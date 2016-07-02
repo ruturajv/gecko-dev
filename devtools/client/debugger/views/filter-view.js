@@ -28,6 +28,8 @@ function FilterView(DebuggerController, DebuggerView) {
   this._onInput = this._onInput.bind(this);
   this._onKeyPress = this._onKeyPress.bind(this);
   this._onBlur = this._onBlur.bind(this);
+
+  this._searchboxHelpPanelOnClick = this._searchboxHelpPanelOnClick.bind(this);
 }
 
 FilterView.prototype = {
@@ -63,6 +65,8 @@ FilterView.prototype = {
     this._searchbox.addEventListener("input", this._onInput, false);
     this._searchbox.addEventListener("keypress", this._onKeyPress, false);
     this._searchbox.addEventListener("blur", this._onBlur, false);
+
+    this._searchboxHelpPanel.addEventListener("mousedown", this._searchboxHelpPanelOnClick, false);
 
     let placeholder = L10N.getFormatStr("emptySearchText", this._fileSearchKey);
     this._searchbox.setAttribute("placeholder", placeholder);
@@ -103,6 +107,8 @@ FilterView.prototype = {
     this._searchbox.removeEventListener("input", this._onInput, false);
     this._searchbox.removeEventListener("keypress", this._onKeyPress, false);
     this._searchbox.removeEventListener("blur", this._onBlur, false);
+
+    this._searchboxHelpPanel.removeEventListener("mousedown", this.__searchboxHelpPanelOnClick, false);
 
     this.FilteredSources.destroy();
     this.FilteredFunctions.destroy();
@@ -518,6 +524,37 @@ FilterView.prototype = {
   _doVariablesFocus: function () {
     this.DebuggerView.showInstrumentsPane();
     this.DebuggerView.Variables.focusFirstVisibleItem();
+  },
+
+  _searchboxHelpPanelOnClick: function(e) {
+    let target = e.target;
+    if (target.tagName === "button") {
+      switch(target.id) {
+        case "global-operator-button":
+          this._searchbox.value = "!";
+          // this._doGlobalSearch();
+          break;
+        case "function-operator-button":
+          this._searchbox.value = "@";
+          // this._doFunctionSearch();
+          break;
+        case "token-operator-button":
+          this._searchbox.value = "#";
+          // this._doTokenSearch();
+          break;
+        case "line-operator-button":
+          this._searchbox.value = ":";
+          // this._doLineSearch();
+          break;
+        case "variable-operator-button":
+          this._searchbox.value = "*";
+          // this._doVariableSearch();
+          break;
+      }
+      this._searchbox.focus();
+      // e.preventDefault();
+      // e.stopPropagation();
+    }
   },
 
   _searchbox: null,
