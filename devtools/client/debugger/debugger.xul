@@ -292,7 +292,7 @@
       </hbox>
       <vbox id="stackframes" flex="1"/>
       <textbox id="searchbox"
-               class="devtools-searchinput" type="search"/>
+               class="devtools-searchinput input-search" type="search"/>
       <toolbarbutton id="instruments-pane-toggle"
                      class="devtools-toolbarbutton"
                      tooltiptext="&debuggerUI.panesButton.tooltip;"

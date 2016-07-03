@@ -13,6 +13,7 @@
   --searcbox-no-match-border-color: #e52e2e;
   --magnifying-glass-image: url(images/magnifying-glass-light.png);
   --magnifying-glass-image-2x: url(images/magnifying-glass-light@2x.png);
+  --filter-image: url(chrome://devtools/skin/images/timeline-filter.svg);
   --tool-options-image: url(images/tool-options.svg);
   --close-button-image: url(chrome://devtools/skin/images/close.svg);
   --icon-filter: invert(1);
@@ -44,6 +45,7 @@
   --searcbox-no-match-border-color: #cc3d3d;
   --magnifying-glass-image: url(images/magnifying-glass.png);
   --magnifying-glass-image-2x: url(images/magnifying-glass@2x.png);
+  --filter-image: url(chrome://devtools/skin/images/timeline-filter.svg);
   --tool-options-image: url(images/tool-options.svg);
   --close-button-image: url(chrome://devtools/skin/images/close.svg);
   --icon-filter: none;
@@ -394,11 +396,18 @@
   padding: 0;
   padding-inline-start: 22px;
   padding-inline-end: 4px;
-  background-image: var(--magnifying-glass-image);
   background-position: 8px center;
   background-size: 11px 11px;
   background-repeat: no-repeat;
   font-size: inherit;
+}
+
+.input-search {
+  background-image: var(--magnifying-glass-image);
+}
+
+.input-filter {
+  background-image: var(--filter-image);
 }
 
 .devtools-searchinput:-moz-locale-dir(rtl),
@@ -465,10 +474,6 @@
 .devtools-style-searchbox-no-match {
   background-color: var(--searcbox-no-match-background-color) !important;
   border-color: var(--searcbox-no-match-border-color) !important;
-}
-
-.devtools-no-search-result {
-  border-color: var(--theme-highlight-red) !important;
 }
 
 .devtools-searchinput-clear {
