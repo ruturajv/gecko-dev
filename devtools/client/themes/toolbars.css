@@ -12,7 +12,6 @@
   --searcbox-no-match-background-color: #ffe5e5;
   --searcbox-no-match-border-color: #e52e2e;
   --magnifying-glass-image: url(images/search.svg);
-  --magnifying-glass-image-2x: url(images/search.svg);
   --filter-image: url(images/filter.svg);
   --tool-options-image: url(images/tool-options.svg);
   --close-button-image: url(chrome://devtools/skin/images/close.svg);
@@ -44,7 +43,6 @@
   --searcbox-no-match-background-color: #402325;
   --searcbox-no-match-border-color: #cc3d3d;
   --magnifying-glass-image: url(images/search.svg);
-  --magnifying-glass-image-2x: url(images/search.svg);
   --filter-image: url(images/filter.svg);
   --tool-options-image: url(images/tool-options.svg);
   --close-button-image: url(chrome://devtools/skin/images/close.svg);
@@ -540,12 +538,6 @@
 .devtools-searchinput > .textbox-input-box > .textbox-search-icons > .textbox-search-clear:hover,
 .devtools-filterinput > .textbox-input-box > .textbox-search-icons > .textbox-search-clear:hover {
   -moz-image-region: rect(0, 32px, 16px, 16px);
-}
-
-@media (min-resolution: 1.1dppx) {
-  .devtools-searchinput {
-    /*background-image: var(--magnifying-glass-image-2x);*/
-  }
 }
 
 /* Close button */
