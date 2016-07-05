@@ -22,6 +22,8 @@
   /* Bug 1200073 - extra space before the browser styles checkbox so
      they aren't squished together in a small window. */
   margin-inline-start: 5px;
+  font: message-box;
+  font-size: inherit;
 }
 
 #propertyContainer {
