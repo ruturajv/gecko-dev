@@ -424,6 +424,11 @@
   visibility: hidden;
 }
 
+.devtools-searchinput .textbox-input::-moz-placeholder,
+.devtools-filterinput .textbox-input::-moz-placeholder {
+  font-style: normal;
+}
+
 /* Searchbox is a div container element for a search input element */
 .devtools-searchbox {
   display: flex;
