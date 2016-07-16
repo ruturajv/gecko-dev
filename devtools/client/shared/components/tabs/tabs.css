@@ -107,8 +107,8 @@
 .theme-light .tabs .tabs-navigation {
   border-bottom: 1px solid var(--theme-splitter-color);
   box-shadow: 0 -2px 0 rgba(170, 170, 170,.1) inset;
-  height: 24px;
-  font-size: 12px;
+  /*height: 24px;*/
+  font: message-box;
 }
 
 .theme-dark .tabs .tab-panel,

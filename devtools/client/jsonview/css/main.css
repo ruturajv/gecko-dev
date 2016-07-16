@@ -20,7 +20,7 @@
 
 .panelContent {
   overflow-y: auto;
-  font-size: 11px;
+  font-size: 80%;
   font-family: var(--monospace-font-family);
   padding-right: 5px;
 }

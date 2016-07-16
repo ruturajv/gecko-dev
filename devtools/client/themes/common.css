@@ -18,7 +18,7 @@
 
 :root[platform="linux"],
 :root.theme-firebug {
-  --monospace-font-family: monospace;
+  --monospace-font-family: DejaVu Sans Mono, monospace;
 }
 
 :root.theme-firebug {

@@ -211,9 +211,19 @@ let Converter = Class({
     let baseUrl = clientBaseUrl + "jsonview/";
     let themeVarsUrl = clientBaseUrl + "themes/variables.css";
     let commonUrl = clientBaseUrl + "themes/common.css";
+  
+    let os;
+    let platform = Services.appinfo.OS;
+    if (platform.startsWith("Win")) {
+      os = "win";
+    } else if (platform.startsWith("Mac")) {
+      os = "mac";
+    } else {
+      os = "linux";
+    }
 
     return "<!DOCTYPE html>\n" +
-      "<html class=\"" + themeClassName + "\">" +
+      "<html platform=\"" + os + "\" class=\"" + themeClassName + "\">" +
       "<head><title>" + this.htmlEncode(title) + "</title>" +
       "<base href=\"" + this.htmlEncode(baseUrl) + "\">" +
       "<link rel=\"stylesheet\" type=\"text/css\" href=\"" +
