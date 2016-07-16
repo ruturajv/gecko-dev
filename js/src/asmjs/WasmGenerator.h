@@ -36,18 +36,6 @@ class FunctionGenerator;
 // any given datum before being read by a background thread. In particular,
 // once created, the Vectors are never resized.
 
-struct TableGenDesc
-{
-    uint32_t globalDataOffset;
-    uint32_t numElems;
-
-    TableGenDesc()
-      : globalDataOffset(0), numElems(0)
-    {}
-};
-
-typedef Vector<TableGenDesc, 0, SystemAllocPolicy> TableGenDescVector;
-
 struct FuncImportGenDesc
 {
     const DeclaredSig* sig;
@@ -71,9 +59,8 @@ struct ModuleGeneratorData
     DeclaredSigPtrVector      funcSigs;
     FuncImportGenDescVector   funcImports;
     GlobalDescVector          globals;
-
-    TableGenDesc              wasmTable;
-    TableGenDescVector        asmJSSigToTable;
+    TableDescVector           tables;
+    Uint32Vector              asmJSSigToTableIndex;
 
     uint32_t funcSigIndex(uint32_t funcIndex) const {
         return funcSigs[funcIndex] - sigs.begin();
@@ -86,6 +73,10 @@ struct ModuleGeneratorData
         minMemoryLength(0),
         maxMemoryLength(UINT32_MAX)
     {}
+
+    bool isAsmJS() const {
+        return kind == ModuleKind::AsmJS;
+    }
 };
 
 typedef UniquePtr<ModuleGeneratorData> UniqueModuleGeneratorData;
@@ -108,19 +99,20 @@ class MOZ_STACK_CLASS ModuleGenerator
     // Data that is moved into the result of finish()
     LinkData                        linkData_;
     MutableMetadata                 metadata_;
-    ExportMap                       exportMap_;
+    ExportVector                    exports_;
     DataSegmentVector               dataSegments_;
     ElemSegmentVector               elemSegments_;
 
     // Data scoped to the ModuleGenerator's lifetime
     UniqueModuleGeneratorData       shared_;
     uint32_t                        numSigs_;
+    uint32_t                        numTables_;
     LifoAlloc                       lifo_;
     jit::JitContext                 jcx_;
     jit::TempAllocator              masmAlloc_;
     jit::MacroAssembler             masm_;
     Uint32Vector                    funcIndexToCodeRange_;
-    FuncIndexMap                    funcIndexToExport_;
+    FuncIndexMap                    funcIndexToFuncExportIndex_;
     uint32_t                        lastPatchedCallsite_;
     uint32_t                        startOfUnpatchedBranches_;
     JumpSiteArray                   jumpThunks_;
@@ -161,6 +153,9 @@ class MOZ_STACK_CLASS ModuleGenerator
     bool usesMemory() const { return UsesMemory(shared_->memoryUsage); }
     uint32_t minMemoryLength() const { return shared_->minMemoryLength; }
 
+    // Tables:
+    const TableDescVector& tables() const { return shared_->tables; }
+
     // Signatures:
     uint32_t numSigs() const { return numSigs_; }
     const DeclaredSig& sig(uint32_t sigIndex) const;
@@ -178,10 +173,11 @@ class MOZ_STACK_CLASS ModuleGenerator
     const FuncImportGenDesc& funcImport(uint32_t funcImportIndex) const;
 
     // Exports:
-    MOZ_MUST_USE bool declareExport(UniqueChars fieldName, uint32_t funcIndex,
-                                    uint32_t* exportIndex = nullptr);
-    uint32_t numExports() const;
+    MOZ_MUST_USE bool declareFuncExport(UniqueChars fieldName, uint32_t funcIndex,
+                                        uint32_t* funcExportIndex = nullptr);
+    MOZ_MUST_USE bool addTableExport(UniqueChars fieldName);
     MOZ_MUST_USE bool addMemoryExport(UniqueChars fieldName);
+    uint32_t numExports() const;
 
     // Function definitions:
     MOZ_MUST_USE bool startFuncDefs();
@@ -189,9 +185,12 @@ class MOZ_STACK_CLASS ModuleGenerator
     MOZ_MUST_USE bool finishFuncDef(uint32_t funcIndex, FunctionGenerator* fg);
     MOZ_MUST_USE bool finishFuncDefs();
 
+    // Start function:
+    bool setStartFunction(uint32_t funcIndex);
+
     // Segments:
     MOZ_MUST_USE bool addDataSegment(DataSegment s) { return dataSegments_.append(s); }
-    MOZ_MUST_USE bool addElemSegment(Uint32Vector&& elemFuncIndices);
+    MOZ_MUST_USE bool addElemSegment(ElemSegment&& s);
 
     // Function names:
     void setFuncNames(NameInBytecodeVector&& funcNames);
@@ -200,7 +199,7 @@ class MOZ_STACK_CLASS ModuleGenerator
     void initSig(uint32_t sigIndex, Sig&& sig);
     void initFuncSig(uint32_t funcIndex, uint32_t sigIndex);
     MOZ_MUST_USE bool initImport(uint32_t importIndex, uint32_t sigIndex);
-    MOZ_MUST_USE bool initSigTableLength(uint32_t sigIndex, uint32_t numElems);
+    MOZ_MUST_USE bool initSigTableLength(uint32_t sigIndex, uint32_t length);
     MOZ_MUST_USE bool initSigTableElems(uint32_t sigIndex, Uint32Vector&& elemFuncIndices);
     void initMemoryUsage(MemoryUsage memoryUsage);
     void bumpMinMemoryLength(uint32_t newMinMemoryLength);

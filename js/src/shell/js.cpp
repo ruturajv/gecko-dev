@@ -2642,6 +2642,13 @@ DisassWithSrc(JSContext* cx, unsigned argc, Value* vp)
 
 #endif /* DEBUG */
 
+/* Pretend we can always preserve wrappers for dummy DOM objects. */
+static bool
+DummyPreserveWrapperCallback(JSContext* cx, JSObject* obj)
+{
+    return true;
+}
+
 static bool
 Intern(JSContext* cx, unsigned argc, Value* vp)
 {
@@ -2953,6 +2960,7 @@ WorkerMain(void* arg)
     JS_SetRuntimePrivate(rt, sr.get());
     JS_SetFutexCanWait(cx);
     JS::SetWarningReporter(cx, WarningReporter);
+    js::SetPreserveWrapperCallback(cx, DummyPreserveWrapperCallback);
     JS_InitDestroyPrincipalsCallback(cx, ShellPrincipals::destroy);
     SetWorkerContextOptions(cx);
 
@@ -6569,7 +6577,7 @@ ShellBuildId(JS::BuildIdCharVector* buildId)
     // in the binary, so every 'make' necessarily builds a new firefox binary.
     // Fortunately, the actual firefox executable is tiny -- all the code is in
     // libxul.so and other shared modules -- so this isn't a big deal. Not so
-    // for the statically-linked JS shell. To avoid recompmiling js.cpp and
+    // for the statically-linked JS shell. To avoid recompiling js.cpp and
     // re-linking 'js' on every 'make', we use a constant buildid and rely on
     // the shell user to manually clear the cache (deleting the dir passed to
     // --js-cache) between cache-breaking updates. Note: jit_tests.py does this
@@ -7174,13 +7182,6 @@ SetOutputFile(const char* const envVar,
 
     outFile->acquire();
     *outFileP = outFile;
-}
-
-/* Pretend we can always preserve wrappers for dummy DOM objects. */
-static bool
-DummyPreserveWrapperCallback(JSContext* cx, JSObject* obj)
-{
-    return true;
 }
 
 static void

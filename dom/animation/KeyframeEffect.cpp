@@ -493,6 +493,7 @@ KeyframeEffectReadOnly::SetKeyframes(nsTArray<Keyframe>&& aKeyframes,
 
   if (aStyleContext) {
     UpdateProperties(aStyleContext);
+    MaybeUpdateFrameForCompositor();
   }
 }
 
@@ -712,6 +713,7 @@ KeyframeEffectReadOnly::ComposeStyle(RefPtr<AnimValuesStyleRule>& aStyleRule,
                                          positionInSegment,
                                          computedTiming.mBeforeFlag);
 
+    MOZ_ASSERT(IsFinite(valuePosition), "Position value should be finite");
     StyleAnimationValue val;
     if (StyleAnimationValue::Interpolate(prop.mProperty,
                                          segment->mFromValue,
@@ -1504,6 +1506,28 @@ KeyframeEffectReadOnly::CanIgnoreIfNotVisible() const
     mCumulativeChangeHint, nsChangeHint_Hints_CanIgnoreIfNotVisible);
 }
 
+void
+KeyframeEffectReadOnly::MaybeUpdateFrameForCompositor()
+{
+  nsIFrame* frame = GetAnimationFrame();
+  if (!frame) {
+    return;
+  }
+
+  // We don't check mWinsInCascade flag here because, at this point,
+  // UpdateCascadeResults has not yet run.
+  // FIXME: Bug 1272495: If this effect does not win in the cascade, the
+  // NS_FRAME_MAY_BE_TRANSFORMED flag should be removed when the animation
+  // will be removed from effect set or the transform keyframes are removed
+  // by setKeyframes. The latter case will be hard to solve though.
+  for (const AnimationProperty& property : mProperties) {
+    if (property.mProperty == eCSSProperty_transform) {
+      frame->AddStateBits(NS_FRAME_MAY_BE_TRANSFORMED);
+      return;
+    }
+  }
+}
+
 //---------------------------------------------------------------------
 //
 // KeyframeEffect
@@ -1602,6 +1626,8 @@ KeyframeEffect::SetTarget(const Nullable<ElementOrCSSPseudoElement>& aTarget)
     } else if (mEffectOptions.mSpacingMode == SpacingMode::paced) {
       KeyframeUtils::ApplyDistributeSpacing(mKeyframes);
     }
+
+    MaybeUpdateFrameForCompositor();
 
     RequestRestyle(EffectCompositor::RestyleType::Layer);
 

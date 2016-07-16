@@ -158,47 +158,67 @@ Import::sizeOfExcludingThis(MallocSizeOf mallocSizeOf) const
            func.sizeOfExcludingThis(mallocSizeOf);
 }
 
-size_t
-ExportMap::serializedSize() const
+Export::Export(UniqueChars fieldName, uint32_t funcExportIndex)
+  : fieldName_(Move(fieldName))
 {
-    return SerializedVectorSize(fieldNames) +
-           SerializedPodVectorSize(fieldsToExports);
+    pod.kind_ = DefinitionKind::Function;
+    pod.funcExportIndex_ = funcExportIndex;
+}
+
+Export::Export(UniqueChars fieldName, DefinitionKind kind)
+  : fieldName_(Move(fieldName))
+{
+    pod.kind_ = kind;
+    pod.funcExportIndex_ = 0;
+}
+
+uint32_t
+Export::funcExportIndex() const
+{
+    MOZ_ASSERT(pod.kind_ == DefinitionKind::Function);
+    return pod.funcExportIndex_;
+}
+
+size_t
+Export::serializedSize() const
+{
+    return fieldName_.serializedSize() +
+           sizeof(pod);
 }
 
 uint8_t*
-ExportMap::serialize(uint8_t* cursor) const
+Export::serialize(uint8_t* cursor) const
 {
-    cursor = SerializeVector(cursor, fieldNames);
-    cursor = SerializePodVector(cursor, fieldsToExports);
+    cursor = fieldName_.serialize(cursor);
+    cursor = WriteBytes(cursor, &pod, sizeof(pod));
     return cursor;
 }
 
 const uint8_t*
-ExportMap::deserialize(const uint8_t* cursor)
+Export::deserialize(const uint8_t* cursor)
 {
-    (cursor = DeserializeVector(cursor, &fieldNames)) &&
-    (cursor = DeserializePodVector(cursor, &fieldsToExports));
+    (cursor = fieldName_.deserialize(cursor)) &&
+    (cursor = ReadBytes(cursor, &pod, sizeof(pod)));
     return cursor;
 }
 
 size_t
-ExportMap::sizeOfExcludingThis(MallocSizeOf mallocSizeOf) const
+Export::sizeOfExcludingThis(MallocSizeOf mallocSizeOf) const
 {
-    return SizeOfVectorExcludingThis(fieldNames, mallocSizeOf) &&
-           fieldsToExports.sizeOfExcludingThis(mallocSizeOf);
+    return fieldName_.sizeOfExcludingThis(mallocSizeOf);
 }
 
 size_t
 ElemSegment::serializedSize() const
 {
-    return sizeof(globalDataOffset) +
+    return sizeof(tableIndex) +
            SerializedPodVectorSize(elems);
 }
 
 uint8_t*
 ElemSegment::serialize(uint8_t* cursor) const
 {
-    cursor = WriteBytes(cursor, &globalDataOffset, sizeof(globalDataOffset));
+    cursor = WriteBytes(cursor, &tableIndex, sizeof(tableIndex));
     cursor = SerializePodVector(cursor, elems);
     return cursor;
 }
@@ -206,7 +226,7 @@ ElemSegment::serialize(uint8_t* cursor) const
 const uint8_t*
 ElemSegment::deserialize(const uint8_t* cursor)
 {
-    (cursor = ReadBytes(cursor, &globalDataOffset, sizeof(globalDataOffset))) &&
+    (cursor = ReadBytes(cursor, &tableIndex, sizeof(tableIndex))) &&
     (cursor = DeserializePodVector(cursor, &elems));
     return cursor;
 }
@@ -223,7 +243,7 @@ Module::serializedSize() const
     return SerializedPodVectorSize(code_) +
            linkData_.serializedSize() +
            SerializedVectorSize(imports_) +
-           exportMap_.serializedSize() +
+           SerializedVectorSize(exports_) +
            SerializedPodVectorSize(dataSegments_) +
            SerializedVectorSize(elemSegments_) +
            metadata_->serializedSize() +
@@ -236,7 +256,7 @@ Module::serialize(uint8_t* cursor) const
     cursor = SerializePodVector(cursor, code_);
     cursor = linkData_.serialize(cursor);
     cursor = SerializeVector(cursor, imports_);
-    cursor = exportMap_.serialize(cursor);
+    cursor = SerializeVector(cursor, exports_);
     cursor = SerializePodVector(cursor, dataSegments_);
     cursor = SerializeVector(cursor, elemSegments_);
     cursor = metadata_->serialize(cursor);
@@ -262,8 +282,8 @@ Module::deserialize(const uint8_t* cursor, UniquePtr<Module>* module, Metadata* 
     if (!cursor)
         return nullptr;
 
-    ExportMap exportMap;
-    cursor = exportMap.deserialize(cursor);
+    ExportVector exports;
+    cursor = DeserializeVector(cursor, &exports);
     if (!cursor)
         return nullptr;
 
@@ -300,7 +320,7 @@ Module::deserialize(const uint8_t* cursor, UniquePtr<Module>* module, Metadata* 
     *module = js::MakeUnique<Module>(Move(code),
                                      Move(linkData),
                                      Move(imports),
-                                     Move(exportMap),
+                                     Move(exports),
                                      Move(dataSegments),
                                      Move(elemSegments),
                                      *metadata,
@@ -322,7 +342,7 @@ Module::addSizeOfMisc(MallocSizeOf mallocSizeOf,
              code_.sizeOfExcludingThis(mallocSizeOf) +
              linkData_.sizeOfExcludingThis(mallocSizeOf) +
              SizeOfVectorExcludingThis(imports_, mallocSizeOf) +
-             exportMap_.sizeOfExcludingThis(mallocSizeOf) +
+             SizeOfVectorExcludingThis(exports_, mallocSizeOf) +
              dataSegments_.sizeOfExcludingThis(mallocSizeOf) +
              SizeOfVectorExcludingThis(elemSegments_, mallocSizeOf) +
              metadata_->sizeOfIncludingThisIfNotSeen(mallocSizeOf, seenMetadata) +
@@ -383,12 +403,22 @@ Module::instantiateMemory(JSContext* cx, MutableHandleWasmMemoryObject memory) c
 }
 
 bool
-Module::instantiateTable(JSContext* cx, const CodeSegment& cs) const
+Module::instantiateTable(JSContext* cx, const CodeSegment& cs, SharedTableVector* tables) const
 {
+    for (const TableDesc& tableDesc : metadata_->tables) {
+        SharedTable table = Table::create(cx, tableDesc.kind, tableDesc.length);
+        if (!table || !tables->emplaceBack(table))
+            return false;
+
+        for (size_t i = 0; i < table->length(); i++)
+            table->array()[i] = cs.badIndirectCallCode();
+    }
+
     for (const ElemSegment& seg : elemSegments_) {
-        auto array = reinterpret_cast<void**>(cs.globalData() + seg.globalDataOffset);
+        SharedTable& table = (*tables)[seg.tableIndex];
+        MOZ_ASSERT(seg.offset + seg.elems.length() <= table->length());
         for (size_t i = 0; i < seg.elems.length(); i++)
-            array[i] = cs.code() + seg.elems[i];
+            table->array()[seg.offset + i] = cs.code() + seg.elems[i];
     }
 
     return true;
@@ -401,20 +431,20 @@ WasmCall(JSContext* cx, unsigned argc, Value* vp)
     RootedFunction callee(cx, &args.callee().as<JSFunction>());
 
     Instance& instance = ExportedFunctionToInstance(callee);
-    uint32_t exportIndex = ExportedFunctionToExportIndex(callee);
+    uint32_t funcExportIndex = ExportedFunctionToExportIndex(callee);
 
-    return instance.callExport(cx, exportIndex, args);
+    return instance.callExport(cx, funcExportIndex, args);
 }
 
 static JSFunction*
-NewExportedFunction(JSContext* cx, Handle<WasmInstanceObject*> instanceObj, uint32_t exportIndex)
+NewExportedFunction(JSContext* cx, HandleWasmInstanceObject instanceObj, uint32_t funcExportIndex)
 {
     Instance& instance = instanceObj->instance();
     const Metadata& metadata = instance.metadata();
-    const Export& exp = metadata.exports[exportIndex];
-    unsigned numArgs = exp.sig().args().length();
+    const FuncExport& fe = metadata.funcExports[funcExportIndex];
+    unsigned numArgs = fe.sig().args().length();
 
-    RootedAtom name(cx, instance.getFuncAtom(cx, exp.funcIndex()));
+    RootedAtom name(cx, instance.getFuncAtom(cx, fe.funcIndex()));
     if (!name)
         return nullptr;
 
@@ -425,7 +455,7 @@ NewExportedFunction(JSContext* cx, Handle<WasmInstanceObject*> instanceObj, uint
         return nullptr;
 
     fun->setExtendedSlot(FunctionExtended::WASM_INSTANCE_SLOT, ObjectValue(*instanceObj));
-    fun->setExtendedSlot(FunctionExtended::WASM_EXPORT_INDEX_SLOT, Int32Value(exportIndex));
+    fun->setExtendedSlot(FunctionExtended::WASM_EXPORT_INDEX_SLOT, Int32Value(funcExportIndex));
     return fun;
 }
 
@@ -433,16 +463,14 @@ static bool
 CreateExportObject(JSContext* cx,
                    HandleWasmInstanceObject instanceObj,
                    HandleWasmMemoryObject memoryObj,
-                   const ExportMap& exportMap,
-                   const Metadata& metadata,
+                   const ExportVector& exports,
                    MutableHandleObject exportObj)
 {
-    MOZ_ASSERT(exportMap.fieldNames.length() == exportMap.fieldsToExports.length());
+    const Instance& instance = instanceObj->instance();
+    const Metadata& metadata = instance.metadata();
+    const SharedTableVector& tables = instance.tables();
 
-    if (metadata.isAsmJS() &&
-        exportMap.fieldNames.length() == 1 &&
-        strlen(exportMap.fieldNames[0].get()) == 0)
-    {
+    if (metadata.isAsmJS() && exports.length() == 1 && strlen(exports[0].fieldName()) == 0) {
         exportObj.set(NewExportedFunction(cx, instanceObj, 0));
         return !!exportObj;
     }
@@ -452,28 +480,39 @@ CreateExportObject(JSContext* cx,
         return false;
 
     Rooted<ValueVector> vals(cx, ValueVector(cx));
-    for (size_t exportIndex = 0; exportIndex < metadata.exports.length(); exportIndex++) {
-        JSFunction* fun = NewExportedFunction(cx, instanceObj, exportIndex);
+    for (size_t i = 0; i < metadata.funcExports.length(); i++) {
+        JSFunction* fun = NewExportedFunction(cx, instanceObj, i);
         if (!fun || !vals.append(ObjectValue(*fun)))
             return false;
     }
 
-    for (size_t fieldIndex = 0; fieldIndex < exportMap.fieldNames.length(); fieldIndex++) {
-        const char* fieldName = exportMap.fieldNames[fieldIndex].get();
-        JSAtom* atom = AtomizeUTF8Chars(cx, fieldName, strlen(fieldName));
+    RootedWasmTableObject tableObj(cx);
+    for (const Export& exp : exports) {
+        JSAtom* atom = AtomizeUTF8Chars(cx, exp.fieldName(), strlen(exp.fieldName()));
         if (!atom)
             return false;
 
         RootedId id(cx, AtomToId(atom));
         RootedValue val(cx);
-        uint32_t exportIndex = exportMap.fieldsToExports[fieldIndex];
-        if (exportIndex == MemoryExport) {
+        switch (exp.kind()) {
+          case DefinitionKind::Function:
+            val = vals[exp.funcExportIndex()];
+            break;
+          case DefinitionKind::Table:
+            MOZ_ASSERT(tables.length() == 1);
+            if (!tableObj) {
+                tableObj = WasmTableObject::create(cx, *tables[0]);
+                if (!tableObj)
+                    return false;
+            }
+            val = ObjectValue(*tableObj);
+            break;
+          case DefinitionKind::Memory:
             if (metadata.assumptions.newFormat)
                 val = ObjectValue(*memoryObj);
             else
                 val = ObjectValue(memoryObj->buffer());
-        } else {
-            val = vals[exportIndex];
+            break;
         }
 
         if (!JS_DefinePropertyById(cx, exportObj, id, val, JSPROP_ENUMERATE))
@@ -501,31 +540,20 @@ Module::instantiate(JSContext* cx,
     if (!cs)
         return false;
 
-    if (!instantiateTable(cx, *cs))
+    SharedTableVector tables;
+    if (!instantiateTable(cx, *cs, &tables))
         return false;
 
     // To support viewing the source of an instance (Instance::createText), the
     // instance must hold onto a ref of the bytecode (keeping it alive). This
     // wastes memory for most users, so we try to only save the source when a
     // developer actually cares: when the compartment is debuggable (which is
-    // true when the web console is open) or a names section is implied (since
+    // true when the web console is open) or a names section is present (since
     // this going to be stripped for non-developer builds).
 
     const ShareableBytes* maybeBytecode = nullptr;
     if (cx->compartment()->isDebuggee() || !metadata_->funcNames.empty())
         maybeBytecode = bytecode_.get();
-
-    // Store a summary of LinkData::FuncTableVector, only as much is needed
-    // for runtime toggling of profiling mode. Currently, only asm.js has typed
-    // function tables.
-
-    TypedFuncTableVector typedFuncTables;
-    if (metadata_->isAsmJS()) {
-        if (!typedFuncTables.reserve(elemSegments_.length()))
-            return false;
-        for (const ElemSegment& seg : elemSegments_)
-            typedFuncTables.infallibleEmplaceBack(seg.globalDataOffset, seg.elems.length());
-    }
 
     // Create the Instance, ensuring that it is traceable via 'instanceObj'
     // before any GC can occur and invalidate the pointers stored in global
@@ -535,8 +563,8 @@ Module::instantiate(JSContext* cx,
         auto instance = cx->make_unique<Instance>(Move(cs),
                                                   *metadata_,
                                                   maybeBytecode,
-                                                  Move(typedFuncTables),
                                                   memory,
+                                                  Move(tables),
                                                   funcImports);
         if (!instance)
             return false;
@@ -547,7 +575,7 @@ Module::instantiate(JSContext* cx,
     // Create the export object.
 
     RootedObject exportObj(cx);
-    if (!CreateExportObject(cx, instanceObj, memory, exportMap_, *metadata_, &exportObj))
+    if (!CreateExportObject(cx, instanceObj, memory, exports_, &exportObj))
         return false;
 
     instanceObj->initExportsObject(exportObj);
@@ -564,6 +592,16 @@ Module::instantiate(JSContext* cx,
     // Done! Notify the Debugger of the new Instance.
 
     Debugger::onNewWasmInstance(cx, instanceObj);
+
+    // Call the start function, if there's one. By specification, it does not
+    // take any arguments nor does it return a value, so just create a dummy
+    // arguments object.
+
+    if (metadata_->hasStartFunction()) {
+        FixedInvokeArgs<0> args(cx);
+        if (!instanceObj->instance().callExport(cx, metadata_->startFuncExportIndex(), args))
+            return false;
+    }
 
     return true;
 }
