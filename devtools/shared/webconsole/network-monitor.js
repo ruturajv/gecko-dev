@@ -1300,18 +1300,9 @@ NetworkMonitor.prototype = {
 
     let timings = httpActivity.timings;
     let harTimings = {};
-    console.log(httpActivity.url, timings);
 
     // Not clear how we can determine "blocked" time.
-    if (timings.STATUS_RESOLVED && timings.STATUS_CONNECTING_TO) {
-      harTimings.blocked = timings.STATUS_RESOLVED.last -
-                           timings.REQUEST_HEADER.first;
-    } else if (timings.STATUS_SENDING_TO) {
-      harTimings.blocked = timings.STATUS_SENDING_TO.first -
-                           timings.REQUEST_HEADER.first;
-    } else {
-      harTimings.blocked = -1;
-    }
+    harTimings.blocked = -1;
 
     // DNS timing information is available only in when the DNS record is not
     // cached.
@@ -1320,13 +1311,11 @@ NetworkMonitor.prototype = {
                      timings.STATUS_RESOLVING.first : -1;
 
     if (timings.STATUS_CONNECTING_TO && timings.STATUS_CONNECTED_TO) {
-      // console.log(httpActivity.url, "timings.STATUS_CONNECTING_TO && timings.STATUS_CONNECTED_TO", httpActivity.timings);
-      harTimings.connect = timings.STATUS_CONNECTED_TO.first -
-                           timings.STATUS_CONNECTING_TO.last;
-    // } else if (timings.STATUS_SENDING_TO) {
-    //   console.log(httpActivity.url, "timings.STATUS_SENDING_TO", httpActivity.timings);
-    //   harTimings.connect = timings.STATUS_SENDING_TO.first -
-    //                        timings.REQUEST_HEADER.first;
+      harTimings.connect = timings.STATUS_CONNECTED_TO.last -
+                           timings.STATUS_CONNECTING_TO.first;
+    } else if (timings.STATUS_SENDING_TO) {
+      harTimings.connect = timings.STATUS_SENDING_TO.first -
+                           timings.REQUEST_HEADER.first;
     } else {
       harTimings.connect = -1;
     }

@@ -2060,7 +2060,7 @@ RequestsMenuView.prototype = Heritage.extend(WidgetMethods, {
    */
   _createWaterfallView: function (item, timings, fromCache) {
     let { target } = item;
-    let sections = ["blocked", "dns", "connect", "send", "wait", "receive"];
+    let sections = ["dns", "connect", "send", "wait", "receive"];
     // Skipping "blocked" because it doesn't work yet.
 
     let timingsNode = $(".requests-menu-timings", target);
