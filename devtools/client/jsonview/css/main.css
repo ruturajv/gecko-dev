@@ -20,14 +20,14 @@
 
 .panelContent {
   overflow-y: auto;
-  font-size: 80%;
-  font-family: var(--monospace-font-family);
   padding-right: 5px;
 }
 
 /* The tree takes the entire horizontal space within the panel content. */
 .panelContent .treeTable {
+  font-size: 80%;
   width: 100%;
+  font-family: var(--monospace-font-family);
 }
 
 /* Make sure there is a little space between label and value columns. */

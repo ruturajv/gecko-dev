@@ -11,19 +11,12 @@
 }
 
 .textPanelBox .data {
-/*  font-size: 11px;
-  font-family: monospace;*/
   overflow: auto;
   height: 100%;
+  font-size: 80%;
 }
 
 .textPanelBox pre {
   margin: 0;
-}
-
-/******************************************************************************/
-/* Dark Theme */
-
-.theme-dark .textPanelBox {
   color: var(--theme-content-color1);
 }

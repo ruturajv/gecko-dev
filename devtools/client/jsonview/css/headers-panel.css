@@ -8,15 +8,11 @@
 
 .headersPanelBox {
   height: 100%;
-/*  font-family: Lucida Grande, Tahoma, sans-serif;
-  font-size: 11px;*/
 }
 
 .headersPanelBox .netInfoHeadersTable {
   overflow: auto;
   height: 100%;
-  line-height: 12px;
-  font: message-box;
 }
 
 .headersPanelBox .netHeadersGroup {
@@ -26,28 +22,57 @@
 .headersPanelBox .netInfoHeadersGroup {
   color: var(--theme-body-color-alt);
   margin-bottom: 10px;
-  border-bottom: 1px solid #D7D7D7;
+  border-bottom: 1px solid var(--theme-splitter-color);
   padding-top: 8px;
   padding-bottom: 4px;
-  /*font-family: Lucida Grande, Tahoma, sans-serif;*/
   font-weight: bold;
-  color: #565656;
   -moz-user-select: none;
 }
 
 .headersPanelBox .netInfoParamValue {
   display: block;
-  /*font-size: 11px;*/
   word-wrap: break-word;
-  color: var(--theme-highlight-purple);
 }
 
 .headersPanelBox .netInfoParamName {
-  color: var(--theme-highlight-red);
   padding: 2px 10px 0 0;
-  /*font-family: Lucida Grande, Tahoma, sans-serif;*/
   font-weight: bold;
   vertical-align: top;
   text-align: right;
   white-space: nowrap;
+}
+
+/******************************************************************************/
+
+/* Theme colors have been generated / copied from Network Panel's
+ * Header view widgets 
+ */
+
+/* Light Theme */
+.theme-light .netInfoParamName {
+  color: var(--theme-highlight-red);
+}
+
+.theme-light .netInfoParamValue {
+  color: var(--theme-highlight-purple);
+}
+
+/* Dark Theme */
+.theme-dark .netInfoParamName {
+  color: var(--theme-highlight-purple);
+}
+
+.theme-dark .netInfoParamValue {
+  color: var(--theme-highlight-gray);
+}
+
+/* Firebug Theme */
+.theme-firebug .netInfoHeadersTable {
+  font-family: Lucida Grande, Tahoma, sans-serif;
+  font-size: 11px;
+  line-height: 12px;
+}
+
+.theme-firebug .netInfoParamValue {
+  font-family: var(--monospace-font-family);
 }

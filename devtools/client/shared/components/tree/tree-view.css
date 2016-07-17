@@ -132,14 +132,16 @@
 /******************************************************************************/
 /* Themes */
 
-/* Light Theme: toggle icon */
-.theme-light .treeTable .treeRow.hasChildren > .treeLabelCell > .treeIcon {
+/* Light, Firebug Theme: toggle icon */
+.theme-light .treeTable .treeRow.hasChildren > .treeLabelCell > .treeIcon,
+.theme-firebug .treeTable .treeRow.hasChildren > .treeLabelCell > .treeIcon {
   background-image: url(chrome://devtools/skin/images/controls.png);
   background-size: 56px 28px;
   background-position: 0 -14px;
 }
 
-.theme-light .treeTable .treeRow.hasChildren.opened > .treeLabelCell > .treeIcon {
+.theme-light .treeTable .treeRow.hasChildren.opened > .treeLabelCell > .treeIcon,
+.theme-firebug .treeTable .treeRow.hasChildren.opened > .treeLabelCell > .treeIcon {
   background-image: url(chrome://devtools/skin/images/controls.png);
   background-size: 56px 28px;
   background-position: -14px -14px;
