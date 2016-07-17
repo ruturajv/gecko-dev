@@ -1300,7 +1300,7 @@ NetworkMonitor.prototype = {
 
     let timings = httpActivity.timings;
     let harTimings = {};
-    console.log(httpActivity.url, timings);
+    console.log(new Date(), httpActivity.url, timings);
 
     // Not clear how we can determine "blocked" time.
     if (timings.STATUS_RESOLVED && timings.STATUS_CONNECTING_TO) {
@@ -1320,13 +1320,8 @@ NetworkMonitor.prototype = {
                      timings.STATUS_RESOLVING.first : -1;
 
     if (timings.STATUS_CONNECTING_TO && timings.STATUS_CONNECTED_TO) {
-      // console.log(httpActivity.url, "timings.STATUS_CONNECTING_TO && timings.STATUS_CONNECTED_TO", httpActivity.timings);
-      harTimings.connect = timings.STATUS_CONNECTED_TO.first -
-                           timings.STATUS_CONNECTING_TO.last;
-    // } else if (timings.STATUS_SENDING_TO) {
-    //   console.log(httpActivity.url, "timings.STATUS_SENDING_TO", httpActivity.timings);
-    //   harTimings.connect = timings.STATUS_SENDING_TO.first -
-    //                        timings.REQUEST_HEADER.first;
+      harTimings.connect = timings.STATUS_CONNECTED_TO.last -
+                           timings.STATUS_CONNECTING_TO.first;
     } else {
       harTimings.connect = -1;
     }
