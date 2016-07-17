@@ -25,7 +25,6 @@
 
 /* The tree takes the entire horizontal space within the panel content. */
 .panelContent .treeTable {
-  font-size: 80%;
   width: 100%;
   font-family: var(--monospace-font-family);
 }

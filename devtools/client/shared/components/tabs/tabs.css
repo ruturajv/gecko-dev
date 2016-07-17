@@ -112,8 +112,7 @@
 
 .theme-dark .tabs .tab-panel,
 .theme-light .tabs .tab-panel {
-  /* Giving all available height, without it vertical scroll doesn't appear */
-  height: 100%; 
+  height: 100%; /* Giving all available height */
 }
 
 .theme-dark .tabs .tabs-menu-item,

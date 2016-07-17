@@ -211,12 +211,12 @@ let Converter = Class({
     let baseUrl = clientBaseUrl + "jsonview/";
     let themeVarsUrl = clientBaseUrl + "themes/variables.css";
     let commonUrl = clientBaseUrl + "themes/common.css";
-  
+
     let os;
     let platform = Services.appinfo.OS;
-    if (platform.startsWith("Win")) {
+    if (platform.startsWith("WINNT")) {
       os = "win";
-    } else if (platform.startsWith("Mac")) {
+    } else if (platform.startsWith("Darwin")) {
       os = "mac";
     } else {
       os = "linux";

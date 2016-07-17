@@ -13,7 +13,6 @@
 .textPanelBox .data {
   overflow: auto;
   height: 100%;
-  font-size: 80%;
 }
 
 .textPanelBox pre {

@@ -162,6 +162,7 @@
 
 /* Dark and Light Themes: Support for retina displays */
 @media (min-resolution: 1.1dppx) {
+  .theme-firebug .treeTable .treeRow.hasChildren > .treeLabelCell > .treeIcon,
   .theme-dark .treeTable .treeRow.hasChildren > .treeLabelCell > .treeIcon,
   .theme-light .treeTable .treeRow.hasChildren > .treeLabelCell > .treeIcon {
     background-image: url("chrome://devtools/skin/images/controls@2x.png");
