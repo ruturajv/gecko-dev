@@ -15,6 +15,10 @@
 @import "headers-panel.css";
 
 
+body {
+  font: message-box;
+  background-color: var(--theme-body-background);
+}
 /******************************************************************************/
 /* Panel Content */
 
@@ -27,6 +31,10 @@
 .panelContent .treeTable {
   width: 100%;
   font-family: var(--monospace-font-family);
+}
+
+:root[platform="linux"] .treeTable {
+  font-size: 80%; /* To handle big monospace font*/
 }
 
 /* Make sure there is a little space between label and value columns. */

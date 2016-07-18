@@ -24,6 +24,7 @@ body {
 pre {
   background-color: white;
   border: none;
+  font-family: var(--monospace-font-family);
 }
 
 #json,

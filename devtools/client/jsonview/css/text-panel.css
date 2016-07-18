@@ -19,3 +19,7 @@
   margin: 0;
   color: var(--theme-content-color1);
 }
+
+:root[platform="linux"] .textPanelBox .data {
+	font-size: 80%;
+}
