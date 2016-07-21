@@ -25,6 +25,7 @@ body {
 .panelContent {
   overflow-y: auto;
   padding-right: 5px;
+  background-color: var(--theme-body-background);
 }
 
 /* The tree takes the entire horizontal space within the panel content. */
