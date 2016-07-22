@@ -5993,10 +5993,69 @@ DebuggerScript_getAllColumnOffsets(JSContext* cx, unsigned argc, Value* vp)
     return true;
 }
 
+class DebuggerScriptGetLineOffsetsMatcher
+{
+    JSContext* cx_;
+    size_t lineno_;
+    RootedObject result_;
+
+  public:
+    explicit DebuggerScriptGetLineOffsetsMatcher(JSContext* cx, size_t lineno)
+      : cx_(cx), lineno_(lineno), result_(cx, NewDenseEmptyArray(cx)) { }
+    using ReturnType = bool;
+    ReturnType match(HandleScript script) {
+        if (!result_)
+            return false;
+
+        /*
+         * First pass: determine which offsets in this script are jump targets and
+         * which line numbers jump to them.
+         */
+        FlowGraphSummary flowData(cx_);
+        if (!flowData.populate(cx_, script))
+            return false;
+
+        /* Second pass: build the result array. */
+        for (BytecodeRangeWithPosition r(cx_, script); !r.empty(); r.popFront()) {
+            if (!r.frontIsEntryPoint())
+                continue;
+
+            size_t offset = r.frontOffset();
+
+            /* If the op at offset is an entry point, append offset to result. */
+            if (r.frontLineNumber() == lineno_ &&
+                !flowData[offset].hasNoEdges() &&
+                flowData[offset].lineno() != lineno_)
+            {
+                if (!NewbornArrayPush(cx_, result_, NumberValue(offset)))
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    ReturnType match(Handle<WasmInstanceObject*> instance) {
+        if (!result_)
+            return false;
+
+        Vector<uint32_t> offsets(cx_);
+        if (!instance->instance().getLineOffsets(lineno_, offsets))
+            return false;
+        for (uint32_t i = 0; i < offsets.length(); i++) {
+            if (!NewbornArrayPush(cx_, result_, NumberValue(offsets[i])))
+                return false;
+        }
+        return true;
+    }
+
+    RootedObject& result() { return result_; }
+};
+
 static bool
 DebuggerScript_getLineOffsets(JSContext* cx, unsigned argc, Value* vp)
 {
-    THIS_DEBUGSCRIPT_SCRIPT(cx, argc, vp, "getLineOffsets", args, obj, script);
+    THIS_DEBUGSCRIPT_REFERENT(cx, argc, vp, "getLineOffsets", args, obj, referent);
     if (!args.requireAtLeast(cx, "Debugger.Script.getLineOffsets", 1))
         return false;
 
@@ -6014,35 +6073,11 @@ DebuggerScript_getLineOffsets(JSContext* cx, unsigned argc, Value* vp)
         }
     }
 
-    /*
-     * First pass: determine which offsets in this script are jump targets and
-     * which line numbers jump to them.
-     */
-    FlowGraphSummary flowData(cx);
-    if (!flowData.populate(cx, script))
+    DebuggerScriptGetLineOffsetsMatcher matcher(cx, lineno);
+    if (!referent.match(matcher))
         return false;
 
-    /* Second pass: build the result array. */
-    RootedObject result(cx, NewDenseEmptyArray(cx));
-    if (!result)
-        return false;
-    for (BytecodeRangeWithPosition r(cx, script); !r.empty(); r.popFront()) {
-        if (!r.frontIsEntryPoint())
-            continue;
-
-        size_t offset = r.frontOffset();
-
-        /* If the op at offset is an entry point, append offset to result. */
-        if (r.frontLineNumber() == lineno &&
-            !flowData[offset].hasNoEdges() &&
-            flowData[offset].lineno() != lineno)
-        {
-            if (!NewbornArrayPush(cx, result, NumberValue(offset)))
-                return false;
-        }
-    }
-
-    args.rval().setObject(*result);
+    args.rval().setObject(*matcher.result());
     return true;
 }
 
@@ -7043,7 +7078,9 @@ DebuggerFrame::create(JSContext* cx, HandleObject proto, AbstractFramePtr refere
 DebuggerFrame::getCallee(JSContext* cx, Handle<DebuggerFrame*> frame,
                          MutableHandle<DebuggerObject*> result)
 {
-    AbstractFramePtr referent = frame->referent();
+    MOZ_ASSERT(frame->isLive());
+
+    AbstractFramePtr referent = DebuggerFrame::getReferent(frame);
     if (!referent.isFunctionFrame()) {
         result.set(nullptr);
         return true;
@@ -7058,6 +7095,8 @@ DebuggerFrame::getCallee(JSContext* cx, Handle<DebuggerFrame*> frame,
 /* static */ bool
 DebuggerFrame::getIsConstructing(JSContext* cx, Handle<DebuggerFrame*> frame, bool& result)
 {
+    MOZ_ASSERT(frame->isLive());
+
     Maybe<ScriptFrameIter> maybeIter;
     if (!DebuggerFrame::getScriptFrameIter(cx, frame, maybeIter))
         return false;
@@ -7108,6 +7147,8 @@ UpdateFrameIterPc(FrameIter& iter)
 DebuggerFrame::getEnvironment(JSContext* cx, Handle<DebuggerFrame*> frame,
                               MutableHandle<DebuggerEnvironment*> result)
 {
+    MOZ_ASSERT(frame->isLive());
+
     Debugger* dbg = frame->owner();
 
     Maybe<ScriptFrameIter> maybeIter;
@@ -7128,9 +7169,38 @@ DebuggerFrame::getEnvironment(JSContext* cx, Handle<DebuggerFrame*> frame,
 }
 
 /* static */ bool
-DebuggerFrame::isGenerator() const
+DebuggerFrame::getIsGenerator(Handle<DebuggerFrame*> frame)
 {
-    return referent().script()->isGenerator();
+    return DebuggerFrame::getReferent(frame).script()->isGenerator();
+}
+
+/* statuc */ bool
+DebuggerFrame::isLive() const
+{
+    return !!getPrivate();
+}
+
+/* static */ bool
+DebuggerFrame::requireLive(JSContext* cx, Handle<DebuggerFrame*> frame)
+{
+    if (!frame->isLive()) {
+        JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_DEBUG_NOT_LIVE,
+                             "Debugger.Frame");
+        return false;
+    }
+
+    return true;
+}
+
+/* static */ AbstractFramePtr
+DebuggerFrame::getReferent(Handle<DebuggerFrame*> frame)
+{
+    AbstractFramePtr referent = AbstractFramePtr::FromRaw(frame->getPrivate());
+    if (referent.isScriptFrameIterData()) {
+        ScriptFrameIter iter(*(ScriptFrameIter::Data*)(referent.raw()));
+        referent = iter.abstractFramePtr();
+    }
+    return referent;
 }
 
 /* static */ bool
@@ -7189,7 +7259,7 @@ DebuggerFrame::checkThis(JSContext* cx, const CallArgs& args, const char* fnname
         return nullptr;
     }
 
-    DebuggerFrame* nthisobj = &thisobj->as<DebuggerFrame>();
+    Rooted<DebuggerFrame*> frame(cx, &thisobj->as<DebuggerFrame>());
 
     /*
      * Forbid Debugger.Frame.prototype, which is of class DebuggerFrame::class_
@@ -7197,19 +7267,18 @@ DebuggerFrame::checkThis(JSContext* cx, const CallArgs& args, const char* fnname
      * is distinguished by having a nullptr private value. Also, forbid popped
      * frames.
      */
-    if (!nthisobj->getPrivate()) {
-        if (nthisobj->getReservedSlot(JSSLOT_DEBUGFRAME_OWNER).isUndefined()) {
-            JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_INCOMPATIBLE_PROTO,
-                                 "Debugger.Frame", fnname, "prototype object");
-            return nullptr;
-        }
-        if (checkLive) {
-            JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_DEBUG_NOT_LIVE,
-                                 "Debugger.Frame");
-            return nullptr;
-        }
+    if (!frame->getPrivate() &&
+        frame->getReservedSlot(JSSLOT_DEBUGFRAME_OWNER).isUndefined())
+    {
+        JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_INCOMPATIBLE_PROTO,
+                             "Debugger.Frame", fnname, "prototype object");
+        return nullptr;
     }
-    return nthisobj;
+
+    if (checkLive && !DebuggerFrame::requireLive(cx, frame))
+        return nullptr;
+
+    return frame;
 }
 
 /*
@@ -7353,7 +7422,7 @@ DebuggerFrame::generatorGetter(JSContext* cx, unsigned argc, Value* vp)
 {
     THIS_DEBUGGER_FRAME(cx, argc, vp, "get callee", args, frame);
 
-    args.rval().setBoolean(frame->isGenerator());
+    args.rval().setBoolean(DebuggerFrame::getIsGenerator(frame));
     return true;
 }
 
@@ -7566,15 +7635,15 @@ DebuggerFrame_getOffset(JSContext* cx, unsigned argc, Value* vp)
     return true;
 }
 
-static bool
-DebuggerFrame_getLive(JSContext* cx, unsigned argc, Value* vp)
+/* static */ bool
+DebuggerFrame::liveGetter(JSContext* cx, unsigned argc, Value* vp)
 {
     CallArgs args = CallArgsFromVp(argc, vp);
-    NativeObject* thisobj = DebuggerFrame::checkThis(cx, args, "get live", false);
-    if (!thisobj)
+    Rooted<DebuggerFrame*> frame(cx, DebuggerFrame::checkThis(cx, args, "get live", false));
+    if (!frame)
         return false;
-    bool hasFrame = !!thisobj->getPrivate();
-    args.rval().setBoolean(hasFrame);
+
+    args.rval().setBoolean(frame->isLive());
     return true;
 }
 
@@ -7884,7 +7953,7 @@ const JSPropertySpec DebuggerFrame::properties_[] = {
     JS_PSG("constructing", DebuggerFrame::constructingGetter, 0),
     JS_PSG("environment", DebuggerFrame::environmentGetter, 0),
     JS_PSG("generator", DebuggerFrame::generatorGetter, 0),
-    JS_PSG("live", DebuggerFrame_getLive, 0),
+    JS_PSG("live", DebuggerFrame::liveGetter, 0),
     JS_PSG("offset", DebuggerFrame_getOffset, 0),
     JS_PSG("older", DebuggerFrame_getOlder, 0),
     JS_PSG("script", DebuggerFrame_getScript, 0),
@@ -7971,6 +8040,10 @@ DebuggerObject::checkThis(JSContext* cx, const CallArgs& args, const char* fnnam
 #define THIS_DEBUGOBJECT_PROMISE(cx, argc, vp, fnname, args, obj)                   \
    THIS_DEBUGOBJECT_REFERENT(cx, argc, vp, fnname, args, obj);                      \
    obj = CheckedUnwrap(obj);                                                        \
+   if (!obj) {                                                                      \
+       JS_ReportError(cx, "Permission denied to access object");                    \
+       return false;                                                                \
+   }                                                                                \
    if (!obj->is<PromiseObject>()) {                                                 \
        JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_NOT_EXPECTED_TYPE,  \
                             "Debugger", "Promise", obj->getClass()->name);          \
@@ -7981,6 +8054,10 @@ DebuggerObject::checkThis(JSContext* cx, const CallArgs& args, const char* fnnam
 #define THIS_DEBUGOBJECT_OWNER_PROMISE(cx, argc, vp, fnname, args, dbg, obj)        \
    THIS_DEBUGOBJECT_OWNER_REFERENT(cx, argc, vp, fnname, args, dbg, obj);           \
    obj = CheckedUnwrap(obj);                                                        \
+   if (!obj) {                                                                      \
+       JS_ReportError(cx, "Permission denied to access object");                    \
+       return false;                                                                \
+   }                                                                                \
    if (!obj->is<PromiseObject>()) {                                                 \
        JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_NOT_EXPECTED_TYPE,  \
                             "Debugger", "Promise", obj->getClass()->name);          \
@@ -8289,18 +8366,21 @@ DebuggerObject::errorMessageNameGetter(JSContext *cx, unsigned argc, Value* vp)
 }
 
 #ifdef SPIDERMONKEY_PROMISE
-static bool
-DebuggerObject_getIsPromise(JSContext* cx, unsigned argc, Value* vp)
+/* static */ bool
+DebuggerObject::isPromiseGetter(JSContext* cx, unsigned argc, Value* vp)
 {
-    THIS_DEBUGOBJECT_REFERENT(cx, argc, vp, "get isPromise", args, refobj);
+    THIS_DEBUGOBJECT(cx, argc, vp, "get isPromise", args, object)
 
-    refobj = CheckedUnwrap(refobj);
-    args.rval().setBoolean(refobj->is<PromiseObject>());
+    bool result;
+    if (!DebuggerObject::isPromise(cx, object, result))
+      return false;
+
+    args.rval().setBoolean(result);
     return true;
 }
 
-static bool
-DebuggerObject_getPromiseState(JSContext* cx, unsigned argc, Value* vp)
+/* static */ bool
+DebuggerObject::promiseStateGetter(JSContext* cx, unsigned argc, Value* vp)
 {
     THIS_DEBUGOBJECT_OWNER_PROMISE(cx, argc, vp, "get promiseState", args, dbg, refobj);
 
@@ -8339,8 +8419,8 @@ DebuggerObject_getPromiseState(JSContext* cx, unsigned argc, Value* vp)
     return true;
 }
 
-static bool
-DebuggerObject_getPromiseLifetime(JSContext* cx, unsigned argc, Value* vp)
+/* static */ bool
+DebuggerObject::promiseLifetimeGetter(JSContext* cx, unsigned argc, Value* vp)
 {
     THIS_DEBUGOBJECT_PROMISE(cx, argc, vp, "get promiseLifetime", args, refobj);
 
@@ -8348,8 +8428,8 @@ DebuggerObject_getPromiseLifetime(JSContext* cx, unsigned argc, Value* vp)
     return true;
 }
 
-static bool
-DebuggerObject_getPromiseTimeToResolution(JSContext* cx, unsigned argc, Value* vp)
+/* static */ bool
+DebuggerObject::promiseTimeToResolutionGetter(JSContext* cx, unsigned argc, Value* vp)
 {
     THIS_DEBUGOBJECT_PROMISE(cx, argc, vp, "get promiseTimeToResolution", args, refobj);
 
@@ -8362,8 +8442,8 @@ DebuggerObject_getPromiseTimeToResolution(JSContext* cx, unsigned argc, Value* v
     return true;
 }
 
-static bool
-DebuggerObject_getPromiseAllocationSite(JSContext* cx, unsigned argc, Value* vp)
+/* static */ bool
+DebuggerObject::promiseAllocationSiteGetter(JSContext* cx, unsigned argc, Value* vp)
 {
     THIS_DEBUGOBJECT_PROMISE(cx, argc, vp, "get promiseAllocationSite", args, refobj);
 
@@ -8379,8 +8459,8 @@ DebuggerObject_getPromiseAllocationSite(JSContext* cx, unsigned argc, Value* vp)
     return true;
 }
 
-static bool
-DebuggerObject_getPromiseResolutionSite(JSContext* cx, unsigned argc, Value* vp)
+/* static */ bool
+DebuggerObject::promiseResolutionSiteGetter(JSContext* cx, unsigned argc, Value* vp)
 {
     THIS_DEBUGOBJECT_PROMISE(cx, argc, vp, "get promiseResolutionSite", args, refobj);
 
@@ -8401,8 +8481,8 @@ DebuggerObject_getPromiseResolutionSite(JSContext* cx, unsigned argc, Value* vp)
     return true;
 }
 
-static bool
-DebuggerObject_getPromiseID(JSContext* cx, unsigned argc, Value* vp)
+/* static */ bool
+DebuggerObject::promiseIDGetter(JSContext* cx, unsigned argc, Value* vp)
 {
     THIS_DEBUGOBJECT_PROMISE(cx, argc, vp, "get promiseID", args, refobj);
 
@@ -8410,8 +8490,8 @@ DebuggerObject_getPromiseID(JSContext* cx, unsigned argc, Value* vp)
     return true;
 }
 
-static bool
-DebuggerObject_getPromiseDependentPromises(JSContext* cx, unsigned argc, Value* vp)
+/* static */ bool
+DebuggerObject::promiseDependentPromisesGetter(JSContext* cx, unsigned argc, Value* vp)
 {
     THIS_DEBUGOBJECT_OWNER_PROMISE(cx, argc, vp, "get promiseDependentPromises", args, dbg, refobj);
 
@@ -8860,14 +8940,14 @@ const JSPropertySpec DebuggerObject::properties_[] = {
 
 #ifdef SPIDERMONKEY_PROMISE
 const JSPropertySpec DebuggerObject::promiseProperties_[] = {
-    JS_PSG("isPromise", DebuggerObject_getIsPromise, 0),
-    JS_PSG("promiseState", DebuggerObject_getPromiseState, 0),
-    JS_PSG("promiseLifetime", DebuggerObject_getPromiseLifetime, 0),
-    JS_PSG("promiseTimeToResolution", DebuggerObject_getPromiseTimeToResolution, 0),
-    JS_PSG("promiseAllocationSite", DebuggerObject_getPromiseAllocationSite, 0),
-    JS_PSG("promiseResolutionSite", DebuggerObject_getPromiseResolutionSite, 0),
-    JS_PSG("promiseID", DebuggerObject_getPromiseID, 0),
-    JS_PSG("promiseDependentPromises", DebuggerObject_getPromiseDependentPromises, 0),
+    JS_PSG("isPromise", DebuggerObject::isPromiseGetter, 0),
+    JS_PSG("promiseState", DebuggerObject::promiseStateGetter, 0),
+    JS_PSG("promiseLifetime", DebuggerObject::promiseLifetimeGetter, 0),
+    JS_PSG("promiseTimeToResolution", DebuggerObject::promiseTimeToResolutionGetter, 0),
+    JS_PSG("promiseAllocationSite", DebuggerObject::promiseAllocationSiteGetter, 0),
+    JS_PSG("promiseResolutionSite", DebuggerObject::promiseResolutionSiteGetter, 0),
+    JS_PSG("promiseID", DebuggerObject::promiseIDGetter, 0),
+    JS_PSG("promiseDependentPromises", DebuggerObject::promiseDependentPromisesGetter, 0),
     JS_PS_END
 };
 #endif // SPIDERMONKEY_PROMISE
@@ -8972,6 +9052,24 @@ bool
 DebuggerObject::isGlobal() const
 {
     return referent()->is<GlobalObject>();
+}
+
+/* static */ bool
+DebuggerObject::isPromise(JSContext* cx, Handle<DebuggerObject*> object,
+                          bool& result)
+{
+    JSObject* referent = object->referent();
+    if (IsCrossCompartmentWrapper(referent)) {
+        referent = CheckedUnwrap(referent);
+
+        if (!referent) {
+            JS_ReportError(cx, "Permission denied to access object");
+            return false;
+        }
+      }
+
+    result = referent->is<PromiseObject>();
+    return true;
 }
 
 /* static */ bool
@@ -10066,7 +10164,7 @@ DebuggerEnvironment::getNames(JSContext* cx, Handle<DebuggerEnvironment*> enviro
         if (JSID_IS_ATOM(id) && IsIdentifier(JSID_TO_ATOM(id))) {
             if (!result.append(id))
                 return false;
-        } 
+        }
     }
 
     return true;

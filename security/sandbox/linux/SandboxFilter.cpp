@@ -87,7 +87,7 @@ public:
     return Trap(BlockedSyscallTrap, nullptr);
   }
 
-  virtual ResultExpr ClonePolicy() const {
+  virtual ResultExpr ClonePolicy(ResultExpr failPolicy) const {
     // Allow use for simple thread creation (pthread_create) only.
 
     // WARNING: s390 and cris pass the flags in the second arg -- see
@@ -113,7 +113,7 @@ public:
       .Case(flags_common, Allow()) // JB 4.3 or KK 4.4
 #endif
       .Case(flags_modern, Allow()) // Android L or glibc
-      .Default(InvalidSyscall());
+      .Default(failPolicy);
   }
 
   virtual ResultExpr PrctlPolicy() const {
@@ -225,7 +225,7 @@ public:
 
       // Thread creation.
     case __NR_clone:
-      return ClonePolicy();
+      return ClonePolicy(InvalidSyscall());
 
       // More thread creation.
 #ifdef __NR_set_robust_list
@@ -404,6 +404,13 @@ class ContentSandboxPolicy : public SandboxPolicyCommon {
       : broker->LStat(path, buf);
   }
 
+  static intptr_t GetPPidTrap(ArgsRef aArgs, void* aux) {
+    // In a pid namespace, getppid() will return 0. We will return 0 instead
+    // of the real parent pid to see what breaks when we introduce the
+    // pid namespace (Bug 1151624).
+    return 0;
+  }
+
 public:
   explicit ContentSandboxPolicy(SandboxBrokerClient* aBroker):mBroker(aBroker) { }
   virtual ~ContentSandboxPolicy() { }
@@ -468,6 +475,7 @@ public:
     case SEMGET:
     case SEMCTL:
     case SEMOP:
+    case MSGGET:
       return Some(Allow());
     default:
       return SandboxPolicyCommon::EvaluateIpcCall(aCall);
@@ -510,6 +518,9 @@ public:
 
     switch (sysno) {
 #ifdef DESKTOP
+    case __NR_getppid:
+      return Trap(GetPPidTrap, nullptr);
+
       // Filesystem syscalls that need more work to determine who's
       // using them, if they need to be, and what we intend to about it.
     case __NR_mkdir:
@@ -646,7 +657,17 @@ public:
 #endif
 
     case __NR_mlock:
+    case __NR_munlock:
       return Allow();
+
+      // We can't usefully allow fork+exec, even on a temporary basis;
+      // the child would inherit the seccomp-bpf policy and almost
+      // certainly die from an unexpected SIGSYS.  We also can't have
+      // fork() crash, currently, because there are too many system
+      // libraries/plugins that try to run commands.  But they can
+      // usually do something reasonable on error.
+    case __NR_clone:
+      return ClonePolicy(Error(EPERM));
 
 #endif // DESKTOP
 

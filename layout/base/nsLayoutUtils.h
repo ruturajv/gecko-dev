@@ -27,7 +27,7 @@
 #include "mozilla/gfx/2D.h"
 #include "Units.h"
 #include "mozilla/ToString.h"
-#include "nsHTMLReflowMetrics.h"
+#include "mozilla/ReflowOutput.h"
 #include "ImageContainer.h"
 #include "gfx2DGlue.h"
 
@@ -2287,12 +2287,6 @@ public:
                                                   const nsSize& aDisplaySize);
 
   /**
-   * Checks if we should forcibly use nearest pixel filtering for the
-   * background.
-   */
-  static bool UseBackgroundNearestFiltering();
-
-  /**
    * Checks whether we want to use the GPU to scale images when
    * possible.
    */
@@ -2738,7 +2732,7 @@ public:
   static bool IsOutlineStyleAutoEnabled();
 
   static void SetBSizeFromFontMetrics(const nsIFrame* aFrame,
-                                      nsHTMLReflowMetrics& aMetrics,
+                                      mozilla::ReflowOutput& aMetrics,
                                       const mozilla::LogicalMargin& aFramePadding,
                                       mozilla::WritingMode aLineWM,
                                       mozilla::WritingMode aFrameWM);

@@ -49,7 +49,7 @@ class AstName
   public:
     template <size_t Length>
     explicit AstName(const char16_t (&str)[Length]) : begin_(str), end_(str + Length - 1) {
-      MOZ_ASSERT(str[Length - 1] == MOZ_UTF16('\0'));
+      MOZ_ASSERT(str[Length - 1] == u'\0');
     }
 
     AstName(const char16_t* begin, size_t length) : begin_(begin), end_(begin + length) {}
@@ -171,8 +171,18 @@ class AstSig : public AstBase
     }
 };
 
+const uint32_t AstNodeUnknownOffset = 0;
+
 class AstNode : public AstBase
-{};
+{
+    uint32_t offset_; // if applicable, offset in the binary format file
+
+  public:
+    AstNode() : offset_(AstNodeUnknownOffset) {}
+
+    uint32_t offset() const { return offset_; }
+    void setOffset(uint32_t offset) { offset_ = offset; }
+};
 
 enum class AstExprKind
 {
@@ -530,15 +540,15 @@ class AstImport : public AstNode
     AstImport(AstName name, AstName module, AstName field, AstRef funcSig)
       : name_(name), module_(module), field_(field), kind_(DefinitionKind::Function), funcSig_(funcSig)
     {}
-    AstImport(AstName name, AstName module, AstName field, AstResizable resizable)
-      : name_(name), module_(module), field_(field), kind_(DefinitionKind::Memory), resizable_(resizable)
+    AstImport(AstName name, AstName module, AstName field, DefinitionKind kind, AstResizable resizable)
+      : name_(name), module_(module), field_(field), kind_(kind), resizable_(resizable)
     {}
     AstName name() const { return name_; }
     AstName module() const { return module_; }
     AstName field() const { return field_; }
     DefinitionKind kind() const { return kind_; }
     AstRef& funcSig() { MOZ_ASSERT(kind_ == DefinitionKind::Function); return funcSig_; }
-    AstResizable memory() const { MOZ_ASSERT(kind_ == DefinitionKind::Memory); return resizable_; }
+    AstResizable resizable() const { MOZ_ASSERT(kind_ != DefinitionKind::Function); return resizable_; }
 };
 
 class AstExport : public AstNode

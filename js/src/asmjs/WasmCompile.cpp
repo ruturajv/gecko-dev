@@ -714,7 +714,8 @@ DecodeResizableTable(Decoder& d, ModuleGeneratorData* init)
         return Fail(d, "already have default table");
 
     TableDesc table(TableKind::AnyFunction);
-    table.length = resizable.initial;
+    table.initial = resizable.initial;
+    table.maximum = resizable.maximum ? *resizable.maximum : UINT32_MAX;
     return init->tables.append(table);
 }
 
@@ -772,6 +773,11 @@ DecodeImport(Decoder& d, bool newFormat, ModuleGeneratorData* init, ImportVector
             return false;
         break;
       }
+      case DefinitionKind::Table: {
+        if (!DecodeResizableTable(d, init))
+            return false;
+        break;
+      }
       case DefinitionKind::Memory: {
         if (!DecodeResizableMemory(d, init))
             return false;
@@ -825,17 +831,18 @@ DecodeTableSection(Decoder& d, bool newFormat, ModuleGeneratorData* init, Uint32
             return false;
     } else {
         TableDesc table(TableKind::AnyFunction);
+        table.maximum = UINT32_MAX;
 
-        if (!d.readVarU32(&table.length))
+        if (!d.readVarU32(&table.initial))
             return Fail(d, "expected number of table elems");
 
-        if (table.length > MaxTableElems)
+        if (table.initial > MaxTableElems)
             return Fail(d, "too many table elements");
 
-        if (!oldElems->resize(table.length))
+        if (!oldElems->resize(table.initial))
             return false;
 
-        for (uint32_t i = 0; i < table.length; i++) {
+        for (uint32_t i = 0; i < table.initial; i++) {
             uint32_t funcIndex;
             if (!d.readVarU32(&funcIndex))
                 return Fail(d, "expected table element");
@@ -953,7 +960,7 @@ DecodeExport(Decoder& d, bool newFormat, ModuleGenerator& mg, CStringSet* dupSet
         if (!fieldName)
             return false;
 
-        return mg.declareFuncExport(Move(fieldName), funcIndex);
+        return mg.addFuncExport(Move(fieldName), funcIndex);
     }
 
     UniqueChars fieldName = DecodeExportName(d, dupSet);
@@ -976,7 +983,7 @@ DecodeExport(Decoder& d, bool newFormat, ModuleGenerator& mg, CStringSet* dupSet
         if (!CheckTypeForJS(d, mg.funcSig(funcIndex)))
             return false;
 
-        return mg.declareFuncExport(Move(fieldName), funcIndex);
+        return mg.addFuncExport(Move(fieldName), funcIndex);
       }
       case DefinitionKind::Table: {
         uint32_t tableIndex;
@@ -1214,7 +1221,7 @@ DecodeElemSection(Decoder& d, bool newFormat, Uint32Vector&& oldElems, ModuleGen
         if (!d.readVarU32(&numElems))
             return Fail(d, "expected segment size");
 
-        uint32_t tableLength = mg.tables()[seg.tableIndex].length;
+        uint32_t tableLength = mg.tables()[seg.tableIndex].initial;
         if (seg.offset > tableLength || tableLength - seg.offset < numElems)
             return Fail(d, "element segment does not fit");
 
@@ -1386,19 +1393,15 @@ DecodeUnknownSections(Decoder& d)
 }
 
 bool
-CompileArgs::init(ExclusiveContext* cx)
+CompileArgs::initFromContext(ExclusiveContext* cx, UniqueChars f)
 {
     alwaysBaseline = cx->options().wasmAlwaysBaseline();
-    if (!assumptions.init(SignalUsage(cx), cx->buildIdOp())) {
-        ReportOutOfMemory(cx);
-        return false;
-    }
-
-    return true;
+    filename = Move(f);
+    return assumptions.initBuildIdFromContext(cx);
 }
 
-UniqueModule
-wasm::Compile(Bytes&& bytecode, CompileArgs&& args, UniqueChars* error)
+SharedModule
+wasm::Compile(const ShareableBytes& bytecode, CompileArgs&& args, UniqueChars* error)
 {
     bool newFormat = args.assumptions.newFormat;
 
@@ -1429,7 +1432,7 @@ wasm::Compile(Bytes&& bytecode, CompileArgs&& args, UniqueChars* error)
     if (!DecodeMemorySection(d, newFormat, init.get(), &memoryExported))
         return nullptr;
 
-    ModuleGenerator mg;
+    ModuleGenerator mg(Move(imports));
     if (!mg.init(Move(init), Move(args)))
         return nullptr;
 
@@ -1456,9 +1459,5 @@ wasm::Compile(Bytes&& bytecode, CompileArgs&& args, UniqueChars* error)
 
     MOZ_ASSERT(!*error, "unreported error in decoding");
 
-    SharedBytes sharedBytes = js_new<ShareableBytes>(Move(bytecode));
-    if (!sharedBytes)
-        return nullptr;
-
-    return mg.finish(Move(imports), *sharedBytes);
+    return mg.finish(bytecode);
 }

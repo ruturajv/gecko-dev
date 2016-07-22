@@ -945,7 +945,7 @@ pref("dom.ipc.plugins.sandbox-level.flash", 0);
 #if defined(NIGHTLY_BUILD)
 pref("security.sandbox.content.level", 2);
 #else
-pref("security.sandbox.content.level", 0);
+pref("security.sandbox.content.level", 1);
 #endif
 
 #if defined(MOZ_STACKWALKING)
@@ -1105,6 +1105,12 @@ pref("services.sync.prefs.sync.xpinstall.whitelist.required", true);
 // fetching these icons to show remote tabs may leak information about that
 // user's tabs and bookmarks. Note this pref is also synced.
 pref("services.sync.syncedTabs.showRemoteIcons", true);
+
+#ifdef NIGHTLY_BUILD
+pref("services.sync.sendTabToDevice.enabled", true);
+#else
+pref("services.sync.sendTabToDevice.enabled", false);
+#endif
 
 // Developer edition preferences
 #ifdef MOZ_DEV_EDITION
@@ -1365,8 +1371,10 @@ pref("privacy.trackingprotection.introURL", "https://www.mozilla.org/%LOCALE%/fi
 // Enable Contextual Identity Containers
 #ifdef NIGHTLY_BUILD
 pref("privacy.userContext.enabled", true);
+pref("privacy.userContext.ui.enabled", true);
 #else
 pref("privacy.userContext.enabled", false);
+pref("privacy.userContext.ui.enabled", false);
 #endif
 
 #ifndef RELEASE_BUILD

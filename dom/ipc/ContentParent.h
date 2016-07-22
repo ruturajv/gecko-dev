@@ -66,7 +66,6 @@ class PJavaScriptParent;
 } // namespace jsipc
 
 namespace layers {
-class PCompositorBridgeParent;
 class PSharedBufferManagerParent;
 struct TextureFactoryIdentifier;
 } // namespace layers
@@ -575,6 +574,24 @@ public:
 
   static bool AllocateLayerTreeId(TabParent* aTabParent, uint64_t* aId);
 
+  static void
+  BroadcastBlobURLRegistration(const nsACString& aURI,
+                               BlobImpl* aBlobImpl,
+                               nsIPrincipal* aPrincipal,
+                               ContentParent* aIgnoreThisCP = nullptr);
+
+  static void
+  BroadcastBlobURLUnregistration(const nsACString& aURI,
+                                 ContentParent* aIgnoreThisCP = nullptr);
+
+  virtual bool
+  RecvStoreAndBroadcastBlobURLRegistration(const nsCString& aURI,
+                                           PBlobParent* aBlobParent,
+                                           const Principal& aPrincipal) override;
+
+  virtual bool
+  RecvUnstoreAndBroadcastBlobURLUnregistration(const nsCString& aURI) override;
+
 protected:
   void OnChannelConnected(int32_t pid) override;
 
@@ -728,14 +745,6 @@ private:
   bool
   DeallocPAPZParent(PAPZParent* aActor) override;
 
-  PCompositorBridgeParent*
-  AllocPCompositorBridgeParent(mozilla::ipc::Transport* aTransport,
-                               base::ProcessId aOtherProcess) override;
-
-  PImageBridgeParent*
-  AllocPImageBridgeParent(mozilla::ipc::Transport* aTransport,
-                          base::ProcessId aOtherProcess) override;
-
   PSharedBufferManagerParent*
   AllocPSharedBufferManagerParent(mozilla::ipc::Transport* aTranport,
                                    base::ProcessId aOtherProcess) override;
@@ -747,10 +756,6 @@ private:
   PProcessHangMonitorParent*
   AllocPProcessHangMonitorParent(Transport* aTransport,
                                  ProcessId aOtherProcess) override;
-
-  PVRManagerParent*
-  AllocPVRManagerParent(Transport* aTransport,
-                        ProcessId aOtherProcess) override;
 
   virtual bool RecvGetProcessAttributes(ContentParentId* aCpId,
                                         bool* aIsForApp,
@@ -1281,6 +1286,8 @@ private:
   // This hashtable is used to run GetFilesHelper objects in the parent process.
   // GetFilesHelper can be aborted by receiving RecvDeleteGetFilesRequest.
   nsRefPtrHashtable<nsIDHashKey, GetFilesHelper> mGetFilesPendingRequests;
+
+  nsTArray<nsCString> mBlobURLs;
 };
 
 } // namespace dom

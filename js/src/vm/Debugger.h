@@ -1153,8 +1153,9 @@ class DebuggerFrame : public NativeObject
                                                bool& result);
     static MOZ_MUST_USE bool getEnvironment(JSContext* cx, Handle<DebuggerFrame*> frame,
                                             MutableHandle<DebuggerEnvironment*> result);
+    static bool getIsGenerator(Handle<DebuggerFrame*> frame);
 
-    bool isGenerator() const;
+    bool isLive() const;
 
   private:
     static const ClassOps classOps_;
@@ -1162,6 +1163,8 @@ class DebuggerFrame : public NativeObject
     static const JSPropertySpec properties_[];
     static const JSFunctionSpec methods_[];
 
+    static MOZ_MUST_USE bool requireLive(JSContext* cx, Handle<DebuggerFrame*> frame);
+    static AbstractFramePtr getReferent(Handle<DebuggerFrame*> frame);
     static MOZ_MUST_USE bool getScriptFrameIter(JSContext* cx, Handle<DebuggerFrame*> frame,
                                                 mozilla::Maybe<ScriptFrameIter>& result);
 
@@ -1171,8 +1174,8 @@ class DebuggerFrame : public NativeObject
     static MOZ_MUST_USE bool constructingGetter(JSContext* cx, unsigned argc, Value* vp);
     static MOZ_MUST_USE bool environmentGetter(JSContext* cx, unsigned argc, Value* vp);
     static MOZ_MUST_USE bool generatorGetter(JSContext* cx, unsigned argc, Value* vp);
+    static MOZ_MUST_USE bool liveGetter(JSContext* cx, unsigned argc, Value* vp);
 
-    AbstractFramePtr referent() const;
     Debugger* owner() const;
 };
 
@@ -1242,6 +1245,8 @@ class DebuggerObject : public NativeObject
                                                MutableHandleObject result);
     static MOZ_MUST_USE bool unwrap(JSContext* cx, Handle<DebuggerObject*> object,
                                     MutableHandle<DebuggerObject*> result);
+    static MOZ_MUST_USE bool isPromise(JSContext* cx, Handle<DebuggerObject*> object,
+                                       bool& result);
 
     // Infallible properties
     bool isCallable() const;
@@ -1298,6 +1303,16 @@ class DebuggerObject : public NativeObject
     static MOZ_MUST_USE bool globalGetter(JSContext* cx, unsigned argc, Value* vp);
     static MOZ_MUST_USE bool allocationSiteGetter(JSContext* cx, unsigned argc, Value* vp);
     static MOZ_MUST_USE bool errorMessageNameGetter(JSContext* cx, unsigned argc, Value* vp);
+#ifdef SPIDERMONKEY_PROMISE
+    static MOZ_MUST_USE bool isPromiseGetter(JSContext* cx, unsigned argc, Value* vp);
+    static MOZ_MUST_USE bool promiseStateGetter(JSContext* cx, unsigned argc, Value* vp);
+    static MOZ_MUST_USE bool promiseLifetimeGetter(JSContext* cx, unsigned argc, Value* vp);
+    static MOZ_MUST_USE bool promiseTimeToResolutionGetter(JSContext* cx, unsigned argc, Value* vp);
+    static MOZ_MUST_USE bool promiseAllocationSiteGetter(JSContext* cx, unsigned argc, Value* vp);
+    static MOZ_MUST_USE bool promiseResolutionSiteGetter(JSContext* cx, unsigned argc, Value* vp);
+    static MOZ_MUST_USE bool promiseIDGetter(JSContext* cx, unsigned argc, Value* vp);
+    static MOZ_MUST_USE bool promiseDependentPromisesGetter(JSContext* cx, unsigned argc, Value* vp);
+#endif // SPIDERMONKEY_PROMISE
 
     // JSNative methods
     static MOZ_MUST_USE bool isExtensibleMethod(JSContext* cx, unsigned argc, Value* vp);

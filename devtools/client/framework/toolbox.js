@@ -11,6 +11,7 @@ const OS_HISTOGRAM = "DEVTOOLS_OS_ENUMERATED_PER_USER";
 const OS_IS_64_BITS = "DEVTOOLS_OS_IS_64_BITS_PER_USER";
 const SCREENSIZE_HISTOGRAM = "DEVTOOLS_SCREEN_RESOLUTION_ENUMERATED_PER_USER";
 const HTML_NS = "http://www.w3.org/1999/xhtml";
+const { SourceMapService } = require("./source-map-service");
 
 var {Cc, Ci, Cu} = require("chrome");
 var promise = require("promise");
@@ -70,9 +71,6 @@ loader.lazyRequireGetter(this, "KeyShortcuts",
 loader.lazyRequireGetter(this, "ZoomKeys",
   "devtools/client/shared/zoom-keys");
 
-loader.lazyGetter(this, "osString", () => {
-  return Cc["@mozilla.org/xre/app-info;1"].getService(Ci.nsIXULRuntime).OS;
-});
 loader.lazyGetter(this, "registerHarOverlay", () => {
   return require("devtools/client/netmonitor/har/toolbox-overlay").register;
 });
@@ -121,6 +119,9 @@ function Toolbox(target, selectedTool, hostType, hostOptions) {
   this._target = target;
   this._toolPanels = new Map();
   this._telemetry = new Telemetry();
+  if (Services.prefs.getBoolPref("devtools.sourcemap.locations.enabled")) {
+    this._sourceMapService = new SourceMapService(this._target);
+  }
 
   this._initInspector = null;
   this._inspector = null;
@@ -495,7 +496,8 @@ Toolbox.prototype = {
     this._telemetry.toolOpened("toolbox");
 
     this._telemetry.logOncePerBrowserVersion(OS_HISTOGRAM, system.getOSCPU());
-    this._telemetry.logOncePerBrowserVersion(OS_IS_64_BITS, system.is64Bit ? 1 : 0);
+    this._telemetry.logOncePerBrowserVersion(OS_IS_64_BITS,
+                                             Services.appinfo.is64Bit ? 1 : 0);
     this._telemetry.logOncePerBrowserVersion(SCREENSIZE_HISTOGRAM, system.getScreenDimensions());
   },
 
@@ -2033,6 +2035,10 @@ Toolbox.prototype = {
     gDevTools.off("pref-changed", this._prefChanged);
 
     this._lastFocusedElement = null;
+    if (this._sourceMapService) {
+      this._sourceMapService.destroy();
+      this._sourceMapService = null;
+    }
 
     if (this.webconsolePanel) {
       this._saveSplitConsoleHeight();

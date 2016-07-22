@@ -87,14 +87,14 @@ define(function (require, exports, module) {
         }
       }
 
-      if (array.length > max + 1) {
+      if (array.length > max) {
         items.pop();
         let objectLink = this.props.objectLink || span;
         items.push(Caption({
           key: "more",
           object: objectLink({
             object: this.props.object
-          }, "more...")
+          }, "more…")
         }));
       }
 
@@ -108,7 +108,9 @@ define(function (require, exports, module) {
       let items;
 
       if (mode == "tiny") {
-        items = span({className: "length"}, this.getLength(object));
+        let objectLength = this.getLength(object);
+        let isEmpty = objectLength === 0;
+        items = span({className: "length"}, isEmpty ? "" : objectLength);
       } else {
         let max = (mode == "short") ? 3 : 300;
         items = this.arrayIterator(object, max);
@@ -174,7 +176,7 @@ define(function (require, exports, module) {
     render: function () {
       return (
         span({title: "Circular reference"},
-          "[...]"
+          "[…]"
         )
       );
     }

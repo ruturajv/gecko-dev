@@ -4410,7 +4410,7 @@ var XULBrowserWindow = {
         pageTooltip.hidePopup();
       }
       else {
-        for (let tooltipWindow = tooltipNode.ownerDocument.defaultView;
+        for (let tooltipWindow = tooltipNode.ownerGlobal;
              tooltipWindow != tooltipWindow.parent;
              tooltipWindow = tooltipWindow.parent) {
           if (tooltipWindow == aWebProgress.DOMWindow) {
@@ -6041,7 +6041,7 @@ var IndexedDBPromptHelper = {
     var requestor = subject.QueryInterface(Ci.nsIInterfaceRequestor);
 
     var browser = requestor.getInterface(Ci.nsIDOMNode);
-    if (browser.ownerDocument.defaultView != window) {
+    if (browser.ownerGlobal != window) {
       // Only listen for notifications for browsers in our chrome window.
       return;
     }
@@ -7621,6 +7621,8 @@ var TabContextMenu = {
 
     this.contextTab.addEventListener("TabAttrModified", this, false);
     aPopupMenu.addEventListener("popuphiding", this, false);
+
+    gFxAccounts.updateTabContextMenu(aPopupMenu);
   },
   handleEvent(aEvent) {
     switch (aEvent.type) {
