@@ -285,6 +285,7 @@ UNIFIED_SOURCES += [
     'jit/TypePolicy.cpp',
     'jit/ValueNumbering.cpp',
     'jit/VMFunctions.cpp',
+    'jit/WasmBCE.cpp',
     'jsalloc.cpp',
     'jsapi.cpp',
     'jsbool.cpp',
@@ -731,7 +732,6 @@ OS_LIBS += CONFIG['REALTIME_LIBS']
 
 CFLAGS += CONFIG['MOZ_ICU_CFLAGS']
 CXXFLAGS += CONFIG['MOZ_ICU_CFLAGS']
-LOCAL_INCLUDES += CONFIG['MOZ_ICU_INCLUDES']
 
 NO_EXPAND_LIBS = True
 

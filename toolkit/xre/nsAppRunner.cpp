@@ -97,6 +97,7 @@
 #include <math.h>
 #include "cairo/cairo-features.h"
 #include "mozilla/WindowsVersion.h"
+#include "mozilla/mscom/MainThreadRuntime.h"
 #include "mozilla/widget/AudioSession.h"
 
 #ifndef PROCESS_DEP_ENABLE
@@ -1835,17 +1836,17 @@ ProfileLockedDialog(nsIFile* aProfileDir, nsIFile* aProfileLocalDir,
 
     nsXPIDLString killMessage;
 #ifndef XP_MACOSX
-    sb->FormatStringFromName(aUnlocker ? MOZ_UTF16("restartMessageUnlocker")
-                                       : MOZ_UTF16("restartMessageNoUnlocker"),
+    sb->FormatStringFromName(aUnlocker ? u"restartMessageUnlocker"
+                                       : u"restartMessageNoUnlocker",
                              params, 2, getter_Copies(killMessage));
 #else
-    sb->FormatStringFromName(aUnlocker ? MOZ_UTF16("restartMessageUnlockerMac")
-                                       : MOZ_UTF16("restartMessageNoUnlockerMac"),
+    sb->FormatStringFromName(aUnlocker ? u"restartMessageUnlockerMac"
+                                       : u"restartMessageNoUnlockerMac",
                              params, 2, getter_Copies(killMessage));
 #endif
 
     nsXPIDLString killTitle;
-    sb->FormatStringFromName(MOZ_UTF16("restartTitle"),
+    sb->FormatStringFromName(u"restartTitle",
                              params, 1, getter_Copies(killTitle));
 
     if (!killMessage || !killTitle)
@@ -1928,10 +1929,10 @@ ProfileMissingDialog(nsINativeAppSupport* aNative)
     nsXPIDLString missingMessage;
 
     // profileMissing
-    sb->FormatStringFromName(MOZ_UTF16("profileMissing"), params, 2, getter_Copies(missingMessage));
+    sb->FormatStringFromName(u"profileMissing", params, 2, getter_Copies(missingMessage));
 
     nsXPIDLString missingTitle;
-    sb->FormatStringFromName(MOZ_UTF16("profileMissingTitle"),
+    sb->FormatStringFromName(u"profileMissingTitle",
                              params, 1, getter_Copies(missingTitle));
 
     if (missingMessage && missingTitle) {
@@ -4303,6 +4304,14 @@ XREMain::XRE_main(int argc, char* argv[], const nsXREAppData* aAppData)
 
   mozilla::IOInterposerInit ioInterposerGuard;
 
+#if defined(XP_WIN)
+  // Some COM settings are global to the process and must be set before any non-
+  // trivial COM is run in the application. Since these settings may affect
+  // stability, we should instantiate COM ASAP so that we can ensure that these
+  // global settings are configured before anything can interfere.
+  mozilla::mscom::MainThreadRuntime msCOMRuntime;
+#endif
+
 #if MOZ_WIDGET_GTK == 2
   XRE_GlibInit();
 #endif
@@ -4716,7 +4725,8 @@ mozilla::BrowserTabsRemoteAutostart()
 
   // Uber override pref for emergency blocking
   if (gBrowserTabsRemoteAutostart &&
-      Preferences::GetBool(kForceDisableE10sPref, false)) {
+      (Preferences::GetBool(kForceDisableE10sPref, false) ||
+       EnvHasValue("MOZ_FORCE_DISABLE_E10S"))) {
     gBrowserTabsRemoteAutostart = false;
     status = kE10sForceDisabled;
   }

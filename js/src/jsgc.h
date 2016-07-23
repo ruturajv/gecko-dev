@@ -50,6 +50,7 @@ enum State {
     SWEEP,
     FINALIZE,
     COMPACT,
+    DECOMMIT,
 
     NUM_STATES
 };
@@ -971,6 +972,7 @@ class GCParallelTask
     }
 
     // Check if a task is actively running.
+    bool isRunningWithLockHeld(const AutoLockHelperThreadState& locked) const;
     bool isRunning() const;
 
     // This should be friended to HelperThread, but cannot be because it
@@ -1225,13 +1227,14 @@ CheckValueAfterMovingGC(const JS::Value& value)
             D(ElementsBarrier, 12)             \
             D(CheckHashTablesOnMinorGC, 13)    \
             D(Compact, 14)                     \
-            D(CheckHeapOnMovingGC, 15)
+            D(CheckHeapOnMovingGC, 15)         \
+            D(CheckNursery, 16)
 
 enum class ZealMode {
 #define ZEAL_MODE(name, value) name = value,
     JS_FOR_EACH_ZEAL_MODE(ZEAL_MODE)
 #undef ZEAL_MODE
-    Limit = 15
+    Limit = 16
 };
 
 enum VerifierType {

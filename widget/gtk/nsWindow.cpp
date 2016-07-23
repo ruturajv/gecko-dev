@@ -114,6 +114,7 @@ using namespace mozilla::widget;
 #include "mozilla/gfx/2D.h"
 #include "mozilla/gfx/HelpersCairo.h"
 #include "mozilla/layers/CompositorBridgeParent.h"
+#include "mozilla/layers/CompositorThread.h"
 
 #ifdef MOZ_X11
 #include "gfxXlibSurface.h"
@@ -3525,11 +3526,11 @@ GetBrandName(nsXPIDLString& brandName)
 
     if (bundle)
         bundle->GetStringFromName(
-            MOZ_UTF16("brandShortName"),
+            u"brandShortName",
             getter_Copies(brandName));
 
     if (brandName.IsEmpty())
-        brandName.AssignLiteral(MOZ_UTF16("Mozilla"));
+        brandName.AssignLiteral(u"Mozilla");
 }
 
 static GdkWindow *
@@ -7051,14 +7052,21 @@ nsWindow::CreateWindowSurface()
   }
 #endif // MOZ_WIDGET_GTK
 
+  Display* display;
+  if (CompositorThreadHolder::IsInCompositorThread()) {
+    display = gfxPlatformGtk::GetPlatform()->GetCompositorDisplay();
+  } else {
+    display = mXDisplay;
+  }
+
 #ifdef MOZ_HAVE_SHMIMAGE
   if (nsShmImage::UseShm()) {
     LOGDRAW(("Drawing to nsWindow %p using MIT-SHM\n", (void*)this));
-    return MakeUnique<WindowSurfaceX11SHM>(mXDisplay, mXWindow, mXVisual, mXDepth);
+    return MakeUnique<WindowSurfaceX11SHM>(display, mXWindow, mXVisual, mXDepth);
   }
 #endif // MOZ_HAVE_SHMIMAGE
 
   LOGDRAW(("Drawing to nsWindow %p using XPutImage\n", (void*)this));
-  return MakeUnique<WindowSurfaceX11Image>(mXDisplay, mXWindow, mXVisual, mXDepth);
+  return MakeUnique<WindowSurfaceX11Image>(display, mXWindow, mXVisual, mXDepth);
 #endif // MOZ_X11
 }

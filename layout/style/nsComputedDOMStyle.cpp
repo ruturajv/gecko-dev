@@ -27,7 +27,7 @@
 #include "nsFlexContainerFrame.h"
 #include "nsGridContainerFrame.h"
 #include "nsGkAtoms.h"
-#include "nsHTMLReflowState.h"
+#include "mozilla/ReflowInput.h"
 #include "nsStyleUtil.h"
 #include "nsStyleStructInlines.h"
 #include "nsROCSSPrimitiveValue.h"
@@ -5125,7 +5125,7 @@ nsComputedDOMStyle::GetLineHeightCoord(nscoord& aCoord)
 
   // lie about font size inflation since we lie about font size (since
   // the inflation only applies to text)
-  aCoord = nsHTMLReflowState::CalcLineHeight(mContent, mStyleContext,
+  aCoord = ReflowInput::CalcLineHeight(mContent, mStyleContext,
                                              blockHeight, 1.0f);
 
   // CalcLineHeight uses font->mFont.size, but we want to use
@@ -5975,7 +5975,8 @@ nsComputedDOMStyle::CreatePrimitiveValueForBasicShape(
 
 already_AddRefed<CSSValue>
 nsComputedDOMStyle::CreatePrimitiveValueForClipPath(
-  const nsStyleBasicShape* aStyleBasicShape, uint8_t aSizingBox)
+  const nsStyleBasicShape* aStyleBasicShape,
+  mozilla::StyleClipShapeSizing aSizingBox)
 {
   RefPtr<nsDOMCSSValueList> valueList = GetROCSSValueList(false);
   if (aStyleBasicShape) {
@@ -5983,13 +5984,13 @@ nsComputedDOMStyle::CreatePrimitiveValueForClipPath(
       CreatePrimitiveValueForBasicShape(aStyleBasicShape));
   }
 
-  if (aSizingBox == NS_STYLE_CLIP_SHAPE_SIZING_NOBOX) {
+  if (aSizingBox == StyleClipShapeSizing::NoBox) {
     return valueList.forget();
   }
 
   nsAutoString boxString;
   AppendASCIItoUTF16(
-    nsCSSProps::ValueToKeyword(aSizingBox,
+    nsCSSProps::ValueToKeyword(uint8_t(aSizingBox),
                                nsCSSProps::kClipShapeSizingKTable),
                                boxString);
   RefPtr<nsROCSSPrimitiveValue> val = new nsROCSSPrimitiveValue;

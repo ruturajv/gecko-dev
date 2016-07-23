@@ -334,10 +334,8 @@ class BaseContext {
    *     belonging to the target scope. Otherwise, undefined.
    */
   wrapPromise(promise, callback = null) {
-    // Note: `promise instanceof this.cloneScope.Promise` returns true
-    // here even for promises that do not belong to the content scope.
     let runSafe = this.runSafe.bind(this);
-    if (promise.constructor === this.cloneScope.Promise) {
+    if (promise instanceof this.cloneScope.Promise) {
       runSafe = this.runSafeWithoutClone.bind(this);
     }
 
@@ -474,10 +472,8 @@ let IconDetails = {
 
   // Returns the appropriate icon URL for the given icons object and the
   // screen resolution of the given window.
-  getURL(icons, window, extension, size = 16) {
+  getPreferredIcon(icons, extension = null, size = 16) {
     const DEFAULT = "chrome://browser/content/extension.svg";
-
-    size *= window.devicePixelRatio;
 
     let bestSize = null;
     if (icons[size]) {
@@ -956,7 +952,7 @@ function promiseDocumentReady(doc) {
  * Messaging primitives.
  */
 
-var nextPortId = 1;
+let gNextPortId = 1;
 
 // Abstraction for a Port object in the extension API. Each port has a unique ID.
 function Port(context, messageManager, name, id, sender) {
@@ -1050,7 +1046,9 @@ Port.prototype = {
 
   disconnect() {
     if (this.disconnected) {
-      throw new this.context.contentWindow.Error("Attempt to disconnect() a disconnected port");
+      // disconnect() may be called without side effects even after the port is
+      // closed - https://developer.chrome.com/extensions/runtime#type-Port
+      return;
     }
     this.handleDisconnection();
     this.messageManager.sendAsyncMessage(this.disconnectName);
@@ -1164,7 +1162,8 @@ Messenger.prototype = {
   },
 
   connect(messageManager, name, recipient) {
-    let portId = nextPortId++;
+    // TODO(robwu): Use a process ID instead of the process type. bugzil.la/1287626
+    let portId = `${gNextPortId++}-${Services.appinfo.processType}`;
     let port = new Port(this.context, messageManager, name, portId, null);
     let msg = {name, portId};
     // TODO: Disconnect the port if no response?

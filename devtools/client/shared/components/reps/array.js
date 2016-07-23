@@ -60,7 +60,7 @@ define(function (require, exports, module) {
         }
       }
 
-      if (array.length > max + 1) {
+      if (array.length > max) {
         items.pop();
 
         let objectLink = this.props.objectLink || DOM.span;
@@ -68,7 +68,7 @@ define(function (require, exports, module) {
           key: "more",
           object: objectLink({
             object: this.props.object
-          }, "more...")
+          }, "more…")
         }));
       }
 
@@ -127,7 +127,8 @@ define(function (require, exports, module) {
       let items;
 
       if (mode == "tiny") {
-        items = DOM.span({className: "length"}, object.length);
+        let isEmpty = object.length === 0;
+        items = DOM.span({className: "length"}, isEmpty ? "" : object.length);
       } else {
         let max = (mode == "short") ? 3 : 300;
         items = this.arrayIterator(object, max);
@@ -188,7 +189,7 @@ define(function (require, exports, module) {
       let tooltip = "Circular reference";
       return (
         DOM.span({title: tooltip},
-          "[...]")
+          "[…]")
       );
     }
   }));
