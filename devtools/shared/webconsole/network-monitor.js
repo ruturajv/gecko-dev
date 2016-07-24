@@ -1303,8 +1303,8 @@ NetworkMonitor.prototype = {
     console.log(new Date(), httpActivity.url, timings);
 
     // Not clear how we can determine "blocked" time.
-    if (timings.STATUS_RESOLVED && timings.STATUS_CONNECTING_TO) {
-      harTimings.blocked = timings.STATUS_RESOLVED.last -
+    if (timings.STATUS_RESOLVING && timings.STATUS_CONNECTING_TO) {
+      harTimings.blocked = timings.STATUS_RESOLVING.first -
                            timings.REQUEST_HEADER.first;
     } else if (timings.STATUS_SENDING_TO) {
       harTimings.blocked = timings.STATUS_SENDING_TO.first -
