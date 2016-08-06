@@ -6,7 +6,6 @@
 
 #include "nsIPrefService.h"
 #include "nsIPrefBranch.h"
-#include "CamerasUtils.h"
 
 #include "CSFLog.h"
 #include "prenv.h"
@@ -109,7 +108,6 @@ MediaEngineWebRTC::MediaEngineWebRTC(MediaEnginePrefs &aPrefs)
   : mMutex("mozilla::MediaEngineWebRTC"),
     mVoiceEngine(nullptr),
     mAudioInput(nullptr),
-    mAudioEngineInit(false),
     mFullDuplex(aPrefs.mFullDuplex),
     mExtendedFilter(aPrefs.mExtendedFilter),
     mDelayAgnostic(aPrefs.mDelayAgnostic)
@@ -350,11 +348,12 @@ MediaEngineWebRTC::EnumerateAudioDevices(dom::MediaSourceEnum aMediaSource,
     return;
   }
 
-  if (!mAudioEngineInit) {
-    if (ptrVoEBase->Init() < 0) {
-      return;
-    }
-    mAudioEngineInit = true;
+  // Always re-init the voice engine, since if we close the last use we
+  // DeInitEngine() and Terminate(), which shuts down Process() - but means
+  // we have to Init() again before using it.  Init() when already inited is
+  // just a no-op, so call always.
+  if (ptrVoEBase->Init() < 0) {
+    return;
   }
 
   if (!mAudioInput) {

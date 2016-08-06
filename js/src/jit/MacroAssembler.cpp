@@ -19,9 +19,12 @@
 #include "jit/Lowering.h"
 #include "jit/MIR.h"
 #include "js/Conversions.h"
+#include "js/GCAPI.h"
 #include "vm/TraceLogging.h"
 
 #include "jsobjinlines.h"
+
+#include "gc/Nursery-inl.h"
 #include "jit/shared/Lowering-shared-inl.h"
 #include "vm/Interpreter-inl.h"
 
@@ -173,14 +176,17 @@ MacroAssembler::guardObjectType(Register obj, const TypeSet* types,
             continue;
         }
 
-        if (lastBranch.isInitialized())
+        if (lastBranch.isInitialized()) {
+            comment("emit GC pointer checks");
             lastBranch.emit(*this);
+        }
 
         JSObject* object = types->getSingletonNoBarrier(i);
         lastBranch = BranchGCPtr(Equal, obj, ImmGCPtr(object), &matched);
     }
 
     if (hasObjectGroups) {
+        comment("has object groups");
         // We are possibly going to overwrite the obj register. So already
         // emit the branch, since branch depends on previous value of obj
         // register and there is definitely a branch following. So no need
@@ -778,6 +784,7 @@ MacroAssembler::nurseryAllocate(Register result, Register temp, gc::AllocKind al
     const Nursery& nursery = GetJitContext()->runtime->gcNursery();
     int thingSize = int(gc::Arena::thingSize(allocKind));
     int totalSize = thingSize + nDynamicSlots * sizeof(HeapSlot);
+    MOZ_ASSERT(totalSize % gc::CellSize == 0);
     loadPtr(AbsoluteAddress(nursery.addressOfPosition()), result);
     computeEffectiveAddress(Address(result, totalSize), temp);
     branchPtr(Assembler::Below, AbsoluteAddress(nursery.addressOfCurrentEnd()), temp, fail);
@@ -1016,6 +1023,120 @@ FindStartOfUndefinedAndUninitializedSlots(NativeObject* templateObj, uint32_t ns
     *startOfUndefined = 0;
 }
 
+static void
+AllocateObjectBufferWithInit(JSContext* cx, TypedArrayObject* obj, uint32_t count)
+{
+    JS::AutoCheckCannotGC nogc(cx);
+
+    obj->initPrivate(nullptr);
+    obj->setFixedSlot(TypedArrayObject::LENGTH_SLOT, Int32Value(count));
+
+    // Typed arrays with a non-compile-time known size that have a count of zero
+    // eventually are essentially typed arrays with inline elements. The bounds
+    // check will make sure that no elements are read or written to that memory.
+    if (count == 0) {
+        obj->setInlineElements();
+        return;
+    }
+
+    size_t nbytes;
+
+    switch (obj->type()) {
+#define CREATE_TYPED_ARRAY(T, N) \
+      case Scalar::N: \
+        if (!js::CalculateAllocSize<T>(count, &nbytes)) \
+            return; \
+        break;
+JS_FOR_EACH_TYPED_ARRAY(CREATE_TYPED_ARRAY)
+#undef CREATE_TYPED_ARRAY
+      default:
+        MOZ_CRASH("Unsupported TypedArray type");
+    }
+
+    nbytes = JS_ROUNDUP(nbytes, sizeof(Value));
+
+    // Elements can only be stored in the nursery since typed arrays have a
+    // finalizer that frees the memory, but the finalizer is only called for
+    // tenured objects. Allocating the memory in the nursery is done to avoid
+    // memory leaks.
+    if (nbytes > Nursery::MaxNurseryBufferSize)
+        return;
+
+    Nursery& nursery = cx->runtime()->gc.nursery;
+    void* buf = nursery.allocateBuffer(obj->zone(), nbytes);
+    if (buf) {
+        if (nursery.isInside(buf) || obj->isTenured()) {
+            obj->initPrivate(buf);
+            memset(buf, 0, nbytes);
+        } else {
+            // If the nursery is full, |allocateBuffer| will try to allocate
+            // the memory in the tenured heap. This will leak memory when the
+            // object is not tenured since the finalizer will not be called for
+            // non-tenured objects.
+            nursery.removeMallocedBuffer(buf);
+            js_free(buf);
+        }
+    }
+}
+
+void
+MacroAssembler::initTypedArraySlots(Register obj, Register temp, Register lengthReg,
+                                    LiveRegisterSet liveRegs, Label* fail,
+                                    TypedArrayObject* templateObj, TypedArrayLength lengthKind)
+{
+    MOZ_ASSERT(templateObj->hasPrivate());
+    MOZ_ASSERT(!templateObj->hasBuffer());
+
+    size_t dataSlotOffset = TypedArrayObject::dataOffset();
+    size_t dataOffset = TypedArrayObject::dataOffset() + sizeof(HeapSlot);
+
+    static_assert(TypedArrayObject::FIXED_DATA_START == TypedArrayObject::DATA_SLOT + 1,
+                    "fixed inline element data assumed to begin after the data slot");
+
+    // Initialise data elements to zero.
+    int32_t length = templateObj->length();
+    size_t nbytes = length * templateObj->bytesPerElement();
+
+    if (lengthKind == TypedArrayLength::Fixed && dataOffset + nbytes <= JSObject::MAX_BYTE_SIZE) {
+        MOZ_ASSERT(dataOffset + nbytes <= templateObj->tenuredSizeOfThis());
+
+        // Store data elements inside the remaining JSObject slots.
+        computeEffectiveAddress(Address(obj, dataOffset), temp);
+        storePtr(temp, Address(obj, dataSlotOffset));
+
+        // Write enough zero pointers into fixed data to zero every
+        // element.  (This zeroes past the end of a byte count that's
+        // not a multiple of pointer size.  That's okay, because fixed
+        // data is a count of 8-byte HeapSlots (i.e. <= pointer size),
+        // and we won't inline unless the desired memory fits in that
+        // space.)
+        static_assert(sizeof(HeapSlot) == 8, "Assumed 8 bytes alignment");
+
+        size_t numZeroPointers = ((nbytes + 7) & ~0x7) / sizeof(char *);
+        for (size_t i = 0; i < numZeroPointers; i++)
+            storePtr(ImmWord(0), Address(obj, dataOffset + i * sizeof(char *)));
+    } else {
+        if (lengthKind == TypedArrayLength::Fixed)
+            move32(Imm32(length), lengthReg);
+
+        // Allocate a buffer on the heap to store the data elements.
+        liveRegs.addUnchecked(temp);
+        liveRegs.addUnchecked(obj);
+        liveRegs.addUnchecked(lengthReg);
+        PushRegsInMask(liveRegs);
+        setupUnalignedABICall(temp);
+        loadJSContext(temp);
+        passABIArg(temp);
+        passABIArg(obj);
+        passABIArg(lengthReg);
+        callWithABI(JS_FUNC_TO_DATA_PTR(void*, AllocateObjectBufferWithInit));
+        PopRegsInMask(liveRegs);
+
+        // Fail when data elements is set to NULL.
+        branchPtr(Assembler::Equal, Address(obj, dataSlotOffset), ImmWord(0), fail);
+    }
+}
+
 void
 MacroAssembler::initGCSlots(Register obj, Register temp, NativeObject* templateObj,
                             bool initContents)
@@ -1086,7 +1207,7 @@ MacroAssembler::initGCThing(Register obj, Register temp, JSObject* templateObj,
     storePtr(ImmGCPtr(templateObj->group()), Address(obj, JSObject::offsetOfGroup()));
 
     if (Shape* shape = templateObj->maybeShape())
-        storePtr(ImmGCPtr(shape), Address(obj, JSObject::offsetOfShape()));
+        storePtr(ImmGCPtr(shape), Address(obj, ShapedObject::offsetOfShape()));
 
     MOZ_ASSERT_IF(convertDoubleElements, templateObj->is<ArrayObject>());
 
@@ -1128,13 +1249,13 @@ MacroAssembler::initGCThing(Register obj, Register temp, JSObject* templateObj,
         } else {
             // If the target type could be a TypedArray that maps shared memory
             // then this would need to store emptyObjectElementsShared in that case.
-            // That cannot happen at present; TypedArray allocation is always
-            // a VM call.
+            MOZ_ASSERT(!ntemplate->isSharedMemory());
+
             storePtr(ImmPtr(emptyObjectElements), Address(obj, NativeObject::offsetOfElements()));
 
             initGCSlots(obj, temp, ntemplate, initContents);
 
-            if (ntemplate->hasPrivate()) {
+            if (ntemplate->hasPrivate() && !ntemplate->is<TypedArrayObject>()) {
                 uint32_t nfixed = ntemplate->numFixedSlots();
                 storePtr(ImmPtr(ntemplate->getPrivate()),
                          Address(obj, NativeObject::getPrivateDataOffset(nfixed)));
@@ -1823,7 +1944,8 @@ void
 MacroAssembler::outOfLineTruncateSlow(FloatRegister src, Register dest, bool widenFloatToDouble,
                                       bool compilingWasm)
 {
-#if defined(JS_CODEGEN_ARM) || defined(JS_CODEGEN_ARM64)
+#if defined(JS_CODEGEN_ARM) || defined(JS_CODEGEN_ARM64) || \
+    defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64)
     if (widenFloatToDouble) {
         convertFloat32ToDouble(src, ScratchDoubleReg);
         src = ScratchDoubleReg;
@@ -1852,7 +1974,8 @@ MacroAssembler::outOfLineTruncateSlow(FloatRegister src, Register dest, bool wid
         callWithABI(mozilla::BitwiseCast<void*, int32_t(*)(double)>(JS::ToInt32));
     storeCallResult(dest);
 
-#if defined(JS_CODEGEN_ARM) || defined(JS_CODEGEN_ARM64)
+#if defined(JS_CODEGEN_ARM) || defined(JS_CODEGEN_ARM64) || \
+    defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64)
     // Nothing
 #elif defined(JS_CODEGEN_X86) || defined(JS_CODEGEN_X64)
     if (widenFloatToDouble)
@@ -1873,7 +1996,7 @@ MacroAssembler::convertDoubleToInt(FloatRegister src, Register output, FloatRegi
         convertDoubleToInt32(src, output, fail, behavior == IntConversion_NegativeZeroCheck);
         break;
       case IntConversion_Truncate:
-        branchTruncateDouble(src, output, truncateFail ? truncateFail : fail);
+        branchTruncateDoubleMaybeModUint32(src, output, truncateFail ? truncateFail : fail);
         break;
       case IntConversion_ClampToUint8:
         // Clamping clobbers the input register, so use a temp.

@@ -30,7 +30,6 @@
 #include "nsIDOMNodeList.h"
 #include "nsIDOMXULCommandDispatcher.h"
 #include "nsIDOMXULElement.h"
-#include "nsIDOMElementCSSInlineStyle.h"
 #include "nsIDOMXULSelectCntrlItemEl.h"
 #include "nsIDocument.h"
 #include "nsLayoutStylesheetCache.h"
@@ -125,27 +124,19 @@ uint32_t             nsXULPrototypeAttribute::gNumCacheSets;
 uint32_t             nsXULPrototypeAttribute::gNumCacheFills;
 #endif
 
-class nsXULElementTearoff final : public nsIDOMElementCSSInlineStyle,
-                                  public nsIFrameLoaderOwner
+class nsXULElementTearoff final : public nsIFrameLoaderOwner
 {
   ~nsXULElementTearoff() {}
 
 public:
   NS_DECL_CYCLE_COLLECTING_ISUPPORTS
-  NS_DECL_CYCLE_COLLECTION_CLASS_AMBIGUOUS(nsXULElementTearoff,
-                                           nsIDOMElementCSSInlineStyle)
+  NS_DECL_CYCLE_COLLECTION_CLASS(nsXULElementTearoff)
 
   explicit nsXULElementTearoff(nsXULElement* aElement)
     : mElement(aElement)
   {
   }
 
-  NS_IMETHOD GetStyle(nsIDOMCSSStyleDeclaration** aStyle) override
-  {
-    nsXULElement* element = static_cast<nsXULElement*>(mElement.get());
-    NS_ADDREF(*aStyle = element->Style());
-    return NS_OK;
-  }
   NS_FORWARD_NSIFRAMELOADEROWNER(static_cast<nsXULElement*>(mElement.get())->)
 private:
   nsCOMPtr<nsIDOMXULElement> mElement;
@@ -158,7 +149,6 @@ NS_IMPL_CYCLE_COLLECTING_RELEASE(nsXULElementTearoff)
 
 NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(nsXULElementTearoff)
   NS_INTERFACE_MAP_ENTRY(nsIFrameLoaderOwner)
-  NS_INTERFACE_MAP_ENTRY(nsIDOMElementCSSInlineStyle)
 NS_INTERFACE_MAP_END_AGGREGATED(mElement)
 
 //----------------------------------------------------------------------
@@ -354,8 +344,6 @@ NS_INTERFACE_TABLE_HEAD_CYCLE_COLLECTION_INHERITED(nsXULElement)
     NS_INTERFACE_TABLE_INHERITED(nsXULElement, nsIDOMNode, nsIDOMElement,
                                  nsIDOMXULElement)
     NS_ELEMENT_INTERFACE_TABLE_TO_MAP_SEGUE
-    NS_INTERFACE_MAP_ENTRY_TEAROFF(nsIDOMElementCSSInlineStyle,
-                                   new nsXULElementTearoff(this))
     NS_INTERFACE_MAP_ENTRY_TEAROFF(nsIFrameLoaderOwner,
                                    new nsXULElementTearoff(this))
 NS_INTERFACE_MAP_END_INHERITING(nsStyledElement)
@@ -1280,8 +1268,7 @@ nsXULElement::PreHandleEvent(EventChainPreVisitor& aVisitor)
          aVisitor.mEvent->mMessage == eMouseDoubleClick ||
          aVisitor.mEvent->mMessage == eXULCommand ||
          aVisitor.mEvent->mMessage == eContextMenu ||
-         aVisitor.mEvent->mMessage == eDragStart ||
-         aVisitor.mEvent->mMessage == eLegacyDragGesture)) {
+         aVisitor.mEvent->mMessage == eDragStart)) {
         // Don't propagate these events from native anonymous scrollbar.
         aVisitor.mCanHandle = true;
         aVisitor.mParentTarget = nullptr;
@@ -1433,7 +1420,7 @@ nsChangeHint
 nsXULElement::GetAttributeChangeHint(const nsIAtom* aAttribute,
                                      int32_t aModType) const
 {
-    nsChangeHint retval(NS_STYLE_HINT_NONE);
+    nsChangeHint retval(nsChangeHint(0));
 
     if (aAttribute == nsGkAtoms::value &&
         (aModType == nsIDOMMutationEvent::REMOVAL ||
@@ -1444,7 +1431,7 @@ nsXULElement::GetAttributeChangeHint(const nsIAtom* aAttribute,
         // value attribute is being added or removed, then we need to
         // return a hint of frame change.  (See bugzilla bug 95475 for
         // details.)
-        retval = NS_STYLE_HINT_FRAMECHANGE;
+        retval = nsChangeHint_ReconstructFrame;
     } else {
         // if left or top changes we reflow. This will happen in xul
         // containers that manage positioned children such as a stack.
@@ -2769,7 +2756,7 @@ NotifyOffThreadScriptCompletedRunnable::Run()
             return NS_ERROR_UNEXPECTED;
         }
         JSContext* cx = jsapi.cx();
-        script = JS::FinishOffThreadScript(cx, JS_GetRuntime(cx), mToken);
+        script = JS::FinishOffThreadScript(cx, mToken);
     }
 
     if (!sReceivers) {

@@ -260,6 +260,10 @@ WorkerRunnable::Run()
 
     MOZ_ASSERT(IsCanceled(), "Subclass Cancel() didn't set IsCanceled()!");
 
+    if (mBehavior == WorkerThreadModifyBusyCount) {
+      mWorkerPrivate->ModifyBusyCountFromWorker(false);
+    }
+
     return NS_OK;
   }
 
@@ -318,9 +322,7 @@ WorkerRunnable::Run()
   JSContext* cx;
   AutoJSAPI* jsapi;
   if (globalObject) {
-    aes.emplace(globalObject, "Worker runnable",
-                isMainThread,
-                isMainThread ? nullptr : GetCurrentThreadJSContext());
+    aes.emplace(globalObject, "Worker runnable", isMainThread);
     jsapi = aes.ptr();
     cx = aes->cx();
   } else {
@@ -658,4 +660,89 @@ WorkerSameThreadRunnable::PostDispatch(WorkerPrivate* aWorkerPrivate,
     // parent and it should be able to process a control runnable.
     MOZ_ASSERT(willIncrement);
   }
+}
+
+WorkerProxyToMainThreadRunnable::WorkerProxyToMainThreadRunnable(WorkerPrivate* aWorkerPrivate)
+  : mWorkerPrivate(aWorkerPrivate)
+{
+  MOZ_ASSERT(mWorkerPrivate);
+  mWorkerPrivate->AssertIsOnWorkerThread();
+}
+
+WorkerProxyToMainThreadRunnable::~WorkerProxyToMainThreadRunnable()
+{}
+
+bool
+WorkerProxyToMainThreadRunnable::Dispatch()
+{
+  mWorkerPrivate->AssertIsOnWorkerThread();
+
+  if (NS_WARN_IF(!mWorkerPrivate->ModifyBusyCountFromWorker(true))) {
+    RunBackOnWorkerThread();
+    return false;
+  }
+
+  if (NS_WARN_IF(NS_FAILED(NS_DispatchToMainThread(this)))) {
+    mWorkerPrivate->ModifyBusyCountFromWorker(false);
+    RunBackOnWorkerThread();
+    return false;
+  }
+
+  return true;
+}
+
+NS_IMETHODIMP
+WorkerProxyToMainThreadRunnable::Run()
+{
+  AssertIsOnMainThread();
+  RunOnMainThread();
+  PostDispatchOnMainThread();
+  return NS_OK;
+}
+
+void
+WorkerProxyToMainThreadRunnable::PostDispatchOnMainThread()
+{
+  class ReleaseRunnable final : public MainThreadWorkerControlRunnable
+  {
+    RefPtr<WorkerProxyToMainThreadRunnable> mRunnable;
+
+  public:
+    ReleaseRunnable(WorkerPrivate* aWorkerPrivate,
+                    WorkerProxyToMainThreadRunnable* aRunnable)
+      : MainThreadWorkerControlRunnable(aWorkerPrivate)
+      , mRunnable(aRunnable)
+    {
+      MOZ_ASSERT(aRunnable);
+    }
+
+    // We must call RunBackOnWorkerThread() also if the runnable is cancelled.
+    nsresult
+    Cancel() override
+    {
+      WorkerRun(nullptr, mWorkerPrivate);
+      return NS_OK;
+    }
+
+    virtual bool
+    WorkerRun(JSContext* aCx, workers::WorkerPrivate* aWorkerPrivate) override
+    {
+      MOZ_ASSERT(aWorkerPrivate);
+      aWorkerPrivate->AssertIsOnWorkerThread();
+
+      mRunnable->RunBackOnWorkerThread();
+
+      // Let's release the worker thread.
+      aWorkerPrivate->ModifyBusyCountFromWorker(false);
+      return true;
+    }
+
+  private:
+    ~ReleaseRunnable()
+    {}
+  };
+
+  RefPtr<WorkerControlRunnable> runnable =
+    new ReleaseRunnable(mWorkerPrivate, this);
+  NS_WARN_IF(!runnable->Dispatch());
 }

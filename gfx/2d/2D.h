@@ -36,6 +36,9 @@ typedef _cairo_surface cairo_surface_t;
 struct _cairo_scaled_font;
 typedef _cairo_scaled_font cairo_scaled_font_t;
 
+struct _FcPattern;
+typedef _FcPattern FcPattern;
+
 struct ID3D11Texture2D;
 struct ID3D11Device;
 struct ID2D1Device;
@@ -1038,7 +1041,7 @@ public:
   /**
    * Create a SourceSurface for a type of NativeSurface. This may fail if the
    * draw target does not know how to deal with the type of NativeSurface passed
-   * in.
+   * in. If this succeeds, the SourceSurface takes the ownersip of the NativeSurface.
    */
   virtual already_AddRefed<SourceSurface>
     CreateSourceSurfaceFromNativeSurface(const NativeSurface &aSurface) const = 0;
@@ -1175,6 +1178,17 @@ public:
     return mPermitSubpixelAA;
   }
 
+  /**
+   * Ensures that no snapshot is still pointing to this DrawTarget's surface data.
+   *
+   * This can be useful if the DrawTarget is wrapped around data that it does not
+   * own, and for some reason the owner of the data has to make it temporarily
+   * unavailable without the DrawTarget knowing about it.
+   * This can cause costly surface copies, so it should not be used without a
+   * a good reason.
+   */
+  virtual void DetachAllSnapshots() = 0;
+
 #ifdef USE_SKIA_GPU
   virtual bool InitWithGrContext(GrContext* aGrContext,
                                  const IntSize &aSize,
@@ -1285,6 +1299,11 @@ public:
   static already_AddRefed<ScaledFont>
     CreateScaledFontForNativeFont(const NativeFont &aNativeFont, Float aSize);
 
+#ifdef MOZ_WIDGET_GTK
+  static already_AddRefed<ScaledFont>
+    CreateScaledFontForFontconfigFont(cairo_scaled_font_t* aScaledFont, FcPattern* aPattern, Float aSize);
+#endif
+
   /**
    * This creates a NativeFontResource from TrueType data.
    *
@@ -1376,10 +1395,6 @@ public:
 
   static void PurgeAllCaches();
 
-#if defined(USE_SKIA) && defined(MOZ_ENABLE_FREETYPE)
-  static already_AddRefed<GlyphRenderingOptions>
-    CreateCairoGlyphRenderingOptions(FontHinting aHinting, bool aAutoHinting, AntialiasMode aAntialiasMode = AntialiasMode::DEFAULT);
-#endif
   static already_AddRefed<DrawTarget>
     CreateDualDrawTarget(DrawTarget *targetA, DrawTarget *targetB);
 

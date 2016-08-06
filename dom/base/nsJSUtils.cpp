@@ -195,7 +195,7 @@ nsJSUtils::EvaluateString(JSContext* aCx,
 
     if (ok && aOffThreadToken) {
       JS::Rooted<JSScript*>
-        script(aCx, JS::FinishOffThreadScript(aCx, JS_GetRuntime(aCx), *aOffThreadToken));
+        script(aCx, JS::FinishOffThreadScript(aCx, *aOffThreadToken));
       *aOffThreadToken = nullptr; // Mark the token as having been finished.
       if (script) {
         ok = JS_ExecuteScript(aCx, scopeChain, script);
@@ -367,8 +367,8 @@ nsJSUtils::ResetTimeZone()
 
 bool nsAutoJSString::init(const JS::Value &v)
 {
-  JSContext* cx = nsContentUtils::RootingCxForThread();
-  if (!init(nsContentUtils::RootingCxForThread(), v)) {
+  JSContext* cx = nsContentUtils::RootingCx();
+  if (!init(cx, v)) {
     JS_ClearPendingException(cx);
     return false;
   }

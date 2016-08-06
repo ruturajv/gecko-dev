@@ -27,7 +27,7 @@
 #include "nsFlexContainerFrame.h"
 #include "nsGridContainerFrame.h"
 #include "nsGkAtoms.h"
-#include "nsHTMLReflowState.h"
+#include "mozilla/ReflowInput.h"
 #include "nsStyleUtil.h"
 #include "nsStyleStructInlines.h"
 #include "nsROCSSPrimitiveValue.h"
@@ -523,7 +523,7 @@ nsComputedDOMStyle::GetStyleContextForElementNoFlush(Element* aElement,
          i < stop; ++i) {
       rules[i].swap(rules[length - i - 1]);
     }
-    
+
     sc = styleSet->AsGecko()->ResolveStyleForRules(parentContext, rules);
   }
 
@@ -2088,7 +2088,7 @@ nsComputedDOMStyle::SetValueToStyleImage(const nsStyleImage& aStyleImage,
       nsCOMPtr<nsIURI> uri;
       req->GetURI(getter_AddRefs(uri));
 
-      const nsStyleSides* cropRect = aStyleImage.GetCropRect();
+      const UniquePtr<nsStyleSides>& cropRect = aStyleImage.GetCropRect();
       if (cropRect) {
         nsAutoString imageRectString;
         GetImageRectString(uri, *cropRect, imageRectString);
@@ -2135,7 +2135,26 @@ nsComputedDOMStyle::DoGetImageLayerImage(const nsStyleImageLayers& aLayers)
     RefPtr<nsROCSSPrimitiveValue> val = new nsROCSSPrimitiveValue;
 
     const nsStyleImage& image = aLayers.mLayers[i].mImage;
-    SetValueToStyleImage(image, val);
+    // Layer::mImage::GetType() returns eStyleImageType_Null in two conditions:
+    // 1. The value of mask-image/bg-image is 'none'.
+    //    Since this layer does not refer to any source, Layer::mSourceURI must
+    //    be nullptr too.
+    // 2. This layer refers to a local resource, e.g. mask-image:url(#mymask).
+    //    For local references, there is no need to download any external
+    //    resource, so Layer::mImage is not used.
+    //    Instead, we store the local URI in one place -- on Layer::mSourceURI.
+    //    Hence, we must serialize using mSourceURI (instead of
+    //    SetValueToStyleImage()/mImage) in this case.
+    bool isLocalURI = image.GetType() == eStyleImageType_Null &&
+                      aLayers.mLayers[i].mSourceURI;
+    if (isLocalURI) {
+      // This is how we represent a 'mask-image' reference for a local URI,
+      // such as 'mask-image:url(#mymask)' or 'mask:url(#mymask)'
+      val->SetURI(aLayers.mLayers[i].mSourceURI);
+    } else {
+      SetValueToStyleImage(image, val);
+    }
+
     valueList->AppendCSSValue(val.forget());
   }
 
@@ -2220,7 +2239,7 @@ nsComputedDOMStyle::DoGetImageLayerRepeat(const nsStyleImageLayers& aLayers)
                                          nsCSSProps::kImageLayerRepeatKTable));
     } else {
       valY = new nsROCSSPrimitiveValue;
-      
+
       valX->SetIdent(nsCSSProps::ValueToKeywordEnum(xRepeat,
                                           nsCSSProps::kImageLayerRepeatKTable));
       valY->SetIdent(nsCSSProps::ValueToKeywordEnum(yRepeat,
@@ -2732,14 +2751,15 @@ already_AddRefed<CSSValue>
 nsComputedDOMStyle::DoGetGridTemplateColumns()
 {
   const ComputedGridTrackInfo* info = nullptr;
-  if (mInnerFrame) {
-    nsIFrame* gridContainerCandidate = mInnerFrame->GetContentInsertionFrame();
-    if (gridContainerCandidate &&
-        gridContainerCandidate->GetType() == nsGkAtoms::gridContainerFrame) {
-      info = static_cast<nsGridContainerFrame*>(gridContainerCandidate)->
-        GetComputedTemplateColumns();
-    }
+
+  nsGridContainerFrame* gridFrame =
+    nsGridContainerFrame::GetGridFrameWithComputedInfo(
+      mContent->GetPrimaryFrame());
+
+  if (gridFrame) {
+    info = gridFrame->GetComputedTemplateColumns();
   }
+
   return GetGridTemplateColumnsRows(StylePosition()->mGridTemplateColumns, info);
 }
 
@@ -2747,14 +2767,15 @@ already_AddRefed<CSSValue>
 nsComputedDOMStyle::DoGetGridTemplateRows()
 {
   const ComputedGridTrackInfo* info = nullptr;
-  if (mInnerFrame) {
-    nsIFrame* gridContainerCandidate = mInnerFrame->GetContentInsertionFrame();
-    if (gridContainerCandidate &&
-        gridContainerCandidate->GetType() == nsGkAtoms::gridContainerFrame) {
-      info = static_cast<nsGridContainerFrame*>(gridContainerCandidate)->
-        GetComputedTemplateRows();
-     }
+
+  nsGridContainerFrame* gridFrame =
+    nsGridContainerFrame::GetGridFrameWithComputedInfo(
+      mContent->GetPrimaryFrame());
+
+  if (gridFrame) {
+    info = gridFrame->GetComputedTemplateRows();
   }
+
   return GetGridTemplateColumnsRows(StylePosition()->mGridTemplateRows, info);
 }
 
@@ -3383,8 +3404,9 @@ nsComputedDOMStyle::GetCSSShadowArray(nsCSSShadowArray* aArray,
       // This is an inset box-shadow
       val = new nsROCSSPrimitiveValue;
       val->SetIdent(
-        nsCSSProps::ValueToKeywordEnum(NS_STYLE_BOX_SHADOW_INSET,
-                                       nsCSSProps::kBoxShadowTypeKTable));
+        nsCSSProps::ValueToKeywordEnum(
+            uint8_t(StyleBoxShadowType::Inset),
+            nsCSSProps::kBoxShadowTypeKTable));
       itemList->AppendCSSValue(val.forget());
     }
     valueList->AppendCSSValue(itemList.forget());
@@ -3519,6 +3541,25 @@ nsComputedDOMStyle::DoGetImageRegion()
   }
 
   return val.forget();
+}
+
+already_AddRefed<CSSValue>
+nsComputedDOMStyle::DoGetInitialLetter()
+{
+  const nsStyleTextReset* textReset = StyleTextReset();
+  RefPtr<nsROCSSPrimitiveValue> val = new nsROCSSPrimitiveValue;
+  if (textReset->mInitialLetterSink == 0) {
+    val->SetIdent(eCSSKeyword_normal);
+    return val.forget();
+  } else {
+    RefPtr<nsDOMCSSValueList> valueList = GetROCSSValueList(false);
+    val->SetNumber(textReset->mInitialLetterSize);
+    valueList->AppendCSSValue(val.forget());
+    RefPtr<nsROCSSPrimitiveValue> second = new nsROCSSPrimitiveValue;
+    second->SetNumber(textReset->mInitialLetterSink);
+    valueList->AppendCSSValue(second.forget());
+    return valueList.forget();
+  }
 }
 
 already_AddRefed<CSSValue>
@@ -4134,7 +4175,7 @@ nsComputedDOMStyle::DoGetBoxSizing()
 {
   RefPtr<nsROCSSPrimitiveValue> val = new nsROCSSPrimitiveValue;
   val->SetIdent(
-    nsCSSProps::ValueToKeywordEnum(uint8_t(StylePosition()->mBoxSizing),
+    nsCSSProps::ValueToKeywordEnum(StylePosition()->mBoxSizing,
                                    nsCSSProps::kBoxSizingKTable));
   return val.forget();
 }
@@ -4382,7 +4423,7 @@ nsComputedDOMStyle::DoGetFloatEdge()
 {
   RefPtr<nsROCSSPrimitiveValue> val = new nsROCSSPrimitiveValue;
   val->SetIdent(
-    nsCSSProps::ValueToKeywordEnum(StyleBorder()->mFloatEdge,
+    nsCSSProps::ValueToKeywordEnum(uint8_t(StyleBorder()->mFloatEdge),
                                    nsCSSProps::kFloatEdgeKTable));
   return val.forget();
 }
@@ -4431,7 +4472,7 @@ nsComputedDOMStyle::DoGetUserFocus()
 {
   RefPtr<nsROCSSPrimitiveValue> val = new nsROCSSPrimitiveValue;
   val->SetIdent(
-    nsCSSProps::ValueToKeywordEnum(StyleUserInterface()->mUserFocus,
+    nsCSSProps::ValueToKeywordEnum(uint8_t(StyleUserInterface()->mUserFocus),
                                    nsCSSProps::kUserFocusKTable));
   return val.forget();
 }
@@ -4708,7 +4749,7 @@ nsComputedDOMStyle::DoGetHeight()
         !(mInnerFrame->IsFrameOfType(nsIFrame::eReplaced)) &&
         // An outer SVG frame should behave the same as eReplaced in this case
         mInnerFrame->GetType() != nsGkAtoms::svgOuterSVGFrame) {
-      
+
       calcHeight = false;
     }
   }
@@ -4752,7 +4793,7 @@ nsComputedDOMStyle::DoGetWidth()
         !(mInnerFrame->IsFrameOfType(nsIFrame::eReplaced)) &&
         // An outer SVG frame should behave the same as eReplaced in this case
         mInnerFrame->GetType() != nsGkAtoms::svgOuterSVGFrame) {
-      
+
       calcWidth = false;
     }
   }
@@ -5104,7 +5145,7 @@ nsComputedDOMStyle::GetLineHeightCoord(nscoord& aCoord)
 
   // lie about font size inflation since we lie about font size (since
   // the inflation only applies to text)
-  aCoord = nsHTMLReflowState::CalcLineHeight(mContent, mStyleContext,
+  aCoord = ReflowInput::CalcLineHeight(mContent, mStyleContext,
                                              blockHeight, 1.0f);
 
   // CalcLineHeight uses font->mFont.size, but we want to use
@@ -5521,10 +5562,12 @@ nsComputedDOMStyle::GetSVGPaintFor(bool aFill)
     }
     case eStyleSVGPaintType_Server:
     {
+      // Bug 1288812 - we should only serialize fragment for local-ref URL.
       RefPtr<nsDOMCSSValueList> valueList = GetROCSSValueList(false);
       RefPtr<nsROCSSPrimitiveValue> fallback = new nsROCSSPrimitiveValue;
-
-      val->SetURI(paint->mPaint.mPaintServer);
+      nsCOMPtr<nsIURI> paintServerURI =
+        paint->mPaint.mPaintServer->GetSourceURL();
+      val->SetURI(paintServerURI);
       SetToRGBAColor(fallback, paint->mFallbackColor);
 
       valueList->AppendCSSValue(val.forget());
@@ -5562,11 +5605,11 @@ already_AddRefed<CSSValue>
 nsComputedDOMStyle::DoGetMarkerEnd()
 {
   RefPtr<nsROCSSPrimitiveValue> val = new nsROCSSPrimitiveValue;
+  // Bug 1288812 - we should only serialize fragment for local-ref URL.
+  nsCOMPtr<nsIURI> markerURI = StyleSVG()->mMarkerEnd.GetSourceURL();
 
-  const nsStyleSVG* svg = StyleSVG();
-
-  if (svg->mMarkerEnd)
-    val->SetURI(svg->mMarkerEnd);
+  if (markerURI)
+    val->SetURI(markerURI);
   else
     val->SetIdent(eCSSKeyword_none);
 
@@ -5577,11 +5620,11 @@ already_AddRefed<CSSValue>
 nsComputedDOMStyle::DoGetMarkerMid()
 {
   RefPtr<nsROCSSPrimitiveValue> val = new nsROCSSPrimitiveValue;
+  // Bug 1288812 - we should only serialize fragment for local-ref URL.
+  nsCOMPtr<nsIURI> markerURI = StyleSVG()->mMarkerMid.GetSourceURL();
 
-  const nsStyleSVG* svg = StyleSVG();
-
-  if (svg->mMarkerMid)
-    val->SetURI(svg->mMarkerMid);
+  if (markerURI)
+    val->SetURI(markerURI);
   else
     val->SetIdent(eCSSKeyword_none);
 
@@ -5592,11 +5635,11 @@ already_AddRefed<CSSValue>
 nsComputedDOMStyle::DoGetMarkerStart()
 {
   RefPtr<nsROCSSPrimitiveValue> val = new nsROCSSPrimitiveValue;
+  // Bug 1288812 - we should only serialize fragment for local-ref URL.
+  nsCOMPtr<nsIURI> markerURI = StyleSVG()->mMarkerStart.GetSourceURL();
 
-  const nsStyleSVG* svg = StyleSVG();
-
-  if (svg->mMarkerStart)
-    val->SetURI(svg->mMarkerStart);
+  if (markerURI)
+    val->SetURI(markerURI);
   else
     val->SetIdent(eCSSKeyword_none);
 
@@ -5954,7 +5997,8 @@ nsComputedDOMStyle::CreatePrimitiveValueForBasicShape(
 
 already_AddRefed<CSSValue>
 nsComputedDOMStyle::CreatePrimitiveValueForClipPath(
-  const nsStyleBasicShape* aStyleBasicShape, uint8_t aSizingBox)
+  const nsStyleBasicShape* aStyleBasicShape,
+  StyleClipShapeSizing aSizingBox)
 {
   RefPtr<nsDOMCSSValueList> valueList = GetROCSSValueList(false);
   if (aStyleBasicShape) {
@@ -5962,7 +6006,7 @@ nsComputedDOMStyle::CreatePrimitiveValueForClipPath(
       CreatePrimitiveValueForBasicShape(aStyleBasicShape));
   }
 
-  if (aSizingBox == NS_STYLE_CLIP_SHAPE_SIZING_NOBOX) {
+  if (aSizingBox == StyleClipShapeSizing::NoBox) {
     return valueList.forget();
   }
 
@@ -5983,18 +6027,20 @@ nsComputedDOMStyle::DoGetClipPath()
 {
   const nsStyleSVGReset* svg = StyleSVGReset();
   switch (svg->mClipPath.GetType()) {
-    case NS_STYLE_CLIP_PATH_SHAPE:
+    case StyleClipPathType::Shape:
       return CreatePrimitiveValueForClipPath(svg->mClipPath.GetBasicShape(),
                                              svg->mClipPath.GetSizingBox());
-    case NS_STYLE_CLIP_PATH_BOX:
+    case StyleClipPathType::Box:
       return CreatePrimitiveValueForClipPath(nullptr,
                                              svg->mClipPath.GetSizingBox());
-    case NS_STYLE_CLIP_PATH_URL: {
+    case StyleClipPathType::URL: {
+      // Bug 1288812 - we should only serialize fragment for local-ref URL.
+      nsCOMPtr<nsIURI> pathURI = svg->mClipPath.GetURL()->GetSourceURL();
       RefPtr<nsROCSSPrimitiveValue> val = new nsROCSSPrimitiveValue;
-      val->SetURI(svg->mClipPath.GetURL());
+      val->SetURI(pathURI);
       return val.forget();
     }
-    case NS_STYLE_CLIP_PATH_NONE: {
+    case StyleClipPathType::None_: {
       RefPtr<nsROCSSPrimitiveValue> val = new nsROCSSPrimitiveValue;
       val->SetIdent(eCSSKeyword_none);
       return val.forget();
@@ -6022,7 +6068,9 @@ nsComputedDOMStyle::CreatePrimitiveValueForStyleFilter(
   RefPtr<nsROCSSPrimitiveValue> value = new nsROCSSPrimitiveValue;
   // Handle url().
   if (aStyleFilter.GetType() == NS_STYLE_FILTER_URL) {
-    value->SetURI(aStyleFilter.GetURL());
+    // Bug 1288812 - we should only serialize fragment for local-ref URL.
+    nsCOMPtr<nsIURI> filterURI = aStyleFilter.GetURL()->GetSourceURL();
+    value->SetURI(filterURI);
     return value.forget();
   }
 
@@ -6304,7 +6352,6 @@ nsComputedDOMStyle::AppendTimingFunction(nsDOMCSSValueList *aValueList,
     case nsTimingFunction::Type::StepEnd:
       nsStyleUtil::AppendStepsTimingFunction(aTimingFunction.mType,
                                              aTimingFunction.mSteps,
-                                             aTimingFunction.mStepSyntax,
                                              tmp);
       break;
     default:

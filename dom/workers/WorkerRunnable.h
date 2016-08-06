@@ -91,7 +91,8 @@ public:
   FromRunnable(nsIRunnable* aRunnable);
 
 protected:
-  WorkerRunnable(WorkerPrivate* aWorkerPrivate, TargetAndBusyBehavior aBehavior)
+  WorkerRunnable(WorkerPrivate* aWorkerPrivate,
+                 TargetAndBusyBehavior aBehavior = WorkerThreadModifyBusyCount)
 #ifdef DEBUG
   ;
 #else
@@ -275,7 +276,7 @@ class WorkerControlRunnable : public WorkerRunnable
 
 protected:
   WorkerControlRunnable(WorkerPrivate* aWorkerPrivate,
-                        TargetAndBusyBehavior aBehavior)
+                        TargetAndBusyBehavior aBehavior = WorkerThreadModifyBusyCount)
 #ifdef DEBUG
   ;
 #else
@@ -300,7 +301,7 @@ private:
   using WorkerRunnable::Cancel;
 };
 
-// A convenience class for WorkerRunnables that originate on the main
+// A convenience class for WorkerRunnables that are originated on the main
 // thread.
 class MainThreadWorkerRunnable : public WorkerRunnable
 {
@@ -406,6 +407,34 @@ public:
 
 private:
   NS_IMETHOD Run() override;
+};
+
+// This runnable is an helper class for dispatching something from a worker
+// thread to the main-thread and back to the worker-thread. During this
+// operation, this class will keep the worker alive.
+class WorkerProxyToMainThreadRunnable : public Runnable
+{
+protected:
+  explicit WorkerProxyToMainThreadRunnable(WorkerPrivate* aWorkerPrivate);
+
+  virtual ~WorkerProxyToMainThreadRunnable();
+
+  // First this method is called on the main-thread.
+  virtual void RunOnMainThread() = 0;
+
+  // After this second method is called on the worker-thread.
+  virtual void RunBackOnWorkerThread() = 0;
+
+public:
+  bool Dispatch();
+
+private:
+  NS_IMETHOD Run() override;
+
+  void PostDispatchOnMainThread();
+
+protected:
+  WorkerPrivate* mWorkerPrivate;
 };
 
 // Class for checking API exposure.  This totally violates the "MUST" in the

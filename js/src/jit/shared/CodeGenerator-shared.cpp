@@ -96,7 +96,7 @@ CodeGeneratorShared::CodeGeneratorShared(MIRGenerator* gen, LIRGraph* graph, Mac
             frameDepth_ += ComputeByteAlignment(sizeof(AsmJSFrame) + frameDepth_,
                                                 AsmJSStackAlignment);
         } else if (gen->performsCall()) {
-            // An MAsmJSCall does not align the stack pointer at calls sites but
+            // An MWasmCall does not align the stack pointer at calls sites but
             // instead relies on the a priori stack adjustment. This must be the
             // last adjustment of frameDepth_.
             frameDepth_ += ComputeByteAlignment(sizeof(AsmJSFrame) + frameDepth_,
@@ -1137,7 +1137,7 @@ HandleRegisterDump(Op op, MacroAssembler& masm, LiveRegisterSet liveRegs, Regist
     const size_t baseOffset = JitActivation::offsetOfRegs();
 
     // Handle live GPRs.
-    for (GeneralRegisterIterator iter(liveRegs.gprs()); iter.more(); iter++) {
+    for (GeneralRegisterIterator iter(liveRegs.gprs()); iter.more(); ++iter) {
         Register reg = *iter;
         Address dump(activation, baseOffset + RegisterDump::offsetOfRegister(reg));
 
@@ -1154,7 +1154,7 @@ HandleRegisterDump(Op op, MacroAssembler& masm, LiveRegisterSet liveRegs, Regist
     }
 
     // Handle live FPRs.
-    for (FloatRegisterIterator iter(liveRegs.fpus()); iter.more(); iter++) {
+    for (FloatRegisterIterator iter(liveRegs.fpus()); iter.more(); ++iter) {
         FloatRegister reg = *iter;
         Address dump(activation, baseOffset + RegisterDump::offsetOfRegister(reg));
         op(reg, dump);
@@ -1450,7 +1450,7 @@ CodeGeneratorShared::emitTruncateDouble(FloatRegister src, Register dest, MInstr
 {
     OutOfLineCode* ool = oolTruncateDouble(src, dest, mir);
 
-    masm.branchTruncateDouble(src, dest, ool->entry());
+    masm.branchTruncateDoubleMaybeModUint32(src, dest, ool->entry());
     masm.bind(ool->rejoin());
 }
 
@@ -1460,7 +1460,7 @@ CodeGeneratorShared::emitTruncateFloat32(FloatRegister src, Register dest, MInst
     OutOfLineTruncateSlow* ool = new(alloc()) OutOfLineTruncateSlow(src, dest, true);
     addOutOfLineCode(ool, mir);
 
-    masm.branchTruncateFloat32(src, dest, ool->entry());
+    masm.branchTruncateFloat32MaybeModUint32(src, dest, ool->entry());
     masm.bind(ool->rejoin());
 }
 
@@ -1489,9 +1489,9 @@ CodeGeneratorShared::omitOverRecursedCheck() const
 }
 
 void
-CodeGeneratorShared::emitAsmJSCall(LAsmJSCall* ins)
+CodeGeneratorShared::emitWasmCallBase(LWasmCallBase* ins)
 {
-    MAsmJSCall* mir = ins->mir();
+    MWasmCall* mir = ins->mir();
 
     if (mir->spIncrement())
         masm.freeStack(mir->spIncrement());
@@ -1508,21 +1508,53 @@ CodeGeneratorShared::emitAsmJSCall(LAsmJSCall* ins)
     masm.bind(&ok);
 #endif
 
-    MAsmJSCall::Callee callee = mir->callee();
+    MWasmCall::Callee callee = mir->callee();
     switch (callee.which()) {
-      case MAsmJSCall::Callee::Internal:
-        masm.call(mir->desc(), callee.internal());
+      case MWasmCall::Callee::Internal: {
+        masm.call(mir->desc(), callee.internalFuncIndex());
         break;
-      case MAsmJSCall::Callee::Dynamic: {
-        if (callee.dynamicHasSigIndex())
-            masm.move32(Imm32(callee.dynamicSigIndex()), WasmTableCallSigReg);
+      }
+      case MWasmCall::Callee::Import: {
+        Register temp = ToRegister(ins->getTemp(0));
+
+        // Load the callee, before the caller's registers are clobbered.
+        uint32_t globalDataOffset = callee.importGlobalDataOffset();;
+        masm.loadWasmGlobalPtr(globalDataOffset + offsetof(wasm::FuncImportTls, code), temp);
+
+        // Save the caller's TLS register in a reserved stack slot (below the
+        // call's stack arguments) for retrieval after the call.
+        masm.storePtr(WasmTlsReg, Address(masm.getStackPointer(), callee.importTlsStackOffset()));
+
+        // Switch to the callee's TLS and pinned registers and make the call.
+        masm.loadWasmGlobalPtr(globalDataOffset + offsetof(wasm::FuncImportTls, tls), WasmTlsReg);
+        masm.loadWasmPinnedRegsFromTls();
+        masm.call(mir->desc(), temp);
+
+        // After return, restore the caller's TLS and pinned registers.
+        masm.loadPtr(Address(masm.getStackPointer(), callee.importTlsStackOffset()), WasmTlsReg);
+        masm.loadWasmPinnedRegsFromTls();
+        break;
+      }
+      case MWasmCall::Callee::Dynamic: {
+        wasm::SigIdDesc sigId = callee.dynamicSigId();
+        switch (sigId.kind()) {
+          case wasm::SigIdDesc::Kind::Global:
+            masm.loadWasmGlobalPtr(sigId.globalDataOffset(), WasmTableCallSigReg);
+            break;
+          case wasm::SigIdDesc::Kind::Immediate:
+            masm.move32(Imm32(sigId.immediate()), WasmTableCallSigReg);
+            break;
+          case wasm::SigIdDesc::Kind::None:
+            break;
+        }
         MOZ_ASSERT(WasmTableCallPtrReg == ToRegister(ins->getOperand(mir->dynamicCalleeOperandIndex())));
         masm.call(mir->desc(), WasmTableCallPtrReg);
         break;
       }
-      case MAsmJSCall::Callee::Builtin:
+      case MWasmCall::Callee::Builtin: {
         masm.call(callee.builtin());
         break;
+      }
     }
 
     if (mir->spIncrement())
@@ -1594,6 +1626,29 @@ CodeGeneratorShared::jumpToBlock(MBasicBlock* mir)
     } else {
         masm.jump(mir->lir()->label());
     }
+}
+
+Label*
+CodeGeneratorShared::getJumpLabelForBranch(MBasicBlock* block)
+{
+    // Skip past trivial blocks.
+    block = skipTrivialBlocks(block);
+
+    if (!labelForBackedgeWithImplicitCheck(block))
+        return block->lir()->label();
+
+    // We need to use a patchable jump for this backedge, but want to treat
+    // this as a normal label target to simplify codegen. Efficiency isn't so
+    // important here as these tests are extremely unlikely to be used in loop
+    // backedges, so emit inline code for the patchable jump. Heap allocating
+    // the label allows it to be used by out of line blocks.
+    Label* res = alloc().lifoAlloc()->newInfallible<Label>();
+    Label after;
+    masm.jump(&after);
+    masm.bind(res);
+    jumpToBlock(block);
+    masm.bind(&after);
+    return res;
 }
 
 // This function is not used for MIPS/MIPS64. MIPS has branchToBlock.
@@ -1739,6 +1794,8 @@ CodeGeneratorShared::emitTracelogScript(bool isStart)
     CodeOffset patchLogger = masm.movWithPatch(ImmPtr(nullptr), logger);
     masm.propagateOOM(patchableTraceLoggers_.append(patchLogger));
 
+    masm.branchTest32(Assembler::Zero, logger, logger, &done);
+
     Address enabledAddress(logger, TraceLoggerThread::offsetOfEnabled());
     masm.branch32(Assembler::Equal, enabledAddress, Imm32(0), &done);
 
@@ -1774,6 +1831,8 @@ CodeGeneratorShared::emitTracelogTree(bool isStart, uint32_t textId)
     CodeOffset patchLocation = masm.movWithPatch(ImmPtr(nullptr), logger);
     masm.propagateOOM(patchableTraceLoggers_.append(patchLocation));
 
+    masm.branchTest32(Assembler::Zero, logger, logger, &done);
+
     Address enabledAddress(logger, TraceLoggerThread::offsetOfEnabled());
     masm.branch32(Assembler::Equal, enabledAddress, Imm32(0), &done);
 
@@ -1804,6 +1863,8 @@ CodeGeneratorShared::emitTracelogTree(bool isStart, const char* text,
 
     CodeOffset patchLocation = masm.movWithPatch(ImmPtr(nullptr), loggerReg);
     masm.propagateOOM(patchableTraceLoggers_.append(patchLocation));
+
+    masm.branchTest32(Assembler::Zero, loggerReg, loggerReg, &done);
 
     Address enabledAddress(loggerReg, TraceLoggerThread::offsetOfEnabled());
     masm.branch32(Assembler::Equal, enabledAddress, Imm32(0), &done);

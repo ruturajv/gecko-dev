@@ -126,9 +126,8 @@ struct Zone
         barrierTracer_(barrierTracerArg),
         needsIncrementalBarrier_(false)
     {
-        for (auto& stackRootPtr : stackRoots_) {
+        for (auto& stackRootPtr : stackRoots_)
             stackRootPtr = nullptr;
-        }
     }
 
     bool needsIncrementalBarrier() const {
@@ -414,7 +413,7 @@ IsIncrementalBarrierNeededOnTenuredGCThing(JS::shadow::Runtime* rt, const JS::GC
 {
     MOZ_ASSERT(thing);
     MOZ_ASSERT(!js::gc::IsInsideNursery(thing.asCell()));
-    if (rt->isHeapBusy())
+    if (rt->isHeapCollecting())
         return false;
     JS::Zone* zone = JS::GetTenuredGCThingZone(thing);
     return JS::shadow::Zone::asShadowZone(zone)->needsIncrementalBarrier();

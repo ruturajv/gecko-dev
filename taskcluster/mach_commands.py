@@ -37,7 +37,7 @@ class ShowTaskGraphSubCommand(SubCommand):
                             help="include debug-level logging output"),
             CommandArgument('--json', '-J', action="store_const",
                             dest="format", const="json",
-                            help="Output each task in the task graph as a JSON object"),
+                            help="Output task graph as a JSON object"),
             CommandArgument('--labels', '-L', action="store_const",
                             dest="format", const="labels",
                             help="Output the label for each task in the task graph (default)"),
@@ -153,6 +153,30 @@ class MachCommands(MachCommandBase):
             traceback.print_exc()
             sys.exit(1)
 
+    @SubCommand('taskgraph', 'action-task',
+                description="Run the action task")
+    @CommandArgument('--root', '-r',
+                     default='taskcluster/ci',
+                     help="root of the taskgraph definition relative to topsrcdir")
+    @CommandArgument('--decision-id',
+                     required=True,
+                     help="Decision Task ID of the reference decision task")
+    @CommandArgument('--task-labels',
+                     required=True,
+                     help='Comma separated list of task labels to be scheduled')
+    def taskgraph_action(self, **options):
+        """Run the action task: Generates a task graph using the set of labels
+        provided in the task-labels parameter. It uses the full-task file of
+        the gecko decision task."""
+
+        import taskgraph.action
+        try:
+            self.setup_logging()
+            return taskgraph.action.taskgraph_action(options)
+        except Exception:
+            traceback.print_exc()
+            sys.exit(1)
+
     def setup_logging(self, quiet=False, verbose=True):
         """
         Set up Python logging for all loggers, sending results to stderr (so
@@ -160,12 +184,15 @@ class MachCommands(MachCommandBase):
         mach timestamp.
         """
         # remove the old terminal handler
-        self.log_manager.replace_terminal_handler(None)
+        old = self.log_manager.replace_terminal_handler(None)
 
         # re-add it, with level and fh set appropriately
         if not quiet:
             level = logging.DEBUG if verbose else logging.INFO
-            self.log_manager.add_terminal_logging(fh=sys.stderr, level=level)
+            self.log_manager.add_terminal_logging(
+                fh=sys.stderr, level=level,
+                write_interval=old.formatter.write_interval,
+                write_times=old.formatter.write_times)
 
         # all of the taskgraph logging is unstructured logging
         self.log_manager.enable_unstructured()
@@ -199,14 +226,12 @@ class MachCommands(MachCommandBase):
             print(label)
 
     def show_taskgraph_json(self, taskgraph):
-        # JSON output is a sequence of JSON objects, rather than a single object, so
-        # disassemble the dictionary
-        for task in taskgraph.to_json().itervalues():
-            print(json.dumps(task))
+        print(json.dumps(taskgraph.to_json(),
+              sort_keys=True, indent=2, separators=(',', ': ')))
 
 
 @CommandProvider
-class LoadImage(object):
+class TaskClusterImagesProvider(object):
     @Command('taskcluster-load-image', category="ci",
              description="Load a pre-built Docker image")
     @CommandArgument('--task-id',
@@ -228,6 +253,19 @@ class LoadImage(object):
                 ok = load_image_by_name(image_name)
             if not ok:
                 sys.exit(1)
+        except Exception:
+            traceback.print_exc()
+            sys.exit(1)
+
+    @Command('taskcluster-build-image', category='ci',
+             description='Build a Docker image')
+    @CommandArgument('image_name',
+                     help='Name of the image to build')
+    def build_image(self, image_name):
+        from taskgraph.docker import build_image
+
+        try:
+            build_image(image_name)
         except Exception:
             traceback.print_exc()
             sys.exit(1)

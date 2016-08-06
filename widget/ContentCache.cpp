@@ -12,6 +12,7 @@
 #include "mozilla/TextEvents.h"
 #include "nsIWidget.h"
 #include "mozilla/RefPtr.h"
+#include "mozilla/Move.h"
 
 namespace mozilla {
 
@@ -68,6 +69,34 @@ public:
   virtual ~GetWritingModeName() {}
 };
 
+class GetEscapedUTF8String final : public NS_ConvertUTF16toUTF8
+{
+public:
+  explicit GetEscapedUTF8String(const nsAString& aString)
+    : NS_ConvertUTF16toUTF8(aString)
+  {
+    Escape();
+  }
+  explicit GetEscapedUTF8String(const char16ptr_t aString)
+    : NS_ConvertUTF16toUTF8(aString)
+  {
+    Escape();
+  }
+  GetEscapedUTF8String(const char16ptr_t aString, uint32_t aLength)
+    : NS_ConvertUTF16toUTF8(aString, aLength)
+  {
+    Escape();
+  }
+
+private:
+  void Escape()
+  {
+    ReplaceSubstring("\r", "\\r");
+    ReplaceSubstring("\n", "\\n");
+    ReplaceSubstring("\t", "\\t");
+  }
+};
+
 /*****************************************************************************
  * mozilla::ContentCache
  *****************************************************************************/
@@ -92,7 +121,7 @@ void
 ContentCacheInChild::Clear()
 {
   MOZ_LOG(sContentCacheLog, LogLevel::Info,
-    ("ContentCacheInChild: 0x%p Clear()", this));
+    ("0x%p Clear()", this));
 
   mCompositionStart = UINT32_MAX;
   mText.Truncate();
@@ -108,8 +137,7 @@ ContentCacheInChild::CacheAll(nsIWidget* aWidget,
                               const IMENotification* aNotification)
 {
   MOZ_LOG(sContentCacheLog, LogLevel::Info,
-    ("ContentCacheInChild: 0x%p CacheAll(aWidget=0x%p, "
-     "aNotification=%s)",
+    ("0x%p CacheAll(aWidget=0x%p, aNotification=%s)",
      this, aWidget, GetNotificationName(aNotification)));
 
   if (NS_WARN_IF(!CacheText(aWidget, aNotification)) ||
@@ -124,8 +152,7 @@ ContentCacheInChild::CacheSelection(nsIWidget* aWidget,
                                     const IMENotification* aNotification)
 {
   MOZ_LOG(sContentCacheLog, LogLevel::Info,
-    ("ContentCacheInChild: 0x%p CacheSelection(aWidget=0x%p, "
-     "aNotification=%s)",
+    ("0x%p CacheSelection(aWidget=0x%p, aNotification=%s)",
      this, aWidget, GetNotificationName(aNotification)));
 
   mCaret.Clear();
@@ -136,7 +163,7 @@ ContentCacheInChild::CacheSelection(nsIWidget* aWidget,
   aWidget->DispatchEvent(&selection, status);
   if (NS_WARN_IF(!selection.mSucceeded)) {
     MOZ_LOG(sContentCacheLog, LogLevel::Error,
-      ("ContentCache: 0x%p CacheSelection(), FAILED, "
+      ("0x%p CacheSelection(), FAILED, "
        "couldn't retrieve the selected text", this));
     return false;
   }
@@ -160,8 +187,7 @@ ContentCacheInChild::CacheCaret(nsIWidget* aWidget,
                                 const IMENotification* aNotification)
 {
   MOZ_LOG(sContentCacheLog, LogLevel::Info,
-    ("ContentCacheInChild: 0x%p CacheCaret(aWidget=0x%p, "
-     "aNotification=%s)",
+    ("0x%p CacheCaret(aWidget=0x%p, aNotification=%s)",
      this, aWidget, GetNotificationName(aNotification)));
 
   mCaret.Clear();
@@ -179,7 +205,7 @@ ContentCacheInChild::CacheCaret(nsIWidget* aWidget,
   aWidget->DispatchEvent(&caretRect, status);
   if (NS_WARN_IF(!caretRect.mSucceeded)) {
     MOZ_LOG(sContentCacheLog, LogLevel::Error,
-      ("ContentCacheInChild: 0x%p CacheCaret(), FAILED, "
+      ("0x%p CacheCaret(), FAILED, "
        "couldn't retrieve the caret rect at offset=%u",
        this, mCaret.mOffset));
     mCaret.Clear();
@@ -187,7 +213,7 @@ ContentCacheInChild::CacheCaret(nsIWidget* aWidget,
   }
   mCaret.mRect = caretRect.mReply.mRect;
   MOZ_LOG(sContentCacheLog, LogLevel::Info,
-    ("ContentCacheInChild: 0x%p CacheCaret(), Succeeded, "
+    ("0x%p CacheCaret(), Succeeded, "
      "mSelection={ mAnchor=%u, mFocus=%u, mWritingMode=%s }, "
      "mCaret={ mOffset=%u, mRect=%s }",
      this, mSelection.mAnchor, mSelection.mFocus,
@@ -201,8 +227,7 @@ ContentCacheInChild::CacheEditorRect(nsIWidget* aWidget,
                                      const IMENotification* aNotification)
 {
   MOZ_LOG(sContentCacheLog, LogLevel::Info,
-    ("ContentCacheInChild: 0x%p CacheEditorRect(aWidget=0x%p, "
-     "aNotification=%s)",
+    ("0x%p CacheEditorRect(aWidget=0x%p, aNotification=%s)",
      this, aWidget, GetNotificationName(aNotification)));
 
   nsEventStatus status = nsEventStatus_eIgnore;
@@ -210,13 +235,13 @@ ContentCacheInChild::CacheEditorRect(nsIWidget* aWidget,
   aWidget->DispatchEvent(&editorRectEvent, status);
   if (NS_WARN_IF(!editorRectEvent.mSucceeded)) {
     MOZ_LOG(sContentCacheLog, LogLevel::Error,
-      ("ContentCacheInChild: 0x%p CacheEditorRect(), FAILED, "
+      ("0x%p CacheEditorRect(), FAILED, "
        "couldn't retrieve the editor rect", this));
     return false;
   }
   mEditorRect = editorRectEvent.mReply.mRect;
   MOZ_LOG(sContentCacheLog, LogLevel::Info,
-    ("ContentCacheInChild: 0x%p CacheEditorRect(), Succeeded, "
+    ("0x%p CacheEditorRect(), Succeeded, "
      "mEditorRect=%s", this, GetRectText(mEditorRect).get()));
   return true;
 }
@@ -226,8 +251,7 @@ ContentCacheInChild::CacheText(nsIWidget* aWidget,
                                const IMENotification* aNotification)
 {
   MOZ_LOG(sContentCacheLog, LogLevel::Info,
-    ("ContentCacheInChild: 0x%p CacheText(aWidget=0x%p, "
-     "aNotification=%s)",
+    ("0x%p CacheText(aWidget=0x%p, aNotification=%s)",
      this, aWidget, GetNotificationName(aNotification)));
 
   nsEventStatus status = nsEventStatus_eIgnore;
@@ -236,15 +260,13 @@ ContentCacheInChild::CacheText(nsIWidget* aWidget,
   aWidget->DispatchEvent(&queryText, status);
   if (NS_WARN_IF(!queryText.mSucceeded)) {
     MOZ_LOG(sContentCacheLog, LogLevel::Error,
-      ("ContentCacheInChild: 0x%p CacheText(), FAILED, "
-       "couldn't retrieve whole text", this));
+      ("0x%p CacheText(), FAILED, couldn't retrieve whole text", this));
     mText.Truncate();
     return false;
   }
   mText = queryText.mReply.mString;
   MOZ_LOG(sContentCacheLog, LogLevel::Info,
-    ("ContentCacheInChild: 0x%p CacheText(), Succeeded, "
-     "mText.Length()=%u", this, mText.Length()));
+    ("0x%p CacheText(), Succeeded, mText.Length()=%u", this, mText.Length()));
 
   return CacheSelection(aWidget, aNotification);
 }
@@ -280,8 +302,8 @@ ContentCacheInChild::CacheTextRects(nsIWidget* aWidget,
                                     const IMENotification* aNotification)
 {
   MOZ_LOG(sContentCacheLog, LogLevel::Info,
-    ("ContentCacheInChild: 0x%p CacheTextRects(aWidget=0x%p, "
-     "aNotification=%s), mCaret={ mOffset=%u, IsValid()=%s }",
+    ("0x%p CacheTextRects(aWidget=0x%p, aNotification=%s), "
+     "mCaret={ mOffset=%u, IsValid()=%s }",
      this, aWidget, GetNotificationName(aNotification), mCaret.mOffset,
      GetBoolName(mCaret.IsValid())));
 
@@ -307,20 +329,14 @@ ContentCacheInChild::CacheTextRects(nsIWidget* aWidget,
     // it's modified after all edit action listeners are performed but this
     // is called while some of them are performed.
     uint32_t length = textComposition->LastData().Length();
-    mTextRectArray.mRects.SetCapacity(length);
     mTextRectArray.mStart = mCompositionStart;
-    uint32_t endOffset = mTextRectArray.mStart + length;
-    for (uint32_t i = mTextRectArray.mStart; i < endOffset; i++) {
-      LayoutDeviceIntRect charRect;
-      if (NS_WARN_IF(!QueryCharRect(aWidget, i, charRect))) {
-        MOZ_LOG(sContentCacheLog, LogLevel::Error,
-          ("ContentCacheInChild: 0x%p CacheTextRects(), FAILED, "
-           "couldn't retrieve text rect at offset=%u", this, i));
-        mTextRectArray.Clear();
-        return false;
-      }
-      mTextRectArray.mRects.AppendElement(charRect);
-    }
+
+    nsEventStatus status = nsEventStatus_eIgnore;
+    WidgetQueryContentEvent textRects(true, eQueryTextRectArray, aWidget);
+    textRects.InitForQueryTextRectArray(mTextRectArray.mStart, length);
+    aWidget->DispatchEvent(&textRects, status);
+
+    mTextRectArray.mRects = Move(textRects.mReply.mRectArray);
   }
 
   if (mTextRectArray.InRange(mSelection.mAnchor)) {
@@ -329,7 +345,7 @@ ContentCacheInChild::CacheTextRects(nsIWidget* aWidget,
     LayoutDeviceIntRect charRect;
     if (NS_WARN_IF(!QueryCharRect(aWidget, mSelection.mAnchor, charRect))) {
       MOZ_LOG(sContentCacheLog, LogLevel::Error,
-        ("ContentCacheInChild: 0x%p CacheTextRects(), FAILED, "
+        ("0x%p CacheTextRects(), FAILED, "
          "couldn't retrieve text rect at anchor of selection (%u)",
          this, mSelection.mAnchor));
     }
@@ -344,7 +360,7 @@ ContentCacheInChild::CacheTextRects(nsIWidget* aWidget,
     LayoutDeviceIntRect charRect;
     if (NS_WARN_IF(!QueryCharRect(aWidget, mSelection.mFocus, charRect))) {
       MOZ_LOG(sContentCacheLog, LogLevel::Error,
-        ("ContentCacheInChild: 0x%p CacheTextRects(), FAILED, "
+        ("0x%p CacheTextRects(), FAILED, "
          "couldn't retrieve text rect at focus of selection (%u)",
          this, mSelection.mFocus));
     }
@@ -359,7 +375,7 @@ ContentCacheInChild::CacheTextRects(nsIWidget* aWidget,
     aWidget->DispatchEvent(&textRect, status);
     if (NS_WARN_IF(!textRect.mSucceeded)) {
       MOZ_LOG(sContentCacheLog, LogLevel::Error,
-        ("ContentCacheInChild: 0x%p CacheTextRects(), FAILED, "
+        ("0x%p CacheTextRects(), FAILED, "
          "couldn't retrieve text rect of whole selected text", this));
     } else {
       mSelection.mRect = textRect.mReply.mRect;
@@ -376,7 +392,7 @@ ContentCacheInChild::CacheTextRects(nsIWidget* aWidget,
     LayoutDeviceIntRect charRect;
     if (NS_WARN_IF(!QueryCharRect(aWidget, 0, charRect))) {
       MOZ_LOG(sContentCacheLog, LogLevel::Error,
-        ("ContentCacheInChild: 0x%p CacheTextRects(), FAILED, "
+        ("0x%p CacheTextRects(), FAILED, "
          "couldn't retrieve first char rect", this));
     } else {
       mFirstCharRect = charRect;
@@ -384,7 +400,7 @@ ContentCacheInChild::CacheTextRects(nsIWidget* aWidget,
   }
 
   MOZ_LOG(sContentCacheLog, LogLevel::Info,
-    ("ContentCacheInChild: 0x%p CacheTextRects(), Succeeded, "
+    ("0x%p CacheTextRects(), Succeeded, "
      "mText.Length()=%u, mTextRectArray={ mStart=%u, mRects.Length()=%u }, "
      "mSelection={ mAnchor=%u, mAnchorCharRect=%s, mFocus=%u, "
      "mFocusCharRect=%s, mRect=%s }, mFirstCharRect=%s",
@@ -404,7 +420,7 @@ ContentCacheInChild::SetSelection(nsIWidget* aWidget,
                                   const WritingMode& aWritingMode)
 {
   MOZ_LOG(sContentCacheLog, LogLevel::Info,
-    ("ContentCacheInChild: 0x%p SetSelection(aStartOffset=%u, "
+    ("0x%p SetSelection(aStartOffset=%u, "
      "aLength=%u, aReversed=%s, aWritingMode=%s), mText.Length()=%u",
      this, aStartOffset, aLength, GetBoolName(aReversed),
      GetWritingModeName(aWritingMode).get(), mText.Length()));
@@ -457,7 +473,7 @@ ContentCacheInParent::AssignContent(const ContentCache& aOther,
   }
 
   MOZ_LOG(sContentCacheLog, LogLevel::Info,
-    ("ContentCacheInParent: 0x%p AssignContent(aNotification=%s), "
+    ("0x%p AssignContent(aNotification=%s), "
      "Succeeded, mText.Length()=%u, mSelection={ mAnchor=%u, mFocus=%u, "
      "mWritingMode=%s, mAnchorCharRect=%s, mFocusCharRect=%s, mRect=%s }, "
      "mFirstCharRect=%s, mCaret={ mOffset=%u, mRect=%s }, mTextRectArray={ "
@@ -515,12 +531,12 @@ ContentCacheInParent::HandleQueryContentEvent(WidgetQueryContentEvent& aEvent,
   switch (aEvent.mMessage) {
     case eQuerySelectedText:
       MOZ_LOG(sContentCacheLog, LogLevel::Info,
-        ("ContentCacheInParent: 0x%p HandleQueryContentEvent("
+        ("0x%p HandleQueryContentEvent("
          "aEvent={ mMessage=eQuerySelectedText }, aWidget=0x%p)",
          this, aWidget));
       if (aWidget->PluginHasFocus()) {
         MOZ_LOG(sContentCacheLog, LogLevel::Info,
-          ("ContentCacheInParent: 0x%p HandleQueryContentEvent(), "
+          ("0x%p HandleQueryContentEvent(), "
            "return emtpy selection becasue plugin has focus",
            this));
         aEvent.mSucceeded = true;
@@ -533,7 +549,7 @@ ContentCacheInParent::HandleQueryContentEvent(WidgetQueryContentEvent& aEvent,
         // If content cache hasn't been initialized properly, make the query
         // failed.
         MOZ_LOG(sContentCacheLog, LogLevel::Error,
-          ("ContentCacheInParent: 0x%p HandleQueryContentEvent(), "
+          ("0x%p HandleQueryContentEvent(), "
            "FAILED because mSelection is not valid", this));
         return true;
       }
@@ -543,7 +559,7 @@ ContentCacheInParent::HandleQueryContentEvent(WidgetQueryContentEvent& aEvent,
       } else {
         if (NS_WARN_IF(mSelection.EndOffset() > mText.Length())) {
           MOZ_LOG(sContentCacheLog, LogLevel::Error,
-            ("ContentCacheInParent: 0x%p HandleQueryContentEvent(), "
+            ("0x%p HandleQueryContentEvent(), "
              "FAILED because mSelection.EndOffset()=%u is larger than "
              "mText.Length()=%u",
              this, mSelection.EndOffset(), mText.Length()));
@@ -556,18 +572,18 @@ ContentCacheInParent::HandleQueryContentEvent(WidgetQueryContentEvent& aEvent,
       aEvent.mReply.mHasSelection = true;
       aEvent.mReply.mWritingMode = mSelection.mWritingMode;
       MOZ_LOG(sContentCacheLog, LogLevel::Info,
-        ("ContentCacheInParent: 0x%p HandleQueryContentEvent(), "
+        ("0x%p HandleQueryContentEvent(), "
          "Succeeded, aEvent={ mReply={ mOffset=%u, mString=\"%s\", "
          "mReversed=%s, mHasSelection=%s, mWritingMode=%s } }",
          this, aEvent.mReply.mOffset,
-         NS_ConvertUTF16toUTF8(aEvent.mReply.mString).get(),
+         GetEscapedUTF8String(aEvent.mReply.mString).get(),
          GetBoolName(aEvent.mReply.mReversed),
          GetBoolName(aEvent.mReply.mHasSelection),
          GetWritingModeName(aEvent.mReply.mWritingMode).get()));
       break;
     case eQueryTextContent: {
       MOZ_LOG(sContentCacheLog, LogLevel::Info,
-        ("ContentCacheInParent: 0x%p HandleQueryContentEvent("
+        ("0x%p HandleQueryContentEvent("
          "aEvent={ mMessage=eQueryTextContent, mInput={ mOffset=%u, "
          "mLength=%u } }, aWidget=0x%p), mText.Length()=%u",
          this, aEvent.mInput.mOffset,
@@ -577,7 +593,7 @@ ContentCacheInParent::HandleQueryContentEvent(WidgetQueryContentEvent& aEvent,
         std::min(aEvent.mInput.EndOffset(), mText.Length());
       if (NS_WARN_IF(inputEndOffset < inputOffset)) {
         MOZ_LOG(sContentCacheLog, LogLevel::Error,
-          ("ContentCacheInParent: 0x%p HandleQueryContentEvent(), "
+          ("0x%p HandleQueryContentEvent(), "
            "FAILED because inputOffset=%u is larger than inputEndOffset=%u",
            this, inputOffset, inputEndOffset));
         return false;
@@ -586,14 +602,14 @@ ContentCacheInParent::HandleQueryContentEvent(WidgetQueryContentEvent& aEvent,
       aEvent.mReply.mString =
         Substring(mText, inputOffset, inputEndOffset - inputOffset);
       MOZ_LOG(sContentCacheLog, LogLevel::Info,
-        ("ContentCacheInParent: 0x%p HandleQueryContentEvent(), "
+        ("0x%p HandleQueryContentEvent(), "
          "Succeeded, aEvent={ mReply={ mOffset=%u, mString.Length()=%u } }",
          this, aEvent.mReply.mOffset, aEvent.mReply.mString.Length()));
       break;
     }
     case eQueryTextRect:
       MOZ_LOG(sContentCacheLog, LogLevel::Info,
-        ("ContentCacheInParent: 0x%p HandleQueryContentEvent("
+        ("0x%p HandleQueryContentEvent("
          "aEvent={ mMessage=eQueryTextRect, mInput={ mOffset=%u, "
          "mLength=%u } }, aWidget=0x%p), mText.Length()=%u",
          this, aEvent.mInput.mOffset, aEvent.mInput.mLength, aWidget,
@@ -602,7 +618,7 @@ ContentCacheInParent::HandleQueryContentEvent(WidgetQueryContentEvent& aEvent,
         // If content cache hasn't been initialized properly, make the query
         // failed.
         MOZ_LOG(sContentCacheLog, LogLevel::Error,
-          ("ContentCacheInParent: 0x%p HandleQueryContentEvent(), "
+          ("0x%p HandleQueryContentEvent(), "
            "FAILED because mSelection is not valid", this));
         return true;
       }
@@ -617,7 +633,7 @@ ContentCacheInParent::HandleQueryContentEvent(WidgetQueryContentEvent& aEvent,
                                           aEvent.mReply.mRect))) {
           // XXX We don't have cache for this request.
           MOZ_LOG(sContentCacheLog, LogLevel::Error,
-            ("ContentCacheInParent: 0x%p HandleQueryContentEvent(), "
+            ("0x%p HandleQueryContentEvent(), "
              "FAILED to get union rect", this));
           return false;
         }
@@ -627,7 +643,7 @@ ContentCacheInParent::HandleQueryContentEvent(WidgetQueryContentEvent& aEvent,
                                      isRelativeToInsertionPoint,
                                      aEvent.mReply.mRect))) {
           MOZ_LOG(sContentCacheLog, LogLevel::Error,
-            ("ContentCacheInParent: 0x%p HandleQueryContentEvent(), "
+            ("0x%p HandleQueryContentEvent(), "
              "FAILED to get caret rect", this));
           return false;
         }
@@ -644,17 +660,17 @@ ContentCacheInParent::HandleQueryContentEvent(WidgetQueryContentEvent& aEvent,
       // XXX This may be wrong if storing range isn't in the selection range.
       aEvent.mReply.mWritingMode = mSelection.mWritingMode;
       MOZ_LOG(sContentCacheLog, LogLevel::Info,
-        ("ContentCacheInParent: 0x%p HandleQueryContentEvent(), "
+        ("0x%p HandleQueryContentEvent(), "
          "Succeeded, aEvent={ mReply={ mOffset=%u, mString=\"%s\", "
          "mWritingMode=%s, mRect=%s } }",
          this, aEvent.mReply.mOffset,
-         NS_ConvertUTF16toUTF8(aEvent.mReply.mString).get(),
+         GetEscapedUTF8String(aEvent.mReply.mString).get(),
          GetWritingModeName(aEvent.mReply.mWritingMode).get(),
          GetRectText(aEvent.mReply.mRect).get()));
       break;
     case eQueryCaretRect:
       MOZ_LOG(sContentCacheLog, LogLevel::Info,
-        ("ContentCacheInParent: 0x%p HandleQueryContentEvent("
+        ("0x%p HandleQueryContentEvent("
          "aEvent={ mMessage=eQueryCaretRect, mInput={ mOffset=%u } }, "
          "aWidget=0x%p), mText.Length()=%u",
          this, aEvent.mInput.mOffset, aWidget, mText.Length()));
@@ -662,7 +678,7 @@ ContentCacheInParent::HandleQueryContentEvent(WidgetQueryContentEvent& aEvent,
         // If content cache hasn't been initialized properly, make the query
         // failed.
         MOZ_LOG(sContentCacheLog, LogLevel::Error,
-          ("ContentCacheInParent: 0x%p HandleQueryContentEvent(), "
+          ("0x%p HandleQueryContentEvent(), "
            "FAILED because mSelection is not valid", this));
         return true;
       }
@@ -674,24 +690,24 @@ ContentCacheInParent::HandleQueryContentEvent(WidgetQueryContentEvent& aEvent,
                                    isRelativeToInsertionPoint,
                                    aEvent.mReply.mRect))) {
         MOZ_LOG(sContentCacheLog, LogLevel::Error,
-          ("ContentCacheInParent: 0x%p HandleQueryContentEvent(), "
+          ("0x%p HandleQueryContentEvent(), "
            "FAILED to get caret rect", this));
         return false;
       }
       aEvent.mReply.mOffset = aEvent.mInput.mOffset;
       MOZ_LOG(sContentCacheLog, LogLevel::Info,
-        ("ContentCacheInParent: 0x%p HandleQueryContentEvent(), "
+        ("0x%p HandleQueryContentEvent(), "
          "Succeeded, aEvent={ mReply={ mOffset=%u, mRect=%s } }",
          this, aEvent.mReply.mOffset, GetRectText(aEvent.mReply.mRect).get()));
       break;
     case eQueryEditorRect:
       MOZ_LOG(sContentCacheLog, LogLevel::Info,
-        ("ContentCacheInParent: 0x%p HandleQueryContentEvent("
+        ("0x%p HandleQueryContentEvent("
          "aEvent={ mMessage=eQueryEditorRect }, aWidget=0x%p)",
          this, aWidget));
       aEvent.mReply.mRect = mEditorRect;
       MOZ_LOG(sContentCacheLog, LogLevel::Info,
-        ("ContentCacheInParent: 0x%p HandleQueryContentEvent(), "
+        ("0x%p HandleQueryContentEvent(), "
          "Succeeded, aEvent={ mReply={ mRect=%s } }",
          this, GetRectText(aEvent.mReply.mRect).get()));
       break;
@@ -708,7 +724,7 @@ ContentCacheInParent::GetTextRect(uint32_t aOffset,
                                   LayoutDeviceIntRect& aTextRect) const
 {
   MOZ_LOG(sContentCacheLog, LogLevel::Info,
-    ("ContentCacheInParent: 0x%p GetTextRect(aOffset=%u, "
+    ("0x%p GetTextRect(aOffset=%u, "
      "aRoundToExistingOffset=%s), "
      "mTextRectArray={ mStart=%u, mRects.Length()=%u }, "
      "mSelection={ mAnchor=%u, mFocus=%u }",
@@ -763,7 +779,7 @@ ContentCacheInParent::GetUnionTextRects(
                         LayoutDeviceIntRect& aUnionTextRect) const
 {
   MOZ_LOG(sContentCacheLog, LogLevel::Info,
-    ("ContentCacheInParent: 0x%p GetUnionTextRects(aOffset=%u, "
+    ("0x%p GetUnionTextRects(aOffset=%u, "
      "aLength=%u, aRoundToExistingOffset=%s), mTextRectArray={ "
      "mStart=%u, mRects.Length()=%u }, "
      "mSelection={ mAnchor=%u, mFocus=%u }",
@@ -813,7 +829,7 @@ ContentCacheInParent::GetUnionTextRects(
     return false;
   }
 
-  if ((aRoundToExistingOffset && mTextRectArray.IsValid()) ||
+  if ((aRoundToExistingOffset && mTextRectArray.HasRects()) ||
       mTextRectArray.IsOverlappingWith(aOffset, aLength)) {
     aUnionTextRect =
       mTextRectArray.GetUnionRectAsFarAsPossible(aOffset, aLength,
@@ -840,7 +856,7 @@ ContentCacheInParent::GetCaretRect(uint32_t aOffset,
                                    LayoutDeviceIntRect& aCaretRect) const
 {
   MOZ_LOG(sContentCacheLog, LogLevel::Info,
-    ("ContentCacheInParent: 0x%p GetCaretRect(aOffset=%u, "
+    ("0x%p GetCaretRect(aOffset=%u, "
      "aRoundToExistingOffset=%s), "
      "mCaret={ mOffset=%u, mRect=%s, IsValid()=%s }, mTextRectArray={ "
      "mStart=%u, mRects.Length()=%u }, mSelection={ mAnchor=%u, mFocus=%u, "
@@ -893,12 +909,12 @@ bool
 ContentCacheInParent::OnCompositionEvent(const WidgetCompositionEvent& aEvent)
 {
   MOZ_LOG(sContentCacheLog, LogLevel::Info,
-    ("ContentCacheInParent: 0x%p OnCompositionEvent(aEvent={ "
+    ("0x%p OnCompositionEvent(aEvent={ "
      "mMessage=%s, mData=\"%s\" (Length()=%u), mRanges->Length()=%u }), "
      "mPendingEventsNeedingAck=%u, mIsComposing=%s, "
      "mCommitStringByRequest=0x%p",
      this, ToChar(aEvent.mMessage),
-     NS_ConvertUTF16toUTF8(aEvent.mData).get(), aEvent.mData.Length(),
+     GetEscapedUTF8String(aEvent.mData).get(), aEvent.mData.Length(),
      aEvent.mRanges ? aEvent.mRanges->Length() : 0, mPendingEventsNeedingAck,
      GetBoolName(mIsComposing), mCommitStringByRequest));
 
@@ -942,7 +958,7 @@ ContentCacheInParent::OnSelectionEvent(
                         const WidgetSelectionEvent& aSelectionEvent)
 {
   MOZ_LOG(sContentCacheLog, LogLevel::Info,
-    ("ContentCacheInParent: 0x%p OnSelectionEvent(aEvent={ "
+    ("0x%p OnSelectionEvent(aEvent={ "
      "mMessage=%s, mOffset=%u, mLength=%u, mReversed=%s, "
      "mExpandToClusterBoundary=%s, mUseNativeLineBreak=%s }), "
      "mPendingEventsNeedingAck=%u, mIsComposing=%s",
@@ -964,7 +980,7 @@ ContentCacheInParent::OnEventNeedingAckHandled(nsIWidget* aWidget,
   // WidgetSelectionEvent.
 
   MOZ_LOG(sContentCacheLog, LogLevel::Info,
-    ("ContentCacheInParent: 0x%p OnEventNeedingAckHandled(aWidget=0x%p, "
+    ("0x%p OnEventNeedingAckHandled(aWidget=0x%p, "
      "aMessage=%s), mPendingEventsNeedingAck=%u",
      this, aWidget, ToChar(aMessage), mPendingEventsNeedingAck));
 
@@ -982,7 +998,7 @@ ContentCacheInParent::RequestIMEToCommitComposition(nsIWidget* aWidget,
                                                     nsAString& aCommittedString)
 {
   MOZ_LOG(sContentCacheLog, LogLevel::Info,
-    ("ContentCacheInParent: 0x%p RequestToCommitComposition(aWidget=%p, "
+    ("0x%p RequestToCommitComposition(aWidget=%p, "
      "aCancel=%s), mIsComposing=%s, mCommitStringByRequest=%p",
      this, aWidget, GetBoolName(aCancel), GetBoolName(mIsComposing),
      mCommitStringByRequest));
@@ -993,7 +1009,7 @@ ContentCacheInParent::RequestIMEToCommitComposition(nsIWidget* aWidget,
     IMEStateManager::GetTextCompositionFor(aWidget);
   if (NS_WARN_IF(!composition)) {
     MOZ_LOG(sContentCacheLog, LogLevel::Warning,
-      ("  ContentCacheInParent: 0x%p RequestToCommitComposition(), "
+      ("  0x%p RequestToCommitComposition(), "
        "does nothing due to no composition", this));
     return false;
   }
@@ -1006,7 +1022,7 @@ ContentCacheInParent::RequestIMEToCommitComposition(nsIWidget* aWidget,
   mCommitStringByRequest = nullptr;
 
   MOZ_LOG(sContentCacheLog, LogLevel::Info,
-    ("  ContentCacheInParent: 0x%p RequestToCommitComposition(), "
+    ("  0x%p RequestToCommitComposition(), "
      "mIsComposing=%s, the composition %s committed synchronously",
      this, GetBoolName(mIsComposing),
      composition->Destroyed() ? "WAS" : "has NOT been"));
@@ -1156,6 +1172,8 @@ ContentCache::TextRectArray::GetUnionRectAsFarAsPossible(
                                uint32_t aLength,
                                bool aRoundToExistingOffset) const
 {
+  MOZ_ASSERT(HasRects());
+
   LayoutDeviceIntRect rect;
   if (!aRoundToExistingOffset && !IsOverlappingWith(aOffset, aLength)) {
     return rect;

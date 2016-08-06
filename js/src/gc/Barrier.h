@@ -93,6 +93,17 @@
  * value0. E.g., see JSObject::writeBarrierPre, which is used if obj->field is
  * a JSObject*. It takes value0 as a parameter.
  *
+ *                                READ-BARRIER
+ *
+ * Incremental GC requires that weak pointers have read barriers. The problem
+ * happens when, during an incremental GC, some code reads a weak pointer and
+ * writes it somewhere on the heap that has been marked black in a previous
+ * slice. Since the weak pointer will not otherwise be marked and will be swept
+ * and finalized in the last slice, this will leave the pointer just written
+ * dangling after the GC. To solve this, we immediately mark black all weak
+ * pointers that get read between slices so that it is safe to store them in an
+ * already marked part of the heap, e.g. in Rooted.
+ *
  *                                POST-BARRIER
  *
  * For generational GC, we want to be able to quickly collect the nursery in a
@@ -232,7 +243,7 @@ bool
 CurrentThreadIsGCSweeping();
 
 bool
-CurrentThreadIsHandlingInitFailure();
+CurrentThreadCanSkipPostBarrier(bool inNursery);
 #endif
 
 namespace gc {
@@ -259,6 +270,8 @@ struct InternalBarrierMethods<T*>
     static void postBarrier(T** vp, T* prev, T* next) { T::writeBarrierPost(vp, prev, next); }
 
     static void readBarrier(T* v) { T::readBarrier(v); }
+
+    static bool isInsideNursery(T* v) { return IsInsideNursery(v); }
 };
 
 template <typename S> struct PreBarrierFunctor : public VoidDefaultAdaptor<S> {
@@ -303,6 +316,10 @@ struct InternalBarrierMethods<Value>
     static void readBarrier(const Value& v) {
         DispatchTyped(ReadBarrierFunctor<Value>(), v);
     }
+
+    static bool isInsideNursery(const Value& v) {
+        return v.isMarkable() && IsInsideNursery(v.toGCThing());
+    }
 };
 
 template <>
@@ -313,6 +330,8 @@ struct InternalBarrierMethods<jsid>
 
     static void preBarrier(jsid id) { DispatchTyped(PreBarrierFunctor<jsid>(), id); }
     static void postBarrier(jsid* idp, jsid prev, jsid next) {}
+
+    static bool isInsideNursery(jsid id) { return false; }
 };
 
 // Barrier classes can use Mixins to add methods to a set of barrier
@@ -432,8 +451,11 @@ class GCPtr : public WriteBarrieredBase<T>
 #ifdef DEBUG
     ~GCPtr() {
         // No prebarrier necessary as this only happens when we are sweeping or
-        // before the containing object becomes part of the GC graph.
-        MOZ_ASSERT(CurrentThreadIsGCSweeping() || CurrentThreadIsHandlingInitFailure());
+        // after we have just collected the nursery.
+        bool inNursery = InternalBarrierMethods<T>::isInsideNursery(this->value);
+        MOZ_ASSERT(CurrentThreadIsGCSweeping() ||
+                   CurrentThreadCanSkipPostBarrier(inNursery));
+        Poison(this, JS_FREED_HEAP_PTR_PATTERN, sizeof(*this));
     }
 #endif
 
@@ -554,14 +576,8 @@ class ReadBarrieredBase : public BarrieredBase<T>
     void post(T prev, T next) { InternalBarrierMethods<T>::postBarrier(&this->value, prev, next); }
 };
 
-// Incremental GC requires that weak pointers have read barriers. This is mostly
-// an issue for empty shapes stored in JSCompartment. The problem happens when,
-// during an incremental GC, some JS code stores one of the compartment's empty
-// shapes into an object already marked black. Normally, this would not be a
-// problem, because the empty shape would have been part of the initial snapshot
-// when the GC started. However, since this is a weak pointer, it isn't. So we
-// may collect the empty shape even though a live object points to it. To fix
-// this, we mark these empty shapes black whenever they get read out.
+// Incremental GC requires that weak pointers have read barriers. See the block
+// comment at the top of Barrier.h for a complete discussion of why.
 //
 // Note that this class also has post-barriers, so is safe to use with nursery
 // pointers. However, when used as a hashtable key, care must still be taken to
@@ -801,6 +817,8 @@ struct MovableCellHasher<PreBarriered<T>>
     using Key = PreBarriered<T>;
     using Lookup = T;
 
+    static bool hasHash(const Lookup& l) { return MovableCellHasher<T>::hasHash(l); }
+    static bool ensureHash(const Lookup& l) { return MovableCellHasher<T>::ensureHash(l); }
     static HashNumber hash(const Lookup& l) { return MovableCellHasher<T>::hash(l); }
     static bool match(const Key& k, const Lookup& l) { return MovableCellHasher<T>::match(k, l); }
     static void rekey(Key& k, const Key& newKey) { k.unsafeSet(newKey); }
@@ -812,6 +830,8 @@ struct MovableCellHasher<HeapPtr<T>>
     using Key = HeapPtr<T>;
     using Lookup = T;
 
+    static bool hasHash(const Lookup& l) { return MovableCellHasher<T>::hasHash(l); }
+    static bool ensureHash(const Lookup& l) { return MovableCellHasher<T>::ensureHash(l); }
     static HashNumber hash(const Lookup& l) { return MovableCellHasher<T>::hash(l); }
     static bool match(const Key& k, const Lookup& l) { return MovableCellHasher<T>::match(k, l); }
     static void rekey(Key& k, const Key& newKey) { k.unsafeSet(newKey); }
@@ -823,6 +843,8 @@ struct MovableCellHasher<ReadBarriered<T>>
     using Key = ReadBarriered<T>;
     using Lookup = T;
 
+    static bool hasHash(const Lookup& l) { return MovableCellHasher<T>::hasHash(l); }
+    static bool ensureHash(const Lookup& l) { return MovableCellHasher<T>::ensureHash(l); }
     static HashNumber hash(const Lookup& l) { return MovableCellHasher<T>::hash(l); }
     static bool match(const Key& k, const Lookup& l) {
         return MovableCellHasher<T>::match(k.unbarrieredGet(), l);
@@ -885,6 +907,7 @@ class ScriptSourceObject;
 class Shape;
 class BaseShape;
 class UnownedBaseShape;
+class WasmInstanceObject;
 namespace jit {
 class JitCode;
 } // namespace jit
@@ -929,12 +952,14 @@ typedef ImmutableTenuredPtr<JS::Symbol*> ImmutableSymbolPtr;
 typedef ReadBarriered<DebugScopeObject*> ReadBarrieredDebugScopeObject;
 typedef ReadBarriered<GlobalObject*> ReadBarrieredGlobalObject;
 typedef ReadBarriered<JSObject*> ReadBarrieredObject;
+typedef ReadBarriered<JSFunction*> ReadBarrieredFunction;
 typedef ReadBarriered<JSScript*> ReadBarrieredScript;
 typedef ReadBarriered<ScriptSourceObject*> ReadBarrieredScriptSourceObject;
 typedef ReadBarriered<Shape*> ReadBarrieredShape;
 typedef ReadBarriered<jit::JitCode*> ReadBarrieredJitCode;
 typedef ReadBarriered<ObjectGroup*> ReadBarrieredObjectGroup;
 typedef ReadBarriered<JS::Symbol*> ReadBarrieredSymbol;
+typedef ReadBarriered<WasmInstanceObject*> ReadBarrieredWasmInstanceObject;
 
 typedef ReadBarriered<Value> ReadBarrieredValue;
 

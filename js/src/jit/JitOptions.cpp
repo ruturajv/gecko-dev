@@ -103,7 +103,7 @@ DefaultJitOptions::DefaultJitOptions()
     SET_DEFAULT(disableLoopUnrolling, true);
 
     // Toggle whether Profile Guided Optimization is globally disabled.
-    SET_DEFAULT(disablePgo, true);
+    SET_DEFAULT(disablePgo, false);
 
     // Toggles whether instruction reordering is globally disabled.
     SET_DEFAULT(disableInstructionReordering, false);
@@ -220,6 +220,10 @@ DefaultJitOptions::DefaultJitOptions()
 
     // Test whether wasm int64 / double NaN bits testing is enabled.
     SET_DEFAULT(wasmTestMode, false);
+
+    // Determines whether explicit bounds check will be used for OOB
+    // instead of signals (even when signals are available).
+    SET_DEFAULT(wasmExplicitBoundsChecks, false);
 }
 
 bool

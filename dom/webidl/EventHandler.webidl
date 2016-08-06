@@ -44,7 +44,7 @@ interface GlobalEventHandlers {
            attribute EventHandler ondrag;
            attribute EventHandler ondragend;
            attribute EventHandler ondragenter;
-           //(Not implemented)attribute EventHandler ondragexit;
+           attribute EventHandler ondragexit;
            attribute EventHandler ondragleave;
            attribute EventHandler ondragover;
            attribute EventHandler ondragstart;
@@ -121,7 +121,9 @@ interface GlobalEventHandlers {
            // Document rather than here.
            attribute EventHandler onmozfullscreenchange;
            attribute EventHandler onmozfullscreenerror;
+           [Pref="pointer-lock-api.prefixed.enabled"]
            attribute EventHandler onmozpointerlockchange;
+           [Pref="pointer-lock-api.prefixed.enabled"]
            attribute EventHandler onmozpointerlockerror;
 };
 

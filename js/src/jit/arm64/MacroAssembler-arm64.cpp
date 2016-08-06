@@ -458,6 +458,12 @@ MacroAssembler::Pop(Register reg)
 }
 
 void
+MacroAssembler::Pop(FloatRegister f)
+{
+    MOZ_CRASH("NYI: Pop(FloatRegister)");
+}
+
+void
 MacroAssembler::Pop(const ValueOperand& val)
 {
     pop(val);
@@ -824,6 +830,12 @@ MacroAssembler::storeUnboxedValue(ConstantOrRegister value, MIRType valueType,
 template void
 MacroAssembler::storeUnboxedValue(ConstantOrRegister value, MIRType valueType,
                                   const BaseIndex& dest, MIRType slotType);
+
+void
+MacroAssembler::comment(const char* msg)
+{
+    Assembler::comment(msg);
+}
 
 //}}} check_macroassembler_style
 

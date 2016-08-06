@@ -5,9 +5,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 "use strict";
 
-const DevToolsUtils = require("devtools/shared/DevToolsUtils");
-const { Cu, Ci } = require("chrome");
-let { XPCOMUtils } = Cu.import("resource://gre/modules/XPCOMUtils.jsm", {});
+const { Ci } = require("chrome");
 
 const PANE_APPEARANCE_DELAY = 50;
 const PAGE_SIZE_ITEM_COUNT_RATIO = 5;
@@ -219,6 +217,17 @@ const ViewHelpers = exports.ViewHelpers = {
   },
 
   /**
+   * Check if the enter key or space was pressed
+   *
+   * @param event event
+   *        The event triggered by a keypress on an element
+   */
+  isSpaceOrReturn: function (event) {
+    return event.keyCode === event.DOM_VK_SPACE ||
+          event.keyCode === event.DOM_VK_RETURN;
+  },
+
+  /**
    * Sets a toggled pane hidden or visible. The pane can either be displayed on
    * the side (right or left depending on the locale) or at the bottom.
    *
@@ -244,7 +253,7 @@ const ViewHelpers = exports.ViewHelpers = {
     pane.classList.add("generic-toggled-pane");
 
     // Avoid useless toggles.
-    if (flags.visible == !pane.hasAttribute("pane-collapsed")) {
+    if (flags.visible == !pane.classList.contains("pane-collapsed")) {
       if (flags.callback) {
         flags.callback();
       }
@@ -267,14 +276,14 @@ const ViewHelpers = exports.ViewHelpers = {
         pane.style.marginLeft = "0";
         pane.style.marginRight = "0";
         pane.style.marginBottom = "0";
-        pane.removeAttribute("pane-collapsed");
+        pane.classList.remove("pane-collapsed");
       } else {
         let width = Math.floor(pane.getAttribute("width")) + 1;
         let height = Math.floor(pane.getAttribute("height")) + 1;
         pane.style.marginLeft = -width + "px";
         pane.style.marginRight = -width + "px";
         pane.style.marginBottom = -height + "px";
-        pane.setAttribute("pane-collapsed", "");
+        pane.classList.add("pane-collapsed");
       }
 
       // Wait for the animation to end before calling afterToggle()
@@ -331,6 +340,7 @@ function Item(ownerView, element, value, attachment) {
   this.attachment = attachment;
   this._value = value + "";
   this._prebuiltNode = element;
+  this._itemsByElement = new Map();
 }
 
 Item.prototype = {
@@ -453,11 +463,6 @@ Item.prototype = {
   attachment: null
 };
 
-// Creating maps thousands of times for widgets with a large number of children
-// fills up a lot of memory. Make sure these are instantiated only if needed.
-DevToolsUtils.defineLazyPrototypeGetter(Item.prototype, "_itemsByElement",
-                                        () => new Map());
-
 /**
  * Some generic Widget methods handling Item instances.
  * Iterable via "for (let childItem of wrappedView) { }".
@@ -520,9 +525,9 @@ const WidgetMethods = exports.WidgetMethods = {
 
     // Can't use a WeakMap for _itemsByValue because keys are strings, and
     // can't use one for _itemsByElement either, since it needs to be iterable.
-    XPCOMUtils.defineLazyGetter(this, "_itemsByValue", () => new Map());
-    XPCOMUtils.defineLazyGetter(this, "_itemsByElement", () => new Map());
-    XPCOMUtils.defineLazyGetter(this, "_stagedItems", () => []);
+    this._itemsByValue = new Map();
+    this._itemsByElement = new Map();
+    this._stagedItems = [];
 
     // Handle internal events emitted by the widget if necessary.
     if (ViewHelpers.isEventEmitter(widget)) {

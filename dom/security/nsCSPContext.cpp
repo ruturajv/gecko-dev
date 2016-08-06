@@ -42,6 +42,7 @@
 #include "mozilla/dom/CSPDictionariesBinding.h"
 #include "mozilla/net/ReferrerPolicy.h"
 #include "nsINetworkInterceptController.h"
+#include "nsSandboxFlags.h"
 
 using namespace mozilla;
 
@@ -647,7 +648,7 @@ nsCSPContext::SetRequestContext(nsIDOMDocument* aDOMDocument,
     doc->SetHasCSP(true);
   }
   else {
-    NS_WARNING("No Document in SetRequestContext; can not query loadgroup; sending reports may fail.");
+    CSPCONTEXTLOG(("No Document in SetRequestContext; can not query loadgroup; sending reports may fail."));
     mLoadingPrincipal = aPrincipal;
     mLoadingPrincipal->GetURI(getter_AddRefs(mSelfURI));
     // if no document is available, then it also does not make sense to queue console messages
@@ -891,7 +892,7 @@ nsCSPContext::SendReports(nsISupports* aBlockedContentSource,
       const char16_t* params[] = { reportURIs[r].get() };
       CSPCONTEXTLOG(("Could not create nsIURI for report URI %s",
                      reportURICstring.get()));
-      logToConsole(MOZ_UTF16("triedToSendReport"), params, ArrayLength(params),
+      logToConsole(u"triedToSendReport", params, ArrayLength(params),
                    aSourceFile, aScriptSample, aLineNum, 0, nsIScriptError::errorFlag);
       continue; // don't return yet, there may be more URIs
     }
@@ -932,7 +933,7 @@ nsCSPContext::SendReports(nsISupports* aBlockedContentSource,
 
     if (!isHttpScheme) {
       const char16_t* params[] = { reportURIs[r].get() };
-      logToConsole(MOZ_UTF16("reportURInotHttpsOrHttp2"), params, ArrayLength(params),
+      logToConsole(u"reportURInotHttpsOrHttp2", params, ArrayLength(params),
                    aSourceFile, aScriptSample, aLineNum, 0, nsIScriptError::errorFlag);
       continue;
     }
@@ -995,7 +996,7 @@ nsCSPContext::SendReports(nsISupports* aBlockedContentSource,
     if (NS_FAILED(rv)) {
       const char16_t* params[] = { reportURIs[r].get() };
       CSPCONTEXTLOG(("AsyncOpen failed for report URI %s", params[0]));
-      logToConsole(MOZ_UTF16("triedToSendReport"), params, ArrayLength(params),
+      logToConsole(u"triedToSendReport", params, ArrayLength(params),
                    aSourceFile, aScriptSample, aLineNum, 0, nsIScriptError::errorFlag);
     } else {
       CSPCONTEXTLOG(("Sent violation report to URI %s", reportURICstring.get()));
@@ -1080,8 +1081,8 @@ class CSPReportSenderRunnable final : public Runnable
         nsString blockedDataChar16 = NS_ConvertUTF8toUTF16(blockedDataStr);
         const char16_t* params[] = { mViolatedDirective.get(),
                                      blockedDataChar16.get() };
-        mCSPContext->logToConsole(mReportOnlyFlag ? MOZ_UTF16("CSPROViolationWithURI") :
-                                                    MOZ_UTF16("CSPViolationWithURI"),
+        mCSPContext->logToConsole(mReportOnlyFlag ? u"CSPROViolationWithURI" :
+                                                    u"CSPViolationWithURI",
                                   params, ArrayLength(params), mSourceFile, mScriptSample,
                                   mLineNum, 0, nsIScriptError::errorFlag);
       }
@@ -1323,6 +1324,45 @@ nsCSPContext::ToJSON(nsAString& outCSPinJSON)
   return NS_OK;
 }
 
+NS_IMETHODIMP
+nsCSPContext::GetCSPSandboxFlags(uint32_t* aOutSandboxFlags)
+{
+  if (!aOutSandboxFlags) {
+    return NS_ERROR_FAILURE;
+  }
+  *aOutSandboxFlags = SANDBOXED_NONE;
+
+  for (uint32_t i = 0; i < mPolicies.Length(); i++) {
+    uint32_t flags = mPolicies[i]->getSandboxFlags();
+
+    // current policy doesn't have sandbox flag, check next policy
+    if (!flags) {
+      continue;
+    }
+
+    // current policy has sandbox flags, if the policy is in enforcement-mode
+    // (i.e. not report-only) set these flags and check for policies with more
+    // restrictions
+    if (!mPolicies[i]->getReportOnlyFlag()) {
+      *aOutSandboxFlags |= flags;
+    } else {
+      // sandbox directive is ignored in report-only mode, warn about it and
+      // continue the loop checking for an enforcement policy.
+      nsAutoString policy;
+      mPolicies[i]->toString(policy);
+
+      CSPCONTEXTLOG(("nsCSPContext::GetCSPSandboxFlags, report only policy, ignoring sandbox in: %s",
+                    policy.get()));
+
+      const char16_t* params[] = { policy.get() };
+      logToConsole(u"ignoringReportOnlyDirective", params, ArrayLength(params),
+                   EmptyString(), EmptyString(), 0, 0, nsIScriptError::warningFlag);
+    }
+  }
+
+  return NS_OK;
+}
+
 /* ========== CSPViolationReportListener implementation ========== */
 
 NS_IMPL_ISUPPORTS(CSPViolationReportListener, nsIStreamListener, nsIRequestObserver, nsISupports);
@@ -1411,7 +1451,7 @@ CSPReportRedirectSink::AsyncOnChannelRedirect(nsIChannel* aOldChannel,
   NS_ASSERTION(observerService, "Observer service required to log CSP violations");
   observerService->NotifyObservers(uri,
                                    CSP_VIOLATION_TOPIC,
-                                   MOZ_UTF16("denied redirect while sending violation report"));
+                                   u"denied redirect while sending violation report");
 
   return NS_BINDING_REDIRECTED;
 }

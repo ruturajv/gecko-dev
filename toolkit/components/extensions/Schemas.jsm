@@ -483,7 +483,7 @@ class Type extends Entry {
   // |baseType| (one of the possible getValueBaseType results) is
   // valid for this type. It returns true or false. It's used to fill
   // in optional arguments to functions before actually type checking
-  // the arguments.
+
   checkBaseType(baseType) {
     return false;
   }
@@ -946,10 +946,11 @@ class ArrayType extends Type {
 }
 
 class FunctionType extends Type {
-  constructor(schema, parameters, isAsync) {
+  constructor(schema, parameters, isAsync, hasAsyncCallback) {
     super(schema);
     this.parameters = parameters;
     this.isAsync = isAsync;
+    this.hasAsyncCallback = hasAsyncCallback;
   }
 
   normalize(value, context) {
@@ -1122,25 +1123,23 @@ class CallEntry extends Entry {
       // When this option is set, it's up to the implementation to
       // parse arguments.
       return args;
-    } else {
-      let success = check(0, 0);
-      if (!success) {
-        this.throwError(context, "Incorrect argument types");
-      }
+    }
+    let success = check(0, 0);
+    if (!success) {
+      this.throwError(context, "Incorrect argument types");
     }
 
     // Now we normalize (and fully type check) all non-omitted arguments.
     fixedArgs = fixedArgs.map((arg, parameterIndex) => {
       if (arg === null) {
         return null;
-      } else {
-        let parameter = this.parameters[parameterIndex];
-        let r = parameter.type.normalize(arg, context);
-        if (r.error) {
-          this.throwError(context, `Type error for parameter ${parameter.name} (${r.error})`);
-        }
-        return r.value;
       }
+      let parameter = this.parameters[parameterIndex];
+      let r = parameter.type.normalize(arg, context);
+      if (r.error) {
+        this.throwError(context, `Type error for parameter ${parameter.name} (${r.error})`);
+      }
+      return r.value;
     });
 
     return fixedArgs;
@@ -1156,6 +1155,7 @@ class FunctionEntry extends CallEntry {
     this.permissions = permissions;
 
     this.isAsync = type.isAsync;
+    this.hasAsyncCallback = type.hasAsyncCallback;
   }
 
   inject(path, name, dest, context) {
@@ -1172,7 +1172,10 @@ class FunctionEntry extends CallEntry {
       stub = (...args) => {
         this.checkDeprecated(context);
         let actuals = this.checkParameters(args, context);
-        let callback = actuals.pop();
+        let callback = null;
+        if (this.hasAsyncCallback) {
+          callback = actuals.pop();
+        }
         return context.callAsyncFunction(path, name, actuals, callback);
       };
     } else if (!this.returns) {
@@ -1312,9 +1315,8 @@ this.Schemas = {
         enumeration = enumeration.map(e => {
           if (typeof(e) == "object") {
             return e.name;
-          } else {
-            return e;
           }
+          return e;
         });
       }
 
@@ -1403,8 +1405,7 @@ this.Schemas = {
       checkTypeProperties();
       return new BooleanType(type);
     } else if (type.type == "function") {
-      let isAsync = typeof(type.async) == "string";
-
+      let isAsync = !!type.async;
       let parameters = null;
       if ("parameters" in type) {
         parameters = [];
@@ -1421,9 +1422,10 @@ this.Schemas = {
         }
       }
 
+      let hasAsyncCallback = false;
       if (isAsync) {
-        if (!parameters || !parameters.length || parameters[parameters.length - 1].name != type.async) {
-          throw new Error(`Internal error: "async" property must name the last parameter of the function.`);
+        if (parameters && parameters.length && parameters[parameters.length - 1].name == type.async) {
+          hasAsyncCallback = true;
         }
         if (type.returns || type.allowAmbiguousOptionalArguments) {
           throw new Error(`Internal error: Async functions must not have return values or ambiguous arguments.`);
@@ -1431,14 +1433,13 @@ this.Schemas = {
       }
 
       checkTypeProperties("parameters", "async", "returns");
-      return new FunctionType(type, parameters, isAsync);
+      return new FunctionType(type, parameters, isAsync, hasAsyncCallback);
     } else if (type.type == "any") {
       // Need to see what minimum and maximum are supposed to do here.
       checkTypeProperties("minimum", "maximum");
       return new AnyType(type);
-    } else {
-      throw new Error(`Unexpected type ${type.type}`);
     }
+    throw new Error(`Unexpected type ${type.type}`);
   },
 
   parseFunction(path, fun) {
@@ -1587,7 +1588,7 @@ this.Schemas = {
     };
 
     if (Services.appinfo.processType != Services.appinfo.PROCESS_TYPE_CONTENT) {
-      return readJSON(url).then(json => {
+      let result = readJSON(url).then(json => {
         this.schemaJSON.set(url, json);
 
         let data = Services.ppmm.initialProcessData;
@@ -1597,15 +1598,15 @@ this.Schemas = {
 
         loadFromJSON(json);
       });
-    } else {
-      if (this.loadedUrls.has(url)) {
-        return;
-      }
-      this.loadedUrls.add(url);
-
-      let schema = this.schemaJSON.get(url);
-      loadFromJSON(schema);
+      return result;
     }
+    if (this.loadedUrls.has(url)) {
+      return;
+    }
+    this.loadedUrls.add(url);
+
+    let schema = this.schemaJSON.get(url);
+    loadFromJSON(schema);
   },
 
   inject(dest, wrapperFuncs) {

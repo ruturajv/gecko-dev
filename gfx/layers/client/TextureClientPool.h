@@ -44,11 +44,12 @@ class TextureClientPool final : public TextureClientAllocator
   ~TextureClientPool();
 
 public:
-  TextureClientPool(gfx::SurfaceFormat aFormat,
-                    TextureFlags aFlags,
+  TextureClientPool(LayersBackend aBackend,
+                    gfx::SurfaceFormat aFormat,
                     gfx::IntSize aSize,
-                    uint32_t aMaxTextureClients,
-                    uint32_t aShrinkTimeoutMsec,
+                    TextureFlags aFlags,
+                    uint32_t aInitialPoolSize,
+                    uint32_t aPoolUnusedSize,
                     TextureForwarder* aAllocator);
 
   /**
@@ -75,22 +76,16 @@ public:
   void ReturnTextureClientDeferred(TextureClient *aClient) override;
 
   /**
-   * Attempt to shrink the pool so that there are no more than
-   * mMaxTextureClients clients outstanding.
-   */
-  void ShrinkToMaximumSize();
-
-  /**
-   * Attempt to shrink the pool so that there are no more than sMinCacheSize
-   * unused clients.
-   */
-  void ShrinkToMinimumSize();
-
-  /**
    * Return any clients to the pool that were previously returned in
    * ReturnTextureClientDeferred.
    */
   void ReturnDeferredClients();
+
+  /**
+   * Attempt to shrink the pool so that there are no more than
+   * mInitialPoolSize outstanding.
+   */
+  void ShrinkToMaximumSize();
 
   /**
    * Report that a client retrieved via GetTextureClient() has become
@@ -104,6 +99,7 @@ public:
    */
   void Clear();
 
+  LayersBackend GetBackend() const { return mBackend; }
   gfx::SurfaceFormat GetFormat() { return mFormat; }
   TextureFlags GetFlags() const { return mFlags; }
 
@@ -115,26 +111,28 @@ public:
 private:
   void ReturnUnlockedClients();
 
-  // The minimum size of the pool (the number of tiles that will be kept after
-  // shrinking).
-  static const uint32_t sMinCacheSize = 0;
+  /// Allocate a single TextureClient to be returned from the pool.
+  void AllocateTextureClient();
+
+  /// Backend passed to the TextureClient for buffer creation.
+  LayersBackend mBackend;
 
   /// Format is passed to the TextureClient for buffer creation.
   gfx::SurfaceFormat mFormat;
 
-  /// Flags passed to the TextureClient for buffer creation.
-  const TextureFlags mFlags;
-
   /// The width and height of the tiles to be used.
   gfx::IntSize mSize;
 
-  // The maximum number of texture clients managed by this pool that we want
-  // to remain active.
-  uint32_t mMaxTextureClients;
+  /// Flags passed to the TextureClient for buffer creation.
+  const TextureFlags mFlags;
 
-  // The time in milliseconds before the pool will be shrunk to the minimum
-  // size after returning a client.
-  uint32_t mShrinkTimeoutMsec;
+  // The initial number of unused texture clients to seed the pool with
+  // on construction
+  uint32_t mInitialPoolSize;
+
+  // How many unused texture clients to try and keep around if we go over
+  // the initial allocation
+  uint32_t mPoolUnusedSize;
 
   /// This is a total number of clients in the wild and in the stack of
   /// deferred clients (see below).  So, the total number of clients in
@@ -150,6 +148,11 @@ private:
   RefPtr<nsITimer> mTimer;
   // This mSurfaceAllocator owns us, so no need to hold a ref to it
   TextureForwarder* mSurfaceAllocator;
+
+  // Keep track of whether this pool has been destroyed or not. If it has,
+  // we won't accept returns of TextureClients anymore, and the refcounting
+  // should take care of their destruction.
+  bool mDestroyed;
 };
 
 } // namespace layers

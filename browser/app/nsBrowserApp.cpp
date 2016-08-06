@@ -17,10 +17,6 @@
 #include <unistd.h>
 #endif
 
-#ifdef XP_MACOSX
-#include "MacQuirks.h"
-#endif
-
 #include <stdio.h>
 #include <stdarg.h>
 #include <time.h>
@@ -36,9 +32,6 @@
 #define XRE_DONT_SUPPORT_XPSP2
 #endif
 #define XRE_WANT_ENVIRON
-#if defined(_MSC_VER) && (_MSC_VER < 1900)
-#define snprintf _snprintf
-#endif
 #define strcasecmp _stricmp
 #ifdef MOZ_SANDBOX
 #include "mozilla/sandboxing/SandboxInitialization.h"
@@ -329,6 +322,20 @@ sizeof(XPCOM_DLL) - 1))
 
 int main(int argc, char* argv[], char* envp[])
 {
+  mozilla::TimeStamp start = mozilla::TimeStamp::Now();
+
+#ifdef HAS_DLL_BLOCKLIST
+  DllBlocklist_Initialize();
+
+#ifdef DEBUG
+  // In order to be effective against AppInit DLLs, the blocklist must be
+  // initialized before user32.dll is loaded into the process (bug 932100).
+  if (GetModuleHandleA("user32.dll")) {
+    fprintf(stderr, "DLL blocklist was unable to intercept AppInit DLLs.\n");
+  }
+#endif
+#endif
+
 #ifdef MOZ_BROWSER_CAN_BE_CONTENTPROC
   // We are launching as a content process, delegate to the appropriate
   // main
@@ -356,36 +363,8 @@ int main(int argc, char* argv[], char* envp[])
   }
 #endif
 
-  mozilla::TimeStamp start = mozilla::TimeStamp::Now();
-
-#ifdef XP_MACOSX
-  TriggerQuirks();
-#endif
-
-  int gotCounters;
-#if defined(XP_UNIX)
-  struct rusage initialRUsage;
-  gotCounters = !getrusage(RUSAGE_SELF, &initialRUsage);
-#elif defined(XP_WIN)
-  IO_COUNTERS ioCounters;
-  gotCounters = GetProcessIoCounters(GetCurrentProcess(), &ioCounters);
-#else
-  #error "Unknown platform"  // having this here keeps cppcheck happy
-#endif
 
   nsIFile *xreDirectory;
-
-#ifdef HAS_DLL_BLOCKLIST
-  DllBlocklist_Initialize();
-
-#ifdef DEBUG
-  // In order to be effective against AppInit DLLs, the blocklist must be
-  // initialized before user32.dll is loaded into the process (bug 932100).
-  if (GetModuleHandleA("user32.dll")) {
-    fprintf(stderr, "DLL blocklist was unable to intercept AppInit DLLs.\n");
-  }
-#endif
-#endif
 
   nsresult rv = InitXPCOMGlue(argv[0], &xreDirectory);
   if (NS_FAILED(rv)) {
@@ -393,32 +372,6 @@ int main(int argc, char* argv[], char* envp[])
   }
 
   XRE_StartupTimelineRecord(mozilla::StartupTimeline::START, start);
-
-  if (gotCounters) {
-#if defined(XP_WIN)
-    XRE_TelemetryAccumulate(mozilla::Telemetry::EARLY_GLUESTARTUP_READ_OPS,
-                            int(ioCounters.ReadOperationCount));
-    XRE_TelemetryAccumulate(mozilla::Telemetry::EARLY_GLUESTARTUP_READ_TRANSFER,
-                            int(ioCounters.ReadTransferCount / 1024));
-    IO_COUNTERS newIoCounters;
-    if (GetProcessIoCounters(GetCurrentProcess(), &newIoCounters)) {
-      XRE_TelemetryAccumulate(mozilla::Telemetry::GLUESTARTUP_READ_OPS,
-                              int(newIoCounters.ReadOperationCount - ioCounters.ReadOperationCount));
-      XRE_TelemetryAccumulate(mozilla::Telemetry::GLUESTARTUP_READ_TRANSFER,
-                              int((newIoCounters.ReadTransferCount - ioCounters.ReadTransferCount) / 1024));
-    }
-#elif defined(XP_UNIX)
-    XRE_TelemetryAccumulate(mozilla::Telemetry::EARLY_GLUESTARTUP_HARD_FAULTS,
-                            int(initialRUsage.ru_majflt));
-    struct rusage newRUsage;
-    if (!getrusage(RUSAGE_SELF, &newRUsage)) {
-      XRE_TelemetryAccumulate(mozilla::Telemetry::GLUESTARTUP_HARD_FAULTS,
-                              int(newRUsage.ru_majflt - initialRUsage.ru_majflt));
-    }
-#else
-  #error "Unknown platform"  // having this here keeps cppcheck happy
-#endif
-  }
 
 #ifdef MOZ_BROWSER_CAN_BE_CONTENTPROC
   XRE_EnableSameExecutableForContentProc();

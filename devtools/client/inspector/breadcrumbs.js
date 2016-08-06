@@ -6,11 +6,12 @@
 
 "use strict";
 
+/* eslint-disable mozilla/reject-some-requires */
 const {Ci} = require("chrome");
+/* eslint-enable mozilla/reject-some-requires */
 const Services = require("Services");
 const promise = require("promise");
 const FocusManager = Services.focus;
-const {waitForTick} = require("devtools/shared/DevToolsUtils");
 
 const ELLIPSIS = Services.prefs.getComplexValue(
     "intl.ellipsis",
@@ -20,10 +21,8 @@ const MAX_LABEL_LENGTH = 40;
 const NS_XHTML = "http://www.w3.org/1999/xhtml";
 const SCROLL_REPEAT_MS = 100;
 
-loader.lazyRequireGetter(this, "EventEmitter",
-                         "devtools/shared/event-emitter");
-loader.lazyRequireGetter(this, "KeyShortcuts",
-                         "devtools/client/shared/key-shortcuts", true);
+const EventEmitter = require("devtools/shared/event-emitter");
+const {KeyShortcuts} = require("devtools/client/shared/key-shortcuts");
 
 /**
  * Component to replicate functionality of XUL arrowscrollbox
@@ -349,7 +348,7 @@ HTMLBreadcrumbs.prototype = {
 
     this.outer.addEventListener("click", this, true);
     this.outer.addEventListener("mouseover", this, true);
-    this.outer.addEventListener("mouseleave", this, true);
+    this.outer.addEventListener("mouseout", this, true);
     this.outer.addEventListener("focus", this, true);
 
     this.shortcuts = new KeyShortcuts({ window: this.chromeWin, target: this.outer });
@@ -480,8 +479,8 @@ HTMLBreadcrumbs.prototype = {
       this.handleClick(event);
     } else if (event.type == "mouseover") {
       this.handleMouseOver(event);
-    } else if (event.type == "mouseleave") {
-      this.handleMouseLeave(event);
+    } else if (event.type == "mouseout") {
+      this.handleMouseOut(event);
     } else if (event.type == "focus") {
       this.handleFocus(event);
     }
@@ -531,10 +530,10 @@ HTMLBreadcrumbs.prototype = {
   },
 
   /**
-   * On mouse leave, make sure to unhighlight.
+   * On mouse out, make sure to unhighlight.
    * @param {DOMEvent} event.
    */
-  handleMouseLeave: function (event) {
+  handleMouseOut: function (event) {
     this.inspector.toolbox.highlighterUtils.unhighlight();
   },
 
@@ -591,7 +590,7 @@ HTMLBreadcrumbs.prototype = {
 
     this.container.removeEventListener("click", this, true);
     this.container.removeEventListener("mouseover", this, true);
-    this.container.removeEventListener("mouseleave", this, true);
+    this.container.removeEventListener("mouseout", this, true);
     this.container.removeEventListener("focus", this, true);
     this.shortcuts.destroy();
 
@@ -830,6 +829,22 @@ HTMLBreadcrumbs.prototype = {
       return;
     }
 
+    // If this was an interesting deletion; then trim the breadcrumb trail
+    if (reason === "markupmutation") {
+      for (let {type, removed} of mutations) {
+        if (type !== "childList") {
+          continue;
+        }
+
+        for (let node of removed) {
+          let removedIndex = this.indexOf(node);
+          if (removedIndex > -1) {
+            this.cutAfter(removedIndex - 1);
+          }
+        }
+      }
+    }
+
     if (!this.selection.isElementNode()) {
       // no selection
       this.setCursor(-1);
@@ -866,10 +881,17 @@ HTMLBreadcrumbs.prototype = {
     this.updateSelectors();
 
     // Make sure the selected node and its neighbours are visible.
-    waitForTick().then(() => {
-      this.scroll();
-      this.inspector.emit("breadcrumbs-updated", this.selection.nodeFront);
-      doneUpdating();
-    });
+    setTimeout(() => {
+      try {
+        this.scroll();
+        this.inspector.emit("breadcrumbs-updated", this.selection.nodeFront);
+        doneUpdating();
+      } catch (e) {
+        // Only log this as an error if we haven't been destroyed in the meantime.
+        if (!this.isDestroyed) {
+          console.error(e);
+        }
+      }
+    }, 0);
   }
 };

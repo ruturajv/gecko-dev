@@ -39,6 +39,32 @@ typedef ASTConsumer *ASTConsumerPtr;
 #define cxxRecordDecl recordDecl
 #endif
 
+// Check if the given expression contains an assignment expression.
+// This can either take the form of a Binary Operator or a
+// Overloaded Operator Call.
+bool HasSideEffectAssignment(const Expr *expr) {
+  if (auto opCallExpr = dyn_cast_or_null<CXXOperatorCallExpr>(expr)) {
+    auto binOp = opCallExpr->getOperator();
+    if (binOp == OO_Equal || (binOp >= OO_PlusEqual && binOp <= OO_PipeEqual)) {
+      return true;
+    }
+  } else if (auto binOpExpr = dyn_cast_or_null<BinaryOperator>(expr)) {
+    if (binOpExpr->isAssignmentOp()) {
+      return true;
+    }
+  }
+
+  // Recurse to children.
+  for (const Stmt *SubStmt : expr->children()) {
+    auto childExpr = dyn_cast_or_null<Expr>(SubStmt);
+    if (childExpr && HasSideEffectAssignment(childExpr)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 namespace {
 
 using namespace clang::ast_matchers;
@@ -124,6 +150,11 @@ private:
     virtual void run(const MatchFinder::MatchResult &Result);
   };
 
+  class AssertAssignmentChecker : public MatchFinder::MatchCallback {
+  public:
+    virtual void run(const MatchFinder::MatchResult &Result);
+  };
+
   ScopeChecker scopeChecker;
   ArithmeticArgChecker arithmeticArgChecker;
   TrivialCtorDtorChecker trivialCtorDtorChecker;
@@ -139,6 +170,7 @@ private:
   NoAutoTypeChecker noAutoTypeChecker;
   NoExplicitMoveConstructorChecker noExplicitMoveConstructorChecker;
   RefCountedCopyConstructorChecker refCountedCopyConstructorChecker;
+  AssertAssignmentChecker assertAttributionChecker;
   MatchFinder astMatcher;
 };
 
@@ -762,6 +794,20 @@ AST_MATCHER(CXXConstructorDecl, isExplicitMoveConstructor) {
 AST_MATCHER(CXXConstructorDecl, isCompilerProvidedCopyConstructor) {
   return !Node.isUserProvided() && Node.isCopyConstructor();
 }
+
+AST_MATCHER(CallExpr, isAssertAssignmentTestFunc) {
+  static const std::string assertName = "MOZ_AssertAssignmentTest";
+  const FunctionDecl *method = Node.getDirectCallee();
+
+  return method
+      && method->getDeclName().isIdentifier()
+      && method->getName() == assertName;
+}
+
+AST_MATCHER(CXXRecordDecl, isLambdaDecl) {
+  return Node.isLambda();
+}
+
 }
 }
 
@@ -1010,12 +1056,21 @@ DiagnosticsMatcher::DiagnosticsMatcher() {
           .bind("node"),
       &noAddRefReleaseOnReturnChecker);
 
-  // Match declrefs with type "pointer to object of ref-counted type" inside a
-  // lambda, where the declaration they reference is not inside the lambda.
-  // This excludes arguments and local variables, leaving only captured
-  // variables.
-  astMatcher.addMatcher(lambdaExpr().bind("lambda"),
-                        &refCountedInsideLambdaChecker);
+  // We want to reject any code which captures a pointer to an object of a
+  // refcounted type, and then lets that value escape. As a primitive analysis,
+  // we reject any occurances of the lambda as a template parameter to a class
+  // (which could allow it to escape), as well as any presence of such a lambda
+  // in a return value (either from lambdas, or in c++14, auto functions).
+  //
+  // We check these lambdas' capture lists for raw pointers to refcounted types.
+  astMatcher.addMatcher(
+      functionDecl(returns(recordType(hasDeclaration(cxxRecordDecl(isLambdaDecl()).bind("decl"))))),
+      &refCountedInsideLambdaChecker);
+  astMatcher.addMatcher(lambdaExpr().bind("lambdaExpr"), &refCountedInsideLambdaChecker);
+  astMatcher.addMatcher(
+      classTemplateSpecializationDecl(hasAnyTemplateArgument(refersToType(
+        recordType(hasDeclaration(cxxRecordDecl(isLambdaDecl()).bind("decl")))))),
+      &refCountedInsideLambdaChecker);
 
   // Older clang versions such as the ones used on the infra recognize these
   // conversions as 'operator _Bool', but newer clang versions recognize these
@@ -1070,6 +1125,10 @@ DiagnosticsMatcher::DiagnosticsMatcher() {
                                             ofClass(hasRefCntMember()))))
           .bind("node"),
       &refCountedCopyConstructorChecker);
+
+  astMatcher.addMatcher(
+      callExpr(isAssertAssignmentTestFunc()).bind("funcCall"),
+      &assertAttributionChecker);
 }
 
 // These enum variants determine whether an allocation has occured in the code.
@@ -1313,13 +1372,34 @@ void DiagnosticsMatcher::NoAddRefReleaseOnReturnChecker::run(
 
 void DiagnosticsMatcher::RefCountedInsideLambdaChecker::run(
     const MatchFinder::MatchResult &Result) {
+  static DenseSet<const CXXRecordDecl*> CheckedDecls;
+
   DiagnosticsEngine &Diag = Result.Context->getDiagnostics();
   unsigned errorID = Diag.getDiagnosticIDs()->getCustomDiagID(
       DiagnosticIDs::Error,
       "Refcounted variable %0 of type %1 cannot be captured by a lambda");
   unsigned noteID = Diag.getDiagnosticIDs()->getCustomDiagID(
       DiagnosticIDs::Note, "Please consider using a smart pointer");
-  const LambdaExpr *Lambda = Result.Nodes.getNodeAs<LambdaExpr>("lambda");
+
+  const CXXRecordDecl *Lambda = Result.Nodes.getNodeAs<CXXRecordDecl>("decl");
+
+  if (const LambdaExpr *OuterLambda = Result.Nodes.getNodeAs<LambdaExpr>("lambdaExpr")) {
+    const CXXMethodDecl *OpCall = OuterLambda->getCallOperator();
+    QualType ReturnTy = OpCall->getReturnType();
+    if (const CXXRecordDecl *Record = ReturnTy->getAsCXXRecordDecl()) {
+      Lambda = Record;
+    }
+  }
+
+  if (!Lambda || !Lambda->isLambda()) {
+    return;
+  }
+
+  // Don't report errors on the same declarations more than once.
+  if (CheckedDecls.count(Lambda)) {
+    return;
+  }
+  CheckedDecls.insert(Lambda);
 
   for (const LambdaCapture Capture : Lambda->captures()) {
     if (Capture.capturesVariable() && Capture.getCaptureKind() != LCK_ByRef) {
@@ -1329,6 +1409,7 @@ void DiagnosticsMatcher::RefCountedInsideLambdaChecker::run(
         Diag.Report(Capture.getLocation(), errorID) << Capture.getCapturedVar()
                                                     << Pointee;
         Diag.Report(Capture.getLocation(), noteID);
+        return;
       }
     }
   }
@@ -1543,6 +1624,18 @@ void DiagnosticsMatcher::RefCountedCopyConstructorChecker::run(
 
   Diag.Report(E->getLocation(), ErrorID);
   Diag.Report(E->getLocation(), NoteID);
+}
+
+void DiagnosticsMatcher::AssertAssignmentChecker::run(
+    const MatchFinder::MatchResult &Result) {
+  DiagnosticsEngine &Diag = Result.Context->getDiagnostics();
+  unsigned assignInsteadOfComp = Diag.getDiagnosticIDs()->getCustomDiagID(
+      DiagnosticIDs::Error, "Forbidden assignment in assert expression");
+  const CallExpr *funcCall = Result.Nodes.getNodeAs<CallExpr>("funcCall");
+
+  if (funcCall && HasSideEffectAssignment(funcCall)) {
+    Diag.Report(funcCall->getLocStart(), assignInsteadOfComp);
+  }
 }
 
 class MozCheckAction : public PluginASTAction {

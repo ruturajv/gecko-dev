@@ -764,6 +764,11 @@ DocAccessible::AttributeChanged(nsIDocument* aDocument,
     accessible = this;
   }
 
+  if (!accessible->IsBoundToParent()) {
+    MOZ_ASSERT_UNREACHABLE("DOM attribute change on accessible detached from tree");
+    return;
+  }
+
   // Fire accessible events iff there's an accessible, otherwise we consider
   // the accessible state wasn't changed, i.e. its state is initial state.
   AttributeChangedImpl(accessible, aNameSpaceID, aAttribute);
@@ -1130,10 +1135,26 @@ DocAccessible::ContentInserted(nsIDocument* aDocument, nsIContent* aContainer,
 }
 
 void
-DocAccessible::ContentRemoved(nsIDocument* aDocument, nsIContent* aContainer,
-                              nsIContent* aChild, int32_t /* unused */,
-                              nsIContent* aPreviousSibling)
+DocAccessible::ContentRemoved(nsIDocument* aDocument,
+                              nsIContent* aContainerNode,
+                              nsIContent* aChildNode, int32_t /* unused */,
+                              nsIContent* aPreviousSiblingNode)
 {
+#ifdef A11Y_LOG
+  if (logging::IsEnabled(logging::eTree)) {
+    logging::MsgBegin("TREE", "DOM content removed; doc: %p", this);
+    logging::Node("container node", aContainerNode);
+    logging::Node("content node", aChildNode);
+    logging::MsgEnd();
+  }
+#endif
+  // This one and content removal notification from layout may result in
+  // double processing of same subtrees. If it pops up in profiling, then
+  // consider reusing a document node cache to reject these notifications early.
+  Accessible* container = GetAccessibleOrContainer(aContainerNode);
+  if (container) {
+    UpdateTreeOnRemoval(container, aChildNode);
+  }
 }
 
 void
@@ -1681,6 +1702,12 @@ public:
    */
   bool Next();
 
+  void Rejected()
+  {
+    mChild = nullptr;
+    mChildBefore = nullptr;
+  }
+
 private:
   Accessible* mChild;
   Accessible* mChildBefore;
@@ -1815,6 +1842,7 @@ DocAccessible::ProcessContentInserted(Accessible* aContainer,
     }
 
     MOZ_ASSERT_UNREACHABLE("accessible was rejected");
+    iter.Rejected();
   } while (iter.Next());
 
   mt.Done();
@@ -1852,7 +1880,9 @@ DocAccessible::ProcessContentInserted(Accessible* aContainer, nsIContent* aNode)
 
     if (child) {
       TreeMutation mt(aContainer);
-      aContainer->InsertAfter(child, walker.Prev());
+      if (!aContainer->InsertAfter(child, walker.Prev())) {
+        return;
+      }
       mt.AfterInsertion(child);
       mt.Done();
 

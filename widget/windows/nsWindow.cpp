@@ -136,11 +136,12 @@
 #include "mozilla/TextEvents.h" // For WidgetKeyboardEvent
 #include "mozilla/TextEventDispatcherListener.h"
 #include "mozilla/widget/WinNativeEventData.h"
+#include "mozilla/widget/PlatformWidgetTypes.h"
 #include "nsThemeConstants.h"
 #include "nsBidiKeyboard.h"
 #include "nsThemeConstants.h"
 #include "gfxConfig.h"
-#include "WinCompositorWidgetProxy.h"
+#include "InProcessWinCompositorWidget.h"
 
 #include "nsIGfxInfo.h"
 #include "nsUXThemeConstants.h"
@@ -187,6 +188,11 @@
 
 #include "InkCollector.h"
 
+// ERROR from wingdi.h (below) gets undefined by some code.
+// #define ERROR               0
+// #define RGN_ERROR ERROR
+#define ERROR 0
+
 #if !defined(SM_CONVERTIBLESLATEMODE)
 #define SM_CONVERTIBLESLATEMODE 0x2003
 #endif
@@ -195,6 +201,7 @@
 #define WM_DPICHANGED 0x02E0
 #endif
 
+#include "mozilla/gfx/DeviceManagerD3D11.h"
 #include "mozilla/layers/APZCTreeManager.h"
 #include "mozilla/layers/InputAPZContext.h"
 #include "mozilla/layers/ScrollInputMethods.h"
@@ -798,7 +805,7 @@ nsWindow::RegisterWindowClass(const wchar_t* aClassName,
   }
 
   wc.style         = CS_DBLCLKS | aExtraStyle;
-  wc.lpfnWndProc   = ::DefWindowProcW;
+  wc.lpfnWndProc   = WinUtils::NonClientDpiScalingDefWindowProcW;
   wc.cbClsExtra    = 0;
   wc.cbWndExtra    = 0;
   wc.hInstance     = nsToolkit::mDllInstance;
@@ -1180,6 +1187,107 @@ nsWindow::EnumAllWindows(WindowEnumCallback aCallback)
                     (LPARAM)aCallback);
 }
 
+static already_AddRefed<SourceSurface>
+CreateSourceSurfaceForGfxSurface(gfxASurface* aSurface)
+{
+  MOZ_ASSERT(aSurface);
+  return Factory::CreateSourceSurfaceForCairoSurface(
+           aSurface->CairoSurface(), aSurface->GetSize(),
+           aSurface->GetSurfaceFormat());
+}
+
+nsWindow::ScrollSnapshot*
+nsWindow::EnsureSnapshotSurface(ScrollSnapshot& aSnapshotData,
+                                const mozilla::gfx::IntSize& aSize)
+{
+  // If the surface doesn't exist or is the wrong size then create new one.
+  if (!aSnapshotData.surface || aSnapshotData.surface->GetSize() != aSize) {
+    aSnapshotData.surface = new gfxWindowsSurface(aSize, kScrollCaptureFormat);
+    aSnapshotData.surfaceHasSnapshot = false;
+  }
+
+  return &aSnapshotData;
+}
+
+already_AddRefed<SourceSurface>
+nsWindow::CreateScrollSnapshot()
+{
+  RECT clip = { 0 };
+  int rgnType = ::GetWindowRgnBox(mWnd, &clip);
+  if (rgnType == RGN_ERROR) {
+    // We failed to get the clip assume that we need a full fallback.
+    clip.left = 0;
+    clip.top = 0;
+    clip.right = mBounds.width;
+    clip.bottom = mBounds.height;
+    return GetFallbackScrollSnapshot(clip);
+  }
+
+  // Check that the window is in a position to snapshot. We don't check for
+  // clipped width as that doesn't currently matter for APZ scrolling.
+  if (clip.top || clip.bottom != mBounds.height) {
+    return GetFallbackScrollSnapshot(clip);
+  }
+
+  nsAutoHDC windowDC(::GetDC(mWnd));
+  if (!windowDC) {
+    return GetFallbackScrollSnapshot(clip);
+  }
+
+  gfx::IntSize snapshotSize(mBounds.width, mBounds.height);
+  ScrollSnapshot* snapshot;
+  if (clip.left || clip.right != mBounds.width) {
+    // Can't do a full snapshot, so use the partial snapshot.
+    snapshot = EnsureSnapshotSurface(mPartialSnapshot, snapshotSize);
+  } else {
+    snapshot = EnsureSnapshotSurface(mFullSnapshot, snapshotSize);
+  }
+
+  // Note that we know that the clip is full height.
+  if (!::BitBlt(snapshot->surface->GetDC(), clip.left, 0, clip.right - clip.left,
+                clip.bottom, windowDC, clip.left, 0, SRCCOPY)) {
+    return GetFallbackScrollSnapshot(clip);
+  }
+  ::GdiFlush();
+  snapshot->surface->Flush();
+  snapshot->surfaceHasSnapshot = true;
+  snapshot->clip = clip;
+  mCurrentSnapshot = snapshot;
+
+  return CreateSourceSurfaceForGfxSurface(mCurrentSnapshot->surface);
+}
+
+already_AddRefed<SourceSurface>
+nsWindow::GetFallbackScrollSnapshot(const RECT& aRequiredClip)
+{
+  gfx::IntSize snapshotSize(mBounds.width, mBounds.height);
+
+  // If the current snapshot is the correct size and covers the required clip,
+  // just keep that by returning null.
+  // Note: we know the clip is always full height.
+  if (mCurrentSnapshot &&
+      mCurrentSnapshot->surface->GetSize() == snapshotSize &&
+      mCurrentSnapshot->clip.left <= aRequiredClip.left &&
+      mCurrentSnapshot->clip.right >= aRequiredClip.right) {
+    return nullptr;
+  }
+
+  // Otherwise we'll use the full snapshot, making sure it is big enough first.
+  mCurrentSnapshot = EnsureSnapshotSurface(mFullSnapshot, snapshotSize);
+
+  // If there is no snapshot, create a default.
+  if (!mCurrentSnapshot->surfaceHasSnapshot) {
+    gfx::SurfaceFormat format = mCurrentSnapshot->surface->GetSurfaceFormat();
+    RefPtr<DrawTarget> dt = Factory::CreateDrawTargetForCairoSurface(
+      mCurrentSnapshot->surface->CairoSurface(),
+      mCurrentSnapshot->surface->GetSize(), &format);
+
+    DefaultFillScrollCapture(dt);
+  }
+
+  return CreateSourceSurfaceForGfxSurface(mCurrentSnapshot->surface);
+}
+
 /**************************************************************
  *
  * SECTION: nsIWidget::Show
@@ -1291,8 +1399,8 @@ NS_METHOD nsWindow::Show(bool bState)
       // Clear contents to avoid ghosting of old content if we display
       // this window again.
       if (wasVisible && mTransparencyMode == eTransparencyTransparent) {
-        if (RefPtr<WinCompositorWidgetProxy> proxy = GetCompositorWidgetProxy()) {
-          proxy->ClearTransparentWindow();
+        if (mCompositorWidgetDelegate) {
+          mCompositorWidgetDelegate->ClearTransparentWindow();
         }
       }
       if (mWindowType != eWindowType_dialog) {
@@ -1549,12 +1657,6 @@ NS_METHOD nsWindow::Resize(double aWidth, double aHeight, bool aRepaint)
     return NS_OK;
   }
 
-  if (mTransparencyMode == eTransparencyTransparent) {
-    if (RefPtr<WinCompositorWidgetProxy> proxy = GetCompositorWidgetProxy()) {
-      proxy->ResizeTransparentWindow(width, height);
-    }
-  }
-
   // Set cached value for lightweight and printing
   mBounds.width  = width;
   mBounds.height = height;
@@ -1606,12 +1708,6 @@ NS_METHOD nsWindow::Resize(double aX, double aY, double aWidth, double aHeight, 
       Invalidate();
     }
     return NS_OK;
-  }
-
-  if (eTransparencyTransparent == mTransparencyMode) {
-    if (RefPtr<WinCompositorWidgetProxy> proxy = GetCompositorWidgetProxy()) {
-      proxy->ResizeTransparentWindow(width, height);
-    }
   }
 
   // Set cached value for lightweight and printing
@@ -3600,13 +3696,8 @@ nsWindow::HasPendingInputEvent()
 LayerManager*
 nsWindow::GetLayerManager(PLayerTransactionChild* aShadowManager,
                           LayersBackend aBackendHint,
-                          LayerManagerPersistence aPersistence,
-                          bool* aAllowRetaining)
+                          LayerManagerPersistence aPersistence)
 {
-  if (aAllowRetaining) {
-    *aAllowRetaining = true;
-  }
-
   RECT windowRect;
   ::GetClientRect(mWnd, &windowRect);
 
@@ -3622,13 +3713,16 @@ nsWindow::GetLayerManager(PLayerTransactionChild* aShadowManager,
 
   if (!mLayerManager) {
     MOZ_ASSERT(!mCompositorSession && !mCompositorBridgeChild);
+    MOZ_ASSERT(!mCompositorWidgetDelegate);
 
     // Ensure we have a widget proxy even if we're not using the compositor,
-    // since that's where we handle transparent windows.
-    if (!mCompositorWidgetProxy) {
-      mCompositorWidgetProxy = new WinCompositorWidgetProxy(this);
-    }
-
+    // since all our transparent window handling lives there.
+    CompositorWidgetInitData initData(
+      reinterpret_cast<uintptr_t>(mWnd),
+      reinterpret_cast<uintptr_t>(static_cast<nsIWidget*>(this)),
+      mTransparencyMode);
+    mBasicLayersSurface = new InProcessWinCompositorWidget(initData, this);
+    mCompositorWidgetDelegate = mBasicLayersSurface;
     mLayerManager = CreateBasicLayerManager();
   }
 
@@ -3687,18 +3781,6 @@ nsWindow::OnDefaultButtonLoaded(const LayoutDeviceIntRect& aButtonRect)
     return NS_ERROR_FAILURE;
   }
   return NS_OK;
-}
-
-mozilla::widget::CompositorWidgetProxy*
-nsWindow::NewCompositorWidgetProxy()
-{
-  return new WinCompositorWidgetProxy(this);
-}
-
-mozilla::widget::WinCompositorWidgetProxy*
-nsWindow::GetCompositorWidgetProxy()
-{
-  return mCompositorWidgetProxy ? mCompositorWidgetProxy->AsWindowsProxy() : nullptr;
 }
 
 void
@@ -4903,17 +4985,16 @@ nsWindow::ProcessMessage(UINT msg, WPARAM& wParam, LPARAM& lParam,
         //
         // To do this we take mPresentLock in nsWindow::PreRender and
         // if that lock is taken we wait before doing WM_SETTEXT
-        RefPtr<WinCompositorWidgetProxy> proxy = GetCompositorWidgetProxy();
-        if (proxy) {
-          proxy->EnterPresentLock();
+        if (mCompositorWidgetDelegate) {
+          mCompositorWidgetDelegate->EnterPresentLock();
         }
         DWORD style = GetWindowLong(mWnd, GWL_STYLE);
         SetWindowLong(mWnd, GWL_STYLE, style & ~WS_VISIBLE);
         *aRetValue = CallWindowProcW(GetPrevWindowProc(), mWnd,
                                      msg, wParam, lParam);
         SetWindowLong(mWnd, GWL_STYLE, style);
-        if (proxy) {
-          proxy->LeavePresentLock();
+        if (mCompositorWidgetDelegate) {
+          mCompositorWidgetDelegate->LeavePresentLock();
         }
 
         return true;
@@ -5158,6 +5239,14 @@ nsWindow::ProcessMessage(UINT msg, WPARAM& wParam, LPARAM& lParam,
 
     case WM_CONTEXTMENU:
     {
+      // If the context menu is brought up by a touch long-press, then
+      // the APZ code is responsble for dealing with this, so we don't
+      // need to do anything.
+      if (mAPZC && MOUSE_INPUT_SOURCE() == nsIDOMMouseEvent::MOZ_SOURCE_TOUCH) {
+        result = true;
+        break;
+      }
+
       // if the context menu is brought up from the keyboard, |lParam|
       // will be -1.
       LPARAM pos;
@@ -6213,12 +6302,6 @@ void nsWindow::OnWindowPosChanged(WINDOWPOS* wp)
     newHeight = r.bottom - r.top;
     nsIntRect rect(wp->x, wp->y, newWidth, newHeight);
 
-    if (eTransparencyTransparent == mTransparencyMode) {
-      if (RefPtr<WinCompositorWidgetProxy> proxy = GetCompositorWidgetProxy()) {
-        proxy->ResizeTransparentWindow(newWidth, newHeight);
-      }
-    }
-
     if (newWidth > mLastSize.width)
     {
       RECT drect;
@@ -6464,15 +6547,11 @@ bool nsWindow::OnTouch(WPARAM wParam, LPARAM lParam)
 
     // Dispatch touch start and touch move event if we have one.
     if (!touchInput.mTimeStamp.IsNull()) {
-      // Convert MultiTouchInput to WidgetTouchEvent interface.
-      WidgetTouchEvent widgetTouchEvent = touchInput.ToWidgetTouchEvent(this);
-      DispatchInputEvent(&widgetTouchEvent);
+      DispatchTouchInput(touchInput);
     }
     // Dispatch touch end event if we have one.
     if (!touchEndInput.mTimeStamp.IsNull()) {
-      // Convert MultiTouchInput to WidgetTouchEvent interface.
-      WidgetTouchEvent widgetTouchEvent = touchEndInput.ToWidgetTouchEvent(this);
-      DispatchInputEvent(&widgetTouchEvent);
+      DispatchTouchInput(touchEndInput);
     }
   }
 
@@ -6735,9 +6814,10 @@ void nsWindow::OnDestroy()
   if (mCursor == -1)
     SetCursor(eCursor_standard);
 
-  if (RefPtr<WinCompositorWidgetProxy> proxy = GetCompositorWidgetProxy()) {
-    proxy->OnDestroyWindow();
+  if (mCompositorWidgetDelegate) {
+    mCompositorWidgetDelegate->OnDestroyWindow();
   }
+  mBasicLayersSurface = nullptr;
 
   // Finalize panning feedback to possibly restore window displacement
   mGesture.PanFeedbackFinalize(mWnd, true);
@@ -6814,7 +6894,7 @@ nsWindow::HasBogusPopupsDropShadowOnMultiMonitor() {
     if (!sHasBogusPopupsDropShadowOnMultiMonitor) {
       // Otherwise check if Direct3D 9 may be used.
       if (gfxConfig::IsEnabled(Feature::HW_COMPOSITING) &&
-          !gfxPrefs::LayersPreferOpenGL())
+          !gfxConfig::IsEnabled(Feature::OPENGL_COMPOSITING))
       {
         nsCOMPtr<nsIGfxInfo> gfxInfo = services::GetGfxInfo();
         if (gfxInfo) {
@@ -7052,8 +7132,8 @@ void nsWindow::SetWindowTranslucencyInner(nsTransparencyMode aMode)
     memset(&mGlassMargins, 0, sizeof mGlassMargins);
   mTransparencyMode = aMode;
 
-  if (RefPtr<WinCompositorWidgetProxy> proxy = GetCompositorWidgetProxy()) {
-    proxy->UpdateTransparency(aMode);
+  if (mCompositorWidgetDelegate) {
+    mCompositorWidgetDelegate->UpdateTransparency(aMode);
   }
   UpdateGlass();
 }
@@ -7718,7 +7798,7 @@ nsWindow::ComputeShouldAccelerate()
   // on Windows 7 where presentation fails randomly for windows with drop
   // shadows.
   if (mTransparencyMode == eTransparencyTransparent ||
-      (IsPopup() && gfxWindowsPlatform::GetPlatform()->IsWARP()))
+      (IsPopup() && DeviceManagerD3D11::Get()->IsWARP()))
   {
     return false;
   }
@@ -7823,4 +7903,12 @@ DWORD ChildWindow::WindowStyle()
     style |= WS_CHILD; // WS_POPUP and WS_CHILD are mutually exclusive.
   VERIFY_WINDOW_STYLE(style);
   return style;
+}
+
+void
+nsWindow::GetCompositorWidgetInitData(mozilla::widget::CompositorWidgetInitData* aInitData)
+{
+  aInitData->hWnd() = reinterpret_cast<uintptr_t>(mWnd);
+  aInitData->widgetKey() = reinterpret_cast<uintptr_t>(static_cast<nsIWidget*>(this));
+  aInitData->transparencyMode() = mTransparencyMode;
 }

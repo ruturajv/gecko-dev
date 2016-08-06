@@ -189,17 +189,20 @@ EvaluateExactReciprocal(TempAllocator& alloc, MDiv* ins)
         return nullptr;
 
     Value ret;
-    ret.setDouble(1.0 / (double) num);
+    ret.setDouble(1.0 / double(num));
+
     MConstant* foldedRhs;
     if (ins->type() == MIRType::Float32)
         foldedRhs = MConstant::NewFloat32(alloc, ret.toDouble());
     else
         foldedRhs = MConstant::New(alloc, ret);
+
     MOZ_ASSERT(foldedRhs->type() == ins->type());
     ins->block()->insertBefore(ins, foldedRhs);
 
     MMul* mul = MMul::New(alloc, left, foldedRhs, ins->type());
     mul->setCommutative();
+    mul->setMustPreserveNaN(ins->mustPreserveNaN());
     return mul;
 }
 
@@ -732,10 +735,28 @@ MConstant::New(TempAllocator& alloc, const Value& v, CompilerConstraintList* con
 }
 
 MConstant*
+MConstant::New(TempAllocator::Fallible alloc, const Value& v, CompilerConstraintList* constraints)
+{
+    return new(alloc) MConstant(v, constraints);
+}
+
+MConstant*
 MConstant::NewFloat32(TempAllocator& alloc, double d)
 {
     MOZ_ASSERT(IsNaN(d) || d == double(float(d)));
     return new(alloc) MConstant(float(d));
+}
+
+MConstant*
+MConstant::NewRawFloat32(TempAllocator& alloc, float f)
+{
+    return new(alloc) MConstant(f);
+}
+
+MConstant*
+MConstant::NewRawDouble(TempAllocator& alloc, double d)
+{
+    return new(alloc) MConstant(d);
 }
 
 MConstant*
@@ -880,6 +901,13 @@ MConstant::MConstant(float f)
 {
     setResultType(MIRType::Float32);
     payload_.f = f;
+    setMovable();
+}
+
+MConstant::MConstant(double d)
+{
+    setResultType(MIRType::Double);
+    payload_.d = d;
     setMovable();
 }
 
@@ -1856,17 +1884,27 @@ MParameter::congruentTo(const MDefinition* ins) const
     return ins->toParameter()->index() == index_;
 }
 
+WrappedFunction::WrappedFunction(JSFunction* fun)
+  : fun_(fun),
+    nargs_(fun->nargs()),
+    isNative_(fun->isNative()),
+    isConstructor_(fun->isConstructor()),
+    isClassConstructor_(fun->isClassConstructor()),
+    isSelfHostedBuiltin_(fun->isSelfHostedBuiltin())
+{}
+
 MCall*
 MCall::New(TempAllocator& alloc, JSFunction* target, size_t maxArgc, size_t numActualArgs,
            bool construct, bool isDOMCall)
 {
+    WrappedFunction* wrappedTarget = target ? new(alloc) WrappedFunction(target) : nullptr;
     MOZ_ASSERT(maxArgc >= numActualArgs);
     MCall* ins;
     if (isDOMCall) {
         MOZ_ASSERT(!construct);
-        ins = new(alloc) MCallDOMNative(target, numActualArgs);
+        ins = new(alloc) MCallDOMNative(wrappedTarget, numActualArgs);
     } else {
-        ins = new(alloc) MCall(target, numActualArgs, construct);
+        ins = new(alloc) MCall(wrappedTarget, numActualArgs, construct);
     }
     if (!ins->init(alloc, maxArgc + NumNonArgumentOperands))
         return nullptr;
@@ -2069,6 +2107,13 @@ MTableSwitch::New(TempAllocator& alloc, MDefinition* ins, int32_t low, int32_t h
 
 MGoto*
 MGoto::New(TempAllocator& alloc, MBasicBlock* target)
+{
+    MOZ_ASSERT(target);
+    return new(alloc) MGoto(target);
+}
+
+MGoto*
+MGoto::New(TempAllocator::Fallible alloc, MBasicBlock* target)
 {
     MOZ_ASSERT(target);
     return new(alloc) MGoto(target);
@@ -2965,6 +3010,9 @@ MBinaryArithInstruction::foldsTo(TempAllocator& alloc)
         return folded;
     }
 
+    if (mustPreserveNaN_)
+        return this;
+
     // 0 + -0 = 0. So we can't remove addition
     if (isAdd() && specialization_ != MIRType::Int32)
         return this;
@@ -3086,6 +3134,7 @@ MMinMax::foldsTo(TempAllocator& alloc)
 
         double lnum = lhs()->toConstant()->numberToDouble();
         double rnum = rhs()->toConstant()->numberToDouble();
+
         double result;
         if (isMax())
             result = js::math_max_impl(lnum, rnum);
@@ -4053,8 +4102,9 @@ MWrapInt64ToInt32::foldsTo(TempAllocator& alloc)
 {
     MDefinition* input = this->input();
     if (input->isConstant()) {
-        int64_t c = input->toConstant()->toInt64();
-        return MConstant::New(alloc, Int32Value(int32_t(c)));
+        uint64_t c = input->toConstant()->toInt64();
+        int32_t output = bottomHalf() ? int32_t(c) : int32_t(c >> 32);
+        return MConstant::New(alloc, Int32Value(output));
     }
 
     return this;
@@ -4102,8 +4152,12 @@ MToFloat32::foldsTo(TempAllocator& alloc)
         return input;
 
     // If x is a Float32, Float32(Double(x)) == x
-    if (input->isToDouble() && input->toToDouble()->input()->type() == MIRType::Float32)
+    if (!mustPreserveNaN_ &&
+        input->isToDouble() &&
+        input->toToDouble()->input()->type() == MIRType::Float32)
+    {
         return input->toToDouble()->input();
+    }
 
     if (input->isConstant() && input->toConstant()->isTypeRepresentableAsDouble())
         return MConstant::NewFloat32(alloc, float(input->toConstant()->numberToDouble()));
@@ -4882,10 +4936,11 @@ MAsmJSLoadHeap::congruentTo(const MDefinition* ins) const
 }
 
 MDefinition::AliasType
-MAsmJSLoadGlobalVar::mightAlias(const MDefinition* def) const
+MWasmLoadGlobalVar::mightAlias(const MDefinition* def) const
 {
-    if (def->isAsmJSStoreGlobalVar()) {
-        const MAsmJSStoreGlobalVar* store = def->toAsmJSStoreGlobalVar();
+    if (def->isWasmStoreGlobalVar()) {
+        const MWasmStoreGlobalVar* store = def->toWasmStoreGlobalVar();
+        // Global variables can't alias each other or be type-reinterpreted.
         return (store->globalDataOffset() == globalDataOffset_) ? AliasType::MayAlias :
                                                                   AliasType::NoAlias;
     }
@@ -4893,7 +4948,7 @@ MAsmJSLoadGlobalVar::mightAlias(const MDefinition* def) const
 }
 
 HashNumber
-MAsmJSLoadGlobalVar::valueHash() const
+MWasmLoadGlobalVar::valueHash() const
 {
     HashNumber hash = MDefinition::valueHash();
     hash = addU32ToHash(hash, globalDataOffset_);
@@ -4901,22 +4956,20 @@ MAsmJSLoadGlobalVar::valueHash() const
 }
 
 bool
-MAsmJSLoadGlobalVar::congruentTo(const MDefinition* ins) const
+MWasmLoadGlobalVar::congruentTo(const MDefinition* ins) const
 {
-    if (ins->isAsmJSLoadGlobalVar()) {
-        const MAsmJSLoadGlobalVar* load = ins->toAsmJSLoadGlobalVar();
-        return globalDataOffset_ == load->globalDataOffset_;
-    }
+    if (ins->isWasmLoadGlobalVar())
+        return globalDataOffset_ == ins->toWasmLoadGlobalVar()->globalDataOffset_;
     return false;
 }
 
 MDefinition*
-MAsmJSLoadGlobalVar::foldsTo(TempAllocator& alloc)
+MWasmLoadGlobalVar::foldsTo(TempAllocator& alloc)
 {
-    if (!dependency() || !dependency()->isAsmJSStoreGlobalVar())
+    if (!dependency() || !dependency()->isWasmStoreGlobalVar())
         return this;
 
-    MAsmJSStoreGlobalVar* store = dependency()->toAsmJSStoreGlobalVar();
+    MWasmStoreGlobalVar* store = dependency()->toWasmStoreGlobalVar();
     if (!store->block()->dominates(block()))
         return this;
 
@@ -4945,24 +4998,6 @@ MAsmJSLoadFuncPtr::congruentTo(const MDefinition* ins) const
         const MAsmJSLoadFuncPtr* load = ins->toAsmJSLoadFuncPtr();
         return limit_ == load->limit_ &&
                globalDataOffset_ == load->globalDataOffset_;
-    }
-    return false;
-}
-
-HashNumber
-MAsmJSLoadFFIFunc::valueHash() const
-{
-    HashNumber hash = MDefinition::valueHash();
-    hash = addU32ToHash(hash, globalDataOffset_);
-    return hash;
-}
-
-bool
-MAsmJSLoadFFIFunc::congruentTo(const MDefinition* ins) const
-{
-    if (ins->isAsmJSLoadFFIFunc()) {
-        const MAsmJSLoadFFIFunc* load = ins->toAsmJSLoadFFIFunc();
-        return globalDataOffset_ == load->globalDataOffset_;
     }
     return false;
 }
@@ -5342,11 +5377,11 @@ MAsmJSUnsignedToFloat32::foldsTo(TempAllocator& alloc)
     return this;
 }
 
-MAsmJSCall*
-MAsmJSCall::New(TempAllocator& alloc, const wasm::CallSiteDesc& desc, Callee callee,
-                const Args& args, MIRType resultType, size_t spIncrement)
+MWasmCall*
+MWasmCall::New(TempAllocator& alloc, const wasm::CallSiteDesc& desc, Callee callee,
+               const Args& args, MIRType resultType, size_t spIncrement)
 {
-    MAsmJSCall* call = new(alloc) MAsmJSCall(desc, callee, spIncrement);
+    MWasmCall* call = new(alloc) MWasmCall(desc, callee, spIncrement);
     call->setResultType(resultType);
 
     if (!call->argRegs_.init(alloc, args.length()))

@@ -25,6 +25,7 @@ H264Converter::H264Converter(PlatformDecoderModule* aPDM,
   , mTaskQueue(aParams.mTaskQueue)
   , mCallback(aParams.mCallback)
   , mDecoder(nullptr)
+  , mGMPCrashHelper(aParams.mCrashHelper)
   , mNeedAVCC(aPDM->DecoderNeedsConversion(aParams.mConfig) == PlatformDecoderModule::kNeedAVCC)
   , mLastError(NS_OK)
 {
@@ -147,7 +148,8 @@ H264Converter::CreateDecoder(DecoderDoctorDiagnostics* aDiagnostics)
     mCallback,
     aDiagnostics,
     mImageContainer,
-    mLayersBackend
+    mLayersBackend,
+    mGMPCrashHelper
   });
 
   if (!mDecoder) {
@@ -237,14 +239,6 @@ H264Converter::UpdateConfigFromExtraData(MediaByteBuffer* aExtraData)
     mCurrentConfig.mDisplay.height = spsdata.display_height;
   }
   mCurrentConfig.mExtraData = aExtraData;
-}
-
-/* static */
-bool
-H264Converter::IsH264(const TrackInfo& aConfig)
-{
-  return aConfig.mMimeType.EqualsLiteral("video/avc") ||
-    aConfig.mMimeType.EqualsLiteral("video/mp4");
 }
 
 } // namespace mozilla

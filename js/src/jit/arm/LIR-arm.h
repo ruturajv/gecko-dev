@@ -117,6 +117,66 @@ class LDivI : public LBinaryMath<1>
     }
 };
 
+class LDivOrModI64 : public LCallInstructionHelper<INT64_PIECES, INT64_PIECES*2, 0>
+{
+  public:
+    LIR_HEADER(DivOrModI64)
+
+    static const size_t Lhs = 0;
+    static const size_t Rhs = INT64_PIECES;
+
+    LDivOrModI64(const LInt64Allocation& lhs, const LInt64Allocation& rhs)
+    {
+        setInt64Operand(Lhs, lhs);
+        setInt64Operand(Rhs, rhs);
+    }
+
+    MBinaryArithInstruction* mir() const {
+        MOZ_ASSERT(mir_->isDiv() || mir_->isMod());
+        return static_cast<MBinaryArithInstruction*>(mir_);
+    }
+    bool canBeDivideByZero() const {
+        if (mir_->isMod())
+            return mir_->toMod()->canBeDivideByZero();
+        return mir_->toDiv()->canBeDivideByZero();
+    }
+    bool canBeNegativeOverflow() const {
+        if (mir_->isMod())
+            return mir_->toMod()->canBeNegativeDividend();
+        return mir_->toDiv()->canBeNegativeOverflow();
+    }
+};
+
+class LUDivOrModI64 : public LCallInstructionHelper<INT64_PIECES, INT64_PIECES*2, 0>
+{
+  public:
+    LIR_HEADER(UDivOrModI64)
+
+    static const size_t Lhs = 0;
+    static const size_t Rhs = INT64_PIECES;
+
+    LUDivOrModI64(const LInt64Allocation& lhs, const LInt64Allocation& rhs)
+    {
+        setInt64Operand(Lhs, lhs);
+        setInt64Operand(Rhs, rhs);
+    }
+
+    MBinaryArithInstruction* mir() const {
+        MOZ_ASSERT(mir_->isDiv() || mir_->isMod());
+        return static_cast<MBinaryArithInstruction*>(mir_);
+    }
+    bool canBeDivideByZero() const {
+        if (mir_->isMod())
+            return mir_->toMod()->canBeDivideByZero();
+        return mir_->toDiv()->canBeDivideByZero();
+    }
+    bool canBeNegativeOverflow() const {
+        if (mir_->isMod())
+            return mir_->toMod()->canBeNegativeDividend();
+        return mir_->toDiv()->canBeNegativeOverflow();
+    }
+};
+
 // LSoftDivI is a software divide for ARM cores that don't support a hardware
 // divide instruction.
 //
@@ -412,35 +472,20 @@ class LSoftUDivOrMod : public LBinaryMath<3>
     }
 };
 
-class LAsmJSLoadFuncPtr : public LInstructionHelper<1, 1, 1>
-{
-  public:
-    LIR_HEADER(AsmJSLoadFuncPtr);
-    LAsmJSLoadFuncPtr(const LAllocation& index, const LDefinition& temp) {
-        setOperand(0, index);
-        setTemp(0, temp);
-    }
-    const MAsmJSLoadFuncPtr* mir() const {
-        return mir_->toAsmJSLoadFuncPtr();
-    }
-    const LAllocation* index() {
-        return getOperand(0);
-    }
-    const LDefinition* temp() {
-        return getTemp(0);
-    }
-};
-
-class LAsmJSCompareExchangeCallout : public LCallInstructionHelper<1, 3, 0>
+class LAsmJSCompareExchangeCallout : public LCallInstructionHelper<1, 4, 2>
 {
   public:
     LIR_HEADER(AsmJSCompareExchangeCallout)
     LAsmJSCompareExchangeCallout(const LAllocation& ptr, const LAllocation& oldval,
-                                 const LAllocation& newval)
+                                 const LAllocation& newval, const LAllocation& tls,
+                                 const LDefinition& temp1, const LDefinition& temp2)
     {
         setOperand(0, ptr);
         setOperand(1, oldval);
         setOperand(2, newval);
+        setOperand(3, tls);
+        setTemp(0, temp1);
+        setTemp(1, temp2);
     }
     const LAllocation* ptr() {
         return getOperand(0);
@@ -451,27 +496,38 @@ class LAsmJSCompareExchangeCallout : public LCallInstructionHelper<1, 3, 0>
     const LAllocation* newval() {
         return getOperand(2);
     }
+    const LAllocation* tls() {
+        return getOperand(3);
+    }
 
     const MAsmJSCompareExchangeHeap* mir() const {
         return mir_->toAsmJSCompareExchangeHeap();
     }
 };
 
-class LAsmJSAtomicExchangeCallout : public LCallInstructionHelper<1, 2, 0>
+class LAsmJSAtomicExchangeCallout : public LCallInstructionHelper<1, 3, 2>
 {
   public:
     LIR_HEADER(AsmJSAtomicExchangeCallout)
 
-    LAsmJSAtomicExchangeCallout(const LAllocation& ptr, const LAllocation& value)
+    LAsmJSAtomicExchangeCallout(const LAllocation& ptr, const LAllocation& value,
+                                const LAllocation& tls, const LDefinition& temp1,
+                                const LDefinition& temp2)
     {
         setOperand(0, ptr);
         setOperand(1, value);
+        setOperand(2, tls);
+        setTemp(0, temp1);
+        setTemp(1, temp2);
     }
     const LAllocation* ptr() {
         return getOperand(0);
     }
     const LAllocation* value() {
         return getOperand(1);
+    }
+    const LAllocation* tls() {
+        return getOperand(2);
     }
 
     const MAsmJSAtomicExchangeHeap* mir() const {
@@ -479,14 +535,19 @@ class LAsmJSAtomicExchangeCallout : public LCallInstructionHelper<1, 2, 0>
     }
 };
 
-class LAsmJSAtomicBinopCallout : public LCallInstructionHelper<1, 2, 0>
+class LAsmJSAtomicBinopCallout : public LCallInstructionHelper<1, 3, 2>
 {
   public:
     LIR_HEADER(AsmJSAtomicBinopCallout)
-    LAsmJSAtomicBinopCallout(const LAllocation& ptr, const LAllocation& value)
+    LAsmJSAtomicBinopCallout(const LAllocation& ptr, const LAllocation& value,
+                             const LAllocation& tls, const LDefinition& temp1,
+                             const LDefinition& temp2)
     {
         setOperand(0, ptr);
         setOperand(1, value);
+        setOperand(2, tls);
+        setTemp(0, temp1);
+        setTemp(1, temp2);
     }
     const LAllocation* ptr() {
         return getOperand(0);
@@ -494,9 +555,37 @@ class LAsmJSAtomicBinopCallout : public LCallInstructionHelper<1, 2, 0>
     const LAllocation* value() {
         return getOperand(1);
     }
+    const LAllocation* tls() {
+        return getOperand(2);
+    }
 
     const MAsmJSAtomicBinopHeap* mir() const {
         return mir_->toAsmJSAtomicBinopHeap();
+    }
+};
+
+class LWasmTruncateToInt64 : public LCallInstructionHelper<INT64_PIECES, 1, 0>
+{
+  public:
+    LIR_HEADER(WasmTruncateToInt64);
+
+    LWasmTruncateToInt64(const LAllocation& in)
+    {
+        setOperand(0, in);
+    }
+
+    MWasmTruncateToInt64* mir() const {
+        return mir_->toWasmTruncateToInt64();
+    }
+};
+
+class LInt64ToFloatingPointCall: public LCallInstructionHelper<1, INT64_PIECES, 0>
+{
+  public:
+    LIR_HEADER(Int64ToFloatingPointCall);
+
+    MInt64ToFloatingPoint* mir() const {
+        return mir_->toInt64ToFloatingPoint();
     }
 };
 

@@ -158,9 +158,8 @@ function getMainWindowWithPreferencesPane() {
   let mainWindow = getMainWindow();
   if (mainWindow && "openAdvancedPreferences" in mainWindow) {
     return mainWindow;
-  } else {
-    return null;
   }
+  return null;
 }
 
 /**
@@ -714,7 +713,7 @@ var EnvironmentData = {
     this.createSubsection("addons", hasAddonData, addonSection, dataDiv);
   },
 
-  appendRow: function(table, id, value){
+  appendRow: function(table, id, value) {
     let row = document.createElement("tr");
     this.appendColumn(row, "td", id);
     this.appendColumn(row, "td", value);
@@ -1210,7 +1209,7 @@ var Histogram = {
     copyButton.className = "copy-node";
     copyButton.appendChild(document.createTextNode(this.hgramCopyCaption));
     copyButton.histogramText = aName + EOL + stats + EOL + EOL + textData;
-    copyButton.addEventListener("click", function(){
+    copyButton.addEventListener("click", function() {
       Cc["@mozilla.org/widget/clipboardhelper;1"].getService(Ci.nsIClipboardHelper)
                                                  .copyString(this.histogramText);
     });
@@ -1559,7 +1558,11 @@ var Scalars = {
     let scalarsSection = document.getElementById("scalars");
     removeAllChildNodes(scalarsSection);
 
-    let scalars = aPayload.scalars;
+    if (!aPayload.processes || !aPayload.processes.parent) {
+      return;
+    }
+
+    let scalars = aPayload.processes.parent.scalars;
     const hasData = scalars && Object.keys(scalars).length > 0;
     setHasData("scalars-section", hasData);
     if (!hasData) {

@@ -123,6 +123,11 @@ AllowContentXBLScope(JSCompartment* c);
 bool
 UseContentXBLScope(JSCompartment* c);
 
+// Clear out the content XBL scope (if any) on the given global.  This will
+// force creation of a new one if one is needed again.
+void
+ClearContentXBLScope(JSObject* global);
+
 bool
 IsInAddonScope(JSObject* obj);
 
@@ -284,7 +289,7 @@ private:
 
     static void FinalizeDOMString(const JSStringFinalizer* fin, char16_t* chars);
 
-    XPCStringConvert();         // not implemented
+    XPCStringConvert() = delete;
 };
 
 class nsIAddonInterposition;
@@ -504,6 +509,9 @@ bool
 SetAddonInterposition(const nsACString& addonId, nsIAddonInterposition* interposition);
 
 bool
+AllowCPOWsInAddon(const nsACString& addonId, bool allow);
+
+bool
 ExtraWarningsForSystemJS();
 
 class ErrorReport {
@@ -617,6 +625,11 @@ namespace dom {
  * chrome or XBL scopes should be exposed.
  */
 bool IsChromeOrXBL(JSContext* cx, JSObject* /* unused */);
+
+/**
+ * Same as IsChromeOrXBL but can be used in worker threads as well.
+ */
+bool ThreadSafeIsChromeOrXBL(JSContext* cx, JSObject* obj);
 
 } // namespace dom
 } // namespace mozilla

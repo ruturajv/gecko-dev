@@ -190,6 +190,10 @@ EVENT(dragenter,
       eDragEnter,
       EventNameType_HTMLXUL,
       eDragEventClass)
+EVENT(dragexit,
+      eDragExit,
+      EventNameType_HTMLXUL,
+      eDragEventClass)
 EVENT(dragleave,
       eDragLeave,
       EventNameType_HTMLXUL,
@@ -323,10 +327,18 @@ EVENT(mozfullscreenerror,
       EventNameType_HTML,
       eBasicEventClass)
 EVENT(mozpointerlockchange,
-      ePointerLockChange,
+      eMozPointerLockChange,
       EventNameType_HTML,
       eBasicEventClass)
 EVENT(mozpointerlockerror,
+      eMozPointerLockError,
+      EventNameType_HTML,
+      eBasicEventClass)
+EVENT(pointerlockchange,
+      ePointerLockChange,
+      EventNameType_HTML,
+      eBasicEventClass)
+EVENT(pointerlockerror,
       ePointerLockError,
       EventNameType_HTML,
       eBasicEventClass)
@@ -719,7 +731,7 @@ NON_IDL_EVENT(speakerforcedchange,
 
 // Events that only have on* attributes on XUL elements
 
- // "text" event is legacy event for modifying composition string in nsEditor.
+ // "text" event is legacy event for modifying composition string in EditorBase.
  // This shouldn't be used by web/xul apps.  "compositionupdate" should be
  // used instead.
 NON_IDL_EVENT(text,
@@ -770,18 +782,6 @@ NON_IDL_EVENT(commandupdate,
               eXULCommandUpdate,
               EventNameType_XUL,
               eBasicEventClass)
-NON_IDL_EVENT(dragexit,
-              eDragExit,
-              EventNameType_XUL,
-              eDragEventClass)
-NON_IDL_EVENT(dragdrop,
-              eLegacyDragDrop,
-              EventNameType_XUL,
-              eDragEventClass)
-NON_IDL_EVENT(draggesture,
-              eLegacyDragGesture,
-              EventNameType_XUL,
-              eDragEventClass)
 NON_IDL_EVENT(overflow,
               eScrollPortOverflow,
               EventNameType_XUL,

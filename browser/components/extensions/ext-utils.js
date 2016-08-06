@@ -8,137 +8,20 @@ XPCOMUtils.defineLazyModuleGetter(this, "PrivateBrowsingUtils",
                                   "resource://gre/modules/PrivateBrowsingUtils.jsm");
 
 Cu.import("resource://gre/modules/ExtensionUtils.jsm");
-Cu.import("resource://gre/modules/AddonManager.jsm");
 Cu.import("resource://gre/modules/AppConstants.jsm");
 
 const XUL_NS = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
-const INTEGER = /^[1-9]\d*$/;
+
 // Minimum time between two resizes.
 const RESIZE_TIMEOUT = 100;
 
 var {
   EventManager,
-  instanceOf,
 } = ExtensionUtils;
 
 // This file provides some useful code for the |tabs| and |windows|
 // modules. All of the code is installed on |global|, which is a scope
 // shared among the different ext-*.js scripts.
-
-
-// Manages icon details for toolbar buttons in the |pageAction| and
-// |browserAction| APIs.
-global.IconDetails = {
-  // Normalizes the various acceptable input formats into an object
-  // with icon size as key and icon URL as value.
-  //
-  // If a context is specified (function is called from an extension):
-  // Throws an error if an invalid icon size was provided or the
-  // extension is not allowed to load the specified resources.
-  //
-  // If no context is specified, instead of throwing an error, this
-  // function simply logs a warning message.
-  normalize(details, extension, context = null) {
-    let result = {};
-
-    try {
-      if (details.imageData) {
-        let imageData = details.imageData;
-
-        // The global might actually be from Schema.jsm, which
-        // normalizes most of our arguments. In that case it won't have
-        // an ImageData property. But Schema.jsm doesn't normalize
-        // actual ImageData objects, so they will come from a global
-        // with the right property.
-        if (instanceOf(imageData, "ImageData")) {
-          imageData = {"19": imageData};
-        }
-
-        for (let size of Object.keys(imageData)) {
-          if (!INTEGER.test(size)) {
-            throw new Error(`Invalid icon size ${size}, must be an integer`);
-          }
-          result[size] = this.convertImageDataToPNG(imageData[size], context);
-        }
-      }
-
-      if (details.path) {
-        let path = details.path;
-        if (typeof path != "object") {
-          path = {"19": path};
-        }
-
-        let baseURI = context ? context.uri : extension.baseURI;
-
-        for (let size of Object.keys(path)) {
-          if (!INTEGER.test(size)) {
-            throw new Error(`Invalid icon size ${size}, must be an integer`);
-          }
-
-          let url = baseURI.resolve(path[size]);
-
-          // The Chrome documentation specifies these parameters as
-          // relative paths. We currently accept absolute URLs as well,
-          // which means we need to check that the extension is allowed
-          // to load them. This will throw an error if it's not allowed.
-          Services.scriptSecurityManager.checkLoadURIStrWithPrincipal(
-            extension.principal, url,
-            Services.scriptSecurityManager.DISALLOW_SCRIPT);
-
-          result[size] = url;
-        }
-      }
-    } catch (e) {
-      // Function is called from extension code, delegate error.
-      if (context) {
-        throw e;
-      }
-      // If there's no context, it's because we're handling this
-      // as a manifest directive. Log a warning rather than
-      // raising an error.
-      extension.manifestError(`Invalid icon data: ${e}`);
-    }
-
-    return result;
-  },
-
-  // Returns the appropriate icon URL for the given icons object and the
-  // screen resolution of the given window.
-  getURL(icons, window, extension, size = 16) {
-    const DEFAULT = "chrome://browser/content/extension.svg";
-
-    size *= window.devicePixelRatio;
-
-    let bestSize = null;
-    if (icons[size]) {
-      bestSize = size;
-    } else if (icons[2 * size]) {
-      bestSize = 2 * size;
-    } else {
-      let sizes = Object.keys(icons)
-                        .map(key => parseInt(key, 10))
-                        .sort((a, b) => a - b);
-
-      bestSize = sizes.find(candidate => candidate > size) || sizes.pop();
-    }
-
-    if (bestSize) {
-      return {size: bestSize, icon: icons[bestSize]};
-    }
-
-    return {size, icon: DEFAULT};
-  },
-
-  convertImageDataToPNG(imageData, context) {
-    let document = context.contentWindow.document;
-    let canvas = document.createElementNS("http://www.w3.org/1999/xhtml", "canvas");
-    canvas.width = imageData.width;
-    canvas.height = imageData.height;
-    canvas.getContext("2d").putImageData(imageData, 0, 0);
-
-    return canvas.toDataURL("image/png");
-  },
-};
 
 global.makeWidgetId = id => {
   id = id.toLowerCase();
@@ -190,7 +73,12 @@ class BasePopup {
     this.popupURI = popupURI;
     this.viewNode = viewNode;
     this.browserStyle = browserStyle;
-    this.window = viewNode.ownerDocument.defaultView;
+    this.window = viewNode.ownerGlobal;
+
+    this.panel = this.viewNode;
+    while (this.panel.localName != "panel") {
+      this.panel = this.panel.parentNode;
+    }
 
     this.contentReady = new Promise(resolve => {
       this._resolveContentReady = resolve;
@@ -210,6 +98,7 @@ class BasePopup {
       this.browser.removeEventListener("DOMWindowClose", this, true);
       this.browser.removeEventListener("MozScrolledAreaChanged", this, true);
       this.viewNode.removeEventListener(this.DESTROY_EVENT, this);
+      this.viewNode.style.maxHeight = "";
       this.browser.remove();
 
       this.browser = null;
@@ -221,6 +110,10 @@ class BasePopup {
   // destroyed. This must be implemented by every subclass.
   get DESTROY_EVENT() {
     throw new Error("Not implemented");
+  }
+
+  get fixedWidth() {
+    return false;
   }
 
   handleEvent(event) {
@@ -283,14 +176,15 @@ class BasePopup {
     this.browser.setAttribute("disableglobalhistory", "true");
     this.browser.setAttribute("webextension-view-type", "popup");
 
+    // We only need flex sizing for the sake of the slide-in sub-views of the
+    // main menu panel, so that the browser occupies the full width of the view,
+    // and also takes up any extra height that's available to it.
+    this.browser.setAttribute("flex", "1");
+
     // Note: When using noautohide panels, the popup manager will add width and
     // height attributes to the panel, breaking our resize code, if the browser
     // starts out smaller than 30px by 10px. This isn't an issue now, but it
     // will be if and when we popup debugging.
-
-    // This overrides the content's preferred size when displayed in a
-    // fixed-size, slide-in panel.
-    this.browser.setAttribute("flex", "1");
 
     viewNode.appendChild(this.browser);
 
@@ -334,28 +228,76 @@ class BasePopup {
       return;
     }
 
-    let width, height;
-    try {
-      let w = {}, h = {};
-      this.browser.docShell.contentViewer.getContentSize(w, h);
+    if (this.fixedWidth) {
+      // If we're in a fixed-width area (namely a slide-in subview of the main
+      // menu panel), we need to calculate the view height based on the
+      // preferred height of the content document's root scrollable element at the
+      // current width, rather than the complete preferred dimensions of the
+      // content window.
 
-      width = w.value / this.window.devicePixelRatio;
-      height = h.value / this.window.devicePixelRatio;
+      let doc = this.browser.contentDocument;
+      if (!doc || !doc.documentElement) {
+        return;
+      }
 
-      // The width calculation is imperfect, and is often a fraction of a pixel
-      // too narrow, even after taking the ceiling, which causes lines of text
-      // to wrap.
-      width += 1;
-    } catch (e) {
-      // getContentSize can throw
-      [width, height] = [400, 400];
+      let root = doc.documentElement;
+      let body = doc.body;
+      if (!body || doc.compatMode == "BackCompat") {
+        // In quirks mode, the root element is used as the scroll frame, and the
+        // body lies about its scroll geometry, and returns the values for the
+        // root instead.
+        body = root;
+      }
+
+      // Compensate for any offsets (margin, padding, ...) between the scroll
+      // area of the body and the outer height of the document.
+      let getHeight = elem => elem.getBoundingClientRect(elem).height;
+      let bodyPadding = getHeight(root) - getHeight(body);
+
+      let height = Math.ceil(body.scrollHeight + bodyPadding);
+
+      // Figure out how much extra space we have on the side of the panel
+      // opposite the arrow.
+      let side = this.panel.getAttribute("side") == "top" ? "bottom" : "top";
+      let maxHeight = this.viewHeight + this.extraHeight[side];
+
+      height = Math.min(height, maxHeight);
+      this.browser.style.height = `${height}px`;
+
+      // Set a maximum height on the <panelview> element to our preferred
+      // maximum height, so that the PanelUI resizing code can make an accurate
+      // calculation. If we don't do this, the flex sizing logic will prevent us
+      // from ever reporting a preferred size smaller than the height currently
+      // available to us in the panel.
+      height = Math.max(height, this.viewHeight);
+      this.viewNode.style.maxHeight = `${height}px`;
+    } else {
+      let width, height;
+      try {
+        let w = {}, h = {};
+        this.browser.docShell.contentViewer.getContentSize(w, h);
+
+        width = w.value / this.window.devicePixelRatio;
+        height = h.value / this.window.devicePixelRatio;
+
+        // The width calculation is imperfect, and is often a fraction of a pixel
+        // too narrow, even after taking the ceiling, which causes lines of text
+        // to wrap.
+        width += 1;
+      } catch (e) {
+        // getContentSize can throw
+        [width, height] = [400, 400];
+      }
+
+      width = Math.ceil(Math.min(width, 800));
+      height = Math.ceil(Math.min(height, 600));
+
+      this.browser.style.width = `${width}px`;
+      this.browser.style.height = `${height}px`;
     }
 
-    width = Math.ceil(Math.min(width, 800));
-    height = Math.ceil(Math.min(height, 600));
-
-    this.browser.style.width = `${width}px`;
-    this.browser.style.height = `${height}px`;
+    let event = new this.window.CustomEvent("WebExtPopupResized");
+    this.browser.dispatchEvent(event);
 
     this._resolveContentReady();
   }
@@ -400,8 +342,34 @@ global.PanelPopup = class PanelPopup extends BasePopup {
 };
 
 global.ViewPopup = class ViewPopup extends BasePopup {
+  constructor(...args) {
+    super(...args);
+
+    // Store the initial height of the view, so that we never resize menu panel
+    // sub-views smaller than the initial height of the menu.
+    this.viewHeight = this.viewNode.boxObject.height;
+
+    // Calculate the extra height available on the screen above and below the
+    // menu panel. Use that to calculate the how much the sub-view may grow.
+    let popupRect = this.panel.getBoundingClientRect();
+
+    let win = this.window;
+    let popupBottom = win.mozInnerScreenY + popupRect.bottom;
+    let popupTop = win.mozInnerScreenY + popupRect.top;
+
+    let screenBottom = win.screen.availTop + win.screen.availHeight;
+    this.extraHeight = {
+      bottom: Math.max(0, screenBottom - popupBottom),
+      top:  Math.max(0, popupTop - win.screen.availTop),
+    };
+  }
+
   get DESTROY_EVENT() {
     return "ViewHiding";
+  }
+
+  get fixedWidth() {
+    return !this.viewNode.classList.contains("cui-widget-panelview");
   }
 
   closePopup() {
@@ -416,6 +384,7 @@ global.TabContext = function TabContext(getDefaults, extension) {
   this.getDefaults = getDefaults;
 
   this.tabData = new WeakMap();
+  this.lastLocation = new WeakMap();
 
   AllWindowEvents.addListener("progress", this);
   AllWindowEvents.addListener("TabSelect", this);
@@ -444,12 +413,24 @@ TabContext.prototype = {
     }
   },
 
+  onStateChange(browser, webProgress, request, stateFlags, statusCode) {
+    let flags = Ci.nsIWebProgressListener;
+
+    if (!(~stateFlags & (flags.STATE_IS_WINDOW | flags.STATE_START) ||
+          this.lastLocation.has(browser))) {
+      this.lastLocation.set(browser, request.URI);
+    }
+  },
+
   onLocationChange(browser, webProgress, request, locationURI, flags) {
-    let gBrowser = browser.ownerDocument.defaultView.gBrowser;
-    if (browser === gBrowser.selectedBrowser) {
+    let gBrowser = browser.ownerGlobal.gBrowser;
+    let lastLocation = this.lastLocation.get(browser);
+    if (browser === gBrowser.selectedBrowser &&
+        !(lastLocation && lastLocation.equalsExceptRef(browser.currentURI))) {
       let tab = gBrowser.getTabForBrowser(browser);
       this.emit("location-change", tab, true);
     }
+    this.lastLocation.set(browser, browser.currentURI);
   },
 
   shutdown() {
@@ -501,7 +482,7 @@ ExtensionTabManager.prototype = {
   },
 
   convert(tab) {
-    let window = tab.ownerDocument.defaultView;
+    let window = tab.ownerGlobal;
     let browser = tab.linkedBrowser;
 
     let mutedInfo = {muted: tab.muted};
@@ -612,7 +593,7 @@ global.TabManager = {
   },
 
   getBrowserId(browser) {
-    let gBrowser = browser.ownerDocument.defaultView.gBrowser;
+    let gBrowser = browser.ownerGlobal.gBrowser;
     // Some non-browser windows have gBrowser but not
     // getTabForBrowser!
     if (gBrowser && gBrowser.getTabForBrowser) {

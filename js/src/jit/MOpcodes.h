@@ -129,11 +129,13 @@ namespace jit {
     _(NewArray)                                                             \
     _(NewArrayCopyOnWrite)                                                  \
     _(NewArrayDynamicLength)                                                \
+    _(NewTypedArray)                                                        \
+    _(NewTypedArrayDynamicLength)                                           \
     _(NewObject)                                                            \
     _(NewTypedObject)                                                       \
     _(NewDeclEnvObject)                                                     \
     _(NewCallObject)                                                        \
-    _(NewRunOnceCallObject)                                                 \
+    _(NewSingletonCallObject)                                               \
     _(NewStringObject)                                                      \
     _(ObjectState)                                                          \
     _(ArrayState)                                                           \
@@ -268,21 +270,23 @@ namespace jit {
     _(IsObject)                                                             \
     _(HasClass)                                                             \
     _(CopySign)                                                             \
+    _(WasmBoundsCheck)                                                      \
+    _(WasmLoad)                                                             \
+    _(WasmStore)                                                            \
     _(WasmTruncateToInt32)                                                  \
     _(AsmJSNeg)                                                             \
     _(AsmJSUnsignedToDouble)                                                \
     _(AsmJSUnsignedToFloat32)                                               \
     _(AsmJSLoadHeap)                                                        \
     _(AsmJSStoreHeap)                                                       \
-    _(AsmJSLoadGlobalVar)                                                   \
-    _(AsmJSStoreGlobalVar)                                                  \
+    _(WasmLoadGlobalVar)                                                    \
+    _(WasmStoreGlobalVar)                                                   \
     _(AsmJSLoadFuncPtr)                                                     \
-    _(AsmJSLoadFFIFunc)                                                     \
     _(AsmJSReturn)                                                          \
     _(AsmJSParameter)                                                       \
     _(AsmJSVoidReturn)                                                      \
     _(AsmJSPassStackArg)                                                    \
-    _(AsmJSCall)                                                            \
+    _(WasmCall)                                                             \
     _(AsmSelect)                                                            \
     _(AsmReinterpret)                                                       \
     _(Rotate)                                                               \

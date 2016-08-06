@@ -18,6 +18,7 @@
 #include "mozilla/Attributes.h"
 #include "mozilla/dom/Promise.h"
 #include "mozilla/dom/TextTrackManager.h"
+#include "mozilla/WeakPtr.h"
 #include "MediaDecoder.h"
 #ifdef MOZ_EME
 #include "mozilla/dom/MediaKeys.h"
@@ -54,6 +55,8 @@ class TextTrack;
 class TimeRanges;
 class WakeLock;
 class MediaTrack;
+class MediaStreamTrack;
+class VideoStreamTrack;
 } // namespace dom
 } // namespace mozilla
 
@@ -81,7 +84,8 @@ class HTMLMediaElement : public nsGenericHTMLElement,
                          public nsIDOMHTMLMediaElement,
                          public MediaDecoderOwner,
                          public nsIAudioChannelAgentCallback,
-                         public PrincipalChangeObserver<DOMMediaStream>
+                         public PrincipalChangeObserver<DOMMediaStream>,
+                         public SupportsWeakPtr<HTMLMediaElement>
 {
   friend AutoNotifyAudioChannelAgent;
 
@@ -93,6 +97,8 @@ public:
   typedef mozilla::MediaResource MediaResource;
   typedef mozilla::MediaDecoderOwner MediaDecoderOwner;
   typedef mozilla::MetadataTags MetadataTags;
+
+  MOZ_DECLARE_WEAKREFERENCE_TYPENAME(HTMLMediaElement)
 
   CORSMode GetCORSMode() {
     return mCORSMode;
@@ -399,17 +405,7 @@ public:
    * null but its GetPlaybackStream() returns null --- which can happen during
    * cycle collection unlinking!
    */
-  MediaStream* GetSrcMediaStream() const
-  {
-    if (!mSrcStream) {
-      return nullptr;
-    }
-    if (mSrcStream->GetCameraStream()) {
-      // XXX Remove this check with CameraPreviewMediaStream per bug 1124630.
-      return mSrcStream->GetCameraStream();
-    }
-    return mSrcStream->GetPlaybackStream();
-  }
+  MediaStream* GetSrcMediaStream() const;
 
   // WebIDL
 
@@ -446,6 +442,8 @@ public:
   // Called by the media decoder object, on the main thread,
   // when the connection between Rtsp server and client gets lost.
   virtual void ResetConnectionState() final override;
+
+  void NotifyXPCOMShutdown() final override;
 
   // Called by media decoder when the audible state changed or when input is
   // a media stream.
@@ -608,6 +606,8 @@ public:
 
   void MozDumpDebugInfo();
 
+  void SetVisible(bool aVisible);
+
   already_AddRefed<DOMMediaStream> GetSrcObject() const;
   void SetSrcObject(DOMMediaStream& aValue);
   void SetSrcObject(DOMMediaStream* aValue);
@@ -709,6 +709,14 @@ public:
     }
   }
 
+  bool GetHasUserInteraction()
+  {
+    return mHasUserInteraction;
+  }
+
+  // A method to check whether we are currently playing.
+  bool IsCurrentlyPlaying() const;
+
   /**
    * A public wrapper for FinishDecoderSetup()
    */
@@ -732,6 +740,7 @@ public:
 protected:
   virtual ~HTMLMediaElement();
 
+  class ChannelLoader;
   class MediaLoadListener;
   class MediaStreamTracksAvailableCallback;
   class MediaStreamTrackListener;
@@ -1133,9 +1142,6 @@ protected:
   // A method to check if we are playing through the AudioChannel.
   bool IsPlayingThroughTheAudioChannel() const;
 
-  // A method to check whether we are currently playing.
-  bool IsCurrentlyPlaying() const;
-
   // Update the audio channel playing state
   void UpdateAudioChannelPlayingState();
 
@@ -1191,6 +1197,9 @@ protected:
   bool IsAllowedToPlay();
 
   bool IsAudible() const;
+  bool HaveFailedWithSourceNotSupportedError() const;
+
+  void OpenUnsupportedMediaWithExtenalAppIfNeeded();
 
   class nsAsyncEventRunner;
   using nsGenericHTMLElement::DispatchEvent;
@@ -1242,6 +1251,8 @@ protected:
   // Holds a reference to the size-getting MediaStreamListener attached to
   // mSrcStream.
   RefPtr<StreamSizeListener> mMediaStreamSizeListener;
+  // The selected video stream track which contained mMediaStreamSizeListener.
+  RefPtr<VideoStreamTrack> mSelectedVideoStreamTrack;
 
   const RefPtr<ShutdownObserver> mShutdownObserver;
 
@@ -1255,11 +1266,7 @@ protected:
   // that resolved to a MediaSource.
   RefPtr<MediaSource> mMediaSource;
 
-  // Holds a reference to the first channel we open to the media resource.
-  // Once the decoder is created, control over the channel passes to the
-  // decoder, and we null out this reference. We must store this in case
-  // we need to cancel the channel before control of it passes to the decoder.
-  nsCOMPtr<nsIChannel> mChannel;
+  RefPtr<ChannelLoader> mChannelLoader;
 
   // Error attribute
   RefPtr<MediaError> mError;
@@ -1575,19 +1582,21 @@ protected:
 
 public:
   // Helper class to measure times for MSE telemetry stats
-  class TimeDurationAccumulator {
+  class TimeDurationAccumulator
+  {
   public:
     TimeDurationAccumulator()
       : mCount(0)
+    {}
+    void Start()
     {
-    }
-    void Start() {
       if (IsStarted()) {
         return;
       }
       mStartTime = TimeStamp::Now();
     }
-    void Pause() {
+    void Pause()
+    {
       if (!IsStarted()) {
         return;
       }
@@ -1595,14 +1604,25 @@ public:
       mCount++;
       mStartTime = TimeStamp();
     }
-    bool IsStarted() const {
+    bool IsStarted() const
+    {
       return !mStartTime.IsNull();
     }
-    double Total() const {
-      return mSum.ToSeconds();
+    double Total() const
+    {
+      if (!IsStarted()) {
+        return mSum.ToSeconds();
+      }
+      // Add current running time until now, but keep it running.
+      return (mSum + (TimeStamp::Now() - mStartTime)).ToSeconds();
     }
-    uint32_t Count() const {
-      return mCount;
+    uint32_t Count() const
+    {
+      if (!IsStarted()) {
+        return mCount;
+      }
+      // Count current run in this report, without increasing the stored count.
+      return mCount + 1;
     }
   private:
     TimeStamp mStartTime;
@@ -1612,6 +1632,9 @@ public:
 private:
   // Total time a video has spent playing.
   TimeDurationAccumulator mPlayTime;
+
+  // Total time a video has spent playing while hidden.
+  TimeDurationAccumulator mHiddenPlayTime;
 
   // Indicates if user has interacted with the element.
   // Used to block autoplay when disabled.

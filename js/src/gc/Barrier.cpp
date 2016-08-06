@@ -65,10 +65,10 @@ CurrentThreadIsGCSweeping()
 }
 
 bool
-CurrentThreadIsHandlingInitFailure()
+CurrentThreadCanSkipPostBarrier(bool inNursery)
 {
-    JSRuntime* rt = TlsPerThreadData.get()->runtimeIfOnOwnerThread();
-    return rt && rt->handlingInitFailure;
+    bool onMainThread = TlsPerThreadData.get()->runtimeIfOnOwnerThread() != nullptr;
+    return !onMainThread && !inNursery;
 }
 
 #endif // DEBUG
@@ -105,6 +105,27 @@ JS_FOR_EACH_TRACEKIND(JS_EXPAND_DEF);
 
 template void PreBarrierFunctor<jsid>::operator()<JS::Symbol>(JS::Symbol*);
 template void PreBarrierFunctor<jsid>::operator()<JSString>(JSString*);
+
+template <typename T>
+/* static */ bool
+MovableCellHasher<T>::hasHash(const Lookup& l)
+{
+    if (!l)
+        return true;
+
+    return l->zoneFromAnyThread()->hasUniqueId(l);
+}
+
+template <typename T>
+/* static */ bool
+MovableCellHasher<T>::ensureHash(const Lookup& l)
+{
+    if (!l)
+        return true;
+
+    uint64_t unusedId;
+    return l->zoneFromAnyThread()->getUniqueId(l, &unusedId);
+}
 
 template <typename T>
 /* static */ HashNumber

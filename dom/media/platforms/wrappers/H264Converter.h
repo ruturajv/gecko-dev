@@ -39,8 +39,6 @@ public:
     return "H264Converter decoder (pending)";
   }
 
-  // Return true if mimetype is H.264.
-  static bool IsH264(const TrackInfo& aConfig);
   nsresult GetLastError() const { return mLastError; }
 
 private:
@@ -65,6 +63,7 @@ private:
   MediaDataDecoderCallback* mCallback;
   RefPtr<MediaDataDecoder> mDecoder;
   MozPromiseRequestHolder<InitPromise> mInitPromiseRequest;
+  RefPtr<GMPCrashHelper> mGMPCrashHelper;
   bool mNeedAVCC;
   nsresult mLastError;
 };

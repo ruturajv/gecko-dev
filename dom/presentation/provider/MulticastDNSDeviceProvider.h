@@ -19,6 +19,8 @@
 #include "nsTArray.h"
 #include "nsWeakPtr.h"
 
+class nsITCPDeviceInfo;
+
 namespace mozilla {
 namespace dom {
 namespace presentation {
@@ -140,10 +142,9 @@ private:
   nsresult RegisterService();
   nsresult UnregisterService(nsresult aReason);
   nsresult StopDiscovery(nsresult aReason);
-  nsresult RequestSession(Device* aDevice,
-                          const nsAString& aUrl,
-                          const nsAString& aPresentationId,
-                          nsIPresentationControlChannel** aRetVal);
+  nsresult Connect(Device* aDevice,
+                   nsIPresentationControlChannel** aRetVal);
+  bool IsCompatibleServer(nsIDNSServiceInfo* aServiceInfo);
 
   // device manipulation
   nsresult AddDevice(const nsACString& aId,
@@ -162,6 +163,9 @@ private:
 
   bool FindDeviceByAddress(const nsACString& aAddress,
                            uint32_t& aIndex);
+
+  already_AddRefed<Device>
+  GetOrCreateDevice(nsITCPDeviceInfo* aDeviceInfo);
 
   void MarkAllDevicesUnknown();
   void ClearUnknownDevices();
