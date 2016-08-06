@@ -25,9 +25,8 @@ Cu.importGlobalProperties(["TextEncoder"]);
 
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 Cu.import("resource://gre/modules/Services.jsm");
+Cu.import("resource://gre/modules/ExtensionContent.jsm");
 
-XPCOMUtils.defineLazyModuleGetter(this, "EventEmitter",
-                                  "resource://devtools/shared/event-emitter.js");
 XPCOMUtils.defineLazyModuleGetter(this, "Locale",
                                   "resource://gre/modules/Locale.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "Log",
@@ -57,44 +56,23 @@ XPCOMUtils.defineLazyModuleGetter(this, "MessageChannel",
 XPCOMUtils.defineLazyModuleGetter(this, "AddonManager",
                                   "resource://gre/modules/AddonManager.jsm");
 
+XPCOMUtils.defineLazyGetter(this, "require", () => {
+  let obj = {};
+  Cu.import("resource://devtools/shared/Loader.jsm", obj);
+  return obj.require;
+});
+
+Cu.import("resource://gre/modules/ExtensionContent.jsm");
 Cu.import("resource://gre/modules/ExtensionManagement.jsm");
 
-// Register built-in parts of the API. Other parts may be registered
-// in browser/, mobile/, or b2g/.
-ExtensionManagement.registerScript("chrome://extensions/content/ext-alarms.js");
-ExtensionManagement.registerScript("chrome://extensions/content/ext-backgroundPage.js");
-ExtensionManagement.registerScript("chrome://extensions/content/ext-cookies.js");
-ExtensionManagement.registerScript("chrome://extensions/content/ext-downloads.js");
-ExtensionManagement.registerScript("chrome://extensions/content/ext-notifications.js");
-ExtensionManagement.registerScript("chrome://extensions/content/ext-i18n.js");
-ExtensionManagement.registerScript("chrome://extensions/content/ext-idle.js");
-ExtensionManagement.registerScript("chrome://extensions/content/ext-runtime.js");
-ExtensionManagement.registerScript("chrome://extensions/content/ext-extension.js");
-ExtensionManagement.registerScript("chrome://extensions/content/ext-webNavigation.js");
-ExtensionManagement.registerScript("chrome://extensions/content/ext-webRequest.js");
-ExtensionManagement.registerScript("chrome://extensions/content/ext-storage.js");
-ExtensionManagement.registerScript("chrome://extensions/content/ext-test.js");
-
 const BASE_SCHEMA = "chrome://extensions/content/schemas/manifest.json";
-
-ExtensionManagement.registerSchema("chrome://extensions/content/schemas/alarms.json");
-ExtensionManagement.registerSchema("chrome://extensions/content/schemas/cookies.json");
-ExtensionManagement.registerSchema("chrome://extensions/content/schemas/downloads.json");
-ExtensionManagement.registerSchema("chrome://extensions/content/schemas/extension.json");
-ExtensionManagement.registerSchema("chrome://extensions/content/schemas/extension_types.json");
-ExtensionManagement.registerSchema("chrome://extensions/content/schemas/i18n.json");
-ExtensionManagement.registerSchema("chrome://extensions/content/schemas/idle.json");
-ExtensionManagement.registerSchema("chrome://extensions/content/schemas/notifications.json");
-ExtensionManagement.registerSchema("chrome://extensions/content/schemas/runtime.json");
-ExtensionManagement.registerSchema("chrome://extensions/content/schemas/storage.json");
-ExtensionManagement.registerSchema("chrome://extensions/content/schemas/test.json");
-ExtensionManagement.registerSchema("chrome://extensions/content/schemas/events.json");
-ExtensionManagement.registerSchema("chrome://extensions/content/schemas/web_navigation.json");
-ExtensionManagement.registerSchema("chrome://extensions/content/schemas/web_request.json");
+const CATEGORY_EXTENSION_SCHEMAS = "webextension-schemas";
+const CATEGORY_EXTENSION_SCRIPTS = "webextension-scripts";
 
 Cu.import("resource://gre/modules/ExtensionUtils.jsm");
 var {
   BaseContext,
+  EventEmitter,
   LocaleData,
   Messenger,
   injectAPI,
@@ -139,18 +117,21 @@ var Management = {
     // extended by other schemas, so needs to be loaded first.
     let promise = Schemas.load(BASE_SCHEMA).then(() => {
       let promises = [];
-      for (let schema of ExtensionManagement.getSchemas()) {
-        promises.push(Schemas.load(schema));
+      for (let [/* name */, value] of XPCOMUtils.enumerateCategoryEntries(CATEGORY_EXTENSION_SCHEMAS)) {
+        promises.push(Schemas.load(value));
       }
       return Promise.all(promises);
     });
 
-    for (let script of ExtensionManagement.getScripts()) {
-      let scope = {extensions: this,
-                   global: scriptScope,
-                   ExtensionContext: ExtensionContext,
-                   GlobalManager: GlobalManager};
-      Services.scriptloader.loadSubScript(script, scope, "UTF-8");
+    for (let [/* name */, value] of XPCOMUtils.enumerateCategoryEntries(CATEGORY_EXTENSION_SCRIPTS)) {
+      let scope = {
+        ExtensionContext,
+        extensions: this,
+        global: scriptScope,
+        GlobalManager,
+        require,
+      };
+      Services.scriptloader.loadSubScript(value, scope, "UTF-8");
 
       // Save the scope to avoid it being garbage collected.
       this.scopes.push(scope);
@@ -227,7 +208,7 @@ var Management = {
 
   // Ask to run all the callbacks that are registered for a given hook.
   emit(hook, ...args) {
-    this.emitter.emit(hook, ...args);
+    return this.emitter.emit(hook, ...args);
   },
 
   off(hook, callback) {
@@ -276,6 +257,11 @@ ExtensionContext = class extends BaseContext {
     if (this.externallyVisible) {
       this.extension.views.add(this);
     }
+  }
+
+  get docShell() {
+    return this.contentWindow.QueryInterface(Ci.nsIInterfaceRequestor)
+               .getInterface(Ci.nsIDocShell);
   }
 
   get cloneScope() {
@@ -348,7 +334,7 @@ class ProxyContext extends ExtensionContext {
 
 function findPathInObject(obj, path) {
   for (let elt of path) {
-    obj = obj[elt];
+    obj = obj[elt] || undefined;
   }
   return obj;
 }
@@ -478,13 +464,20 @@ ParentAPIManager.init();
 
 // For extensions that have called setUninstallURL(), send an event
 // so the browser can display the URL.
-let UninstallObserver = {
+var UninstallObserver = {
   initialized: false,
 
   init: function() {
     if (!this.initialized) {
       AddonManager.addAddonListener(this);
       this.initialized = true;
+    }
+  },
+
+  uninit: function() {
+    if (this.initialized) {
+      AddonManager.removeAddonListener(this);
+      this.initialized = false;
     }
   },
 
@@ -501,11 +494,13 @@ GlobalManager = {
   // Map[extension ID -> Extension]. Determines which extension is
   // responsible for content under a particular extension ID.
   extensionMap: new Map(),
+  initialized: false,
 
   init(extension) {
     if (this.extensionMap.size == 0) {
       Services.obs.addObserver(this, "content-document-global-created", false);
       UninstallObserver.init();
+      this.initialized = true;
     }
 
     this.extensionMap.set(extension.id, extension);
@@ -514,8 +509,10 @@ GlobalManager = {
   uninit(extension) {
     this.extensionMap.delete(extension.id);
 
-    if (this.extensionMap.size == 0) {
+    if (this.extensionMap.size == 0 && this.initialized) {
       Services.obs.removeObserver(this, "content-document-global-created");
+      UninstallObserver.uninit();
+      this.initialized = false;
     }
   },
 
@@ -682,16 +679,10 @@ GlobalManager = {
     let alertDisplayedWarning = false;
     let alertOverwrite = text => {
       if (!alertDisplayedWarning) {
-        let consoleWindow = Services.wm.getMostRecentWindow("devtools:webconsole");
-        if (!consoleWindow) {
-          let {require} = Cu.import("resource://devtools/shared/Loader.jsm", {});
-          require("devtools/client/framework/devtools-browser");
-          let hudservice = require("devtools/client/webconsole/hudservice");
-          hudservice.toggleBrowserConsole().catch(Cu.reportError);
-        } else {
-          // the Browser Console was already open
-          consoleWindow.focus();
-        }
+        require("devtools/client/framework/devtools-browser");
+
+        let hudservice = require("devtools/client/webconsole/hudservice");
+        hudservice.openBrowserConsoleOrFocus();
 
         contentWindow.console.warn("alert() is not supported in background windows; please use console.log instead.");
 
@@ -1218,24 +1209,29 @@ this.Extension.generateXPI = function(id, data) {
  * @param {string} id
  * @param {nsIFile} file
  * @param {nsIURI} rootURI
+ * @param {string} installType
  */
-function MockExtension(id, file, rootURI) {
+function MockExtension(id, file, rootURI, installType) {
   this.id = id;
   this.file = file;
   this.rootURI = rootURI;
+  this.installType = installType;
 
-  this._extension = null;
-  this._extensionPromise = new Promise(resolve => {
+  let promiseEvent = eventName => new Promise(resolve => {
     let onstartup = (msg, extension) => {
       if (extension.id == this.id) {
-        Management.off("startup", onstartup);
+        Management.off(eventName, onstartup);
 
         this._extension = extension;
         resolve(extension);
       }
     };
-    Management.on("startup", onstartup);
+    Management.on(eventName, onstartup);
   });
+
+  this._extension = null;
+  this._extensionPromise = promiseEvent("startup");
+  this._readyPromise = promiseEvent("ready");
 }
 
 MockExtension.prototype = {
@@ -1256,10 +1252,28 @@ MockExtension.prototype = {
   },
 
   startup() {
-    return AddonManager.installTemporaryAddon(this.file).then(addon => {
-      this.addon = addon;
-      return this._extensionPromise;
-    });
+    if (this.installType == "temporary") {
+      return AddonManager.installTemporaryAddon(this.file).then(addon => {
+        this.addon = addon;
+        return this._readyPromise;
+      });
+    } else if (this.installType == "permanent") {
+      return new Promise((resolve, reject) => {
+        AddonManager.getInstallForFile(this.file, install => {
+          let listener = {
+            onInstallFailed: reject,
+            onInstallEnded: (install, newAddon) => {
+              this.addon = newAddon;
+              resolve(this._readyPromise);
+            },
+          };
+
+          install.addListener(listener);
+          install.install();
+        });
+      });
+    }
+    throw new Error("installType must be one of: temporary, permanent");
   },
 
   shutdown() {
@@ -1290,8 +1304,9 @@ this.Extension.generate = function(id, data) {
   let fileURI = Services.io.newFileURI(file);
   let jarURI = Services.io.newURI("jar:" + fileURI.spec + "!/", null, null);
 
+  // This may be "temporary" or "permanent".
   if (data.useAddonManager) {
-    return new MockExtension(id, file, jarURI);
+    return new MockExtension(id, file, jarURI, data.useAddonManager);
   }
 
   return new Extension({
@@ -1352,10 +1367,6 @@ Extension.prototype = extend(Object.create(ExtensionData.prototype), {
   broadcast(msg, data) {
     return new Promise(resolve => {
       let count = Services.ppmm.childCount;
-      if (AppConstants.MOZ_NUWA_PROCESS) {
-        // The nuwa process is frozen, so don't expect it to answer.
-        count--;
-      }
       Services.ppmm.addMessageListener(msg + "Complete", function listener() {
         count--;
         if (count == 0) {
@@ -1387,9 +1398,10 @@ Extension.prototype = extend(Object.create(ExtensionData.prototype), {
 
     this.webAccessibleResources = new MatchGlobs(strippedWebAccessibleResources);
 
+    let promises = [];
     for (let directive in manifest) {
       if (manifest[directive] !== null) {
-        Management.emit("manifest_" + directive, directive, this, manifest);
+        promises.push(Management.emit(`manifest_${directive}`, directive, this, manifest));
       }
     }
 
@@ -1400,7 +1412,9 @@ Extension.prototype = extend(Object.create(ExtensionData.prototype), {
     let serial = this.serialize();
     data["Extension:Extensions"].push(serial);
 
-    return this.broadcast("Extension:Startup", serial);
+    return this.broadcast("Extension:Startup", serial).then(() => {
+      return Promise.all(promises);
+    });
   },
 
   callOnClose(obj) {
@@ -1462,6 +1476,8 @@ Extension.prototype = extend(Object.create(ExtensionData.prototype), {
       Management.emit("startup", this);
 
       return this.runManifest(this.manifest);
+    }).then(() => {
+      Management.emit("ready", this);
     }).catch(e => {
       dump(`Extension error: ${e.message} ${e.filename || e.fileName}:${e.lineNumber} :: ${e.stack || new Error().stack}\n`);
       Cu.reportError(e);

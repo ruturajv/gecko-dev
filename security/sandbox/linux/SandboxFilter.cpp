@@ -41,6 +41,10 @@ using namespace sandbox::bpf_dsl;
 #define MADV_DONTDUMP 16
 #endif
 
+#ifndef PR_SET_PTRACER
+#define PR_SET_PTRACER 0x59616d61
+#endif
+
 // To avoid visual confusion between "ifdef ANDROID" and "ifndef ANDROID":
 #ifndef ANDROID
 #define DESKTOP
@@ -124,7 +128,8 @@ public:
     return Switch(op)
       .CASES((PR_GET_SECCOMP, // BroadcastSetThreadSandbox, etc.
               PR_SET_NAME,    // Thread creation
-              PR_SET_DUMPABLE), // Crash reporting
+              PR_SET_DUMPABLE, // Crash reporting
+              PR_SET_PTRACER), // Debug-mode crash handling
              Allow())
       .Default(InvalidSyscall());
   }
@@ -574,8 +579,8 @@ public:
     case __NR_mprotect:
     case __NR_brk:
     case __NR_madvise:
-#if defined(ANDROID) && !defined(MOZ_MEMORY)
-      // Android's libc's realloc uses mremap.
+#if !defined(MOZ_MEMORY)
+      // libc's realloc uses mremap (Bug 1286119).
     case __NR_mremap:
 #endif
       return Allow();
@@ -669,6 +674,22 @@ public:
     case __NR_clone:
       return ClonePolicy(Error(EPERM));
 
+#ifdef __NR_fadvise64
+    case __NR_fadvise64:
+      return Allow();
+#endif
+
+#ifdef __NR_fadvise64_64
+    case __NR_fadvise64_64:
+      return Allow();
+#endif
+
+    case __NR_fallocate:
+      return Allow();
+
+    case __NR_get_mempolicy:
+      return Allow();
+
 #endif // DESKTOP
 
 #ifdef __NR_getrandom
@@ -683,6 +704,11 @@ public:
     case __NR_sysinfo:
 #endif
       return Allow();
+
+#ifdef MOZ_JPROF
+    case __NR_setitimer:
+      return Allow();
+#endif // MOZ_JPROF
 
     default:
       return SandboxPolicyCommon::EvaluateSyscall(sysno);
@@ -729,15 +755,15 @@ class GMPSandboxPolicy : public SandboxPolicyCommon {
       MOZ_CRASH("unexpected syscall number");
     }
 
+    if (strcmp(path, plugin->mPath) != 0) {
+      SANDBOX_LOG_ERROR("attempt to open file %s (flags=0%o) which is not the"
+                        " media plugin %s", path, flags, plugin->mPath);
+      return -EPERM;
+    }
     if ((flags & O_ACCMODE) != O_RDONLY) {
       SANDBOX_LOG_ERROR("non-read-only open of file %s attempted (flags=0%o)",
                         path, flags);
-      return -ENOSYS;
-    }
-    if (strcmp(path, plugin->mPath) != 0) {
-      SANDBOX_LOG_ERROR("attempt to open file %s which is not the media plugin"
-                        " %s", path, plugin->mPath);
-      return -ENOSYS;
+      return -EPERM;
     }
     int fd = plugin->mFd.exchange(-1);
     if (fd < 0) {
@@ -796,7 +822,7 @@ public:
         .Else(InvalidSyscall());
     }
     case __NR_brk:
-    case __NR_geteuid:
+    CASES_FOR_geteuid:
       return Allow();
     case __NR_sched_getparam:
     case __NR_sched_getscheduler:

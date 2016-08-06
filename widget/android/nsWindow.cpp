@@ -58,9 +58,9 @@ using mozilla::Unused;
 #include "Layers.h"
 #include "mozilla/layers/LayerManagerComposite.h"
 #include "mozilla/layers/AsyncCompositionManager.h"
-#include "mozilla/layers/APZCTreeManager.h"
 #include "mozilla/layers/APZEventState.h"
 #include "mozilla/layers/APZThreadUtils.h"
+#include "mozilla/layers/IAPZCTreeManager.h"
 #include "GLContext.h"
 #include "GLContextProvider.h"
 #include "ScopedGLHelpers.h"
@@ -85,8 +85,9 @@ using mozilla::Unused;
 
 using namespace mozilla;
 using namespace mozilla::dom;
-using namespace mozilla::widget;
 using namespace mozilla::layers;
+using namespace mozilla::java;
+using namespace mozilla::widget;
 
 NS_IMPL_ISUPPORTS_INHERITED0(nsWindow, nsBaseWidget)
 
@@ -112,6 +113,11 @@ static bool sFailedToCreateGLContext = false;
 // Multitouch swipe thresholds in inches
 static const double SWIPE_MAX_PINCH_DELTA_INCHES = 0.4;
 static const double SWIPE_MIN_DISTANCE_INCHES = 0.6;
+
+// Sync with GeckoEditableView class
+static const int IME_MONITOR_CURSOR_ONE_SHOT = 1;
+static const int IME_MONITOR_CURSOR_START_MONITOR = 2;
+static const int IME_MONITOR_CURSOR_END_MONITOR = 3;
 
 static Modifiers GetModifiers(int32_t metaState);
 
@@ -219,6 +225,7 @@ public:
         , mIMEUpdatingContext(false)
         , mIMESelectionChanged(false)
         , mIMETextChangedDuringFlush(false)
+        , mIMEMonitorCursor(false)
     {
         Base::AttachNative(aInstance, this);
         EditableBase::AttachNative(mEditable, this);
@@ -239,7 +246,7 @@ public:
     // Create and attach a window.
     static void Open(const jni::Class::LocalRef& aCls,
                      GeckoView::Window::Param aWindow,
-                     GeckoView::Param aView, jni::Object::Param aGLController,
+                     GeckoView::Param aView, jni::Object::Param aCompositor,
                      jni::String::Param aChromeURI,
                      int32_t aWidth, int32_t aHeight);
 
@@ -247,7 +254,7 @@ public:
     void Close();
 
     // Reattach this nsWindow to a new GeckoView.
-    void Reattach(GeckoView::Param aView);
+    void Reattach(GeckoView::Param aView, jni::Object::Param aCompositor);
 
     void LoadUri(jni::String::Param aUri, int32_t aFlags);
 
@@ -277,8 +284,7 @@ private:
             , mOldEnd(aIMENotification.mTextChangeData.mRemovedEndOffset)
             , mNewEnd(aIMENotification.mTextChangeData.mAddedEndOffset)
         {
-            MOZ_ASSERT(aIMENotification.mMessage ==
-                           mozilla::widget::NOTIFY_IME_OF_TEXT_CHANGE,
+            MOZ_ASSERT(aIMENotification.mMessage == NOTIFY_IME_OF_TEXT_CHANGE,
                        "IMETextChange initialized with wrong notification");
             MOZ_ASSERT(aIMENotification.mTextChangeData.IsValid(),
                        "The text change notification isn't initialized");
@@ -290,7 +296,7 @@ private:
     };
 
     // GeckoEditable instance used by this nsWindow;
-    mozilla::widget::GeckoEditable::GlobalRef mEditable;
+    java::GeckoEditable::GlobalRef mEditable;
     AutoTArray<mozilla::UniquePtr<mozilla::WidgetEvent>, 8> mIMEKeyEvents;
     AutoTArray<IMETextChange, 4> mIMETextChanges;
     InputContext mInputContext;
@@ -299,6 +305,7 @@ private:
     bool mIMEUpdatingContext;
     bool mIMESelectionChanged;
     bool mIMETextChangedDuringFlush;
+    bool mIMEMonitorCursor;
 
     void SendIMEDummyKeyEvents();
     void AddIMETextChange(const IMETextChange& aChange);
@@ -310,6 +317,7 @@ private:
     void PostFlushIMEChanges();
     void FlushIMEChanges(FlushChangesFlag aFlags = FLUSH_FLAG_NONE);
     void AsyncNotifyIME(int32_t aNotification);
+    void UpdateCompositionRects();
 
 public:
     bool NotifyIME(const IMENotification& aIMENotification);
@@ -351,6 +359,9 @@ public:
 
     // Update styling for the active composition using previous-added ranges.
     void OnImeUpdateComposition(int32_t aStart, int32_t aEnd);
+
+    // Set cursor mode whether IME requests
+    void OnImeRequestCursorUpdates(int aRequestMode);
 };
 
 /**
@@ -472,7 +483,7 @@ public:
             return;
         }
 
-        RefPtr<APZCTreeManager> controller = mWindow->mAPZC;
+        RefPtr<IAPZCTreeManager> controller = mWindow->mAPZC;
         RefPtr<CompositorBridgeParent> compositor = mWindow->GetCompositorBridgeParent();
         if (controller && compositor) {
             // TODO: Pass in correct values for presShellId and viewId.
@@ -491,7 +502,7 @@ public:
             return;
         }
 
-        RefPtr<APZCTreeManager> controller = mWindow->mAPZC;
+        RefPtr<IAPZCTreeManager> controller = mWindow->mAPZC;
         if (controller) {
             controller->AdjustScrollForSurfaceShift(
                 ScreenPoint(aX, aY));
@@ -502,7 +513,10 @@ public:
     {
         MOZ_ASSERT(AndroidBridge::IsJavaUiThread());
 
-        APZCTreeManager::SetLongTapEnabled(aIsLongpressEnabled);
+        RefPtr<IAPZCTreeManager> controller = mWindow->mAPZC;
+        if (controller) {
+            controller->SetLongTapEnabled(aIsLongpressEnabled);
+        }
     }
 
     bool HandleScrollEvent(int64_t aTime, int32_t aMetaState,
@@ -517,7 +531,7 @@ public:
             return false;
         }
 
-        RefPtr<APZCTreeManager> controller = mWindow->mAPZC;
+        RefPtr<IAPZCTreeManager> controller = mWindow->mAPZC;
         if (!controller) {
             return false;
         }
@@ -568,13 +582,13 @@ public:
         MouseInput::ButtonType result = MouseInput::NONE;
 
         switch (button) {
-            case widget::sdk::MotionEvent::BUTTON_PRIMARY:
+            case java::sdk::MotionEvent::BUTTON_PRIMARY:
                 result = MouseInput::LEFT_BUTTON;
                 break;
-            case widget::sdk::MotionEvent::BUTTON_SECONDARY:
+            case java::sdk::MotionEvent::BUTTON_SECONDARY:
                 result = MouseInput::RIGHT_BUTTON;
                 break;
-            case widget::sdk::MotionEvent::BUTTON_TERTIARY:
+            case java::sdk::MotionEvent::BUTTON_TERTIARY:
                 result = MouseInput::MIDDLE_BUTTON;
                 break;
             default:
@@ -587,19 +601,19 @@ public:
     static int16_t ConvertButtons(int buttons) {
         int16_t result = 0;
 
-        if (buttons & widget::sdk::MotionEvent::BUTTON_PRIMARY) {
+        if (buttons & java::sdk::MotionEvent::BUTTON_PRIMARY) {
             result |= WidgetMouseEventBase::eLeftButtonFlag;
         }
-        if (buttons & widget::sdk::MotionEvent::BUTTON_SECONDARY) {
+        if (buttons & java::sdk::MotionEvent::BUTTON_SECONDARY) {
             result |= WidgetMouseEventBase::eRightButtonFlag;
         }
-        if (buttons & widget::sdk::MotionEvent::BUTTON_TERTIARY) {
+        if (buttons & java::sdk::MotionEvent::BUTTON_TERTIARY) {
             result |= WidgetMouseEventBase::eMiddleButtonFlag;
         }
-        if (buttons & widget::sdk::MotionEvent::BUTTON_BACK) {
+        if (buttons & java::sdk::MotionEvent::BUTTON_BACK) {
             result |= WidgetMouseEventBase::e4thButtonFlag;
         }
-        if (buttons & widget::sdk::MotionEvent::BUTTON_FORWARD) {
+        if (buttons & java::sdk::MotionEvent::BUTTON_FORWARD) {
             result |= WidgetMouseEventBase::e5thButtonFlag;
         }
 
@@ -617,7 +631,7 @@ public:
             return false;
         }
 
-        RefPtr<APZCTreeManager> controller = mWindow->mAPZC;
+        RefPtr<IAPZCTreeManager> controller = mWindow->mAPZC;
         if (!controller) {
             return false;
         }
@@ -710,7 +724,7 @@ public:
             return false;
         }
 
-        RefPtr<APZCTreeManager> controller = mWindow->mAPZC;
+        RefPtr<IAPZCTreeManager> controller = mWindow->mAPZC;
         if (!controller) {
             return false;
         }
@@ -832,7 +846,7 @@ public:
 
     void HandleMotionEventVelocity(int64_t aTime, float aSpeedY)
     {
-        RefPtr<APZCTreeManager> controller = mWindow->mAPZC;
+        RefPtr<IAPZCTreeManager> controller = mWindow->mAPZC;
         if (controller) {
             controller->ProcessTouchVelocity((uint32_t)aTime, aSpeedY);
         }
@@ -860,34 +874,34 @@ public:
 };
 
 /**
- * GLController has some unique requirements for its native calls, so make it
+ * Compositor has some unique requirements for its native calls, so make it
  * separate from GeckoViewSupport.
  */
-class nsWindow::GLControllerSupport final
-    : public GLController::Natives<GLControllerSupport>
-    , public SupportsWeakPtr<GLControllerSupport>
+class nsWindow::LayerViewSupport final
+    : public LayerView::Compositor::Natives<LayerViewSupport>
+    , public SupportsWeakPtr<LayerViewSupport>
     , public UsesGeckoThreadProxy
 {
     nsWindow& window;
-    GLController::GlobalRef mGLController;
+    LayerView::Compositor::GlobalRef mCompositor;
     GeckoLayerClient::GlobalRef mLayerClient;
     Atomic<bool, ReleaseAcquire> mCompositorPaused;
     mozilla::jni::GlobalRef<mozilla::jni::Object> mSurface;
 
     // In order to use Event::HasSameTypeAs in PostTo(), we cannot make
-    // GLControllerEvent a template because each template instantiation is
-    // a different type. So implement GLControllerEvent as a ProxyEvent.
-    class GLControllerEvent final : public nsAppShell::ProxyEvent
+    // LayerViewEvent a template because each template instantiation is
+    // a different type. So implement LayerViewEvent as a ProxyEvent.
+    class LayerViewEvent final : public nsAppShell::ProxyEvent
     {
         using Event = nsAppShell::Event;
 
     public:
         static UniquePtr<Event> MakeEvent(UniquePtr<Event>&& event)
         {
-            return MakeUnique<GLControllerEvent>(mozilla::Move(event));
+            return MakeUnique<LayerViewEvent>(mozilla::Move(event));
         }
 
-        GLControllerEvent(UniquePtr<Event>&& event)
+        LayerViewEvent(UniquePtr<Event>&& event)
             : nsAppShell::ProxyEvent(mozilla::Move(event))
         {}
 
@@ -908,46 +922,43 @@ class nsWindow::GLControllerSupport final
     };
 
 public:
-    typedef GLController::Natives<GLControllerSupport> Base;
+    typedef LayerView::Compositor::Natives<LayerViewSupport> Base;
 
-    MOZ_DECLARE_WEAKREFERENCE_TYPENAME(GLControllerSupport);
+    MOZ_DECLARE_WEAKREFERENCE_TYPENAME(LayerViewSupport);
 
     template<class Functor>
     static void OnNativeCall(Functor&& aCall)
     {
-        if (aCall.IsTarget(&GLControllerSupport::CreateCompositor)) {
+        if (aCall.IsTarget(&LayerViewSupport::CreateCompositor)) {
 
-            // These calls are blocking.
+            // This call is blocking.
             nsAppShell::SyncRunEvent(WindowEvent<Functor>(
-                    mozilla::Move(aCall)), &GLControllerEvent::MakeEvent);
+                    mozilla::Move(aCall)), &LayerViewEvent::MakeEvent);
             return;
 
-        } else if (aCall.IsTarget(&GLControllerSupport::PauseCompositor)) {
-            aCall.SetTarget(&GLControllerSupport::SyncPauseCompositor);
-            (Functor(aCall))();
-            return;
         } else if (aCall.IsTarget(
-                &GLControllerSupport::SyncResumeResizeCompositor)) {
+                &LayerViewSupport::SyncResumeResizeCompositor)) {
             // This call is synchronous. Perform the original call using a copy
             // of the lambda. Then redirect the original lambda to
             // OnResumedCompositor, to be run on the Gecko thread. We use
             // Functor instead of our own lambda so that Functor can handle
             // object lifetimes for us.
             (Functor(aCall))();
-            aCall.SetTarget(&GLControllerSupport::OnResumedCompositor);
+            aCall.SetTarget(&LayerViewSupport::OnResumedCompositor);
             nsAppShell::PostEvent(
-                    mozilla::MakeUnique<GLControllerEvent>(
+                    mozilla::MakeUnique<LayerViewEvent>(
                     mozilla::MakeUnique<WindowEvent<Functor>>(
                     mozilla::Move(aCall))));
             return;
 
         } else if (aCall.IsTarget(
-                &GLControllerSupport::SyncInvalidateAndScheduleComposite)) {
+                &LayerViewSupport::SyncInvalidateAndScheduleComposite) ||
+                aCall.IsTarget(&LayerViewSupport::SyncPauseCompositor)) {
             // This call is synchronous.
             return aCall();
         }
 
-        // GLControllerEvent (i.e. prioritized event) applies to
+        // LayerViewEvent (i.e. prioritized event) applies to
         // CreateCompositor, PauseCompositor, and OnResumedCompositor. For all
         // other events, use regular WindowEvent.
         nsAppShell::PostEvent(
@@ -955,21 +966,21 @@ public:
                 mozilla::Move(aCall)));
     }
 
-    GLControllerSupport(nsWindow* aWindow,
-                        const GLController::LocalRef& aInstance)
+    LayerViewSupport(nsWindow* aWindow,
+                     const LayerView::Compositor::LocalRef& aInstance)
         : window(*aWindow)
-        , mGLController(aInstance)
+        , mCompositor(aInstance)
         , mCompositorPaused(true)
     {
         Base::AttachNative(aInstance, this);
     }
 
-    ~GLControllerSupport()
+    ~LayerViewSupport()
     {
         if (window.mNPZCSupport) {
             window.mNPZCSupport->DetachFromWindow();
         }
-        mGLController->Destroy();
+        mCompositor->Destroy();
     }
 
     const GeckoLayerClient::Ref& GetLayerClient() const
@@ -984,7 +995,7 @@ public:
 
     void* GetSurface()
     {
-        mSurface = mGLController->GetSurface();
+        mSurface = mCompositor->GetSurface();
         return mSurface.Get();
     }
 
@@ -1004,7 +1015,7 @@ private:
     }
 
     /**
-     * GLController methods
+     * Compositor methods
      */
 public:
     using Base::DisposeNative;
@@ -1059,18 +1070,6 @@ public:
         OnResumedCompositor(aWidth, aHeight);
     }
 
-    void PauseCompositor()
-    {
-        // The compositor gets paused when the app is about to go into the
-        // background. While the compositor is paused, we need to ensure that
-        // no layer tree updates (from draw events) occur, since the compositor
-        // cannot make a GL context current in order to process updates.
-        if (window.mCompositorBridgeChild) {
-            window.mCompositorBridgeChild->SendPause();
-        }
-        mCompositorPaused = true;
-    }
-
     void SyncPauseCompositor()
     {
         if (RefPtr<CompositorBridgeParent> bridge = window.GetCompositorBridgeParent()) {
@@ -1106,6 +1105,7 @@ public:
     }
 };
 
+
 nsWindow::GeckoViewSupport::~GeckoViewSupport()
 {
     // Disassociate our GeckoEditable instance with our native object.
@@ -1119,7 +1119,7 @@ nsWindow::GeckoViewSupport::~GeckoViewSupport()
 nsWindow::GeckoViewSupport::Open(const jni::Class::LocalRef& aCls,
                                  GeckoView::Window::Param aWindow,
                                  GeckoView::Param aView,
-                                 jni::Object::Param aGLController,
+                                 jni::Object::Param aCompositor,
                                  jni::String::Param aChromeURI,
                                  int32_t aWidth, int32_t aHeight)
 {
@@ -1175,10 +1175,10 @@ nsWindow::GeckoViewSupport::Open(const jni::Class::LocalRef& aCls,
 
     window->mGeckoViewSupport->mDOMWindow = pdomWindow;
 
-    // Attach the GLController to the new window.
-    window->mGLControllerSupport = mozilla::MakeUnique<GLControllerSupport>(
-            window, GLController::LocalRef(
-            aCls.Env(), GLController::Ref::From(aGLController)));
+    // Attach the Compositor to the new window.
+    window->mLayerViewSupport = mozilla::MakeUnique<LayerViewSupport>(
+            window, LayerView::Compositor::LocalRef(
+            aCls.Env(), LayerView::Compositor::Ref::From(aCompositor)));
 
     gGeckoViewWindow = window;
 
@@ -1205,10 +1205,14 @@ nsWindow::GeckoViewSupport::Close()
 }
 
 void
-nsWindow::GeckoViewSupport::Reattach(GeckoView::Param aView)
+nsWindow::GeckoViewSupport::Reattach(GeckoView::Param aView, jni::Object::Param aCompositor)
 {
     // Associate our previous GeckoEditable with the new GeckoView.
     mEditable->OnViewChange(aView);
+
+    window.mLayerViewSupport = mozilla::MakeUnique<LayerViewSupport>(
+            &window, LayerView::Compositor::LocalRef(jni::GetGeckoThreadEnv(),
+            LayerView::Compositor::Ref::From(aCompositor)));
 }
 
 void
@@ -1250,7 +1254,7 @@ nsWindow::InitNatives()
 {
     nsWindow::GeckoViewSupport::Base::Init();
     nsWindow::GeckoViewSupport::EditableBase::Init();
-    nsWindow::GLControllerSupport::Init();
+    nsWindow::LayerViewSupport::Init();
     nsWindow::NPZCSupport::Init();
 }
 
@@ -1606,8 +1610,9 @@ nsWindow::Resize(double aX,
     mBounds.width = NSToIntRound(aWidth);
     mBounds.height = NSToIntRound(aHeight);
 
-    if (needSizeDispatch)
-        OnSizeChanged(gfx::IntSize(aWidth, aHeight));
+    if (needSizeDispatch) {
+        OnSizeChanged(gfx::IntSize::Truncate(aWidth, aHeight));
+    }
 
     // Should we skip honoring aRepaint here?
     if (aRepaint && FindTopLevel() == nsWindow::TopWindow())
@@ -1975,10 +1980,10 @@ nsWindow::GetNativeData(uint32_t aDataType)
         }
 
         case NS_JAVA_SURFACE:
-            if (!mGLControllerSupport) {
+            if (!mLayerViewSupport) {
                 return nullptr;
             }
-            return mGLControllerSupport->GetSurface();
+            return mLayerViewSupport->GetSurface();
     }
 
     return nullptr;
@@ -2466,7 +2471,7 @@ ConvertAndroidScanCodeToCodeNameIndex(int scanCode)
 static bool
 IsModifierKey(int32_t keyCode)
 {
-    using mozilla::widget::sdk::KeyEvent;
+    using mozilla::java::sdk::KeyEvent;
     return keyCode == KeyEvent::KEYCODE_ALT_LEFT ||
            keyCode == KeyEvent::KEYCODE_ALT_RIGHT ||
            keyCode == KeyEvent::KEYCODE_SHIFT_LEFT ||
@@ -2480,7 +2485,7 @@ IsModifierKey(int32_t keyCode)
 static Modifiers
 GetModifiers(int32_t metaState)
 {
-    using mozilla::widget::sdk::KeyEvent;
+    using mozilla::java::sdk::KeyEvent;
     return (metaState & KeyEvent::META_ALT_MASK ? MODIFIER_ALT : 0)
         | (metaState & KeyEvent::META_SHIFT_MASK ? MODIFIER_SHIFT : 0)
         | (metaState & KeyEvent::META_CTRL_MASK ? MODIFIER_CONTROL : 0)
@@ -2895,6 +2900,46 @@ nsWindow::GeckoViewSupport::FlushIMEChanges(FlushChangesFlag aFlags)
     }
 }
 
+static jni::ObjectArray::LocalRef
+ConvertRectArrayToJavaRectFArray(JNIEnv* aJNIEnv, const nsTArray<LayoutDeviceIntRect>& aRects, const LayoutDeviceIntPoint& aOffset, const CSSToLayoutDeviceScale aScale)
+{
+    size_t length = aRects.Length();
+    jobjectArray rects = aJNIEnv->NewObjectArray(length, sdk::RectF::Context().ClassRef(), nullptr);
+    auto rectsRef = jni::ObjectArray::LocalRef::Adopt(aJNIEnv, rects);
+    for (size_t i = 0; i < length; i++) {
+        sdk::RectF::LocalRef rect(aJNIEnv);
+        LayoutDeviceIntRect tmp = aRects[i] + aOffset;
+        sdk::RectF::New(tmp.x / aScale.scale, tmp.y / aScale.scale,
+                        (tmp.x + tmp.width) / aScale.scale,
+                        (tmp.y + tmp.height) / aScale.scale,
+                        &rect);
+        rectsRef->SetElement(i, rect);
+    }
+    return rectsRef;
+}
+
+void
+nsWindow::GeckoViewSupport::UpdateCompositionRects()
+{
+    const auto composition(window.GetIMEComposition());
+    if (NS_WARN_IF(!composition)) {
+        return;
+    }
+
+    uint32_t offset = composition->NativeOffsetOfStartComposition();
+    WidgetQueryContentEvent textRects(true, eQueryTextRectArray, &window);
+    textRects.InitForQueryTextRectArray(offset, composition->String().Length());
+    window.DispatchEvent(&textRects);
+
+    auto rects =
+        ConvertRectArrayToJavaRectFArray(jni::GetGeckoThreadEnv(),
+                                         textRects.mReply.mRectArray,
+                                         window.WidgetToScreenOffset(),
+                                         window.GetDefaultScale());
+
+    mEditable->UpdateCompositionRects(rects);
+}
+
 void
 nsWindow::GeckoViewSupport::AsyncNotifyIME(int32_t aNotification)
 {
@@ -2946,6 +2991,9 @@ nsWindow::GeckoViewSupport::NotifyIME(const IMENotification& aIMENotification)
 
         case NOTIFY_IME_OF_FOCUS: {
             ALOGIME("IME: NOTIFY_IME_OF_FOCUS");
+            // IME will call requestCursorUpdates after getting context.
+            // So reset cursor update mode before getting context.
+            mIMEMonitorCursor = false;
             mEditable->NotifyIME(GeckoEditableListener::NOTIFY_IME_OF_FOCUS);
             return true;
         }
@@ -2980,6 +3028,16 @@ nsWindow::GeckoViewSupport::NotifyIME(const IMENotification& aIMENotification)
             PostFlushIMEChanges();
             mIMESelectionChanged = true;
             AddIMETextChange(IMETextChange(aIMENotification));
+            return true;
+        }
+
+        case NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED: {
+            ALOGIME("IME: NOTIFY_IME_OF_COMPOSITION_EVENT_HANDLED");
+
+            // Hardware keyboard support requires each string rect.
+            if (AndroidBridge::Bridge() && AndroidBridge::Bridge()->GetAPIVersion() >= 21 && mIMEMonitorCursor) {
+                UpdateCompositionRects();
+            }
             return true;
         }
 
@@ -3337,6 +3395,17 @@ nsWindow::GeckoViewSupport::OnImeUpdateComposition(int32_t aStart, int32_t aEnd)
 }
 
 void
+nsWindow::GeckoViewSupport::OnImeRequestCursorUpdates(int aRequestMode)
+{
+    if (aRequestMode == IME_MONITOR_CURSOR_ONE_SHOT) {
+        UpdateCompositionRects();
+        return;
+    }
+
+    mIMEMonitorCursor = (aRequestMode == IME_MONITOR_CURSOR_START_MONITOR);
+}
+
+void
 nsWindow::UserActivity()
 {
   if (!mIdleService) {
@@ -3439,8 +3508,8 @@ nsWindow::SynthesizeNativeTouchPoint(uint32_t aPointerId,
         return NS_ERROR_UNEXPECTED;
     }
 
-    MOZ_ASSERT(mGLControllerSupport);
-    GeckoLayerClient::LocalRef client = mGLControllerSupport->GetLayerClient();
+    MOZ_ASSERT(mLayerViewSupport);
+    GeckoLayerClient::LocalRef client = mLayerViewSupport->GetLayerClient();
     client->SynthesizeNativeTouchPoint(aPointerId, eventType,
         aPoint.x, aPoint.y, aPointerPressure, aPointerOrientation);
 
@@ -3455,8 +3524,8 @@ nsWindow::SynthesizeNativeMouseEvent(LayoutDeviceIntPoint aPoint,
 {
     mozilla::widget::AutoObserverNotifier notifier(aObserver, "mouseevent");
 
-    MOZ_ASSERT(mGLControllerSupport);
-    GeckoLayerClient::LocalRef client = mGLControllerSupport->GetLayerClient();
+    MOZ_ASSERT(mLayerViewSupport);
+    GeckoLayerClient::LocalRef client = mLayerViewSupport->GetLayerClient();
     client->SynthesizeNativeMouseEvent(aNativeMessage, aPoint.x, aPoint.y);
 
     return NS_OK;
@@ -3468,8 +3537,8 @@ nsWindow::SynthesizeNativeMouseMove(LayoutDeviceIntPoint aPoint,
 {
     mozilla::widget::AutoObserverNotifier notifier(aObserver, "mouseevent");
 
-    MOZ_ASSERT(mGLControllerSupport);
-    GeckoLayerClient::LocalRef client = mGLControllerSupport->GetLayerClient();
+    MOZ_ASSERT(mLayerViewSupport);
+    GeckoLayerClient::LocalRef client = mLayerViewSupport->GetLayerClient();
     client->SynthesizeNativeMouseEvent(sdk::MotionEvent::ACTION_HOVER_MOVE, aPoint.x, aPoint.y);
 
     return NS_OK;
@@ -3482,8 +3551,8 @@ nsWindow::DrawWindowUnderlay(LayerManagerComposite* aManager,
     if (Destroyed()) {
         return;
     }
-    MOZ_ASSERT(mGLControllerSupport);
-    GeckoLayerClient::LocalRef client = mGLControllerSupport->GetLayerClient();
+    MOZ_ASSERT(mLayerViewSupport);
+    GeckoLayerClient::LocalRef client = mLayerViewSupport->GetLayerClient();
 
     LayerRenderer::Frame::LocalRef frame = client->CreateFrame();
     mLayerRendererFrame = frame;
@@ -3527,8 +3596,8 @@ nsWindow::DrawWindowOverlay(LayerManagerComposite* aManager,
     GLint scissorRect[4];
     gl->fGetIntegerv(LOCAL_GL_SCISSOR_BOX, scissorRect);
 
-    MOZ_ASSERT(mGLControllerSupport);
-    GeckoLayerClient::LocalRef client = mGLControllerSupport->GetLayerClient();
+    MOZ_ASSERT(mLayerViewSupport);
+    GeckoLayerClient::LocalRef client = mLayerViewSupport->GetLayerClient();
 
     client->ActivateProgram();
     mLayerRendererFrame->DrawForeground();
@@ -3543,8 +3612,8 @@ nsWindow::DrawWindowOverlay(LayerManagerComposite* aManager,
 void
 nsWindow::InvalidateAndScheduleComposite()
 {
-    if (gGeckoViewWindow && gGeckoViewWindow->mGLControllerSupport) {
-        gGeckoViewWindow->mGLControllerSupport->
+    if (gGeckoViewWindow && gGeckoViewWindow->mLayerViewSupport) {
+        gGeckoViewWindow->mLayerViewSupport->
                 SyncInvalidateAndScheduleComposite();
     }
 }
@@ -3552,8 +3621,8 @@ nsWindow::InvalidateAndScheduleComposite()
 bool
 nsWindow::IsCompositionPaused()
 {
-    if (gGeckoViewWindow && gGeckoViewWindow->mGLControllerSupport) {
-        return gGeckoViewWindow->mGLControllerSupport->CompositorPaused();
+    if (gGeckoViewWindow && gGeckoViewWindow->mLayerViewSupport) {
+        return gGeckoViewWindow->mLayerViewSupport->CompositorPaused();
     }
     return false;
 }
@@ -3561,29 +3630,17 @@ nsWindow::IsCompositionPaused()
 void
 nsWindow::SchedulePauseComposition()
 {
-    if (gGeckoViewWindow && gGeckoViewWindow->mGLControllerSupport) {
-        return gGeckoViewWindow->mGLControllerSupport->SyncPauseCompositor();
+    if (gGeckoViewWindow && gGeckoViewWindow->mLayerViewSupport) {
+        return gGeckoViewWindow->mLayerViewSupport->SyncPauseCompositor();
     }
 }
 
 void
 nsWindow::ScheduleResumeComposition()
 {
-    if (gGeckoViewWindow && gGeckoViewWindow->mGLControllerSupport) {
-        return gGeckoViewWindow->mGLControllerSupport->SyncResumeCompositor();
+    if (gGeckoViewWindow && gGeckoViewWindow->mLayerViewSupport) {
+        return gGeckoViewWindow->mLayerViewSupport->SyncResumeCompositor();
     }
-}
-
-float
-nsWindow::ComputeRenderIntegrity()
-{
-    if (gGeckoViewWindow) {
-        if (RefPtr<CompositorBridgeParent> bridge = gGeckoViewWindow->GetCompositorBridgeParent()) {
-            return bridge->ComputeRenderIntegrity();
-        }
-    }
-
-    return 1.f;
 }
 
 bool
@@ -3605,7 +3662,7 @@ nsWindow::WidgetPaintsBackground()
 bool
 nsWindow::NeedsPaint()
 {
-    if (!mGLControllerSupport || mGLControllerSupport->CompositorPaused() ||
+    if (!mLayerViewSupport || mLayerViewSupport->CompositorPaused() ||
             // FindTopLevel() != nsWindow::TopWindow() ||
             !GetLayerManager(nullptr)) {
         return false;

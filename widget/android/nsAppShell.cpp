@@ -42,11 +42,6 @@
 #include <pthread.h>
 #include <wchar.h>
 
-#ifdef MOZ_GAMEPAD
-#include "mozilla/dom/GamepadPlatformService.h"
-#include "mozilla/dom/Gamepad.h"
-#endif
-
 #include "GeckoProfiler.h"
 #ifdef MOZ_ANDROID_HISTORY
 #include "nsNetUtil.h"
@@ -58,10 +53,13 @@
 #include "mozilla/Logging.h"
 #endif
 
+#include "AndroidAlerts.h"
 #include "ANRReporter.h"
 #include "GeckoNetworkManager.h"
 #include "GeckoScreenOrientation.h"
 #include "PrefsHelper.h"
+#include "Telemetry.h"
+#include "ThumbnailHelper.h"
 
 #ifdef DEBUG_ANDROID_EVENTS
 #define EVLOG(args...)  ALOG(args)
@@ -70,51 +68,13 @@
 #endif
 
 using namespace mozilla;
-typedef mozilla::dom::GamepadPlatformService GamepadPlatformService;
 
 nsIGeolocationUpdate *gLocationCallback = nullptr;
-nsAutoPtr<mozilla::AndroidGeckoEvent> gLastSizeChange;
 
 nsAppShell* nsAppShell::sAppShell;
 StaticAutoPtr<Mutex> nsAppShell::sAppShellLock;
 
 NS_IMPL_ISUPPORTS_INHERITED(nsAppShell, nsBaseAppShell, nsIObserver)
-
-class ThumbnailRunnable : public Runnable {
-public:
-    ThumbnailRunnable(nsIAndroidBrowserApp* aBrowserApp, int aTabId,
-                       const nsTArray<nsIntPoint>& aPoints, RefCountedJavaObject* aBuffer):
-        mBrowserApp(aBrowserApp), mPoints(aPoints), mTabId(aTabId), mBuffer(aBuffer) {}
-
-    virtual nsresult Run() {
-        const auto& buffer = jni::Object::Ref::From(mBuffer->GetObject());
-        nsCOMPtr<mozIDOMWindowProxy> domWindow;
-        nsCOMPtr<nsIBrowserTab> tab;
-        mBrowserApp->GetBrowserTab(mTabId, getter_AddRefs(tab));
-        if (!tab) {
-            widget::ThumbnailHelper::SendThumbnail(buffer, mTabId, false, false);
-            return NS_ERROR_FAILURE;
-        }
-
-        tab->GetWindow(getter_AddRefs(domWindow));
-        if (!domWindow) {
-            widget::ThumbnailHelper::SendThumbnail(buffer, mTabId, false, false);
-            return NS_ERROR_FAILURE;
-        }
-
-        NS_ASSERTION(mPoints.Length() == 1, "Thumbnail event does not have enough coordinates");
-
-        bool shouldStore = true;
-        nsresult rv = AndroidBridge::Bridge()->CaptureThumbnail(domWindow, mPoints[0].x, mPoints[0].y, mTabId, buffer, shouldStore);
-        widget::ThumbnailHelper::SendThumbnail(buffer, mTabId, NS_SUCCEEDED(rv), shouldStore);
-        return rv;
-    }
-private:
-    nsCOMPtr<nsIAndroidBrowserApp> mBrowserApp;
-    nsTArray<nsIntPoint> mPoints;
-    int mTabId;
-    RefPtr<RefCountedJavaObject> mBuffer;
-};
 
 class WakeLockListener final : public nsIDOMMozWakeLockListener {
 private:
@@ -124,7 +84,7 @@ public:
   NS_DECL_ISUPPORTS;
 
   nsresult Callback(const nsAString& topic, const nsAString& state) override {
-    widget::GeckoAppShell::NotifyWakeLockChanged(topic, state);
+    java::GeckoAppShell::NotifyWakeLockChanged(topic, state);
     return NS_OK;
   }
 };
@@ -135,7 +95,7 @@ StaticRefPtr<WakeLockListener> sWakeLockListener;
 
 
 class GeckoThreadSupport final
-    : public widget::GeckoThread::Natives<GeckoThreadSupport>
+    : public java::GeckoThread::Natives<GeckoThreadSupport>
     , public UsesGeckoThreadProxy
 {
     static uint32_t sPauseCount;
@@ -255,7 +215,7 @@ uint32_t GeckoThreadSupport::sPauseCount;
 
 
 class GeckoAppShellSupport final
-    : public widget::GeckoAppShell::Natives<GeckoAppShellSupport>
+    : public java::GeckoAppShell::Natives<GeckoAppShellSupport>
     , public UsesGeckoThreadProxy
 {
 public:
@@ -363,6 +323,17 @@ public:
         }
 #endif
     }
+
+    static void NotifyAlertListener(jni::String::Param aName,
+                                    jni::String::Param aTopic)
+    {
+        if (!aName || !aTopic) {
+            return;
+        }
+
+        AndroidAlerts::NotifyListener(
+                aName->ToString(), aTopic->ToCString().get());
+    }
 };
 
 nsAppShell::nsAppShell()
@@ -388,9 +359,11 @@ nsAppShell::nsAppShell()
         mozilla::GeckoNetworkManager::Init();
         mozilla::GeckoScreenOrientation::Init();
         mozilla::PrefsHelper::Init();
+        mozilla::widget::Telemetry::Init();
+        mozilla::ThumbnailHelper::Init();
         nsWindow::InitNatives();
 
-        widget::GeckoThread::SetState(widget::GeckoThread::State::JNI_READY());
+        java::GeckoThread::SetState(java::GeckoThread::State::JNI_READY());
     }
 
     sPowerManagerService = do_GetService(POWERMANAGERSERVICE_CONTRACTID);
@@ -492,11 +465,11 @@ nsAppShell::Observe(nsISupports* aSubject,
         if (jni::IsAvailable()) {
             // See if we want to force 16-bit color before doing anything
             if (Preferences::GetBool("gfx.android.rgb16.force", false)) {
-                widget::GeckoAppShell::SetScreenDepthOverride(16);
+                java::GeckoAppShell::SetScreenDepthOverride(16);
             }
 
-            widget::GeckoThread::SetState(
-                    widget::GeckoThread::State::PROFILE_READY());
+            java::GeckoThread::SetState(
+                    java::GeckoThread::State::PROFILE_READY());
 
             // Gecko on Android follows the Android app model where it never
             // stops until it is killed by the system or told explicitly to
@@ -514,16 +487,16 @@ nsAppShell::Observe(nsISupports* aSubject,
     } else if (!strcmp(aTopic, "chrome-document-loaded")) {
         if (jni::IsAvailable()) {
             // Our first window has loaded, assume any JS initialization has run.
-            widget::GeckoThread::CheckAndSetState(
-                    widget::GeckoThread::State::PROFILE_READY(),
-                    widget::GeckoThread::State::RUNNING());
+            java::GeckoThread::CheckAndSetState(
+                    java::GeckoThread::State::PROFILE_READY(),
+                    java::GeckoThread::State::RUNNING());
         }
         removeObserver = true;
 
     } else if (!strcmp(aTopic, "quit-application-granted")) {
         if (jni::IsAvailable()) {
-            widget::GeckoThread::SetState(
-                    widget::GeckoThread::State::EXITING());
+            java::GeckoThread::SetState(
+                    java::GeckoThread::State::EXITING());
 
             // We are told explicitly to quit, perhaps due to
             // nsIAppStartup::Quit being called. We should release our hold on
@@ -691,49 +664,6 @@ nsAppShell::LegacyGeckoEvent::Run()
     EVLOG("nsAppShell: event %p %d", (void*)curEvent.get(), curEvent->Type());
 
     switch (curEvent->Type()) {
-    case AndroidGeckoEvent::NATIVE_POKE:
-        nsAppShell::Get()->NativeEventCallback();
-        break;
-
-    case AndroidGeckoEvent::THUMBNAIL: {
-        if (!nsAppShell::Get()->mBrowserApp)
-            break;
-
-        int32_t tabId = curEvent->MetaState();
-        const nsTArray<nsIntPoint>& points = curEvent->Points();
-        RefCountedJavaObject* buffer = curEvent->ByteBuffer();
-        RefPtr<ThumbnailRunnable> sr = new ThumbnailRunnable(nsAppShell::Get()->mBrowserApp, tabId, points, buffer);
-        MessageLoop::current()->PostIdleTask(NewRunnableMethod(sr.get(), &ThumbnailRunnable::Run));
-        break;
-    }
-
-    case AndroidGeckoEvent::ZOOMEDVIEW: {
-        if (!nsAppShell::Get()->mBrowserApp)
-            break;
-        int32_t tabId = curEvent->MetaState();
-        const nsTArray<nsIntPoint>& points = curEvent->Points();
-        float scaleFactor = (float) curEvent->X();
-        RefPtr<RefCountedJavaObject> javaBuffer = curEvent->ByteBuffer();
-        const auto& mBuffer = jni::Object::Ref::From(javaBuffer->GetObject());
-
-        nsCOMPtr<mozIDOMWindowProxy> domWindow;
-        nsCOMPtr<nsIBrowserTab> tab;
-        nsAppShell::Get()->mBrowserApp->GetBrowserTab(tabId, getter_AddRefs(tab));
-        if (!tab) {
-            NS_ERROR("Can't find tab!");
-            break;
-        }
-        tab->GetWindow(getter_AddRefs(domWindow));
-        if (!domWindow) {
-            NS_ERROR("Can't find dom window!");
-            break;
-        }
-        NS_ASSERTION(points.Length() == 2, "ZoomedView event does not have enough coordinates");
-        nsIntRect r(points[0].x, points[0].y, points[1].x, points[1].y);
-        AndroidBridge::Bridge()->CaptureZoomedView(domWindow, r, mBuffer, scaleFactor);
-        break;
-    }
-
     case AndroidGeckoEvent::VIEWPORT: {
         if (curEvent->Characters().Length() == 0)
             break;
@@ -747,153 +677,6 @@ nsAppShell::LegacyGeckoEvent::Run()
         break;
     }
 
-    case AndroidGeckoEvent::TELEMETRY_UI_SESSION_STOP: {
-        if (!nsAppShell::Get()->mBrowserApp)
-            break;
-        if (curEvent->Characters().Length() == 0)
-            break;
-
-        nsCOMPtr<nsIUITelemetryObserver> obs;
-        nsAppShell::Get()->mBrowserApp->GetUITelemetryObserver(getter_AddRefs(obs));
-        if (!obs)
-            break;
-
-        obs->StopSession(
-                curEvent->Characters().get(),
-                curEvent->CharactersExtra().get(),
-                curEvent->Time()
-                );
-        break;
-    }
-
-    case AndroidGeckoEvent::TELEMETRY_UI_SESSION_START: {
-        if (!nsAppShell::Get()->mBrowserApp)
-            break;
-        if (curEvent->Characters().Length() == 0)
-            break;
-
-        nsCOMPtr<nsIUITelemetryObserver> obs;
-        nsAppShell::Get()->mBrowserApp->GetUITelemetryObserver(getter_AddRefs(obs));
-        if (!obs)
-            break;
-
-        obs->StartSession(
-                curEvent->Characters().get(),
-                curEvent->Time()
-                );
-        break;
-    }
-
-    case AndroidGeckoEvent::TELEMETRY_UI_EVENT: {
-        if (!nsAppShell::Get()->mBrowserApp)
-            break;
-        if (curEvent->Data().Length() == 0)
-            break;
-
-        nsCOMPtr<nsIUITelemetryObserver> obs;
-        nsAppShell::Get()->mBrowserApp->GetUITelemetryObserver(getter_AddRefs(obs));
-        if (!obs)
-            break;
-
-        obs->AddEvent(
-                curEvent->Data().get(),
-                curEvent->Characters().get(),
-                curEvent->Time(),
-                curEvent->CharactersExtra().get()
-                );
-        break;
-    }
-
-    case AndroidGeckoEvent::CALL_OBSERVER:
-    {
-        nsCOMPtr<nsIObserver> observer;
-        nsAppShell::Get()->mObserversHash.Get(curEvent->Characters(), getter_AddRefs(observer));
-
-        if (observer) {
-            observer->Observe(nullptr, NS_ConvertUTF16toUTF8(curEvent->CharactersExtra()).get(),
-                              curEvent->Data().get());
-        } else {
-            ALOG("Call_Observer event: Observer was not found!");
-        }
-
-        break;
-    }
-
-    case AndroidGeckoEvent::REMOVE_OBSERVER:
-        nsAppShell::Get()->mObserversHash.Remove(curEvent->Characters());
-        break;
-
-    case AndroidGeckoEvent::ADD_OBSERVER:
-        nsAppShell::Get()->AddObserver(curEvent->Characters(), curEvent->Observer());
-        break;
-
-    case AndroidGeckoEvent::LOW_MEMORY:
-        // TODO hook in memory-reduction stuff for different levels here
-        if (curEvent->MetaState() >= AndroidGeckoEvent::MEMORY_PRESSURE_MEDIUM) {
-            nsCOMPtr<nsIObserverService> os = mozilla::services::GetObserverService();
-            if (os) {
-                os->NotifyObservers(nullptr, "memory-pressure", u"low-memory");
-            }
-        }
-        break;
-
-    case AndroidGeckoEvent::TELEMETRY_HISTOGRAM_ADD:
-        // If the extras field is not empty then this is a keyed histogram.
-        if (!curEvent->CharactersExtra().IsVoid()) {
-            Telemetry::Accumulate(NS_ConvertUTF16toUTF8(curEvent->Characters()).get(),
-                                  NS_ConvertUTF16toUTF8(curEvent->CharactersExtra()),
-                                  curEvent->Count());
-        } else {
-            Telemetry::Accumulate(NS_ConvertUTF16toUTF8(curEvent->Characters()).get(),
-                                  curEvent->Count());
-        }
-        break;
-
-    case AndroidGeckoEvent::GAMEPAD_ADDREMOVE: {
-#ifdef MOZ_GAMEPAD
-            RefPtr<GamepadPlatformService> service;
-            service = GamepadPlatformService::GetParentService();
-            if (!service) {
-              break;
-            }
-            if (curEvent->Action() == AndroidGeckoEvent::ACTION_GAMEPAD_ADDED) {
-              int svc_id = service->AddGamepad("android",
-                                               dom::GamepadMappingType::Standard,
-                                               dom::kStandardGamepadButtons,
-                                               dom::kStandardGamepadAxes);
-              widget::GeckoAppShell::GamepadAdded(curEvent->ID(),
-                                                  svc_id);
-            } else if (curEvent->Action() == AndroidGeckoEvent::ACTION_GAMEPAD_REMOVED) {
-              service->RemoveGamepad(curEvent->ID());
-            }
-#endif
-        break;
-    }
-
-    case AndroidGeckoEvent::GAMEPAD_DATA: {
-#ifdef MOZ_GAMEPAD
-            int id = curEvent->ID();
-            RefPtr<GamepadPlatformService> service;
-            service = GamepadPlatformService::GetParentService();
-            if (!service) {
-              break;
-            }
-            if (curEvent->Action() == AndroidGeckoEvent::ACTION_GAMEPAD_BUTTON) {
-              service->NewButtonEvent(id, curEvent->GamepadButton(),
-                                      curEvent->GamepadButtonPressed(),
-                                      curEvent->GamepadButtonValue());
-            } else if (curEvent->Action() == AndroidGeckoEvent::ACTION_GAMEPAD_AXES) {
-                int valid = curEvent->Flags();
-                const nsTArray<float>& values = curEvent->GamepadValues();
-                for (unsigned i = 0; i < values.Length(); i++) {
-                    if (valid & (1<<i)) {
-                      service->NewAxisMoveEvent(id, i, values[i]);
-                    }
-                }
-            }
-#endif
-        break;
-    }
     case AndroidGeckoEvent::NOOP:
         break;
 

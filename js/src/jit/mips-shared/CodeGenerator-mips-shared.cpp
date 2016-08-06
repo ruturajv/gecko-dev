@@ -1649,9 +1649,15 @@ CodeGeneratorMIPSShared::visitStoreTypedArrayElementStatic(LStoreTypedArrayEleme
 }
 
 void
-CodeGeneratorMIPSShared::visitAsmJSCall(LAsmJSCall* ins)
+CodeGeneratorMIPSShared::visitWasmCall(LWasmCall* ins)
 {
-    emitAsmJSCall(ins);
+    emitWasmCallBase(ins);
+}
+
+void
+CodeGeneratorMIPSShared::visitWasmCallI64(LWasmCallI64* ins)
+{
+    emitWasmCallBase(ins);
 }
 
 void
@@ -2235,9 +2241,9 @@ CodeGeneratorMIPSShared::visitEffectiveAddress(LEffectiveAddress* ins)
 }
 
 void
-CodeGeneratorMIPSShared::visitAsmJSLoadGlobalVar(LAsmJSLoadGlobalVar* ins)
+CodeGeneratorMIPSShared::visitWasmLoadGlobalVar(LWasmLoadGlobalVar* ins)
 {
-    const MAsmJSLoadGlobalVar* mir = ins->mir();
+    const MWasmLoadGlobalVar* mir = ins->mir();
     unsigned addr = mir->globalDataOffset() - AsmJSGlobalRegBias;
     if (mir->type() == MIRType::Int32)
         masm.load32(Address(GlobalReg, addr), ToRegister(ins->output()));
@@ -2248,9 +2254,9 @@ CodeGeneratorMIPSShared::visitAsmJSLoadGlobalVar(LAsmJSLoadGlobalVar* ins)
 }
 
 void
-CodeGeneratorMIPSShared::visitAsmJSStoreGlobalVar(LAsmJSStoreGlobalVar* ins)
+CodeGeneratorMIPSShared::visitWasmStoreGlobalVar(LWasmStoreGlobalVar* ins)
 {
-    const MAsmJSStoreGlobalVar* mir = ins->mir();
+    const MWasmStoreGlobalVar* mir = ins->mir();
 
     MOZ_ASSERT(IsNumberType(mir->value()->type()));
     unsigned addr = mir->globalDataOffset() - AsmJSGlobalRegBias;
@@ -2260,32 +2266,6 @@ CodeGeneratorMIPSShared::visitAsmJSStoreGlobalVar(LAsmJSStoreGlobalVar* ins)
         masm.storeFloat32(ToFloatRegister(ins->value()), Address(GlobalReg, addr));
     else
         masm.storeDouble(ToFloatRegister(ins->value()), Address(GlobalReg, addr));
-}
-
-void
-CodeGeneratorMIPSShared::visitAsmJSLoadFuncPtr(LAsmJSLoadFuncPtr* ins)
-{
-    const MAsmJSLoadFuncPtr* mir = ins->mir();
-
-    Register index = ToRegister(ins->index());
-    Register out = ToRegister(ins->output());
-    unsigned addr = mir->globalDataOffset() - AsmJSGlobalRegBias;
-
-    if (mir->hasLimit()) {
-        masm.branch32(Assembler::Condition::AboveOrEqual, index, Imm32(mir->limit()),
-                      wasm::JumpTarget::OutOfBounds);
-    }
-
-    BaseIndex source(GlobalReg, index, ScalePointer, addr);
-    masm.loadPtr(source, out);
-}
-
-void
-CodeGeneratorMIPSShared::visitAsmJSLoadFFIFunc(LAsmJSLoadFFIFunc* ins)
-{
-    const MAsmJSLoadFFIFunc* mir = ins->mir();
-    masm.loadPtr(Address(GlobalReg, mir->globalDataOffset() - AsmJSGlobalRegBias),
-                 ToRegister(ins->output()));
 }
 
 void

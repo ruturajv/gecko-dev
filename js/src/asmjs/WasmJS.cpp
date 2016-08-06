@@ -22,11 +22,14 @@
 #include "asmjs/WasmInstance.h"
 #include "asmjs/WasmModule.h"
 
+#include "jit/JitOptions.h"
+
 #include "jsobjinlines.h"
 
 #include "vm/NativeObject-inl.h"
 
 using namespace js;
+using namespace js::jit;
 using namespace js::wasm;
 
 bool
@@ -59,6 +62,16 @@ CheckCompilerSupport(JSContext* cx)
     return true;
 }
 
+bool
+wasm::IsI64Implemented()
+{
+#if defined(JS_CPU_X64) || defined(JS_CODEGEN_X86) || defined(JS_CODEGEN_ARM)
+    return true;
+#else
+    return false;
+#endif
+}
+
 // ============================================================================
 // (Temporary) Wasm class and static methods
 
@@ -89,15 +102,21 @@ GetProperty(JSContext* cx, HandleObject obj, const char* chars, MutableHandleVal
 
 static bool
 GetImports(JSContext* cx,
+           const Module& module,
            HandleObject importObj,
-           const ImportVector& imports,
            MutableHandle<FunctionVector> funcImports,
            MutableHandleWasmTableObject tableImport,
-           MutableHandleWasmMemoryObject memoryImport)
+           MutableHandleWasmMemoryObject memoryImport,
+           ValVector* globalImports)
 {
+    const ImportVector& imports = module.imports();
     if (!imports.empty() && !importObj)
         return Throw(cx, "no import object given");
 
+    const Metadata& metadata = module.metadata();
+
+    uint32_t globalIndex = 0;
+    const GlobalDescVector& globals = metadata.globals;
     for (const Import& import : imports) {
         RootedValue v(cx);
         if (!GetProperty(cx, importObj, import.module.get(), &v))
@@ -135,8 +154,52 @@ GetImports(JSContext* cx,
             MOZ_ASSERT(!memoryImport);
             memoryImport.set(&v.toObject().as<WasmMemoryObject>());
             break;
+
+          case DefinitionKind::Global:
+            Val val;
+            const GlobalDesc& global = globals[globalIndex++];
+            MOZ_ASSERT(global.importIndex() == globalIndex - 1);
+            MOZ_ASSERT(!global.isMutable());
+            switch (global.type()) {
+              case ValType::I32: {
+                int32_t i32;
+                if (!ToInt32(cx, v, &i32))
+                    return false;
+                val = Val(uint32_t(i32));
+                break;
+              }
+              case ValType::I64: {
+                MOZ_ASSERT(JitOptions.wasmTestMode, "no int64 in JS");
+                int64_t i64;
+                if (!ReadI64Object(cx, v, &i64))
+                    return false;
+                val = Val(uint64_t(i64));
+                break;
+              }
+              case ValType::F32: {
+                double d;
+                if (!ToNumber(cx, v, &d))
+                    return false;
+                val = Val(float(d));
+                break;
+              }
+              case ValType::F64: {
+                double d;
+                if (!ToNumber(cx, v, &d))
+                    return false;
+                val = Val(d);
+                break;
+              }
+              default: {
+                MOZ_CRASH("unexpected import value type");
+              }
+            }
+            if (!globalImports->append(val))
+                return false;
         }
     }
+
+    MOZ_ASSERT(globalIndex == globals.length() || !globals[globalIndex].isImport());
 
     return true;
 }
@@ -184,10 +247,11 @@ wasm::Eval(JSContext* cx, Handle<TypedArrayObject*> code, HandleObject importObj
     Rooted<FunctionVector> funcs(cx, FunctionVector(cx));
     RootedWasmTableObject table(cx);
     RootedWasmMemoryObject memory(cx);
-    if (!GetImports(cx, importObj, module->imports(), &funcs, &table, &memory))
+    ValVector globals;
+    if (!GetImports(cx, *module, importObj, &funcs, &table, &memory, &globals))
         return false;
 
-    return module->instantiate(cx, funcs, table, memory, nullptr, instanceObj);
+    return module->instantiate(cx, funcs, table, memory, globals, nullptr, instanceObj);
 }
 
 static bool
@@ -511,12 +575,13 @@ WasmInstanceObject::construct(JSContext* cx, unsigned argc, Value* vp)
     Rooted<FunctionVector> funcs(cx, FunctionVector(cx));
     RootedWasmTableObject table(cx);
     RootedWasmMemoryObject memory(cx);
-    if (!GetImports(cx, importObj, module.imports(), &funcs, &table, &memory))
+    ValVector globals;
+    if (!GetImports(cx, module, importObj, &funcs, &table, &memory, &globals))
         return false;
 
     RootedObject instanceProto(cx, &cx->global()->getPrototype(JSProto_WasmInstance).toObject());
     RootedWasmInstanceObject instanceObj(cx);
-    if (!module.instantiate(cx, funcs, table, memory, instanceProto, &instanceObj))
+    if (!module.instantiate(cx, funcs, table, memory, globals, instanceProto, &instanceObj))
         return false;
 
     args.rval().setObject(*instanceObj);
@@ -557,7 +622,7 @@ WasmInstanceObject::getExportedFunction(JSContext* cx, HandleWasmInstanceObject 
     }
 
     const Instance& instance = instanceObj->instance();
-    RootedAtom name(cx, instance.getFuncAtom(cx, funcIndex));
+    RootedAtom name(cx, instance.code().getFuncAtom(cx, funcIndex));
     if (!name)
         return false;
 
@@ -835,18 +900,40 @@ WasmTableObject::construct(JSContext* cx, unsigned argc, Value* vp)
         return false;
     }
 
+    RootedObject obj(cx, &args[0].toObject());
+    RootedId id(cx);
+    RootedValue val(cx);
+
+    JSAtom* elementAtom = Atomize(cx, "element", strlen("element"));
+    if (!elementAtom)
+        return false;
+    id = AtomToId(elementAtom);
+    if (!GetProperty(cx, obj, obj, id, &val))
+        return false;
+
+    if (!val.isString()) {
+        JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_WASM_BAD_ELEMENT);
+        return false;
+    }
+
+    JSLinearString* str = val.toString()->ensureLinear(cx);
+    if (!str)
+        return false;
+
+    if (!StringEqualsAscii(str, "anyfunc")) {
+        JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_WASM_BAD_ELEMENT);
+        return false;
+    }
+
     JSAtom* initialAtom = Atomize(cx, "initial", strlen("initial"));
     if (!initialAtom)
         return false;
-
-    RootedObject obj(cx, &args[0].toObject());
-    RootedId id(cx, AtomToId(initialAtom));
-    RootedValue initialVal(cx);
-    if (!GetProperty(cx, obj, obj, id, &initialVal))
+    id = AtomToId(initialAtom);
+    if (!GetProperty(cx, obj, obj, id, &val))
         return false;
 
     double initialDbl;
-    if (!ToInteger(cx, initialVal, &initialDbl))
+    if (!ToInteger(cx, val, &initialDbl))
         return false;
 
     if (initialDbl < 0 || initialDbl > INT32_MAX) {
@@ -856,6 +943,11 @@ WasmTableObject::construct(JSContext* cx, unsigned argc, Value* vp)
 
     uint32_t initial = uint32_t(initialDbl);
     MOZ_ASSERT(double(initial) == initialDbl);
+
+    if (initial > MaxTableElems) {
+        JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_WASM_BAD_SIZE, "Table", "initial");
+        return false;
+    }
 
     SharedTable table = Table::create(cx, TableKind::AnyFunction, initial);
     if (!table)
@@ -922,7 +1014,7 @@ WasmTableObject::getImpl(JSContext* cx, const CallArgs& args)
     MOZ_ASSERT(instanceVector.length() == table.length());
 
     RootedWasmInstanceObject instanceObj(cx, instanceVector[index]);
-    const CodeRange* codeRange = instanceObj->instance().lookupCodeRange(table.array()[index]);
+    const CodeRange* codeRange = instanceObj->instance().code().lookupRange(table.array()[index]);
 
     // A non-function code range means the bad-indirect-call stub, so a null element.
     if (!codeRange || !codeRange->isFunction()) {
@@ -1001,7 +1093,8 @@ WasmTableObject::setImpl(JSContext* cx, const CallArgs& args)
 
         Instance& instance = instanceObj->instance();
         const FuncExport& funcExport = instance.metadata().lookupFuncExport(funcIndex);
-        table.array()[index] = instance.codeSegment().code() + funcExport.tableEntryOffset();
+        const CodeRange& codeRange = instance.metadata().codeRanges[funcExport.codeRangeIndex()];
+        table.array()[index] = instance.codeSegment().base() + codeRange.funcTableEntry();
     } else {
         table.array()[index] = instanceVector[index]->instance().codeSegment().badIndirectCallCode();
     }

@@ -1098,21 +1098,16 @@ nsLookAndFeel::Init()
     // with wrong color theme, see Bug 972382
     GtkSettings *settings = gtk_settings_get_for_screen(gdk_screen_get_default());
 
+    // Disable dark theme because it interacts poorly with widget styling in
+    // web content (see bug 1216658).
+    // To avoid triggering reload of theme settings unnecessarily, only set the
+    // setting when necessary.
+    const gchar* dark_setting = "gtk-application-prefer-dark-theme";
+    gboolean dark;
+    g_object_get(settings, dark_setting, &dark, nullptr);
 
-    bool allowDarkTheme = mozilla::Preferences::GetBool("widget.allow-gtk-dark-theme", false);
-
-    if (!allowDarkTheme) {
-        // Disable dark theme because it interacts poorly with widget styling in
-        // web content (see bug 1216658).
-        // To avoid triggering reload of theme settings unnecessarily, only set the
-        // setting when necessary.
-        const gchar* dark_setting = "gtk-application-prefer-dark-theme";
-        gboolean dark;
-        g_object_get(settings, dark_setting, &dark, nullptr);
-
-        if (dark) {
-            g_object_set(settings, dark_setting, FALSE, nullptr);
-        }
+    if (dark) {
+        g_object_set(settings, dark_setting, FALSE, nullptr);
     }
 
     GtkWidgetPath *path = gtk_widget_path_new();
@@ -1349,12 +1344,11 @@ nsLookAndFeel::Init()
     sOddCellBackground = GDK_RGBA_TO_NS_RGBA(color);
     gtk_style_context_restore(style);
 
-    GtkWidget *frame = gtk_frame_new(nullptr);
-    gtk_container_add(GTK_CONTAINER(parent), frame);
-    style = gtk_widget_get_style_context(frame);
-    GetBorderColors(style, &sFrameOuterLightBorder, &sFrameInnerDarkBorder);
-
     gtk_widget_path_free(path);
+
+    style = ClaimStyleContext(MOZ_GTK_FRAME_BORDER);
+    GetBorderColors(style, &sFrameOuterLightBorder, &sFrameInnerDarkBorder);
+    ReleaseStyleContext(style);
 
     // GtkInfoBar
     // TODO - Use WidgetCache for it?

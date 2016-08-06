@@ -16,6 +16,7 @@ var { LocalDebuggerTransport, ChildDebuggerTransport, WorkerDebuggerTransport } 
   require("devtools/shared/transport/transport");
 var DevToolsUtils = require("devtools/shared/DevToolsUtils");
 var { dumpn, dumpv } = DevToolsUtils;
+var flags = require("devtools/shared/flags");
 var EventEmitter = require("devtools/shared/event-emitter");
 var Promise = require("promise");
 var SyncPromise = require("devtools/shared/deprecated-sync-thenables");
@@ -56,14 +57,14 @@ Object.defineProperty(this, "Components", {
 });
 
 if (isWorker) {
-  dumpn.wantLogging = true;
-  dumpv.wantVerbose = true;
+  flags.wantLogging = true;
+  flags.wantVerbose = true;
 } else {
   const LOG_PREF = "devtools.debugger.log";
   const VERBOSE_PREF = "devtools.debugger.log.verbose";
 
-  dumpn.wantLogging = Services.prefs.getBoolPref(LOG_PREF);
-  dumpv.wantVerbose =
+  flags.wantLogging = Services.prefs.getBoolPref(LOG_PREF);
+  flags.wantVerbose =
     Services.prefs.getPrefType(VERBOSE_PREF) !== Services.prefs.PREF_INVALID &&
     Services.prefs.getBoolPref(VERBOSE_PREF);
 }
@@ -896,13 +897,11 @@ var DebuggerServer = {
   },
 
   /**
-   * Check if the caller is running in a content child process.
-   * (Eventually set by child.js)
-   *
-   * @return boolean
-   *         true if the caller is running in a content
+   * Check if the server is running in the child process.
    */
-  isInChildProcess: false,
+  get isInChildProcess() {
+    return Services.appinfo.processType != Ci.nsIXULRuntime.PROCESS_TYPE_DEFAULT;
+  },
 
   /**
    * In a chrome parent process, ask all content child processes
@@ -918,7 +917,7 @@ var DebuggerServer = {
    *        is evaluated
    */
   setupInChild({ module, setupChild, args, waitForEval }) {
-    if (this.isInChildProcess || this._childMessageManagers.size == 0) {
+    if (this._childMessageManagers.size == 0) {
       return Promise.resolve();
     }
     let deferred = Promise.defer();
@@ -982,7 +981,9 @@ var DebuggerServer = {
   connectToChild(connection, frame, onDestroy) {
     let deferred = SyncPromise.defer();
 
-    let mm = frame.frameLoader.messageManager;
+    // Get messageManager from XUL browser (which might be a specialized tunnel for RDM)
+    // or else fallback to asking the frameLoader itself.
+    let mm = frame.messageManager || frame.frameLoader.messageManager;
     mm.loadFrameScript("resource://devtools/server/child.js", false);
     this._childMessageManagers.add(mm);
 
@@ -1298,7 +1299,22 @@ var DebuggerServer = {
         }
       }
     }
-  }
+  },
+
+  /**
+   * ⚠ TESTING ONLY! ⚠ Searches all active connections for an actor matching an ID.
+   * This is helpful for some tests which depend on reaching into the server to check some
+   * properties of an actor.
+   */
+  _searchAllConnectionsForActor(actorID) {
+    for (let connID of Object.getOwnPropertyNames(this._connections)) {
+      let actor = this._connections[connID].getActor(actorID);
+      if (actor) {
+        return actor;
+      }
+    }
+    return null;
+  },
 };
 
 // Expose these to save callers the trouble of importing DebuggerSocket
@@ -1390,7 +1406,9 @@ DebuggerServerConnection.prototype = {
   parentMessageManager: null,
 
   close() {
-    this._transport.close();
+    if (this._transport) {
+      this._transport.close();
+    }
   },
 
   send(packet) {
@@ -1594,6 +1612,13 @@ DebuggerServerConnection.prototype = {
    */
   cancelForwarding(prefix) {
     this._forwardingPrefixes.delete(prefix);
+
+    // Notify the client that forwarding in now cancelled for this prefix.
+    // There could be requests in progress that the client should abort rather leaving
+    // handing indefinitely.
+    if (this.rootActor) {
+      this.send(this.rootActor.forwardingCancelled(prefix));
+    }
   },
 
   sendActorEvent(actorID, eventName, event = {}) {

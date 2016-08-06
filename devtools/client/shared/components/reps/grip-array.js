@@ -11,7 +11,6 @@ define(function (require, exports, module) {
   // Dependencies
   const React = require("devtools/client/shared/vendor/react");
   const { createFactories, isGrip } = require("./rep-utils");
-  const { ObjectBox } = createFactories(require("./object-box"));
   const { Caption } = createFactories(require("./caption"));
 
   // Shortcuts
@@ -35,8 +34,9 @@ define(function (require, exports, module) {
     },
 
     getTitle: function (object, context) {
-      if (this.props.objectLink) {
-        return this.props.objectLink({
+      let objectLink = this.props.objectLink || span;
+      if (this.props.mode != "tiny") {
+        return objectLink({
           object: object
         }, object.class);
       }
@@ -58,7 +58,7 @@ define(function (require, exports, module) {
       let delim;
       let provider = this.props.provider;
 
-      for (let i = 0; i < array.length && i <= max; i++) {
+      for (let i = 0; i < array.length && i < max; i++) {
         try {
           let itemGrip = array[i];
           let value = provider ? provider.getValue(itemGrip) : itemGrip;
@@ -88,13 +88,12 @@ define(function (require, exports, module) {
       }
 
       if (array.length > max) {
-        items.pop();
         let objectLink = this.props.objectLink || span;
         items.push(Caption({
           key: "more",
           object: objectLink({
             object: this.props.object
-          }, "more…")
+          }, (grip.preview.length - max) + " more…")
         }));
       }
 
@@ -117,11 +116,12 @@ define(function (require, exports, module) {
       }
 
       let objectLink = this.props.objectLink || span;
+      let title = this.getTitle(object);
 
       return (
-        ObjectBox({
-          className: "array"},
-          this.getTitle(object),
+        span({
+          className: "objectBox objectBox-array"},
+          title,
           objectLink({
             className: "arrayLeftBracket",
             role: "presentation",

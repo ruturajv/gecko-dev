@@ -58,6 +58,7 @@ Decoder::Decoder(RasterImage* aImage)
   , mInitialized(false)
   , mMetadataDecode(false)
   , mInFrame(false)
+  , mFinishedNewFrame(false)
   , mReachedTerminalState(false)
   , mDecodeDone(false)
   , mError(false)
@@ -246,6 +247,14 @@ Decoder::GetTargetSize()
   return mDownscaler ? Some(mDownscaler->TargetSize()) : Nothing();
 }
 
+Maybe<uint32_t>
+Decoder::TakeCompleteFrameCount()
+{
+  const bool finishedNewFrame = mFinishedNewFrame;
+  mFinishedNewFrame = false;
+  return finishedNewFrame ? Some(GetCompleteFrameCount()) : Nothing();
+}
+
 nsresult
 Decoder::AllocateFrame(uint32_t aFrameNum,
                        const nsIntSize& aTargetSize,
@@ -262,14 +271,16 @@ Decoder::AllocateFrame(uint32_t aFrameNum,
     mCurrentFrame->GetImageData(&mImageData, &mImageDataLength);
     mCurrentFrame->GetPaletteData(&mColormap, &mColormapSize);
 
-    if (aFrameNum + 1 == mFrameCount) {
-      // If we're past the first frame, PostIsAnimated() should've been called.
-      MOZ_ASSERT_IF(mFrameCount > 1, HasAnimation());
+    // We should now be on |aFrameNum|. (Note that we're comparing the frame
+    // number, which is zero-based, with the frame count, which is one-based.)
+    MOZ_ASSERT(aFrameNum + 1 == mFrameCount);
 
-      // Update our state to reflect the new frame
-      MOZ_ASSERT(!mInFrame, "Starting new frame but not done with old one!");
-      mInFrame = true;
-    }
+    // If we're past the first frame, PostIsAnimated() should've been called.
+    MOZ_ASSERT_IF(mFrameCount > 1, HasAnimation());
+
+    // Update our state to reflect the new frame.
+    MOZ_ASSERT(!mInFrame, "Starting new frame but not done with old one!");
+    mInFrame = true;
   }
 
   return mCurrentFrame ? NS_OK : NS_ERROR_FAILURE;
@@ -367,10 +378,6 @@ Decoder::AllocateFrameInternal(uint32_t aFrameNum,
 
   mFrameCount++;
 
-  if (mImage) {
-    mImage->OnAddedFrame(mFrameCount);
-  }
-
   return ref;
 }
 
@@ -431,8 +438,9 @@ Decoder::PostFrameStop(Opacity aFrameOpacity
   MOZ_ASSERT(mInFrame, "Stopping frame when we didn't start one");
   MOZ_ASSERT(mCurrentFrame, "Stopping frame when we don't have one");
 
-  // Update our state
+  // Update our state.
   mInFrame = false;
+  mFinishedNewFrame = true;
 
   mCurrentFrame->Finish(aFrameOpacity, aDisposalMethod, aTimeout,
                         aBlendMethod, aBlendRect);
@@ -445,7 +453,7 @@ Decoder::PostFrameStop(Opacity aFrameOpacity
   // here when the first frame is complete.
   if (!ShouldSendPartialInvalidations() && mFrameCount == 1) {
     mInvalidRect.UnionRect(mInvalidRect,
-                           gfx::IntRect(gfx::IntPoint(0, 0), GetSize()));
+                           IntRect(IntPoint(), Size()));
   }
 }
 

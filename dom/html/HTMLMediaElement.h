@@ -443,6 +443,8 @@ public:
   // when the connection between Rtsp server and client gets lost.
   virtual void ResetConnectionState() final override;
 
+  void NotifyXPCOMShutdown() final override;
+
   // Called by media decoder when the audible state changed or when input is
   // a media stream.
   virtual void SetAudibleState(bool aAudible) final override;
@@ -603,6 +605,8 @@ public:
   void GetMozDebugReaderData(nsAString& aString);
 
   void MozDumpDebugInfo();
+
+  void SetVisible(bool aVisible);
 
   already_AddRefed<DOMMediaStream> GetSrcObject() const;
   void SetSrcObject(DOMMediaStream& aValue);
@@ -1193,6 +1197,9 @@ protected:
   bool IsAllowedToPlay();
 
   bool IsAudible() const;
+  bool HaveFailedWithSourceNotSupportedError() const;
+
+  void OpenUnsupportedMediaWithExtenalAppIfNeeded();
 
   class nsAsyncEventRunner;
   using nsGenericHTMLElement::DispatchEvent;

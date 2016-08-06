@@ -109,7 +109,7 @@ SpammyLayoutWarningsEnabled()
 #endif
 
 void*
-AnimatedGeometryRoot::operator new(size_t aSize, nsDisplayListBuilder* aBuilder)
+AnimatedGeometryRoot::operator new(size_t aSize, nsDisplayListBuilder* aBuilder) CPP_THROW_NEW
 {
   return aBuilder->Allocate(aSize);
 }
@@ -6734,8 +6734,8 @@ nsDisplaySVGEffects::BuildLayer(nsDisplayListBuilder* aBuilder,
     }
   }
 
-  float opacity = mFrame->StyleEffects()->mOpacity;
-  if (opacity == 0.0f)
+  if (mFrame->StyleEffects()->mOpacity == 0.0f &&
+      !mOpacityItemCreated)
     return nullptr;
 
   nsIFrame* firstFrame =

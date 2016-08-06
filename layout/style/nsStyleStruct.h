@@ -15,10 +15,11 @@
 #include "mozilla/ArenaObjectID.h"
 #include "mozilla/Attributes.h"
 #include "mozilla/CSSVariableValues.h"
+#include "mozilla/Maybe.h"
 #include "mozilla/SheetType.h"
 #include "mozilla/StaticPtr.h"
 #include "mozilla/StyleStructContext.h"
-#include "nsAutoPtr.h"
+#include "mozilla/UniquePtr.h"
 #include "nsColor.h"
 #include "nsCoord.h"
 #include "nsMargin.h"
@@ -246,6 +247,24 @@ enum nsStyleImageType {
   eStyleImageType_Element
 };
 
+struct CachedBorderImageData
+{
+  // Caller are expected to ensure that the value of aSVGViewportSize is
+  // different from the cached one since the method won't do the check.
+  void SetCachedSVGViewportSize(const mozilla::Maybe<nsSize>& aSVGViewportSize);
+  const mozilla::Maybe<nsSize>& GetCachedSVGViewportSize();
+  void PurgeCachedImages();
+  void SetSubImage(uint8_t aIndex, imgIContainer* aSubImage);
+  imgIContainer* GetSubImage(uint8_t aIndex);
+
+private:
+  // If this is a SVG border-image, we save the size of the SVG viewport that
+  // we used when rasterizing any cached border-image subimages. (The viewport
+  // size matters for percent-valued sizes & positions in inner SVG doc).
+  mozilla::Maybe<nsSize> mCachedSVGViewportSize;
+  nsCOMArray<imgIContainer> mSubImages;
+};
+
 /**
  * Represents a paintable image of one of the following types.
  * (1) A real image loaded from an external source.
@@ -269,7 +288,7 @@ struct nsStyleImage
   void UntrackImage(nsPresContext* aContext);
   void SetGradientData(nsStyleGradient* aGradient);
   void SetElementId(const char16_t* aElementId);
-  void SetCropRect(nsStyleSides* aCropRect);
+  void SetCropRect(mozilla::UniquePtr<nsStyleSides> aCropRect);
 
   nsStyleImageType GetType() const {
     return mType;
@@ -288,7 +307,7 @@ struct nsStyleImage
     NS_ASSERTION(mType == eStyleImageType_Element, "Data is not an element!");
     return mElementId;
   }
-  nsStyleSides* GetCropRect() const {
+  const mozilla::UniquePtr<nsStyleSides>& GetCropRect() const {
     NS_ASSERTION(mType == eStyleImageType_Image,
                  "Only image data can have a crop rect");
     return mCropRect;
@@ -358,12 +377,17 @@ struct nsStyleImage
   // during a border-image paint operation
   inline void SetSubImage(uint8_t aIndex, imgIContainer* aSubImage) const;
   inline imgIContainer* GetSubImage(uint8_t aIndex) const;
+  void PurgeCacheForViewportChange(
+    const mozilla::Maybe<nsSize>& aSVGViewportSize,
+    const bool aHasIntrinsicRatio) const;
 
 private:
   void DoCopy(const nsStyleImage& aOther);
+  void EnsureCachedBIData() const;
 
-  // Cache for border-image painting.
-  nsCOMArray<imgIContainer> mSubImages;
+  // This variable keeps some cache data for border image and is lazily
+  // allocated since it is only used in border image case.
+  mozilla::UniquePtr<CachedBorderImageData> mCachedBIData;
 
   nsStyleImageType mType;
   union {
@@ -373,7 +397,7 @@ private:
   };
 
   // This is _currently_ used only in conjunction with eStyleImageType_Image.
-  nsAutoPtr<nsStyleSides> mCropRect;
+  mozilla::UniquePtr<nsStyleSides> mCropRect;
 #ifdef DEBUG
   bool mImageTracked;
 #endif
@@ -1260,7 +1284,7 @@ struct MOZ_NEEDS_MEMMOVABLE_MEMBERS nsStyleBorder
   }
 
 public:
-  nsBorderColors** mBorderColors;        // [reset] composite (stripe) colors
+  nsBorderColors** mBorderColors;     // [reset] composite (stripe) colors
   nsStyleCorners mBorderRadius;       // [reset] coord, percent
   nsStyleImage   mBorderImageSource;  // [reset]
   nsStyleSides   mBorderImageSlice;   // [reset] factor, percent
@@ -1270,7 +1294,7 @@ public:
   uint8_t        mBorderImageFill;    // [reset]
   uint8_t        mBorderImageRepeatH; // [reset] see nsStyleConsts.h
   uint8_t        mBorderImageRepeatV; // [reset]
-  uint8_t        mFloatEdge;          // [reset]
+  mozilla::StyleFloatEdge mFloatEdge; // [reset]
   uint8_t        mBoxDecorationBreak; // [reset] see nsStyleConsts.h
 
 protected:
@@ -1977,6 +2001,8 @@ struct MOZ_NEEDS_MEMMOVABLE_MEMBERS nsStyleTextReset
 
   uint8_t mTextDecorationLine;          // [reset] see nsStyleConsts.h
   uint8_t mUnicodeBidi;                 // [reset] see nsStyleConsts.h
+  nscoord mInitialLetterSink;           // [reset] 0 means normal
+  float mInitialLetterSize;             // [reset] 0.0f means normal
 protected:
   uint8_t mTextDecorationStyle;         // [reset] see nsStyleConsts.h
 
@@ -2267,13 +2293,6 @@ struct nsTimingFunction
     CubicBezier,  // cubic-bezier()
   };
 
-  enum class StepSyntax {
-    Keyword,                     // step-start and step-end
-    FunctionalWithoutKeyword,    // steps(...)
-    FunctionalWithStartKeyword,  // steps(..., start)
-    FunctionalWithEndKeyword,    // steps(..., end)
-  };
-
   // Whether the timing function type is represented by a spline,
   // and thus will have mFunc filled in.
   static bool IsSplineType(Type aType)
@@ -2298,21 +2317,12 @@ struct nsTimingFunction
 
   enum class Keyword { Implicit, Explicit };
 
-  nsTimingFunction(Type aType, uint32_t aSteps, Keyword aKeyword)
+  nsTimingFunction(Type aType, uint32_t aSteps)
     : mType(aType)
   {
     MOZ_ASSERT(mType == Type::StepStart || mType == Type::StepEnd,
                "wrong type");
     mSteps = aSteps;
-    if (mType == Type::StepStart) {
-      MOZ_ASSERT(aKeyword == Keyword::Explicit,
-                 "only StepEnd can have an implicit keyword");
-      mStepSyntax = StepSyntax::FunctionalWithStartKeyword;
-    } else {
-      mStepSyntax = aKeyword == Keyword::Explicit ?
-                      StepSyntax::FunctionalWithEndKeyword :
-                      StepSyntax::FunctionalWithoutKeyword;
-    }
   }
 
   nsTimingFunction(const nsTimingFunction& aOther)
@@ -2329,7 +2339,6 @@ struct nsTimingFunction
       float mY2;
     } mFunc;
     struct {
-      StepSyntax mStepSyntax;
       uint32_t mSteps;
     };
   };
@@ -2350,7 +2359,6 @@ struct nsTimingFunction
       mFunc.mY2 = aOther.mFunc.mY2;
     } else {
       mSteps = aOther.mSteps;
-      mStepSyntax = aOther.mStepSyntax;
     }
 
     return *this;
@@ -2365,8 +2373,7 @@ struct nsTimingFunction
       return mFunc.mX1 == aOther.mFunc.mX1 && mFunc.mY1 == aOther.mFunc.mY1 &&
              mFunc.mX2 == aOther.mFunc.mX2 && mFunc.mY2 == aOther.mFunc.mY2;
     }
-    return mSteps == aOther.mSteps &&
-           mStepSyntax == aOther.mStepSyntax;
+    return mSteps == aOther.mSteps;
   }
 
   bool operator!=(const nsTimingFunction& aOther) const
@@ -3105,10 +3112,10 @@ struct MOZ_NEEDS_MEMMOVABLE_MEMBERS nsStyleUserInterface
     return nsChangeHint_NeedReflow;
   }
 
-  uint8_t   mUserInput;       // [inherited]
-  uint8_t   mUserModify;      // [inherited] (modify-content)
-  uint8_t   mUserFocus;       // [inherited] (auto-select)
-  uint8_t   mPointerEvents;   // [inherited] see nsStyleConsts.h
+  uint8_t                   mUserInput;       // [inherited]
+  uint8_t                   mUserModify;      // [inherited] (modify-content)
+  mozilla::StyleUserFocus   mUserFocus;       // [inherited] (auto-select)
+  uint8_t                   mPointerEvents;   // [inherited] see nsStyleConsts.h
 
   uint8_t   mCursor;          // [inherited] See nsStyleConsts.h
 
@@ -3226,6 +3233,39 @@ protected:
   nscoord mTwipsPerPixel;
 };
 
+struct FragmentOrURL
+{
+  FragmentOrURL() : mIsLocalRef(false) {}
+  FragmentOrURL(const FragmentOrURL& aSource)
+    : mIsLocalRef(false)
+  { *this = aSource; }
+
+  void SetValue(const nsCSSValue* aValue);
+  void SetNull();
+
+  FragmentOrURL& operator=(const FragmentOrURL& aOther);
+  bool operator==(const FragmentOrURL& aOther) const;
+  bool operator!=(const FragmentOrURL& aOther) const {
+    return !(*this == aOther);
+  }
+
+  bool EqualsExceptRef(nsIURI* aURI) const;
+
+  nsIURI* GetSourceURL() const { return mURL; }
+  void GetSourceString(nsString& aRef) const;
+
+  // When matching a url with mIsLocalRef set, resolve it against aURI;
+  // Otherwise, ignore aURL and return mURL directly.
+  already_AddRefed<nsIURI> Resolve(nsIURI* aURI) const;
+  already_AddRefed<nsIURI> Resolve(nsIContent* aContent) const;
+
+  bool IsLocalRef() const { return mIsLocalRef; }
+
+private:
+  nsCOMPtr<nsIURI> mURL;
+  bool    mIsLocalRef;
+};
+
 enum nsStyleSVGPaintType {
   eStyleSVGPaintType_None = 1,
   eStyleSVGPaintType_Color,
@@ -3244,7 +3284,7 @@ struct nsStyleSVGPaint
 {
   union {
     nscolor mColor;
-    nsIURI *mPaintServer;
+    FragmentOrURL* mPaintServer;
   } mPaint;
   nsStyleSVGPaintType mType;
   nscolor mFallbackColor;
@@ -3295,9 +3335,9 @@ struct MOZ_NEEDS_MEMMOVABLE_MEMBERS nsStyleSVG
 
   nsStyleSVGPaint  mFill;             // [inherited]
   nsStyleSVGPaint  mStroke;           // [inherited]
-  nsCOMPtr<nsIURI> mMarkerEnd;        // [inherited]
-  nsCOMPtr<nsIURI> mMarkerMid;        // [inherited]
-  nsCOMPtr<nsIURI> mMarkerStart;      // [inherited]
+  FragmentOrURL    mMarkerEnd;        // [inherited]
+  FragmentOrURL    mMarkerMid;        // [inherited]
+  FragmentOrURL    mMarkerStart;      // [inherited]
   nsTArray<nsStyleCoord> mStrokeDasharray;  // [inherited] coord, percent, factor
 
   nsStyleCoord     mStrokeDashoffset; // [inherited] coord, percent, factor
@@ -3359,7 +3399,8 @@ struct MOZ_NEEDS_MEMMOVABLE_MEMBERS nsStyleSVG
   }
 
   bool HasMarker() const {
-    return mMarkerStart || mMarkerMid || mMarkerEnd;
+    return mMarkerStart.GetSourceURL() || mMarkerMid.GetSourceURL() ||
+           mMarkerEnd.GetSourceURL();
   }
 
   /**
@@ -3506,18 +3547,18 @@ struct nsStyleClipPath
     return !(*this == aOther);
   }
 
-  int32_t GetType() const {
+  mozilla::StyleClipPathType GetType() const {
     return mType;
   }
 
-  nsIURI* GetURL() const {
-    NS_ASSERTION(mType == NS_STYLE_CLIP_PATH_URL, "wrong clip-path type");
+  FragmentOrURL* GetURL() const {
+    NS_ASSERTION(mType == mozilla::StyleClipPathType::URL, "wrong clip-path type");
     return mURL;
   }
-  void SetURL(nsIURI* aURL);
+  bool SetURL(const nsCSSValue* aValue);
 
   nsStyleBasicShape* GetBasicShape() const {
-    NS_ASSERTION(mType == NS_STYLE_CLIP_PATH_SHAPE, "wrong clip-path type");
+    NS_ASSERTION(mType == mozilla::StyleClipPathType::Shape, "wrong clip-path type");
     return mBasicShape;
   }
 
@@ -3530,13 +3571,15 @@ struct nsStyleClipPath
 
 private:
   void ReleaseRef();
+  void CopyURL(const nsStyleClipPath& aOther);
+
   void* operator new(size_t) = delete;
 
-  int32_t mType; // see NS_STYLE_CLIP_PATH_* constants in nsStyleConsts.h
   union {
     nsStyleBasicShape* mBasicShape;
-    nsIURI* mURL;
+    FragmentOrURL* mURL;
   };
+  mozilla::StyleClipPathType    mType;
   mozilla::StyleClipShapeSizing mSizingBox;
 };
 
@@ -3566,11 +3609,12 @@ struct nsStyleFilter
   void SetFilterParameter(const nsStyleCoord& aFilterParameter,
                           int32_t aType);
 
-  nsIURI* GetURL() const {
+  FragmentOrURL* GetURL() const {
     NS_ASSERTION(mType == NS_STYLE_FILTER_URL, "wrong filter type");
     return mURL;
   }
-  void SetURL(nsIURI* aURL);
+
+  bool SetURL(const nsCSSValue* aValue);
 
   nsCSSShadowArray* GetDropShadow() const {
     NS_ASSERTION(mType == NS_STYLE_FILTER_DROP_SHADOW, "wrong filter type");
@@ -3580,11 +3624,12 @@ struct nsStyleFilter
 
 private:
   void ReleaseRef();
+  void CopyURL(const nsStyleFilter& aOther);
 
   int32_t mType; // see NS_STYLE_FILTER_* constants in nsStyleConsts.h
   nsStyleCoord mFilterParameter; // coord, percent, factor, angle
   union {
-    nsIURI* mURL;
+    FragmentOrURL* mURL;
     nsCSSShadowArray* mDropShadow;
   };
 };
@@ -3625,7 +3670,7 @@ struct MOZ_NEEDS_MEMMOVABLE_MEMBERS nsStyleSVGReset
   }
 
   bool HasClipPath() const {
-    return mClipPath.GetType() != NS_STYLE_CLIP_PATH_NONE;
+    return mClipPath.GetType() != mozilla::StyleClipPathType::None_;
   }
 
   bool HasNonScalingStroke() const {
@@ -3777,6 +3822,30 @@ STATIC_ASSERT_FIELD_OFFSET_MATCHES(nsRect, nsRect_Simple, x);
 STATIC_ASSERT_FIELD_OFFSET_MATCHES(nsRect, nsRect_Simple, y);
 STATIC_ASSERT_FIELD_OFFSET_MATCHES(nsRect, nsRect_Simple, width);
 STATIC_ASSERT_FIELD_OFFSET_MATCHES(nsRect, nsRect_Simple, height);
+
+/**
+ * <div rustbindgen="true" replaces="nsSize">
+ */
+struct nsSize_Simple {
+  nscoord width, height;
+};
+
+STATIC_ASSERT_TYPE_LAYOUTS_MATCH(nsSize, nsSize_Simple);
+STATIC_ASSERT_FIELD_OFFSET_MATCHES(nsSize, nsSize_Simple, width);
+STATIC_ASSERT_FIELD_OFFSET_MATCHES(nsSize, nsSize_Simple, height);
+
+/**
+ * <div rustbindgen="true" replaces="UniquePtr">
+ *
+ * TODO(Emilio): This is a workaround and we should be able to get rid of this
+ * one.
+ */
+template<typename T, typename Deleter = mozilla::DefaultDelete<T>>
+struct UniquePtr_Simple {
+  T* mPtr;
+};
+
+STATIC_ASSERT_TYPE_LAYOUTS_MATCH(mozilla::UniquePtr<int>, UniquePtr_Simple<int>);
 
 /**
  * <div rustbindgen replaces="nsTArray"></div>

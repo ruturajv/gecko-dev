@@ -48,8 +48,10 @@ user_pref("app.update.url.android", "");
 // Make sure GMPInstallManager won't hit the network.
 user_pref("media.gmp-manager.url.override", "http://%(server)s/dummy-gmp-manager.xml");
 user_pref("dom.w3c_touch_events.enabled", 1);
+user_pref("layout.accessiblecaret.enabled_on_touch", false);
 user_pref("dom.undo_manager.enabled", true);
 user_pref("dom.webcomponents.enabled", true);
+user_pref("dom.webcomponents.customelements.enabled", true);
 user_pref("dom.htmlimports.enabled", true);
 // Existing tests assume there is no font size inflation.
 user_pref("font.size.inflation.emPerLine", 0);
@@ -161,6 +163,9 @@ user_pref("layout.css.grid-template-subgrid-value.enabled", true);
 
 // Enable CSS 'contain' for testing
 user_pref("layout.css.contain.enabled", true);
+
+// Enable CSS initial-letter for testing
+user_pref("layout.css.initial-letter.enabled", true);
 
 // Enable CSS object-fit & object-position for testing
 user_pref("layout.css.object-fit-and-position.enabled", true);
@@ -282,13 +287,6 @@ user_pref("dom.apps.customization.enabled", true);
 // Don't fetch or send directory tiles data from real servers
 user_pref("browser.newtabpage.directory.source", 'data:application/json,{"testing":1}');
 user_pref("browser.newtabpage.directory.ping", "");
-
-// Enable Loop
-user_pref("loop.debug.loglevel", "All");
-user_pref("loop.enabled", true);
-user_pref("loop.throttled", false);
-user_pref("loop.server", "http://%(server)s/browser/browser/extensions/loop/chrome/test/mochitest/loop_fxa.sjs?");
-user_pref("loop.CSP","default-src 'self' about: file: chrome: data: wss://* http://* https://*");
 
 // Ensure UITour won't hit the network
 user_pref("browser.uitour.pinnedTabUrl", "http://%(server)s/uitour-dummy/pinnedTab");

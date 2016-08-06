@@ -215,15 +215,19 @@ struct MOZ_STACK_CLASS ScrollReflowInput {
 
   // === Filled in by ReflowScrolledFrame ===
   nsOverflowAreas mContentsOverflowAreas;
+  MOZ_INIT_OUTSIDE_CTOR
   bool mReflowedContentsWithHScrollbar;
+  MOZ_INIT_OUTSIDE_CTOR
   bool mReflowedContentsWithVScrollbar;
 
   // === Filled in when TryLayout succeeds ===
   // The size of the inside-border area
   nsSize mInsideBorderSize;
   // Whether we decided to show the horizontal scrollbar
+  MOZ_INIT_OUTSIDE_CTOR
   bool mShowHScrollbar;
   // Whether we decided to show the vertical scrollbar
+  MOZ_INIT_OUTSIDE_CTOR
   bool mShowVScrollbar;
 
   ScrollReflowInput(nsIScrollableFrame* aFrame,
@@ -386,8 +390,8 @@ nsHTMLScrollFrame::TryLayout(ScrollReflowInput* aState,
 
   if (!aForce) {
     nsRect scrolledRect =
-      mHelper.GetScrolledRectInternal(aState->mContentsOverflowAreas.ScrollableOverflow(),
-                                     scrollPortSize);
+      mHelper.GetUnsnappedScrolledRectInternal(aState->mContentsOverflowAreas.ScrollableOverflow(),
+                                               scrollPortSize);
     nscoord oneDevPixel = aState->mBoxState.PresContext()->DevPixelsToAppUnits(1);
 
     // If the style is HIDDEN then we already know that aAssumeHScroll is false
@@ -682,8 +686,8 @@ nsHTMLScrollFrame::ReflowContents(ScrollReflowInput* aState,
       ComputeInsideBorderSize(aState,
                               nsSize(kidDesiredSize.Width(), kidDesiredSize.Height()));
     nsRect scrolledRect =
-      mHelper.GetScrolledRectInternal(kidDesiredSize.ScrollableOverflow(),
-                                     insideBorderSize);
+      mHelper.GetUnsnappedScrolledRectInternal(kidDesiredSize.ScrollableOverflow(),
+                                               insideBorderSize);
     if (nsRect(nsPoint(0, 0), insideBorderSize).Contains(scrolledRect)) {
       // Let's pretend we had no scrollbars coming in here
       ReflowScrolledFrame(aState, false, false, &kidDesiredSize, false);
@@ -734,8 +738,8 @@ nsHTMLScrollFrame::PlaceScrollArea(const ScrollReflowInput& aState,
   // Preserve the width or height of empty rects
   nsSize portSize = mHelper.mScrollPort.Size();
   nsRect scrolledRect =
-    mHelper.GetScrolledRectInternal(aState.mContentsOverflowAreas.ScrollableOverflow(),
-                                   portSize);
+    mHelper.GetUnsnappedScrolledRectInternal(aState.mContentsOverflowAreas.ScrollableOverflow(),
+                                             portSize);
   scrolledArea.UnionRectEdges(scrolledRect,
                               nsRect(nsPoint(0,0), portSize));
 
@@ -2022,69 +2026,14 @@ ScrollFrameHelper::CompleteAsyncScroll(const nsRect &aRange, nsIAtom* aOrigin)
   mDestination = GetScrollPosition();
 }
 
-#if defined(XP_WIN) || defined(MOZ_WIDGET_GTK)
-struct PluginSearchCtx {
-  nsIFrame* outer;
-  bool value;
-};
-static void
-HasPluginFramesCallback(nsISupports* aSupports, void* aCtx)
-{
-  // Stop searching once we've found a plugin.
-  PluginSearchCtx* pCtx = static_cast<PluginSearchCtx*>(aCtx);
-  if (pCtx->value) {
-    return;
-  }
-
-  nsCOMPtr<nsIContent> content = do_QueryInterface(aSupports);
-  if (content) {
-    nsIFrame* frame = content->GetPrimaryFrame();
-    if (frame) {
-      nsPluginFrame* plugin = do_QueryFrame(frame);
-      if (plugin) {
-        // Check to be sure this plugin is contained within a subframe of
-        // the nsGfxScrollFrame that initiated this callback.
-        if (nsLayoutUtils::IsAncestorFrameCrossDoc(pCtx->outer, plugin, nullptr)) {
-          pCtx->value = true;
-        }
-      }
-    }
-  }
-}
-
-static bool
-HasPluginSubframesCallback(nsIDocument* aDocument, void* aCtx)
-{
-  aDocument->EnumerateActivityObservers(HasPluginFramesCallback, aCtx);
-
-  // Stop the enumeration if we've found a plugin.
-  return !static_cast<PluginSearchCtx*>(aCtx)->value;
-}
-#endif
-
 bool
 ScrollFrameHelper::HasPluginFrames()
 {
 #if defined(XP_WIN) || defined(MOZ_WIDGET_GTK)
   if (XRE_IsContentProcess()) {
     nsPresContext* presContext = mOuter->PresContext();
-
-    // Don't search if we don't have any plugins registered.
     nsRootPresContext* rootPresContext = presContext->GetRootPresContext();
-    if (rootPresContext &&
-        !rootPresContext->NeedToComputePluginGeometryUpdates()) {
-      return false;
-    }
-
-    PluginSearchCtx ctx = { mOuter, false };
-    presContext->Document()->EnumerateActivityObservers(HasPluginFramesCallback,
-                                                        (void*)&ctx);
-    if (ctx.value) {
-      return true;
-    }
-    presContext->Document()->EnumerateSubDocuments(HasPluginSubframesCallback,
-                                                   (void*)&ctx);
-    if (ctx.value) {
+    if (!rootPresContext || rootPresContext->NeedToComputePluginGeometryUpdates()) {
       return true;
     }
   }
@@ -2761,15 +2710,6 @@ ScrollFrameHelper::ScrollToImpl(nsPoint aPt, const nsRect& aRange, nsIAtom* aOri
       if (!apzDisabled && !HasPluginFrames()) {
         if (LastScrollOrigin() == nsGkAtoms::apz) {
           schedulePaint = false;
-
-          // If we have any windowed plugins at all then schedule an empty
-          // transaction because the parent will be waiting for an update.
-          if (!gfxPrefs::HidePluginsForScroll()) {
-            nsRootPresContext* root = presContext->GetRootPresContext();
-            if (root && root->NeedToComputePluginGeometryUpdates()) {
-              mOuter->SchedulePaint(nsIFrame::PAINT_COMPOSITE_ONLY);
-            }
-          }          
           PAINT_SKIP_LOG("Skipping due to APZ scroll\n");
         } else if (mScrollableByAPZ) {
           nsIWidget* widget = presContext->GetNearestWidget();
@@ -3366,7 +3306,13 @@ ScrollFrameHelper::BuildDisplayList(nsDisplayListBuilder*   aBuilder,
         MOZ_ASSERT(!inactiveScrollClip->mIsAsyncScrollable);
       }
 
-      DisplayListClipState::AutoSaveRestore displayPortClipState(aBuilder);
+      // Clip our contents to the unsnapped scrolled rect. This makes sure that
+      // we don't have display items over the subpixel seam at the edge of the
+      // scrolled area.
+      DisplayListClipState::AutoSaveRestore scrolledRectClipState(aBuilder);
+      nsRect scrolledRectClip =
+        GetUnsnappedScrolledRectInternal(mScrolledFrame->GetScrollableOverflowRect(),
+                                         mScrollPort.Size()) + mScrolledFrame->GetPosition();
       if (usingDisplayPort) {
         // Clip the contents to the display port.
         // The dirty rect already acts kind of like a clip, in that
@@ -3384,8 +3330,10 @@ ScrollFrameHelper::BuildDisplayList(nsDisplayListBuilder*   aBuilder,
         // pixels.
         // If there is no display port, we don't need this because the clip
         // from the scroll port is still applied.
-        displayPortClipState.ClipContainingBlockDescendants(dirtyRect + aBuilder->ToReferenceFrame(mOuter));
+        scrolledRectClip = scrolledRectClip.Intersect(dirtyRect);
       }
+      scrolledRectClipState.ClipContainingBlockDescendants(
+        scrolledRectClip + aBuilder->ToReferenceFrame(mOuter));
 
       mOuter->BuildDisplayListForChild(aBuilder, mScrolledFrame, dirtyRect, scrolledContent);
     }
@@ -5626,12 +5574,19 @@ ScrollFrameHelper::GetBorderRadii(const nsSize& aFrameSize,
   return true;
 }
 
+static nscoord
+SnapCoord(nscoord aCoord, double aRes, nscoord aAppUnitsPerPixel)
+{
+  double snappedToLayerPixels = NS_round((aRes*aCoord)/aAppUnitsPerPixel);
+  return NSToCoordRoundWithClamp(snappedToLayerPixels*aAppUnitsPerPixel/aRes);
+}
+
 nsRect
 ScrollFrameHelper::GetScrolledRect() const
 {
   nsRect result =
-    GetScrolledRectInternal(mScrolledFrame->GetScrollableOverflowRect(),
-                            mScrollPort.Size());
+    GetUnsnappedScrolledRectInternal(mScrolledFrame->GetScrollableOverflowRect(),
+                                     mScrollPort.Size());
 
   if (result.width < mScrollPort.width) {
     NS_WARNING("Scrolled rect smaller than scrollport?");
@@ -5639,30 +5594,82 @@ ScrollFrameHelper::GetScrolledRect() const
   if (result.height < mScrollPort.height) {
     NS_WARNING("Scrolled rect smaller than scrollport?");
   }
+
+  // Expand / contract the result by up to half a layer pixel so that scrolling
+  // to the right / bottom edge does not change the layer pixel alignment of
+  // the scrolled contents.
+  // For that, we first convert the scroll port and the scrolled rect to rects
+  // relative to the reference frame, since that's the space where painting does
+  // snapping.
+  nsSize scrollPortSize = GetScrollPositionClampingScrollPortSize();
+  nsIFrame* referenceFrame = nsLayoutUtils::GetReferenceFrame(mOuter);
+  nsPoint toReferenceFrame = mOuter->GetOffsetToCrossDoc(referenceFrame);
+  nsRect scrollPort(mScrollPort.TopLeft() + toReferenceFrame, scrollPortSize);
+  nsRect scrolledRect = result + scrollPort.TopLeft();
+
+  if (scrollPort.Overflows() || scrolledRect.Overflows()) {
+    return result;
+  }
+
+  // Now, snap the bottom right corner of both of these rects.
+  // We snap to layer pixels, so we need to respect the layer's scale.
+  nscoord appUnitsPerDevPixel = mScrolledFrame->PresContext()->AppUnitsPerDevPixel();
+  gfxSize scale = FrameLayerBuilder::GetPaintedLayerScaleForFrame(mScrolledFrame);
+  if (scale.IsEmpty()) {
+    scale = gfxSize(1.0f, 1.0f);
+  }
+
+  // Compute bounds for the scroll position, and computed the snapped scrolled
+  // rect from the scroll position bounds.
+  nscoord snappedScrolledAreaBottom = SnapCoord(scrolledRect.YMost(), scale.height, appUnitsPerDevPixel);
+  nscoord snappedScrollPortBottom = SnapCoord(scrollPort.YMost(), scale.height, appUnitsPerDevPixel);
+  nscoord maximumScrollOffsetY = snappedScrolledAreaBottom - snappedScrollPortBottom;
+  result.SetBottomEdge(scrollPort.height + maximumScrollOffsetY);
+
+  if (GetScrolledFrameDir() == NS_STYLE_DIRECTION_LTR) {
+    nscoord snappedScrolledAreaRight = SnapCoord(scrolledRect.XMost(), scale.width, appUnitsPerDevPixel);
+    nscoord snappedScrollPortRight = SnapCoord(scrollPort.XMost(), scale.width, appUnitsPerDevPixel);
+    nscoord maximumScrollOffsetX = snappedScrolledAreaRight - snappedScrollPortRight;
+    result.SetRightEdge(scrollPort.width + maximumScrollOffsetX);
+  } else {
+    // In RTL, the scrolled area's right edge is at scrollPort.XMost(),
+    // and the scrolled area's x position is zero or negative. We want
+    // the right edge to stay flush with the scroll port, so we snap the
+    // left edge.
+    nscoord snappedScrolledAreaLeft = SnapCoord(scrolledRect.x, scale.width, appUnitsPerDevPixel);
+    nscoord snappedScrollPortLeft = SnapCoord(scrollPort.x, scale.width, appUnitsPerDevPixel);
+    nscoord minimumScrollOffsetX = snappedScrolledAreaLeft - snappedScrollPortLeft;
+    result.SetLeftEdge(minimumScrollOffsetX);
+  }
+
   return result;
 }
 
-nsRect
-ScrollFrameHelper::GetScrolledRectInternal(const nsRect& aScrolledFrameOverflowArea,
-                                               const nsSize& aScrollPortSize) const
-{
-  uint8_t frameDir = IsLTR() ? NS_STYLE_DIRECTION_LTR : NS_STYLE_DIRECTION_RTL;
 
+uint8_t
+ScrollFrameHelper::GetScrolledFrameDir() const
+{
   // If the scrolled frame has unicode-bidi: plaintext, the paragraph
   // direction set by the text content overrides the direction of the frame
   if (mScrolledFrame->StyleTextReset()->mUnicodeBidi &
       NS_STYLE_UNICODE_BIDI_PLAINTEXT) {
     nsIFrame* childFrame = mScrolledFrame->PrincipalChildList().FirstChild();
     if (childFrame) {
-      frameDir =
-        (nsBidiPresUtils::ParagraphDirection(childFrame) == NSBIDI_LTR)
+      return (nsBidiPresUtils::ParagraphDirection(childFrame) == NSBIDI_LTR)
           ? NS_STYLE_DIRECTION_LTR : NS_STYLE_DIRECTION_RTL;
     }
   }
 
+  return IsLTR() ? NS_STYLE_DIRECTION_LTR : NS_STYLE_DIRECTION_RTL;
+}
+
+nsRect
+ScrollFrameHelper::GetUnsnappedScrolledRectInternal(const nsRect& aScrolledFrameOverflowArea,
+                                                    const nsSize& aScrollPortSize) const
+{
   return nsLayoutUtils::GetScrolledRect(mScrolledFrame,
                                         aScrolledFrameOverflowArea,
-                                        aScrollPortSize, frameDir);
+                                        aScrollPortSize, GetScrolledFrameDir());
 }
 
 nsMargin

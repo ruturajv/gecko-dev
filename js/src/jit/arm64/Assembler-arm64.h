@@ -88,6 +88,11 @@ static constexpr Register GlobalReg =  { Registers::x20 };
 static constexpr Register HeapReg = { Registers::x21 };
 static constexpr Register HeapLenReg = { Registers::x22 };
 
+// TLS pointer argument register for WebAssembly functions. This must not alias
+// any other register used for passing function arguments or return values.
+// Preserved by WebAssembly functions.
+static constexpr Register WasmTlsReg = { Registers::x17 };
+
 // Define unsized Registers.
 #define DEFINE_UNSIZED_REGISTERS(N)  \
 static constexpr Register r##N = { Registers::x##N };
@@ -123,7 +128,6 @@ static constexpr ValueOperand JSReturnOperand = ValueOperand(JSReturnReg);
 static constexpr Register AsmJSIonExitRegCallee = r8;
 static constexpr Register AsmJSIonExitRegE0 = r0;
 static constexpr Register AsmJSIonExitRegE1 = r1;
-static constexpr Register AsmJSIonExitRegE2 = r2;
 
 // Registers used in the GenerateFFIIonExit Disable Activation block.
 // None of these may be the second scratch register.
@@ -271,6 +275,11 @@ class Assembler : public vixl::Assembler
     // excess bookkeeping has been flushed to the instruction stream.
     void flush() {
         armbuffer_.flushPool();
+    }
+
+    void comment(const char* msg) {
+        // This is not implemented because setPrinter() is not implemented.
+        // TODO spew("; %s", msg);
     }
 
     int actualIndex(int curOffset) {

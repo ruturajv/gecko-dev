@@ -1488,13 +1488,18 @@ class MConstant : public MNullaryInstruction
     MConstant(const Value& v, CompilerConstraintList* constraints);
     explicit MConstant(JSObject* obj);
     explicit MConstant(float f);
+    explicit MConstant(double d);
     explicit MConstant(int64_t i);
 
   public:
     INSTRUCTION_HEADER(Constant)
     static MConstant* New(TempAllocator& alloc, const Value& v,
                           CompilerConstraintList* constraints = nullptr);
+    static MConstant* New(TempAllocator::Fallible alloc, const Value& v,
+                          CompilerConstraintList* constraints = nullptr);
     static MConstant* NewFloat32(TempAllocator& alloc, double d);
+    static MConstant* NewRawFloat32(TempAllocator& alloc, float d);
+    static MConstant* NewRawDouble(TempAllocator& alloc, double d);
     static MConstant* NewInt64(TempAllocator& alloc, int64_t i);
     static MConstant* NewAsmJS(TempAllocator& alloc, const Value& v, MIRType type);
     static MConstant* NewConstraintlessObject(TempAllocator& alloc, JSObject* v);
@@ -1562,11 +1567,11 @@ class MConstant : public MNullaryInstruction
     bool isInt32(int32_t i) const {
         return type() == MIRType::Int32 && payload_.i32 == i;
     }
-    double toDouble() const {
+    const double& toDouble() const {
         MOZ_ASSERT(type() == MIRType::Double);
         return payload_.d;
     }
-    float toFloat32() const {
+    const float& toFloat32() const {
         MOZ_ASSERT(type() == MIRType::Float32);
         return payload_.f;
     }
@@ -3324,6 +3329,50 @@ class MNewTypedArray : public MNullaryInstruction
         return templateObject_;
     }
 
+    gc::InitialHeap initialHeap() const {
+        return initialHeap_;
+    }
+
+    virtual AliasSet getAliasSet() const override {
+        return AliasSet::None();
+    }
+};
+
+class MNewTypedArrayDynamicLength
+  : public MUnaryInstruction,
+    public IntPolicy<0>::Data
+{
+    CompilerObject templateObject_;
+    gc::InitialHeap initialHeap_;
+
+    MNewTypedArrayDynamicLength(CompilerConstraintList* constraints, JSObject* templateObject,
+                           gc::InitialHeap initialHeap, MDefinition* length)
+      : MUnaryInstruction(length),
+        templateObject_(templateObject),
+        initialHeap_(initialHeap)
+    {
+        setGuard(); // Need to throw if length is negative.
+        setResultType(MIRType::Object);
+        if (!templateObject->isSingleton())
+            setResultTypeSet(MakeSingletonTypeSet(constraints, templateObject));
+    }
+
+  public:
+    INSTRUCTION_HEADER(NewTypedArrayDynamicLength)
+
+    static MNewTypedArrayDynamicLength* New(TempAllocator& alloc, CompilerConstraintList* constraints,
+                                            JSObject* templateObject, gc::InitialHeap initialHeap,
+                                            MDefinition* length)
+    {
+        return new(alloc) MNewTypedArrayDynamicLength(constraints, templateObject, initialHeap, length);
+    }
+
+    MDefinition* length() const {
+        return getOperand(0);
+    }
+    JSObject* templateObject() const {
+        return templateObject_;
+    }
     gc::InitialHeap initialHeap() const {
         return initialHeap_;
     }
@@ -5091,8 +5140,11 @@ class MToFloat32
   : public MToFPInstruction
 {
   protected:
+    bool mustPreserveNaN_;
+
     explicit MToFloat32(MDefinition* def, ConversionKind conversion = NonStringPrimitives)
-      : MToFPInstruction(def, conversion)
+      : MToFPInstruction(def, conversion),
+        mustPreserveNaN_(false)
     {
         setResultType(MIRType::Float32);
         setMovable();
@@ -5107,15 +5159,19 @@ class MToFloat32
     INSTRUCTION_HEADER(ToFloat32)
     TRIVIAL_NEW_WRAPPERS
 
-    static MToFloat32* NewAsmJS(TempAllocator& alloc, MDefinition* def) {
-        return new(alloc) MToFloat32(def, NonStringPrimitives);
+    static MToFloat32* NewAsmJS(TempAllocator& alloc, MDefinition* def, bool mustPreserveNaN) {
+        auto* ret = MToFloat32::New(alloc, def, NonStringPrimitives);
+        ret->mustPreserveNaN_ = mustPreserveNaN;
+        return ret;
     }
 
     virtual MDefinition* foldsTo(TempAllocator& alloc) override;
     bool congruentTo(const MDefinition* ins) const override {
-        if (!ins->isToFloat32() || ins->toToFloat32()->conversion() != conversion())
+        if (!congruentIfOperandsEqual(ins))
             return false;
-        return congruentIfOperandsEqual(ins);
+        auto* other = ins->toToFloat32();
+        return other->conversion() == conversion() &&
+               other->mustPreserveNaN_ == mustPreserveNaN_;
     }
     AliasSet getAliasSet() const override {
         return AliasSet::None();
@@ -5194,8 +5250,11 @@ class MWrapInt64ToInt32
   : public MUnaryInstruction,
     public NoTypePolicy::Data
 {
-    explicit MWrapInt64ToInt32(MDefinition* def)
-      : MUnaryInstruction(def)
+    bool bottomHalf_;
+
+    explicit MWrapInt64ToInt32(MDefinition* def, bool bottomHalf)
+      : MUnaryInstruction(def),
+        bottomHalf_(bottomHalf)
     {
         setResultType(MIRType::Int32);
         setMovable();
@@ -5203,16 +5262,26 @@ class MWrapInt64ToInt32
 
   public:
     INSTRUCTION_HEADER(WrapInt64ToInt32)
-    static MWrapInt64ToInt32* NewAsmJS(TempAllocator& alloc, MDefinition* def) {
-        return new(alloc) MWrapInt64ToInt32(def);
+    static MWrapInt64ToInt32* NewAsmJS(TempAllocator& alloc, MDefinition* def,
+                                       bool bottomHalf = true)
+    {
+        return new(alloc) MWrapInt64ToInt32(def, bottomHalf);
     }
 
     MDefinition* foldsTo(TempAllocator& alloc) override;
     bool congruentTo(const MDefinition* ins) const override {
+        if (!ins->isWrapInt64ToInt32())
+            return false;
+        if (ins->toWrapInt64ToInt32()->bottomHalf() != bottomHalf())
+            return false;
         return congruentIfOperandsEqual(ins);
     }
     AliasSet getAliasSet() const override {
         return AliasSet::None();
+    }
+
+    bool bottomHalf() const {
+        return bottomHalf_;
     }
 };
 
@@ -5930,10 +5999,16 @@ class MBinaryArithInstruction
     // analysis detect a precision loss in the multiplication.
     TruncateKind implicitTruncate_;
 
+    // Whether we must preserve NaN semantics, and in particular not fold
+    // (x op id) or (id op x) to x, or replace a division by a multiply of the
+    // exact reciprocal.
+    bool mustPreserveNaN_;
+
   public:
     MBinaryArithInstruction(MDefinition* left, MDefinition* right)
       : MBinaryInstruction(left, right),
-        implicitTruncate_(NoTruncate)
+        implicitTruncate_(NoTruncate),
+        mustPreserveNaN_(false)
     {
         specialization_ = MIRType::None;
         setMovable();
@@ -5943,6 +6018,9 @@ class MBinaryArithInstruction
                                         MDefinition* left, MDefinition* right);
 
     bool constantDoubleResult(TempAllocator& alloc);
+
+    void setMustPreserveNaN(bool b) { mustPreserveNaN_ = b; }
+    bool mustPreserveNaN() const { return mustPreserveNaN_; }
 
     MDefinition* foldsTo(TempAllocator& alloc) override;
 
@@ -5961,7 +6039,10 @@ class MBinaryArithInstruction
     virtual void trySpecializeFloat32(TempAllocator& alloc) override;
 
     bool congruentTo(const MDefinition* ins) const override {
-        return binaryCongruentTo(ins);
+        if (!binaryCongruentTo(ins))
+            return false;
+        const auto* other = static_cast<const MBinaryArithInstruction*>(ins);
+        return other->mustPreserveNaN_ == mustPreserveNaN_;
     }
     AliasSet getAliasSet() const override {
         if (specialization_ >= MIRType::Object)
@@ -6000,16 +6081,21 @@ class MMinMax
     INSTRUCTION_HEADER(MinMax)
     TRIVIAL_NEW_WRAPPERS
 
+    static MMinMax* NewWasm(TempAllocator& alloc, MDefinition* left, MDefinition* right,
+                            MIRType type, bool isMax)
+    {
+        return New(alloc, left, right, type, isMax);
+    }
+
     bool isMax() const {
         return isMax_;
     }
 
     bool congruentTo(const MDefinition* ins) const override {
-        if (!ins->isMinMax())
+        if (!congruentIfOperandsEqual(ins))
             return false;
-        if (isMax() != ins->toMinMax()->isMax())
-            return false;
-        return congruentIfOperandsEqual(ins);
+        const MMinMax* other = ins->toMinMax();
+        return other->isMax() == isMax();
     }
 
     AliasSet getAliasSet() const override {
@@ -6620,11 +6706,12 @@ class MSub : public MBinaryArithInstruction
     TRIVIAL_NEW_WRAPPERS
 
     static MSub* NewAsmJS(TempAllocator& alloc, MDefinition* left, MDefinition* right,
-                          MIRType type)
+                          MIRType type, bool mustPreserveNaN = false)
     {
         MSub* sub = new(alloc) MSub(left, right);
         sub->specialization_ = type;
         sub->setResultType(type);
+        sub->setMustPreserveNaN(mustPreserveNaN);
         if (type == MIRType::Int32)
             sub->setTruncateKind(Truncate);
         return sub;
@@ -6694,6 +6781,13 @@ class MMul : public MBinaryArithInstruction
     {
         return new(alloc) MMul(left, right, type, mode);
     }
+    static MMul* NewWasm(TempAllocator& alloc, MDefinition* left, MDefinition* right, MIRType type,
+                         Mode mode, bool mustPreserveNaN)
+    {
+        auto* ret = new(alloc) MMul(left, right, type, mode);
+        ret->setMustPreserveNaN(mustPreserveNaN);
+        return ret;
+    }
 
     MDefinition* foldsTo(TempAllocator& alloc) override;
     void analyzeEdgeCasesForward() override;
@@ -6713,6 +6807,9 @@ class MMul : public MBinaryArithInstruction
             return false;
 
         if (mode_ != mul->mode())
+            return false;
+
+        if (mustPreserveNaN() != mul->mustPreserveNaN())
             return false;
 
         return binaryCongruentTo(ins);
@@ -6786,13 +6883,15 @@ class MDiv : public MBinaryArithInstruction
         return new(alloc) MDiv(left, right, type);
     }
     static MDiv* NewAsmJS(TempAllocator& alloc, MDefinition* left, MDefinition* right,
-                          MIRType type, bool unsignd, bool trapOnError = false)
+                          MIRType type, bool unsignd, bool trapOnError = false,
+                          bool mustPreserveNaN = false)
     {
         MDiv* div = new(alloc) MDiv(left, right, type);
         div->unsigned_ = unsignd;
         div->trapOnError_ = trapOnError;
         if (trapOnError)
             div->setGuard(); // not removable because of possible side-effects.
+        div->setMustPreserveNaN(mustPreserveNaN);
         if (type == MIRType::Int32)
             div->setTruncateKind(Truncate);
         return div;
@@ -13210,13 +13309,13 @@ class MAsmJSStoreHeap
 };
 
 class MAsmJSCompareExchangeHeap
-  : public MTernaryInstruction,
+  : public MQuaternaryInstruction,
     public MWasmMemoryAccess,
     public NoTypePolicy::Data
 {
     MAsmJSCompareExchangeHeap(MDefinition* base, const MWasmMemoryAccess& access,
-                              MDefinition* oldv, MDefinition* newv)
-        : MTernaryInstruction(base, oldv, newv),
+                              MDefinition* oldv, MDefinition* newv, MDefinition* tls)
+        : MQuaternaryInstruction(base, oldv, newv, tls),
           MWasmMemoryAccess(access)
     {
         setGuard();             // Not removable
@@ -13230,6 +13329,7 @@ class MAsmJSCompareExchangeHeap
     MDefinition* base() const { return getOperand(0); }
     MDefinition* oldValue() const { return getOperand(1); }
     MDefinition* newValue() const { return getOperand(2); }
+    MDefinition* tls() const { return getOperand(3); }
 
     AliasSet getAliasSet() const override {
         return AliasSet::Store(AliasSet::AsmJSHeap);
@@ -13237,13 +13337,13 @@ class MAsmJSCompareExchangeHeap
 };
 
 class MAsmJSAtomicExchangeHeap
-  : public MBinaryInstruction,
+  : public MTernaryInstruction,
     public MWasmMemoryAccess,
     public NoTypePolicy::Data
 {
     MAsmJSAtomicExchangeHeap(MDefinition* base, const MWasmMemoryAccess& access,
-                             MDefinition* value)
-        : MBinaryInstruction(base, value),
+                             MDefinition* value, MDefinition* tls)
+        : MTernaryInstruction(base, value, tls),
           MWasmMemoryAccess(access)
     {
         setGuard();             // Not removable
@@ -13256,6 +13356,7 @@ class MAsmJSAtomicExchangeHeap
 
     MDefinition* base() const { return getOperand(0); }
     MDefinition* value() const { return getOperand(1); }
+    MDefinition* tls() const { return getOperand(2); }
 
     AliasSet getAliasSet() const override {
         return AliasSet::Store(AliasSet::AsmJSHeap);
@@ -13263,15 +13364,15 @@ class MAsmJSAtomicExchangeHeap
 };
 
 class MAsmJSAtomicBinopHeap
-  : public MBinaryInstruction,
+  : public MTernaryInstruction,
     public MWasmMemoryAccess,
     public NoTypePolicy::Data
 {
     AtomicOp op_;
 
     MAsmJSAtomicBinopHeap(AtomicOp op, MDefinition* base, const MWasmMemoryAccess& access,
-                          MDefinition* v)
-        : MBinaryInstruction(base, v),
+                          MDefinition* v, MDefinition* tls)
+        : MTernaryInstruction(base, v, tls),
           MWasmMemoryAccess(access),
           op_(op)
     {
@@ -13286,15 +13387,16 @@ class MAsmJSAtomicBinopHeap
     AtomicOp operation() const { return op_; }
     MDefinition* base() const { return getOperand(0); }
     MDefinition* value() const { return getOperand(1); }
+    MDefinition* tls() const { return getOperand(2); }
 
     AliasSet getAliasSet() const override {
         return AliasSet::Store(AliasSet::AsmJSHeap);
     }
 };
 
-class MAsmJSLoadGlobalVar : public MNullaryInstruction
+class MWasmLoadGlobalVar : public MNullaryInstruction
 {
-    MAsmJSLoadGlobalVar(MIRType type, unsigned globalDataOffset, bool isConstant)
+    MWasmLoadGlobalVar(MIRType type, unsigned globalDataOffset, bool isConstant)
       : globalDataOffset_(globalDataOffset), isConstant_(isConstant)
     {
         MOZ_ASSERT(IsNumberType(type) || IsSimdType(type));
@@ -13306,7 +13408,7 @@ class MAsmJSLoadGlobalVar : public MNullaryInstruction
     bool isConstant_;
 
   public:
-    INSTRUCTION_HEADER(AsmJSLoadGlobalVar)
+    INSTRUCTION_HEADER(WasmLoadGlobalVar)
     TRIVIAL_NEW_WRAPPERS
 
     unsigned globalDataOffset() const { return globalDataOffset_; }
@@ -13322,18 +13424,18 @@ class MAsmJSLoadGlobalVar : public MNullaryInstruction
     AliasType mightAlias(const MDefinition* def) const override;
 };
 
-class MAsmJSStoreGlobalVar
+class MWasmStoreGlobalVar
   : public MUnaryInstruction,
     public NoTypePolicy::Data
 {
-    MAsmJSStoreGlobalVar(unsigned globalDataOffset, MDefinition* v)
+    MWasmStoreGlobalVar(unsigned globalDataOffset, MDefinition* v)
       : MUnaryInstruction(v), globalDataOffset_(globalDataOffset)
     {}
 
     unsigned globalDataOffset_;
 
   public:
-    INSTRUCTION_HEADER(AsmJSStoreGlobalVar)
+    INSTRUCTION_HEADER(WasmStoreGlobalVar)
     TRIVIAL_NEW_WRAPPERS
 
     unsigned globalDataOffset() const { return globalDataOffset_; }
@@ -13384,26 +13486,6 @@ class MAsmJSLoadFuncPtr
     bool congruentTo(const MDefinition* ins) const override;
 };
 
-class MAsmJSLoadFFIFunc : public MNullaryInstruction
-{
-    explicit MAsmJSLoadFFIFunc(unsigned globalDataOffset)
-      : globalDataOffset_(globalDataOffset)
-    {
-        setResultType(MIRType::Pointer);
-    }
-
-    unsigned globalDataOffset_;
-
-  public:
-    INSTRUCTION_HEADER(AsmJSLoadFFIFunc)
-    TRIVIAL_NEW_WRAPPERS
-
-    unsigned globalDataOffset() const { return globalDataOffset_; }
-
-    HashNumber valueHash() const override;
-    bool congruentTo(const MDefinition* ins) const override;
-};
-
 class MAsmJSParameter : public MNullaryInstruction
 {
     ABIArg abi_;
@@ -13422,11 +13504,12 @@ class MAsmJSParameter : public MNullaryInstruction
 };
 
 class MAsmJSReturn
-  : public MAryControlInstruction<1, 0>,
+  : public MAryControlInstruction<2, 0>,
     public NoTypePolicy::Data
 {
-    explicit MAsmJSReturn(MDefinition* ins) {
+    explicit MAsmJSReturn(MDefinition* ins, MDefinition* tlsPtr) {
         initOperand(0, ins);
+        initOperand(1, tlsPtr);
     }
 
   public:
@@ -13435,9 +13518,13 @@ class MAsmJSReturn
 };
 
 class MAsmJSVoidReturn
-  : public MAryControlInstruction<0, 0>,
+  : public MAryControlInstruction<1, 0>,
     public NoTypePolicy::Data
 {
+    explicit MAsmJSVoidReturn(MDefinition* tlsPtr) {
+        initOperand(0, tlsPtr);
+    }
+
   public:
     INSTRUCTION_HEADER(AsmJSVoidReturn)
     TRIVIAL_NEW_WRAPPERS
@@ -13467,33 +13554,49 @@ class MAsmJSPassStackArg
     }
 };
 
-class MAsmJSCall final
+class MWasmCall final
   : public MVariadicInstruction,
     public NoTypePolicy::Data
 {
   public:
     class Callee {
       public:
-        enum Which { Internal, Dynamic, Builtin };
-        static const uint32_t NoSigIndex = UINT32_MAX;
+        enum Which { Internal, Import, Dynamic, Builtin };
       private:
         Which which_;
-        union {
-            uint32_t internal_;
+        union U {
+            U() {}
+            uint32_t internalFuncIndex_;
+            struct {
+                uint32_t globalDataOffset_;
+                uint32_t tlsStackOffset_;
+            } import;
             struct {
                 MDefinition* callee_;
-                uint32_t sigIndex_;
+                wasm::SigIdDesc sigId_;
             } dynamic;
             wasm::SymbolicAddress builtin_;
         } u;
       public:
         Callee() {}
-        explicit Callee(uint32_t callee) : which_(Internal) {
-            u.internal_ = callee;
+        static Callee internal(uint32_t callee) {
+            Callee c;
+            c.which_ = Internal;
+            c.u.internalFuncIndex_ = callee;
+            return c;
         }
-        explicit Callee(MDefinition* callee, uint32_t sigIndex = NoSigIndex) : which_(Dynamic) {
+        static Callee import(uint32_t globalDataOffset, uint32_t tlsStackOffset) {
+            Callee c;
+            c.which_ = Import;
+            c.u.import.globalDataOffset_ = globalDataOffset;
+            c.u.import.tlsStackOffset_ = tlsStackOffset;
+            return c;
+        }
+        explicit Callee(MDefinition* callee, wasm::SigIdDesc sigId = wasm::SigIdDesc())
+          : which_(Dynamic)
+        {
             u.dynamic.callee_ = callee;
-            u.dynamic.sigIndex_ = sigIndex;
+            u.dynamic.sigId_ = sigId;
         }
         explicit Callee(wasm::SymbolicAddress callee) : which_(Builtin) {
             u.builtin_ = callee;
@@ -13501,21 +13604,25 @@ class MAsmJSCall final
         Which which() const {
             return which_;
         }
-        uint32_t internal() const {
+        uint32_t internalFuncIndex() const {
             MOZ_ASSERT(which_ == Internal);
-            return u.internal_;
+            return u.internalFuncIndex_;
+        }
+        uint32_t importGlobalDataOffset() const {
+            MOZ_ASSERT(which_ == Import);
+            return u.import.globalDataOffset_;
+        }
+        uint32_t importTlsStackOffset() const {
+            MOZ_ASSERT(which_ == Import);
+            return u.import.tlsStackOffset_;
         }
         MDefinition* dynamicPtr() const {
             MOZ_ASSERT(which_ == Dynamic);
             return u.dynamic.callee_;
         }
-        bool dynamicHasSigIndex() const {
+        wasm::SigIdDesc dynamicSigId() const {
             MOZ_ASSERT(which_ == Dynamic);
-            return u.dynamic.sigIndex_ != NoSigIndex;
-        }
-        uint32_t dynamicSigIndex() const {
-            MOZ_ASSERT(dynamicHasSigIndex());
-            return u.dynamic.sigIndex_;
+            return u.dynamic.sigId_;
         }
         wasm::SymbolicAddress builtin() const {
             MOZ_ASSERT(which_ == Builtin);
@@ -13529,12 +13636,14 @@ class MAsmJSCall final
     FixedList<AnyRegister> argRegs_;
     size_t spIncrement_;
 
-    MAsmJSCall(const wasm::CallSiteDesc& desc, Callee callee, size_t spIncrement)
-     : desc_(desc), callee_(callee), spIncrement_(spIncrement)
+    MWasmCall(const wasm::CallSiteDesc& desc, Callee callee, size_t spIncrement)
+      : desc_(desc),
+        callee_(callee),
+        spIncrement_(spIncrement)
     { }
 
   public:
-    INSTRUCTION_HEADER(AsmJSCall)
+    INSTRUCTION_HEADER(WasmCall)
 
     struct Arg {
         AnyRegister reg;
@@ -13543,8 +13652,8 @@ class MAsmJSCall final
     };
     typedef Vector<Arg, 8, SystemAllocPolicy> Args;
 
-    static MAsmJSCall* New(TempAllocator& alloc, const wasm::CallSiteDesc& desc, Callee callee,
-                           const Args& args, MIRType resultType, size_t spIncrement);
+    static MWasmCall* New(TempAllocator& alloc, const wasm::CallSiteDesc& desc, Callee callee,
+                          const Args& args, MIRType resultType, size_t spIncrement);
 
     size_t numArgs() const {
         return argRegs_.length();

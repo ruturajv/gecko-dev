@@ -262,6 +262,9 @@ class MacroAssemblerARM : public Assembler
     Condition ma_check_mul(Register src1, Register src2, Register dest, Condition cond);
     Condition ma_check_mul(Register src1, Imm32 imm, Register dest, Condition cond);
 
+    void ma_umull(Register src1, Register src2, Register destHigh, Register destLow);
+    void ma_umull(Register src1, Imm32 imm, Register destHigh, Register destLow);
+
     // Fast mod, uses scratch registers, and thus needs to be in the assembler
     // implicitly assumes that we can overwrite dest at the beginning of the
     // sequence.
@@ -985,8 +988,13 @@ class MacroAssemblerARMCompat : public MacroAssemblerARM
     void store32(Imm32 src, const BaseIndex& address);
 
     void store64(Register64 src, Address address) {
-        store32(src.low, address);
-        store32(src.high, Address(address.base, address.offset + 4));
+        store32(src.low, Address(address.base, address.offset + INT64LOW_OFFSET));
+        store32(src.high, Address(address.base, address.offset + INT64HIGH_OFFSET));
+    }
+
+    void store64(Imm64 imm, Address address) {
+        store32(imm.low(), Address(address.base, address.offset + INT64LOW_OFFSET));
+        store32(imm.hi(), Address(address.base, address.offset + INT64HIGH_OFFSET));
     }
 
     template <typename T> void storePtr(ImmWord imm, T address);
@@ -1336,9 +1344,9 @@ class MacroAssemblerARMCompat : public MacroAssemblerARM
     void simulatorStop(const char* msg);
 
     // Evaluate srcDest = minmax<isMax>{Float32,Double}(srcDest, other).
-    // Handle NaN specially if handleNaN is true.
-    void minMaxDouble(FloatRegister srcDest, FloatRegister other, bool handleNaN, bool isMax);
-    void minMaxFloat32(FloatRegister srcDest, FloatRegister other, bool handleNaN, bool isMax);
+    // Checks for NaN if canBeNaN is true.
+    void minMaxDouble(FloatRegister srcDest, FloatRegister other, bool canBeNaN, bool isMax);
+    void minMaxFloat32(FloatRegister srcDest, FloatRegister other, bool canBeNaN, bool isMax);
 
     void compareDouble(FloatRegister lhs, FloatRegister rhs);
 
@@ -1438,12 +1446,15 @@ class MacroAssemblerARMCompat : public MacroAssemblerARM
         as_vmov(VFPRegister(dest).singleOverlay(), VFPRegister(src).singleOverlay(), cc);
     }
 
-    void loadWasmActivation(Register dest) {
-        loadPtr(Address(GlobalReg, wasm::ActivationGlobalDataOffset - AsmJSGlobalRegBias), dest);
+    void loadWasmGlobalPtr(uint32_t globalDataOffset, Register dest) {
+        loadPtr(Address(GlobalReg, globalDataOffset - AsmJSGlobalRegBias), dest);
     }
-    void loadAsmJSHeapRegisterFromGlobalData() {
-        loadPtr(Address(GlobalReg, wasm::HeapGlobalDataOffset - AsmJSGlobalRegBias), HeapReg);
+    void loadWasmPinnedRegsFromTls() {
+        loadPtr(Address(WasmTlsReg, offsetof(wasm::TlsData, memoryBase)), HeapReg);
+        loadPtr(Address(WasmTlsReg, offsetof(wasm::TlsData, globalData)), GlobalReg);
+        ma_add(Imm32(AsmJSGlobalRegBias), GlobalReg);
     }
+
     // Instrumentation for entering and leaving the profiler.
     void profilerEnterFrame(Register framePtr, Register scratch);
     void profilerExitFrame();

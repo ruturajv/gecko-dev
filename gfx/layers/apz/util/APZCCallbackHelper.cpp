@@ -169,7 +169,7 @@ ScrollFrame(nsIContent* aContent,
   // get another repaint request when APZ confirms. In the interval while this
   // is happening we can just leave the callback transform as it was.
   bool mainThreadScrollChanged =
-    sf && sf->CurrentScrollGeneration() != aMetrics.GetScrollGeneration();
+    sf && sf->CurrentScrollGeneration() != aMetrics.GetScrollGeneration() && nsLayoutUtils::CanScrollOriginClobberApz(sf->LastScrollOrigin());
   if (aContent && !mainThreadScrollChanged) {
     CSSPoint scrollDelta = apzScrollOffset - actualScrollOffset;
     aContent->SetProperty(nsGkAtoms::apzCallbackTransform, new CSSPoint(scrollDelta),
@@ -430,7 +430,7 @@ APZCCallbackHelper::ApplyCallbackTransform(const LayoutDeviceIntPoint& aPoint,
 {
     LayoutDevicePoint point = LayoutDevicePoint(aPoint.x, aPoint.y);
     point = ApplyCallbackTransform(point / aScale, aGuid) * aScale;
-    return gfx::RoundedToInt(point);
+    return LayoutDeviceIntPoint::Round(point);
 }
 
 void
@@ -471,7 +471,7 @@ APZCCallbackHelper::DispatchSynthesizedMouseEvent(EventMessage aMsg,
 
   WidgetMouseEvent event(true, aMsg, aWidget,
                          WidgetMouseEvent::eReal, WidgetMouseEvent::eNormal);
-  event.mRefPoint = LayoutDeviceIntPoint(aRefPoint.x, aRefPoint.y);
+  event.mRefPoint = LayoutDeviceIntPoint::Truncate(aRefPoint.x, aRefPoint.y);
   event.mTime = aTime;
   event.button = WidgetMouseEvent::eLeftButton;
   event.inputSource = nsIDOMMouseEvent::MOZ_SOURCE_TOUCH;
@@ -480,7 +480,10 @@ APZCCallbackHelper::DispatchSynthesizedMouseEvent(EventMessage aMsg,
     event.mClickCount = 1;
   }
   event.mModifiers = aModifiers;
-
+  // Real touch events will generate corresponding pointer events. We set
+  // convertToPointer to false to prevent the synthesized mouse events generate
+  // pointer events again.
+  event.convertToPointer = false;
   return DispatchWidgetEvent(event);
 }
 
@@ -499,7 +502,8 @@ APZCCallbackHelper::DispatchMouseEvent(const nsCOMPtr<nsIPresShell>& aPresShell,
   bool defaultPrevented = false;
   nsContentUtils::SendMouseEvent(aPresShell, aType, aPoint.x, aPoint.y,
       aButton, aClickCount, aModifiers, aIgnoreRootScrollFrame, 0,
-      aInputSourceArg, false, &defaultPrevented, false);
+      aInputSourceArg, false, &defaultPrevented, false,
+      /* aIsWidgetEventSynthesized = */ false);
   return defaultPrevented;
 }
 
@@ -554,6 +558,24 @@ GetRootDocumentElementFor(nsIWidget* aWidget)
   return nullptr;
 }
 
+static nsIFrame*
+UpdateRootFrameForTouchTargetDocument(nsIFrame* aRootFrame)
+{
+#if defined(MOZ_ANDROID_APZ)
+  // Re-target so that the hit test is performed relative to the frame for the
+  // Root Content Document instead of the Root Document which are different in
+  // Android. See bug 1229752 comment 16 for an explanation of why this is necessary.
+  if (nsIDocument* doc = aRootFrame->PresContext()->PresShell()->GetTouchEventTargetDocument()) {
+    if (nsIPresShell* shell = doc->GetShell()) {
+      if (nsIFrame* frame = shell->GetRootFrame()) {
+        return frame;
+      }
+    }
+  }
+#endif
+  return aRootFrame;
+}
+
 // Determine the scrollable target frame for the given point and add it to
 // the target list. If the frame doesn't have a displayport, set one.
 // Return whether or not a displayport was set.
@@ -564,19 +586,6 @@ PrepareForSetTargetAPZCNotification(nsIWidget* aWidget,
                                     const LayoutDeviceIntPoint& aRefPoint,
                                     nsTArray<ScrollableLayerGuid>* aTargets)
 {
-#if defined(MOZ_ANDROID_APZ)
-  // Re-target so that the hit test is performed relative to the frame for the
-  // Root Content Document instead of the Root Document which are different in
-  // Android. See bug 1229752 comment 16 for an explanation of why this is necessary.
-  if (nsIDocument* doc = aRootFrame->PresContext()->PresShell()->GetTouchEventTargetDocument()) {
-    if (nsIPresShell* shell = doc->GetShell()) {
-      if(nsIFrame* frame = shell->GetRootFrame()) {
-        aRootFrame = frame;
-      }
-    }
-  }
-#endif
-
   ScrollableLayerGuid guid(aGuid.mLayersId, 0, FrameMetrics::NULL_SCROLL_ID);
   nsPoint point =
     nsLayoutUtils::GetEventCoordinatesRelativeTo(aWidget, aRefPoint, aRootFrame);
@@ -739,6 +748,8 @@ APZCCallbackHelper::SendSetTargetAPZCNotification(nsIWidget* aWidget,
   sLastTargetAPZCNotificationInputBlock = aInputBlockId;
   if (nsIPresShell* shell = aDocument->GetShell()) {
     if (nsIFrame* rootFrame = shell->GetRootFrame()) {
+      rootFrame = UpdateRootFrameForTouchTargetDocument(rootFrame);
+
       bool waitForRefresh = false;
       nsTArray<ScrollableLayerGuid> targets;
 
@@ -771,17 +782,24 @@ APZCCallbackHelper::SendSetTargetAPZCNotification(nsIWidget* aWidget,
 void
 APZCCallbackHelper::SendSetAllowedTouchBehaviorNotification(
         nsIWidget* aWidget,
+        nsIDocument* aDocument,
         const WidgetTouchEvent& aEvent,
         uint64_t aInputBlockId,
         const SetAllowedTouchBehaviorCallback& aCallback)
 {
-  nsTArray<TouchBehaviorFlags> flags;
-  for (uint32_t i = 0; i < aEvent.mTouches.Length(); i++) {
-    flags.AppendElement(
-      widget::TouchActionHelper::GetAllowedTouchBehavior(
-                               aWidget, aEvent.mTouches[i]->mRefPoint));
+  if (nsIPresShell* shell = aDocument->GetShell()) {
+    if (nsIFrame* rootFrame = shell->GetRootFrame()) {
+      rootFrame = UpdateRootFrameForTouchTargetDocument(rootFrame);
+
+      nsTArray<TouchBehaviorFlags> flags;
+      for (uint32_t i = 0; i < aEvent.mTouches.Length(); i++) {
+        flags.AppendElement(
+          TouchActionHelper::GetAllowedTouchBehavior(aWidget,
+                rootFrame, aEvent.mTouches[i]->mRefPoint));
+      }
+      aCallback(aInputBlockId, Move(flags));
+    }
   }
-  aCallback(aInputBlockId, Move(flags));
 }
 
 void

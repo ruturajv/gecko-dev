@@ -49,7 +49,7 @@ public:
                     gfx::IntSize aSize,
                     TextureFlags aFlags,
                     uint32_t aInitialPoolSize,
-                    uint32_t aPoolIncrementSize,
+                    uint32_t aPoolUnusedSize,
                     TextureForwarder* aAllocator);
 
   /**
@@ -111,11 +111,8 @@ public:
 private:
   void ReturnUnlockedClients();
 
-  /// We maintain a number of unused texture clients for immediate return from
-  /// GetTextureClient(). This will normally be called if there are no
-  /// TextureClients available in the pool, which ideally should only ever
-  /// be at startup.
-  void AllocateTextureClients(size_t aSize);
+  /// Allocate a single TextureClient to be returned from the pool.
+  void AllocateTextureClient();
 
   /// Backend passed to the TextureClient for buffer creation.
   LayersBackend mBackend;
@@ -135,7 +132,7 @@ private:
 
   // How many unused texture clients to try and keep around if we go over
   // the initial allocation
-  uint32_t mPoolIncrementSize;
+  uint32_t mPoolUnusedSize;
 
   /// This is a total number of clients in the wild and in the stack of
   /// deferred clients (see below).  So, the total number of clients in
@@ -151,6 +148,11 @@ private:
   RefPtr<nsITimer> mTimer;
   // This mSurfaceAllocator owns us, so no need to hold a ref to it
   TextureForwarder* mSurfaceAllocator;
+
+  // Keep track of whether this pool has been destroyed or not. If it has,
+  // we won't accept returns of TextureClients anymore, and the refcounting
+  // should take care of their destruction.
+  bool mDestroyed;
 };
 
 } // namespace layers

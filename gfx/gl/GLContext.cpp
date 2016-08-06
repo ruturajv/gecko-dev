@@ -12,7 +12,6 @@
 #include <ctype.h>
 #include <vector>
 #ifdef MOZ_WIDGET_ANDROID
-#include <fcntl.h>
 #include <sys/mman.h>
 #endif
 
@@ -164,6 +163,7 @@ static const char* const sExtensionNames[] = {
     "GL_NV_geometry_program4",
     "GL_NV_half_float",
     "GL_NV_instanced_arrays",
+    "GL_NV_primitive_restart",
     "GL_NV_texture_barrier",
     "GL_NV_transform_feedback",
     "GL_NV_transform_feedback2",
@@ -1575,6 +1575,14 @@ GLContext::LoadMoreSymbols(const char* prefix, bool trygl)
         fnLoadForFeature(symbols, GLFeature::invalidate_framebuffer);
     }
 
+    if (IsSupported(GLFeature::prim_restart)) {
+        const SymLoadStruct symbols[] = {
+            { (PRFuncPtr*) &mSymbols.fPrimitiveRestartIndex,    { "PrimitiveRestartIndex", "PrimitiveRestartIndexNV", nullptr } },
+            END_SYMBOLS
+        };
+        fnLoadForFeature(symbols, GLFeature::prim_restart);
+    }
+
     if (IsExtensionSupported(KHR_debug)) {
         const SymLoadStruct symbols[] = {
             { (PRFuncPtr*) &mSymbols.fDebugMessageControl,  { "DebugMessageControl",  "DebugMessageControlKHR",  nullptr } },
@@ -2886,15 +2894,11 @@ WillTextureMapSucceed(GLsizei width, GLsizei height, GLenum format, GLenum type)
     // there to be double the actual size of the texture available.
     size_t size = width * height * GetBytesPerTexel(format, type) * 2;
 
-    int fd = open("/dev/zero", O_RDONLY);
-
-    void *p = mmap(nullptr, size, PROT_NONE, MAP_SHARED, fd, 0);
+    void *p = mmap(nullptr, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (p != MAP_FAILED) {
         willSucceed = true;
         munmap(p, size);
     }
-
-    close(fd);
 
     return willSucceed;
 }
@@ -3072,6 +3076,7 @@ GetBytesPerTexel(GLenum format, GLenum type)
             case LOCAL_GL_RGB:
                 return 3 * multiplier;
             case LOCAL_GL_RGBA:
+            case LOCAL_GL_BGRA_EXT:
                 return 4 * multiplier;
             default:
                 break;
@@ -3084,7 +3089,6 @@ GetBytesPerTexel(GLenum format, GLenum type)
     }
 
     gfxCriticalError() << "Unknown texture type " << type << " or format " << format;
-    MOZ_CRASH();
     return 0;
 }
 

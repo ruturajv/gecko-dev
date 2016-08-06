@@ -42,6 +42,8 @@ var subtests = [
 
   // Simple test to exercise touch-tapping behaviour
   {'file': 'helper_tap.html'},
+  // Tapping, but with a full-zoom applied
+  {'file': 'helper_tap_fullzoom.html'},
 
   // For the following two tests, disable displayport suppression to make sure it
   // doesn't interfere with the test by scheduling paints non-deterministically.
@@ -70,6 +72,7 @@ var subtests = [
 ];
 
 if (isApzEnabled()) {
+  ok(window.TouchEvent, "Check if TouchEvent is supported (it should be, the test harness forces it on everywhere)");
   if (getPlatform() == "android") {
     // This has a lot of subtests, and Android emulators are slow.
     SimpleTest.requestLongerTimeout(2);

@@ -708,7 +708,7 @@ MacroAssemblerARM::ma_rsb(Imm32 imm, Register dest, SBit s, Condition c)
 void
 MacroAssemblerARM::ma_rsb(Register src1, Register dest, SBit s, Condition c)
 {
-    as_alu(dest, dest, O2Reg(src1), OpAdd, s, c);
+    as_alu(dest, src1, O2Reg(dest), OpRsb, s, c);
 }
 
 void
@@ -898,6 +898,20 @@ MacroAssemblerARM::ma_check_mul(Register src1, Imm32 imm, Register dest, Conditi
     }
 
     MOZ_CRASH("Condition NYI");
+}
+
+void
+MacroAssemblerARM::ma_umull(Register src1, Imm32 imm, Register destHigh, Register destLow)
+{
+    ScratchRegisterScope scratch(asMasm());
+    ma_mov(imm, scratch);
+    as_umull(destHigh, destLow, src1, scratch);
+}
+
+void
+MacroAssemblerARM::ma_umull(Register src1, Register src2, Register destHigh, Register destLow)
+{
+    as_umull(destHigh, destLow, src1, src2);
 }
 
 void
@@ -2546,14 +2560,16 @@ MacroAssemblerARMCompat::setStackArg(Register reg, uint32_t arg)
 }
 
 void
-MacroAssemblerARMCompat::minMaxDouble(FloatRegister srcDest, FloatRegister second, bool handleNaN, bool isMax)
+MacroAssemblerARMCompat::minMaxDouble(FloatRegister srcDest, FloatRegister second, bool canBeNaN,
+                                      bool isMax)
 {
     FloatRegister first = srcDest;
 
-    Assembler::Condition cond = isMax
-        ? Assembler::VFP_LessThanOrEqual
-        : Assembler::VFP_GreaterThanOrEqual;
     Label nan, equal, returnSecond, done;
+
+    Assembler::Condition cond = isMax
+                                ? Assembler::VFP_LessThanOrEqual
+                                : Assembler::VFP_GreaterThanOrEqual;
 
     compareDouble(first, second);
     // First or second is NaN, result is NaN.
@@ -2580,8 +2596,11 @@ MacroAssemblerARMCompat::minMaxDouble(FloatRegister srcDest, FloatRegister secon
     ma_b(&done);
 
     bind(&nan);
-    loadConstantDouble(JS::GenericNaN(), srcDest);
-    ma_b(&done);
+    // If the first argument is the NaN, return it; otherwise return the second
+    // operand.
+    compareDouble(first, first);
+    ma_vmov(first, srcDest, Assembler::VFP_Unordered);
+    ma_b(&done, Assembler::VFP_Unordered);
 
     bind(&returnSecond);
     ma_vmov(second, srcDest);
@@ -2590,14 +2609,16 @@ MacroAssemblerARMCompat::minMaxDouble(FloatRegister srcDest, FloatRegister secon
 }
 
 void
-MacroAssemblerARMCompat::minMaxFloat32(FloatRegister srcDest, FloatRegister second, bool handleNaN, bool isMax)
+MacroAssemblerARMCompat::minMaxFloat32(FloatRegister srcDest, FloatRegister second, bool canBeNaN,
+                                       bool isMax)
 {
     FloatRegister first = srcDest;
 
-    Assembler::Condition cond = isMax
-        ? Assembler::VFP_LessThanOrEqual
-        : Assembler::VFP_GreaterThanOrEqual;
     Label nan, equal, returnSecond, done;
+
+    Assembler::Condition cond = isMax
+                                ? Assembler::VFP_LessThanOrEqual
+                                : Assembler::VFP_GreaterThanOrEqual;
 
     compareFloat(first, second);
     // First or second is NaN, result is NaN.
@@ -2624,8 +2645,10 @@ MacroAssemblerARMCompat::minMaxFloat32(FloatRegister srcDest, FloatRegister seco
     ma_b(&done);
 
     bind(&nan);
-    loadConstantFloat32(float(JS::GenericNaN()), srcDest);
-    ma_b(&done);
+    // See comment in minMaxDouble.
+    compareFloat(first, first);
+    ma_vmov_f32(first, srcDest, Assembler::VFP_Unordered);
+    ma_b(&done, Assembler::VFP_Unordered);
 
     bind(&returnSecond);
     ma_vmov_f32(second, srcDest);
@@ -4740,6 +4763,12 @@ void
 MacroAssembler::flush()
 {
     Assembler::flush();
+}
+
+void
+MacroAssembler::comment(const char* msg)
+{
+    Assembler::comment(msg);
 }
 
 // ===============================================================

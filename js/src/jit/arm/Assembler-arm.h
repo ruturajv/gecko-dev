@@ -74,6 +74,11 @@ static constexpr Register CallTempNonArgRegs[] = { r5, r6, r7, r8 };
 static const uint32_t NumCallTempNonArgRegs =
     mozilla::ArrayLength(CallTempNonArgRegs);
 
+// TLS pointer argument register for WebAssembly functions. This must not alias
+// any other register used for passing function arguments or return values.
+// Preserved by WebAssembly functions.
+static constexpr Register WasmTlsReg = r9;
+
 class ABIArgGenerator
 {
     unsigned intRegIndex_;
@@ -123,7 +128,7 @@ static constexpr Register JSReturnReg_Data = r2;
 static constexpr Register StackPointer = sp;
 static constexpr Register FramePointer = InvalidReg;
 static constexpr Register ReturnReg = r0;
-static constexpr Register64 ReturnReg64(InvalidReg, InvalidReg);
+static constexpr Register64 ReturnReg64(r1, r0);
 static constexpr FloatRegister ReturnFloat32Reg = { FloatRegisters::d0, VFPRegister::Single };
 static constexpr FloatRegister ReturnDoubleReg = { FloatRegisters::d0, VFPRegister::Double};
 static constexpr FloatRegister ReturnSimd128Reg = InvalidFloatReg;
@@ -155,7 +160,6 @@ static const int32_t AsmJSGlobalRegBias = 1024;
 static constexpr Register AsmJSIonExitRegCallee = r4;
 static constexpr Register AsmJSIonExitRegE0 = r0;
 static constexpr Register AsmJSIonExitRegE1 = r1;
-static constexpr Register AsmJSIonExitRegE2 = r2;
 
 // Registers used in the GenerateFFIIonExit Disable Activation block.
 // None of these may be the second scratch register (lr).
@@ -1377,6 +1381,8 @@ class Assembler : public AssemblerShared
     }
 
     static Condition InvertCondition(Condition cond);
+    static Condition UnsignedCondition(Condition cond);
+    static Condition ConditionWithoutEqual(Condition cond);
 
     // MacroAssemblers hold onto gcthings, so they are traced by the GC.
     void trace(JSTracer* trc);
@@ -1774,6 +1780,12 @@ class Assembler : public AssemblerShared
         MOZ_ASSERT(!isFinished);
         m_buffer.flushPool();
         return;
+    }
+
+    void comment(const char* msg) {
+#ifdef JS_DISASM_ARM
+        spew("; %s", msg);
+#endif
     }
 
     // Copy the assembly code to the given buffer, and perform any pending
