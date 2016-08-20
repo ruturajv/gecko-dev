@@ -110,6 +110,7 @@
 #include "nsDeviceContext.h"
 #include "nsSandboxFlags.h"
 #include "FrameLayerBuilder.h"
+#include "VRManagerChild.h"
 
 #ifdef NS_PRINTING
 #include "nsIPrintSession.h"
@@ -358,7 +359,7 @@ public:
     }
 
 private:
-    NS_IMETHOD Run()
+    NS_IMETHOD Run() override
     {
         MOZ_ASSERT(NS_IsMainThread());
         MOZ_ASSERT(mInfo);
@@ -389,7 +390,7 @@ private:
     }
 
     NS_IMETHOD
-    Run()
+    Run() override
     {
         MOZ_ASSERT(NS_IsMainThread());
         MOZ_ASSERT(mTabChild);
@@ -741,7 +742,7 @@ TabChild::Init()
     NS_ERROR("couldn't create fake widget");
     return NS_ERROR_FAILURE;
   }
-  mPuppetWidget->Create(
+  mPuppetWidget->InfallibleCreate(
     nullptr, 0,              // no parents
     LayoutDeviceIntRect(0, 0, 0, 0),
     nullptr                  // HandleWidgetEvent
@@ -1487,9 +1488,7 @@ TabChild::ApplyShowInfo(const ShowInfo& aInfo)
       nsCOMPtr<nsILoadContext> context = do_GetInterface(docShell);
       // No need to re-set private browsing mode.
       if (!context->UsePrivateBrowsing()) {
-        bool nonBlank;
-        docShell->GetHasLoadedNonBlankURI(&nonBlank);
-        if (nonBlank) {
+        if (docShell->GetHasLoadedNonBlankURI()) {
           nsContentUtils::ReportToConsoleNonLocalized(
             NS_LITERAL_STRING("We should not switch to Private Browsing after loading a document."),
             nsIScriptError::warningFlag,
@@ -2741,6 +2740,7 @@ TabChild::InitRenderingState(const TextureFactoryIdentifier& aTextureFactoryIden
                "PuppetWidget should have shadow manager");
     lf->IdentifyTextureHost(mTextureFactoryIdentifier);
     ImageBridgeChild::IdentifyCompositorTextureHost(mTextureFactoryIdentifier);
+    gfx::VRManagerChild::IdentifyTextureHost(mTextureFactoryIdentifier);
 
     mRemoteFrame = remoteFrame;
     if (aLayersId != 0) {

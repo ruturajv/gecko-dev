@@ -197,9 +197,10 @@ nsPNGDecoder::CreateFrame(const FrameInfo& aFrameInfo)
                        : SurfaceFormat::B8G8R8A8;
 
   // Make sure there's no animation or padding if we're downscaling.
-  MOZ_ASSERT_IF(mDownscaler, mNumFrames == 0);
-  MOZ_ASSERT_IF(mDownscaler, !GetImageMetadata().HasAnimation());
-  MOZ_ASSERT_IF(mDownscaler, transparency != TransparencyType::eFrameRect);
+  MOZ_ASSERT_IF(Size() != OutputSize(), mNumFrames == 0);
+  MOZ_ASSERT_IF(Size() != OutputSize(), !GetImageMetadata().HasAnimation());
+  MOZ_ASSERT_IF(Size() != OutputSize(),
+                transparency != TransparencyType::eFrameRect);
 
   // If this image is interlaced, we can display better quality intermediate
   // results to the user by post processing them with ADAM7InterpolatingFilter.
@@ -675,7 +676,8 @@ nsPNGDecoder::info_callback(png_structp png_ptr, png_infop info_ptr)
     int32_t rawTimeout = GetNextFrameDelay(png_ptr, info_ptr);
     decoder->PostIsAnimated(FrameTimeout::FromRawMilliseconds(rawTimeout));
 
-    if (decoder->mDownscaler && !decoder->IsFirstFrameDecode()) {
+    if (decoder->Size() != decoder->OutputSize() &&
+        !decoder->IsFirstFrameDecode()) {
       MOZ_ASSERT_UNREACHABLE("Doing downscale-during-decode "
                              "for an animated image?");
       png_error(decoder->mPNG, "Invalid downscale attempt"); // Abort decode.
@@ -954,7 +956,9 @@ nsPNGDecoder::frame_info_callback(png_structp png_ptr, png_uint_32 frame_num)
   // old frame is done
   decoder->EndImageFrame();
 
-  if (!decoder->mFrameIsHidden && decoder->IsFirstFrameDecode()) {
+  const bool previousFrameWasHidden = decoder->mFrameIsHidden;
+
+  if (!previousFrameWasHidden && decoder->IsFirstFrameDecode()) {
     // We're about to get a second non-hidden frame, but we only want the first.
     // Stop decoding now. (And avoid allocating the unnecessary buffers below.)
     decoder->PostDecodeDone();
@@ -970,14 +974,32 @@ nsPNGDecoder::frame_info_callback(png_structp png_ptr, png_uint_32 frame_num)
                           png_get_next_frame_y_offset(png_ptr, decoder->mInfo),
                           png_get_next_frame_width(png_ptr, decoder->mInfo),
                           png_get_next_frame_height(png_ptr, decoder->mInfo));
-
   const bool isInterlaced = bool(decoder->interlacebuf);
 
-  decoder->mNextFrameInfo = Some(FrameInfo{ decoder->format,
-                                            frameRect,
-                                            isInterlaced });
+#ifndef PNGLCONF_H
+  // if using system library, check frame_width and height against 0
+  if (frameRect.width == 0)
+    png_error(png_ptr, "Frame width must not be 0");
+  if (frameRect.height == 0)
+    png_error(png_ptr, "Frame height must not be 0");
+#endif
+
+  const FrameInfo info { decoder->format, frameRect, isInterlaced };
+
+  // If the previous frame was hidden, skip the yield (which will mislead the
+  // caller, who will think the previous frame was real) and just allocate the
+  // new frame here.
+  if (previousFrameWasHidden) {
+    if (NS_FAILED(decoder->CreateFrame(info))) {
+      return decoder->DoTerminate(png_ptr, TerminalState::FAILURE);
+    }
+
+    MOZ_ASSERT(decoder->mImageData, "Should have a buffer now");
+    return;  // No yield, so we'll just keep decoding.
+  }
 
   // Yield to the caller to notify them that the previous frame is now complete.
+  decoder->mNextFrameInfo = Some(info);
   return decoder->DoYield(png_ptr);
 }
 #endif
@@ -1032,10 +1054,10 @@ nsPNGDecoder::warning_callback(png_structp png_ptr, png_const_charp warning_msg)
   MOZ_LOG(sPNGLog, LogLevel::Warning, ("libpng warning: %s\n", warning_msg));
 }
 
-Telemetry::ID
-nsPNGDecoder::SpeedHistogram()
+Maybe<Telemetry::ID>
+nsPNGDecoder::SpeedHistogram() const
 {
-  return Telemetry::IMAGE_DECODE_SPEED_PNG;
+  return Some(Telemetry::IMAGE_DECODE_SPEED_PNG);
 }
 
 bool

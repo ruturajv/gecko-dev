@@ -395,9 +395,9 @@ nsSVGMaskProperty::nsSVGMaskProperty(nsIFrame* aFrame)
   const nsStyleSVGReset *svgReset = aFrame->StyleSVGReset();
 
   for (uint32_t i = 0; i < svgReset->mMask.mImageCount; i++) {
-    nsSVGPaintingProperty* prop =
-      new nsSVGPaintingProperty(svgReset->mMask.mLayers[i].mSourceURI, aFrame,
-                                false);
+    nsCOMPtr<nsIURI> maskUri = nsSVGEffects::GetMaskURI(aFrame, i);
+    nsSVGPaintingProperty* prop = new nsSVGPaintingProperty(maskUri, aFrame,
+                                                            false);
     mProperties.AppendElement(prop);
   }
 }
@@ -579,7 +579,7 @@ nsSVGEffects::GetEffectProperties(nsIFrame* aFrame)
 
   result.mFilter = GetOrCreateFilterProperty(aFrame);
 
-  if (style->mClipPath.GetType() == StyleClipPathType::URL) {
+  if (style->mClipPath.GetType() == StyleShapeSourceType::URL) {
     nsCOMPtr<nsIURI> pathURI = nsSVGEffects::GetClipPathURI(aFrame);
     result.mClipPath =
       GetPaintingProperty(pathURI, aFrame, ClipPathProperty());
@@ -929,7 +929,7 @@ already_AddRefed<nsIURI>
 nsSVGEffects::GetClipPathURI(nsIFrame* aFrame)
 {
   const nsStyleSVGReset* svgResetStyle = aFrame->StyleSVGReset();
-  MOZ_ASSERT(svgResetStyle->mClipPath.GetType() == StyleClipPathType::URL);
+  MOZ_ASSERT(svgResetStyle->mClipPath.GetType() == StyleShapeSourceType::URL);
 
   FragmentOrURL* url = svgResetStyle->mClipPath.GetURL();
   return ResolveFragmentOrURL(aFrame, url);
@@ -963,4 +963,14 @@ nsSVGEffects::GetPaintURI(nsIFrame* aFrame,
              nsStyleSVGPaintType::eStyleSVGPaintType_Server);
 
   return ResolveFragmentOrURL(aFrame, (svgStyle->*aPaint).mPaint.mPaintServer);
+}
+
+already_AddRefed<nsIURI>
+nsSVGEffects::GetMaskURI(nsIFrame* aFrame, uint32_t aIndex)
+{
+  const nsStyleSVGReset* svgReset = aFrame->StyleSVGReset();
+  MOZ_ASSERT(svgReset->mMask.mLayers.Length() > aIndex);
+
+  return ResolveFragmentOrURL(aFrame,
+                              &svgReset->mMask.mLayers[aIndex].mSourceURI);
 }

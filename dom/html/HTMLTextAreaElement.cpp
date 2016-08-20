@@ -55,6 +55,7 @@ HTMLTextAreaElement::HTMLTextAreaElement(already_AddRefed<mozilla::dom::NodeInfo
                                          FromParser aFromParser)
   : nsGenericHTMLFormElementWithState(aNodeInfo),
     mValueChanged(false),
+    mLastValueChangeWasInteractive(false),
     mHandlingSelect(false),
     mDoneAddingChildren(!aFromParser),
     mInhibitStateRestoration(!!(aFromParser & FROM_PARSER_FRAGMENT)),
@@ -192,6 +193,7 @@ NS_IMPL_BOOL_ATTR(HTMLTextAreaElement, Autofocus, autofocus)
 NS_IMPL_UINT_ATTR_NON_ZERO_DEFAULT_VALUE(HTMLTextAreaElement, Cols, cols, DEFAULT_COLS)
 NS_IMPL_BOOL_ATTR(HTMLTextAreaElement, Disabled, disabled)
 NS_IMPL_NON_NEGATIVE_INT_ATTR(HTMLTextAreaElement, MaxLength, maxlength)
+NS_IMPL_NON_NEGATIVE_INT_ATTR(HTMLTextAreaElement, MinLength, minlength)
 NS_IMPL_STRING_ATTR(HTMLTextAreaElement, Name, name)
 NS_IMPL_BOOL_ATTR(HTMLTextAreaElement, ReadOnly, readonly)
 NS_IMPL_BOOL_ATTR(HTMLTextAreaElement, Required, required)
@@ -397,7 +399,8 @@ HTMLTextAreaElement::ParseAttribute(int32_t aNamespaceID,
                                     nsAttrValue& aResult)
 {
   if (aNamespaceID == kNameSpaceID_None) {
-    if (aAttribute == nsGkAtoms::maxlength) {
+    if (aAttribute == nsGkAtoms::maxlength ||
+        aAttribute == nsGkAtoms::minlength) {
       return aResult.ParseNonNegativeIntValue(aValue);
     } else if (aAttribute == nsGkAtoms::cols ||
                aAttribute == nsGkAtoms::rows) {
@@ -660,38 +663,50 @@ HTMLTextAreaElement::GetSelectionStart(int32_t *aSelectionStart)
   NS_ENSURE_ARG_POINTER(aSelectionStart);
 
   ErrorResult error;
-  *aSelectionStart = GetSelectionStart(error);
+  Nullable<uint32_t> selStart(GetSelectionStart(error));
+  if (error.Failed()) {
+    return error.StealNSResult();
+  }
+
+  *aSelectionStart = int32_t(selStart.Value());
   return error.StealNSResult();
 }
 
-uint32_t
+Nullable<uint32_t>
 HTMLTextAreaElement::GetSelectionStart(ErrorResult& aError)
 {
   int32_t selStart, selEnd;
   nsresult rv = GetSelectionRange(&selStart, &selEnd);
 
   if (NS_FAILED(rv) && mState.IsSelectionCached()) {
-    return mState.GetSelectionProperties().GetStart();
+    return Nullable<uint32_t>(mState.GetSelectionProperties().GetStart());
   }
   if (NS_FAILED(rv)) {
     aError.Throw(rv);
   }
-  return selStart;
+  return Nullable<uint32_t>(selStart);
 }
 
 NS_IMETHODIMP
 HTMLTextAreaElement::SetSelectionStart(int32_t aSelectionStart)
 {
   ErrorResult error;
-  SetSelectionStart(aSelectionStart, error);
+  Nullable<uint32_t> selStart(aSelectionStart);
+  SetSelectionStart(selStart, error);
   return error.StealNSResult();
 }
 
 void
-HTMLTextAreaElement::SetSelectionStart(uint32_t aSelectionStart, ErrorResult& aError)
+HTMLTextAreaElement::SetSelectionStart(const Nullable<uint32_t>& aSelectionStart,
+                                       ErrorResult& aError)
 {
+  int32_t selStart = 0;
+  if (!aSelectionStart.IsNull()) {
+    selStart = aSelectionStart.Value();
+  }
+
   if (mState.IsSelectionCached()) {
-    mState.GetSelectionProperties().SetStart(aSelectionStart);
+    mState.GetSelectionProperties().SetStart(selStart);
     return;
   }
 
@@ -707,7 +722,7 @@ HTMLTextAreaElement::SetSelectionStart(uint32_t aSelectionStart, ErrorResult& aE
     aError.Throw(rv);
     return;
   }
-  start = aSelectionStart;
+  start = selStart;
   if (end < start) {
     end = start;
   }
@@ -723,38 +738,50 @@ HTMLTextAreaElement::GetSelectionEnd(int32_t *aSelectionEnd)
   NS_ENSURE_ARG_POINTER(aSelectionEnd);
 
   ErrorResult error;
-  *aSelectionEnd = GetSelectionEnd(error);
-  return error.StealNSResult();
+  Nullable<uint32_t> selEnd(GetSelectionEnd(error));
+  if (error.Failed()) {
+    return error.StealNSResult();
+  }
+
+  *aSelectionEnd = int32_t(selEnd.Value());
+  return NS_OK;
 }
 
-uint32_t
+Nullable<uint32_t>
 HTMLTextAreaElement::GetSelectionEnd(ErrorResult& aError)
 {
   int32_t selStart, selEnd;
   nsresult rv = GetSelectionRange(&selStart, &selEnd);
 
   if (NS_FAILED(rv) && mState.IsSelectionCached()) {
-    return mState.GetSelectionProperties().GetEnd();
+    return Nullable<uint32_t>(mState.GetSelectionProperties().GetEnd());
   }
   if (NS_FAILED(rv)) {
     aError.Throw(rv);
   }
-  return selEnd;
+  return Nullable<uint32_t>(selEnd);
 }
 
 NS_IMETHODIMP
 HTMLTextAreaElement::SetSelectionEnd(int32_t aSelectionEnd)
 {
   ErrorResult error;
-  SetSelectionEnd(aSelectionEnd, error);
+  Nullable<uint32_t> selEnd(aSelectionEnd);
+  SetSelectionEnd(selEnd, error);
   return error.StealNSResult();
 }
 
 void
-HTMLTextAreaElement::SetSelectionEnd(uint32_t aSelectionEnd, ErrorResult& aError)
+HTMLTextAreaElement::SetSelectionEnd(const Nullable<uint32_t>& aSelectionEnd,
+                                     ErrorResult& aError)
 {
+  int32_t selEnd = 0;
+  if (!aSelectionEnd.IsNull()) {
+    selEnd = aSelectionEnd.Value();
+  }
+
   if (mState.IsSelectionCached()) {
-    mState.GetSelectionProperties().SetEnd(aSelectionEnd);
+    mState.GetSelectionProperties().SetEnd(selEnd);
     return;
   }
 
@@ -770,7 +797,7 @@ HTMLTextAreaElement::SetSelectionEnd(uint32_t aSelectionEnd, ErrorResult& aError
     aError.Throw(rv);
     return;
   }
-  end = aSelectionEnd;
+  end = selEnd;
   if (start > end) {
     start = end;
   }
@@ -847,7 +874,8 @@ HTMLTextAreaElement::SetSelectionDirection(const nsAString& aDirection)
 }
 
 void
-HTMLTextAreaElement::SetSelectionDirection(const nsAString& aDirection, ErrorResult& aError)
+HTMLTextAreaElement::SetSelectionDirection(const nsAString& aDirection,
+                                           ErrorResult& aError)
 {
   if (mState.IsSelectionCached()) {
     nsITextControlFrame::SelectionDirection dir = nsITextControlFrame::eNone;
@@ -1291,6 +1319,8 @@ HTMLTextAreaElement::AfterSetAttr(int32_t aNameSpaceID, nsIAtom* aName,
       }
     } else if (aName == nsGkAtoms::maxlength) {
       UpdateTooLongValidityState();
+    } else if (aName == nsGkAtoms::minlength) {
+      UpdateTooShortValidityState();
     }
 
     UpdateState(aNotify);
@@ -1344,7 +1374,9 @@ HTMLTextAreaElement::SetCustomValidity(const nsAString& aError)
 bool
 HTMLTextAreaElement::IsTooLong()
 {
-  if (!HasAttr(kNameSpaceID_None, nsGkAtoms::maxlength) || !mValueChanged) {
+  if (!mValueChanged ||
+      !mLastValueChangeWasInteractive ||
+      !HasAttr(kNameSpaceID_None, nsGkAtoms::maxlength)) {
     return false;
   }
 
@@ -1363,6 +1395,29 @@ HTMLTextAreaElement::IsTooLong()
 }
 
 bool
+HTMLTextAreaElement::IsTooShort()
+{
+  if (!mValueChanged ||
+      !mLastValueChangeWasInteractive ||
+      !HasAttr(kNameSpaceID_None, nsGkAtoms::minlength)) {
+    return false;
+  }
+
+  int32_t minLength = -1;
+  GetMinLength(&minLength);
+
+  // Minlength of -1 means parsing error.
+  if (minLength == -1) {
+    return false;
+  }
+
+  int32_t textLength = -1;
+  GetTextLength(&textLength);
+
+  return textLength && textLength < minLength;
+}
+
+bool
 HTMLTextAreaElement::IsValueMissing() const
 {
   if (!HasAttr(kNameSpaceID_None, nsGkAtoms::required) || !IsMutable()) {
@@ -1375,10 +1430,13 @@ HTMLTextAreaElement::IsValueMissing() const
 void
 HTMLTextAreaElement::UpdateTooLongValidityState()
 {
-  // TODO: this code will be re-enabled with bug 613016 and bug 613019.
-#if 0
   SetValidityState(VALIDITY_STATE_TOO_LONG, IsTooLong());
-#endif
+}
+
+void
+HTMLTextAreaElement::UpdateTooShortValidityState()
+{
+  SetValidityState(VALIDITY_STATE_TOO_SHORT, IsTooShort());
 }
 
 void
@@ -1420,6 +1478,27 @@ HTMLTextAreaElement::GetValidationMessage(nsAString& aValidationMessage,
         const char16_t* params[] = { strMaxLength.get(), strTextLength.get() };
         rv = nsContentUtils::FormatLocalizedString(nsContentUtils::eDOM_PROPERTIES,
                                                    "FormValidationTextTooLong",
+                                                   params, message);
+        aValidationMessage = message;
+      }
+      break;
+    case VALIDITY_STATE_TOO_SHORT:
+      {
+        nsXPIDLString message;
+        int32_t minLength = -1;
+        int32_t textLength = -1;
+        nsAutoString strMinLength;
+        nsAutoString strTextLength;
+
+        GetMinLength(&minLength);
+        GetTextLength(&textLength);
+
+        strMinLength.AppendInt(minLength);
+        strTextLength.AppendInt(textLength);
+
+        const char16_t* params[] = { strMinLength.get(), strTextLength.get() };
+        rv = nsContentUtils::FormatLocalizedString(nsContentUtils::eDOM_PROPERTIES,
+                                                   "FormValidationTextTooShort",
                                                    params, message);
         aValidationMessage = message;
       }
@@ -1525,11 +1604,14 @@ HTMLTextAreaElement::InitializeKeyboardEventListeners()
 }
 
 NS_IMETHODIMP_(void)
-HTMLTextAreaElement::OnValueChanged(bool aNotify)
+HTMLTextAreaElement::OnValueChanged(bool aNotify, bool aWasInteractiveUserChange)
 {
+  mLastValueChangeWasInteractive = aWasInteractiveUserChange;
+
   // Update the validity state
   bool validBefore = IsValid();
   UpdateTooLongValidityState();
+  UpdateTooShortValidityState();
   UpdateValueMissingValidityState();
 
   if (validBefore != IsValid()) {

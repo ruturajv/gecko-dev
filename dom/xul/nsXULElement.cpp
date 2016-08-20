@@ -803,7 +803,7 @@ class XULInContentErrorReporter : public Runnable
 public:
   explicit XULInContentErrorReporter(nsIDocument* aDocument) : mDocument(aDocument) {}
 
-  NS_IMETHOD Run()
+  NS_IMETHOD Run() override
   {
     mDocument->WarnOnceAbout(nsIDocument::eImportXULIntoContent, false);
     return NS_OK;
@@ -1589,7 +1589,7 @@ nsXULElement::LoadSrc()
 }
 
 nsresult
-nsXULElement::GetFrameLoader(nsIFrameLoader **aFrameLoader)
+nsXULElement::GetFrameLoaderXPCOM(nsIFrameLoader **aFrameLoader)
 {
     *aFrameLoader = GetFrameLoader().take();
     return NS_OK;
@@ -1697,39 +1697,12 @@ nsXULElement::Focus()
     return rv.StealNSResult();
 }
 
-void
-nsXULElement::Focus(ErrorResult& rv)
-{
-    nsIFocusManager* fm = nsFocusManager::GetFocusManager();
-    nsCOMPtr<nsIDOMElement> elem = do_QueryObject(this);
-    if (fm) {
-        rv = fm->SetFocus(this, 0);
-    }
-}
-
 NS_IMETHODIMP
 nsXULElement::Blur()
 {
     ErrorResult rv;
     Blur(rv);
     return rv.StealNSResult();
-}
-
-void
-nsXULElement::Blur(ErrorResult& rv)
-{
-    if (!ShouldBlur(this))
-      return;
-
-    nsIDocument* doc = GetComposedDoc();
-    if (!doc)
-      return;
-
-    nsPIDOMWindowOuter* win = doc->GetWindow();
-    nsIFocusManager* fm = nsFocusManager::GetFocusManager();
-    if (win && fm) {
-      rv = fm->ClearFocus(win);
-    }
 }
 
 NS_IMETHODIMP
@@ -1780,6 +1753,12 @@ nsXULElement::ClickWithInputSource(uint16_t aInputSource, bool aIsTrustedEvent)
             status = nsEventStatus_eIgnore;  // reset status
             EventDispatcher::Dispatch(static_cast<nsIContent*>(this),
                                       context, &eventClick, nullptr, &status);
+
+            // If the click has been prevented, lets skip the command call
+            // this is how a physical click works
+            if (status == nsEventStatus_eConsumeNoDefault) {
+                return NS_OK;
+            }
         }
     }
 
@@ -1963,7 +1942,7 @@ public:
     , mState(aState)
   {}
 
-  NS_IMETHOD Run() {
+  NS_IMETHOD Run() override {
     NS_ASSERTION(mWidget, "You shouldn't call this runnable with a null widget!");
 
     mWidget->SetDrawsInTitlebar(mState);
@@ -2021,7 +2000,7 @@ public:
         mWidget(aWidget), mMargin(aMargin)
     {}
 
-    NS_IMETHOD Run()
+    NS_IMETHOD Run() override
     {
         // SetNonClientMargins can dispatch native events, hence doing
         // it off a script runner.
@@ -2747,7 +2726,7 @@ NotifyOffThreadScriptCompletedRunnable::Run()
 {
     MOZ_ASSERT(NS_IsMainThread());
 
-    JS::Rooted<JSScript*> script(nsContentUtils::RootingCx());
+    JS::Rooted<JSScript*> script(RootingCx());
     {
         AutoJSAPI jsapi;
         if (!jsapi.Init(xpc::CompilationScope())) {

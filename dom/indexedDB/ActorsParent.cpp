@@ -71,6 +71,7 @@
 #include "nsIEventTarget.h"
 #include "nsIFile.h"
 #include "nsIFileURL.h"
+#include "nsIFileProtocolHandler.h"
 #include "nsIInputStream.h"
 #include "nsIInterfaceRequestor.h"
 #include "nsInterfaceHashtable.h"
@@ -148,11 +149,11 @@ class VersionChangeTransaction;
 
 // If JS_STRUCTURED_CLONE_VERSION changes then we need to update our major
 // schema version.
-static_assert(JS_STRUCTURED_CLONE_VERSION == 6,
+static_assert(JS_STRUCTURED_CLONE_VERSION == 7,
               "Need to update the major schema version.");
 
 // Major schema version. Bump for almost everything.
-const uint32_t kMajorSchemaVersion = 23;
+const uint32_t kMajorSchemaVersion = 24;
 
 // Minor schema version. Should almost always be 0 (maybe bump on release
 // branches if we have to).
@@ -4101,6 +4102,19 @@ UpgradeSchemaFrom22_0To23_0(mozIStorageConnection* aConnection,
 }
 
 nsresult
+UpgradeSchemaFrom23_0To24_0(mozIStorageConnection* aConnection)
+{
+  // The only change between 23 and 24 was a different structured clone format,
+  // but it's backwards-compatible.
+  nsresult rv = aConnection->SetSchemaVersion(MakeSchemaVersion(24, 0));
+  if (NS_WARN_IF(NS_FAILED(rv))) {
+    return rv;
+  }
+
+  return NS_OK;
+}
+
+nsresult
 GetDatabaseFileURL(nsIFile* aDatabaseFile,
                    PersistenceType aPersistenceType,
                    const nsACString& aGroup,
@@ -4111,8 +4125,22 @@ GetDatabaseFileURL(nsIFile* aDatabaseFile,
   MOZ_ASSERT(aDatabaseFile);
   MOZ_ASSERT(aResult);
 
+  nsresult rv;
+
+  nsCOMPtr<nsIProtocolHandler> protocolHandler(
+    do_GetService(NS_NETWORK_PROTOCOL_CONTRACTID_PREFIX "file", &rv));
+  if (NS_WARN_IF(NS_FAILED(rv))) {
+    return rv;
+  }
+
+  nsCOMPtr<nsIFileProtocolHandler> fileHandler(
+    do_QueryInterface(protocolHandler, &rv));
+  if (NS_WARN_IF(NS_FAILED(rv))) {
+    return rv;
+  }
+
   nsCOMPtr<nsIURI> uri;
-  nsresult rv = NS_NewFileURI(getter_AddRefs(uri), aDatabaseFile);
+  rv = fileHandler->NewFileURI(aDatabaseFile, getter_AddRefs(uri));
   if (NS_WARN_IF(NS_FAILED(rv))) {
     return rv;
   }
@@ -4592,7 +4620,7 @@ CreateStorageConnection(nsIFile* aDBFile,
       }
     } else  {
       // This logic needs to change next time we change the schema!
-      static_assert(kSQLiteSchemaVersion == int32_t((23 << 4) + 0),
+      static_assert(kSQLiteSchemaVersion == int32_t((24 << 4) + 0),
                     "Upgrade function needed due to schema version increase.");
 
       while (schemaVersion != kSQLiteSchemaVersion) {
@@ -4636,6 +4664,8 @@ CreateStorageConnection(nsIFile* aDBFile,
           rv = UpgradeSchemaFrom21_0To22_0(connection);
         } else if (schemaVersion == MakeSchemaVersion(22, 0)) {
           rv = UpgradeSchemaFrom22_0To23_0(connection, aOrigin);
+        } else if (schemaVersion == MakeSchemaVersion(23, 0)) {
+          rv = UpgradeSchemaFrom23_0To24_0(connection);
         } else {
           IDB_WARNING("Unable to open IndexedDB database, no upgrade path is "
                       "available!");
@@ -12606,12 +12636,16 @@ IdleConnectionRunnable::Run()
 
   if (owningThread) {
     mDatabaseInfo->AssertIsOnConnectionThread();
-    MOZ_ASSERT(mDatabaseInfo->mConnection);
-    mDatabaseInfo->mConnection->DoIdleProcessing(mNeedsCheckpoint);
 
-    MOZ_ALWAYS_SUCCEEDS(
-      owningThread->Dispatch(this, NS_DISPATCH_NORMAL));
-    return NS_OK;
+    // The connection could be null if EnsureConnection() didn't run or was not
+    // successful in TransactionDatabaseOperationBase::RunOnConnectionThread().
+    if (mDatabaseInfo->mConnection) {
+      mDatabaseInfo->mConnection->DoIdleProcessing(mNeedsCheckpoint);
+
+      MOZ_ALWAYS_SUCCEEDS(
+        owningThread->Dispatch(this, NS_DISPATCH_NORMAL));
+      return NS_OK;
+    }
   }
 
   RefPtr<ConnectionPool> connectionPool = mDatabaseInfo->mConnectionPool;
@@ -12650,6 +12684,8 @@ CloseConnectionRunnable::Run()
     nsCOMPtr<nsIEventTarget> owningThread;
     mOwningThread.swap(owningThread);
 
+    // The connection could be null if EnsureConnection() didn't run or was not
+    // successful in TransactionDatabaseOperationBase::RunOnConnectionThread().
     if (mDatabaseInfo->mConnection) {
       mDatabaseInfo->AssertIsOnConnectionThread();
 

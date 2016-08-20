@@ -19,7 +19,7 @@
   The COMPUTED_STYLE_PROP macro is defined for each such property.
   Its arguments are:
 
-  -. 'id' the nsCSSProperty ID, without the leading "nsCSSProperty_".
+  -. 'id' the nsCSSPropertyID ID, without the leading "nsCSSProperty_".
 
   -. 'method' the nsComputedDOMStyle method name that returns the
   CSSValue representing that property's computed value, without the leading
@@ -217,6 +217,7 @@ COMPUTED_STYLE_PROP(scroll_snap_points_x,          ScrollSnapPointsX)
 COMPUTED_STYLE_PROP(scroll_snap_points_y,          ScrollSnapPointsY)
 COMPUTED_STYLE_PROP(scroll_snap_type_x,            ScrollSnapTypeX)
 COMPUTED_STYLE_PROP(scroll_snap_type_y,            ScrollSnapTypeY)
+COMPUTED_STYLE_PROP(shape_outside,                 ShapeOutside)
 //// COMPUTED_STYLE_PROP(size,                     Size)
 COMPUTED_STYLE_PROP(table_layout,                  TableLayout)
 COMPUTED_STYLE_PROP(text_align,                    TextAlign)

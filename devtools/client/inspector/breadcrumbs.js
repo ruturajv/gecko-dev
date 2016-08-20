@@ -11,7 +11,6 @@ const {Ci} = require("chrome");
 /* eslint-enable mozilla/reject-some-requires */
 const Services = require("Services");
 const promise = require("promise");
-const FocusManager = Services.focus;
 
 const ELLIPSIS = Services.prefs.getComplexValue(
     "intl.ellipsis",
@@ -23,6 +22,9 @@ const SCROLL_REPEAT_MS = 100;
 
 const EventEmitter = require("devtools/shared/event-emitter");
 const {KeyShortcuts} = require("devtools/client/shared/key-shortcuts");
+
+// Some margin may be required for visible element detection.
+const SCROLL_MARGIN = 1;
 
 /**
  * Component to replicate functionality of XUL arrowscrollbox
@@ -40,6 +42,9 @@ function ArrowScrollBox(win, container) {
 }
 
 ArrowScrollBox.prototype = {
+
+  // Scroll behavior, exposed for testing
+  scrollBehavior: "smooth",
 
   /**
    * Build the HTML, add to the DOM and start listening to
@@ -70,9 +75,25 @@ ArrowScrollBox.prototype = {
   },
 
   /**
+   * Determine whether the current text directionality is RTL
+   */
+  isRtl: function () {
+    return this.win.getComputedStyle(this.container).direction === "rtl";
+  },
+
+  /**
+   * Scroll to the specified element using the current scroll behavior
+   * @param {Element} element element to scroll
+   * @param {String} block desired alignment of element after scrolling
+   */
+  scrollToElement: function (element, block) {
+    element.scrollIntoView({ block: block, behavior: this.scrollBehavior });
+  },
+
+  /**
    * Call the given function once; then continuously
    * while the mouse button is held
-   * @param {repeatFn} the function to repeat while the button is held
+   * @param {Function} repeatFn the function to repeat while the button is held
    */
   clickOrHold: function (repeatFn) {
     let timer;
@@ -110,7 +131,7 @@ ArrowScrollBox.prototype = {
     }
 
     let element = this.inner.childNodes[0];
-    element.scrollIntoView({ block: "start", behavior: "smooth" });
+    this.scrollToElement(element, "start");
   },
 
   /**
@@ -123,7 +144,7 @@ ArrowScrollBox.prototype = {
     }
 
     let element = children[children.length - 1];
-    element.scrollIntoView({ block: "start", behavior: "smooth" });
+    this.scrollToElement(element, "start");
   },
 
   /**
@@ -136,7 +157,8 @@ ArrowScrollBox.prototype = {
         return;
       }
 
-      element.scrollIntoView({ block: "start", behavior: "smooth" });
+      let block = this.isRtl() ? "end" : "start";
+      this.scrollToElement(element, block);
     };
 
     this.clickOrHold(scrollToStart);
@@ -152,7 +174,8 @@ ArrowScrollBox.prototype = {
         return;
       }
 
-      element.scrollIntoView({ block: "end", behavior: "smooth" });
+      let block = this.isRtl() ? "start" : "end";
+      this.scrollToElement(element, block);
     };
 
     this.clickOrHold(scrollToEnd);
@@ -197,46 +220,72 @@ ArrowScrollBox.prototype = {
   },
 
   /**
+   * Check whether the element is to the left of its container but does
+   * not also span the entire container.
+   * @param {Number} left the left scroll point of the container
+   * @param {Number} right the right edge of the container
+   * @param {Number} elementLeft the left edge of the element
+   * @param {Number} elementRight the right edge of the element
+   */
+  elementLeftOfContainer: function (left, right, elementLeft, elementRight) {
+    return elementLeft < (left - SCROLL_MARGIN)
+           && elementRight < (right - SCROLL_MARGIN);
+  },
+
+  /**
+   * Check whether the element is to the right of its container but does
+   * not also span the entire container.
+   * @param {Number} left the left scroll point of the container
+   * @param {Number} right the right edge of the container
+   * @param {Number} elementLeft the left edge of the element
+   * @param {Number} elementRight the right edge of the element
+   */
+  elementRightOfContainer: function (left, right, elementLeft, elementRight) {
+    return elementLeft > (left + SCROLL_MARGIN)
+           && elementRight > (right + SCROLL_MARGIN);
+  },
+
+  /**
    * Get the first (i.e. furthest left for LTR)
-   * non visible element in the scroll box
+   * non or partly visible element in the scroll box
    */
   getFirstInvisibleElement: function () {
-    let start = this.inner.scrollLeft;
-    let end = this.inner.scrollLeft + this.inner.clientWidth;
-    let crumbs = this.inner.childNodes;
-    for (let i = crumbs.length - 1; i > -1; i--) {
-      let element = crumbs[i];
-      let elementRight = element.offsetLeft + element.offsetWidth;
-      if (element.offsetLeft < start) {
-        // edge case, check the element isn't already visible
-        if (elementRight >= end) {
-          continue;
-        }
-        return element;
-      }
-    }
+    let elementsList = Array.from(this.inner.childNodes).reverse();
 
-    return null;
+    let predicate = this.isRtl() ?
+      this.elementRightOfContainer : this.elementLeftOfContainer;
+    return this.findFirstWithBounds(elementsList, predicate);
   },
 
   /**
    * Get the last (i.e. furthest right for LTR)
-   * non-visible element in the scroll box
+   * non or partly visible element in the scroll box
    */
   getLastInvisibleElement: function () {
-    let end = this.inner.scrollLeft + this.inner.clientWidth;
-    let elementStart = 0;
-    for (let element of this.inner.childNodes) {
-      let elementEnd = elementStart + element.offsetWidth;
-      if (elementEnd > end) {
-        // Edge case: check the element isn't bigger than the
-        // container and thus already in view
-        if (elementStart > this.inner.scrollLeft) {
-          return element;
-        }
-      }
+    let predicate = this.isRtl() ?
+      this.elementLeftOfContainer : this.elementRightOfContainer;
+    return this.findFirstWithBounds(this.inner.childNodes, predicate);
+  },
 
-      elementStart = elementEnd;
+  /**
+   * Find the first element that matches the given predicate, called with bounds
+   * information
+   * @param {Array} elements an ordered list of elements
+   * @param {Function} predicate a function to be called with bounds
+   * information
+   */
+  findFirstWithBounds: function (elements, predicate) {
+    let left = this.inner.scrollLeft;
+    let right = left + this.inner.clientWidth;
+    for (let element of elements) {
+      let elementLeft = element.offsetLeft - element.parentElement.offsetLeft;
+      let elementRight = elementLeft + element.offsetWidth;
+
+      // Check that the starting edge of the element is out of the visible area
+      // and that the ending edge does not span the whole container
+      if (predicate(left, right, elementLeft, elementRight)) {
+        return element;
+      }
     }
 
     return null;
@@ -356,14 +405,15 @@ HTMLBreadcrumbs.prototype = {
 
     this.shortcuts.on("Right", this.handleShortcut);
     this.shortcuts.on("Left", this.handleShortcut);
-    this.shortcuts.on("Tab", this.handleShortcut);
-    this.shortcuts.on("Shift+Tab", this.handleShortcut);
 
     // We will save a list of already displayed nodes in this array.
     this.nodeHierarchy = [];
 
     // Last selected node in nodeHierarchy.
     this.currentIndex = -1;
+
+    // Used to build a unique breadcrumb button Id.
+    this.breadcrumbsWidgetItemId = 0;
 
     this.update = this.update.bind(this);
     this.updateSelectors = this.updateSelectors.bind(this);
@@ -487,20 +537,22 @@ HTMLBreadcrumbs.prototype = {
   },
 
   /**
-   * Focus event handler. When breadcrumbs container gets focus, if there is an
-   * already selected breadcrumb, move focus to it.
+   * Focus event handler. When breadcrumbs container gets focus,
+   * aria-activedescendant needs to be updated to currently selected
+   * breadcrumb. Ensures that the focus stays on the container at all times.
    * @param {DOMEvent} event.
    */
   handleFocus: function (event) {
-    let control = this.container.querySelector(
-      ".breadcrumbs-widget-item[checked]");
-    if (!this.suspendFocus && control && control !== event.target) {
-      // If we already have a selected breadcrumb and focus target is not it,
-      // move focus to selected breadcrumb
-      event.preventDefault();
-      control.focus();
+    event.stopPropagation();
+
+    let node = this.nodeHierarchy[this.currentIndex];
+    if (node) {
+      this.outer.setAttribute("aria-activedescendant", node.button.id);
+    } else {
+      this.outer.removeAttribute("aria-activedescendant");
     }
-    this.suspendFocus = false;
+
+    this.outer.focus();
   },
 
   /**
@@ -508,10 +560,6 @@ HTMLBreadcrumbs.prototype = {
    * @param {DOMEvent} event.
    */
   handleClick: function (event) {
-    // When clicking a button temporarily suspend the behaviour that refocuses
-    // the currently selected button, to prevent flicking back to that button
-    // See Bug 1272011
-    this.suspendFocus = true;
     let target = event.originalTarget;
     if (target.tagName == "button") {
       target.onBreadcrumbsClick();
@@ -554,28 +602,17 @@ HTMLBreadcrumbs.prototype = {
     event.stopPropagation();
 
     this.keyPromise = (this.keyPromise || promise.resolve(null)).then(() => {
+      let currentnode;
       if (name === "Left" && this.currentIndex != 0) {
-        let node = this.nodeHierarchy[this.currentIndex - 1].node;
-        return this.selection.setNodeFront(node, "breadcrumbs");
+        currentnode = this.nodeHierarchy[this.currentIndex - 1];
       } else if (name === "Right" && this.currentIndex < this.nodeHierarchy.length - 1) {
-        let node = this.nodeHierarchy[this.currentIndex + 1].node;
-        return this.selection.setNodeFront(node, "breadcrumbs");
-      } else if (name === "Tab") {
-        // To move focus to next element following the breadcrumbs, relative
-        // element needs to be the last element in breadcrumbs' subtree.
-        let last = this.container.lastChild;
-        while (last && last.lastChild) {
-          last = last.lastChild;
-        }
-        FocusManager.moveFocus(this.chromeWin, last, FocusManager.MOVEFOCUS_FORWARD, 0);
-      } else if (name === "Shift+Tab") {
-        // Tabbing when breadcrumbs or its contents are focused should move focus to
-        // previous focusable element relative to breadcrumbs themselves.
-        let elt = this.container;
-        FocusManager.moveFocus(this.chromeWin, elt, FocusManager.MOVEFOCUS_BACKWARD, 0);
+        currentnode = this.nodeHierarchy[this.currentIndex + 1];
+      } else {
+        return null;
       }
 
-      return null;
+      this.outer.setAttribute("aria-activedescendant", currentnode.button.id);
+      return this.selection.setNodeFront(currentnode.node, "breadcrumbs");
     });
   },
 
@@ -632,6 +669,9 @@ HTMLBreadcrumbs.prototype = {
       if (this.hadFocus) {
         this.nodeHierarchy[index].button.focus();
       }
+    } else {
+      // Unset active active descendant when all buttons are unselected.
+      this.outer.removeAttribute("aria-activedescendant");
     }
     this.currentIndex = index;
   },
@@ -671,7 +711,9 @@ HTMLBreadcrumbs.prototype = {
     let button = this.chromeDoc.createElementNS(NS_XHTML, "button");
     button.appendChild(this.prettyPrintNodeAsXHTML(node));
     button.className = "breadcrumbs-widget-item";
+    button.id = "breadcrumbs-widget-item-" + this.breadcrumbsWidgetItemId++;
 
+    button.setAttribute("tabindex", "-1");
     button.setAttribute("title", this.prettyPrintNodeAsText(node));
 
     button.onclick = () => {
@@ -740,7 +782,7 @@ HTMLBreadcrumbs.prototype = {
     // FIXME bug 684352: make sure its immediate neighbors are visible too.
     if (!this.isDestroyed) {
       let element = this.nodeHierarchy[this.currentIndex].button;
-      element.scrollIntoView({ block: "end", behavior: "smooth" });
+      this.arrowScrollBox.scrollToElement(element, "end");
     }
   },
 
@@ -830,6 +872,7 @@ HTMLBreadcrumbs.prototype = {
     }
 
     // If this was an interesting deletion; then trim the breadcrumb trail
+    let trimmed = false;
     if (reason === "markupmutation") {
       for (let {type, removed} of mutations) {
         if (type !== "childList") {
@@ -840,6 +883,7 @@ HTMLBreadcrumbs.prototype = {
           let removedIndex = this.indexOf(node);
           if (removedIndex > -1) {
             this.cutAfter(removedIndex - 1);
+            trimmed = true;
           }
         }
       }
@@ -848,6 +892,10 @@ HTMLBreadcrumbs.prototype = {
     if (!this.selection.isElementNode()) {
       // no selection
       this.setCursor(-1);
+      if (trimmed) {
+        // Since something changed, notify the interested parties.
+        this.inspector.emit("breadcrumbs-updated", this.selection.nodeFront);
+      }
       return;
     }
 

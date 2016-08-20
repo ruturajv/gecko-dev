@@ -88,11 +88,7 @@
                 onget="return this.view; /*.QueryInterface(Components.interfaces.nsIXULTreeBuilder)*/"
                 readonly="true"/>
       <field name="pageUpOrDownMovesSelection">
-        {
-          let { AppConstants } =
-              Components.utils.import("resource://gre/modules/AppConstants.jsm", {});
-          AppConstants.platform != "macosx";
-        }
+        !/Mac/.test(navigator.platform)
       </field>
       <property name="keepCurrentInView"
                 onget="return (this.getAttribute('keepcurrentinview') == 'true');"
@@ -543,11 +539,9 @@
               }
               i = i > edge ? edge : i;
 
-            } else {
-              if (c <= i) {
-                 i = c <= p ? 0 : c - p;
-                 this.treeBoxObject.ensureRowIsVisible(i);
-              }
+            } else if (c <= i) {
+               i = c <= p ? 0 : c - p;
+               this.treeBoxObject.ensureRowIsVisible(i);
             }
             this.view.selection.timedSelect(i, this._selectDelay);
           ]]>
@@ -671,9 +665,7 @@
             return true;
           }
 
-          let { AppConstants } =
-              Components.utils.import("resource://gre/modules/AppConstants.jsm", {});
-          if (AppConstants.platform == "macosx") {
+          if (/Mac/.test(navigator.platform)) {
             // See if we can edit the cell.
             var row = this.currentIndex;
             if (this._cellSelType) {
@@ -846,7 +838,7 @@
               // If already opened, select the first child.
               // The getParentIndex test above ensures that the children
               // are already populated and ready.
-              if (cellSelType && !this.view.isSelectable(c , currentColumn)) {
+              if (cellSelType && !this.view.isSelectable(c, currentColumn)) {
                 let col = this._getNextColumn(c, false);
                 if (col) {
                   this.view.selection.currentColumn = col;
@@ -1415,11 +1407,9 @@
           if (event.target != event.originalTarget)
             return;
 
-          let { AppConstants } =
-              Components.utils.import("resource://gre/modules/AppConstants.jsm", {});
           // On Windows multiple clicking on tree columns only cycles one time
           // every 2 clicks.
-          if (AppConstants.platform == "win" && event.detail % 2 == 0)
+          if (/Win/.test(navigator.platform) && event.detail % 2 == 0)
             return;
 
           var tree = this.parentNode.parentNode;

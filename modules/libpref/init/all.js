@@ -750,7 +750,7 @@ pref("gfx.canvas.azure.backends", "direct2d1.1,skia,cairo");
 pref("gfx.content.azure.backends", "direct2d1.1,cairo");
 #else
 #ifdef XP_MACOSX
-pref("gfx.content.azure.backends", "skia,cg");
+pref("gfx.content.azure.backends", "skia");
 pref("gfx.canvas.azure.backends", "skia");
 // Accelerated cg canvas where available (10.7+)
 pref("gfx.canvas.azure.accelerated", true);
@@ -1142,6 +1142,10 @@ pref("dom.forms.number", true);
 // Enable <input type=color> by default. It will be turned off for remaining
 // platforms which don't have a color picker implemented yet.
 pref("dom.forms.color", true);
+
+// Support for input type=date, time, month, week and datetime-local. By
+// default, disabled.
+pref("dom.forms.datetime", false);
 
 // Support for new @autocomplete values
 pref("dom.forms.autocomplete.experimental", false);
@@ -2215,10 +2219,10 @@ pref("mousewheel.acceleration.start", -1);
 // factor to be multiplied for constant acceleration
 pref("mousewheel.acceleration.factor", 10);
 
-// Prefs for override the system mouse wheel scrolling speed on the root
+// Prefs for override the system mouse wheel scrolling speed on
 // content of the web pages.  When
 // "mousewheel.system_scroll_override_on_root_content.enabled" is true and the system
-// scrolling speed isn't customized by the user, the root content scrolling
+// scrolling speed isn't customized by the user, the content scrolling
 // speed is multiplied by the following factors.  The value will be used as
 // 1/100.  E.g., 200 means 2.00.
 // NOTE: Even if "mousewheel.system_scroll_override_on_root_content.enabled" is
@@ -2602,6 +2606,9 @@ pref("layout.css.scroll-behavior.damping-ratio", "1.0");
 
 // Is support for scroll-snap enabled?
 pref("layout.css.scroll-snap.enabled", true);
+
+// Is support for CSS shape-outside enabled?
+pref("layout.css.shape-outside.enabled", false);
 
 // Is support for document.fonts enabled?
 pref("layout.css.font-loading-api.enabled", true);
@@ -3391,6 +3398,12 @@ pref("intl.tsf.support_imm", true);
 
 // Whether creates native caret for ATOK or not.
 pref("intl.tsf.hack.atok.create_native_caret", true);
+// Whether use available composition string rect for result of
+// ITfContextView::GetTextExt() even if the specified range is same as the
+// range of composition string but some character rects of them are not
+// available.  Note that this is ignored if active ATOK is or older than 2016
+// and create_native_caret is true.
+pref("intl.tsf.hack.atok.do_not_return_no_layout_error_of_composition_string", true);
 // Whether use composition start position for the result of
 // ITfContextView::GetTextExt() if the specified range is larger than
 // composition start offset.
@@ -3863,16 +3876,9 @@ pref("print.print_paper_size", 0);
 // around the content of the page for Print Preview only
 pref("print.print_extra_margin", 0); // twips
 
-// CSSOM-View scroll-behavior smooth scrolling and scroll snap requires the C++ APZC
-#ifdef MOZ_ANDROID_APZ
 pref("layout.css.scroll-behavior.enabled", true);
 pref("layout.css.scroll-behavior.property-enabled", true);
 pref("layout.css.scroll-snap.enabled", true);
-#else
-pref("layout.css.scroll-behavior.enabled", false);
-pref("layout.css.scroll-behavior.property-enabled", false);
-pref("layout.css.scroll-snap.enabled", false);
-#endif
 
 /* PostScript print module prefs */
 // pref("print.postscript.enabled",      true);
@@ -4400,6 +4406,7 @@ pref("gl.require-hardware", false);
 #ifdef XP_MACOSX
 pref("gl.multithreaded", true);
 #endif
+pref("gl.ignore-dx-interop2-blacklist", false);
 
 pref("webgl.force-enabled", false);
 pref("webgl.disabled", false);
@@ -4561,6 +4568,8 @@ pref("layers.componentalpha.enabled", true);
 // Use the DT-backend implemented PushLayer
 pref("gfx.content.use-native-pushlayer", false);
 
+pref("gfx.content.always-paint", false);
+
 #ifdef ANDROID
 pref("gfx.apitrace.enabled",false);
 #endif
@@ -4585,13 +4594,14 @@ pref("gfx.direct2d.force-enabled", false);
 pref("layers.prefer-opengl", false);
 pref("layers.prefer-d3d9", false);
 pref("layers.allow-d3d9-fallback", true);
-pref("layers.d3d11.force-warp", false);
-pref("layers.d3d11.disable-warp", true);
-
 #endif
 
 // Copy-on-write canvas
+#ifdef XP_WIN
+pref("layers.shared-buffer-provider.enabled", false);
+#else
 pref("layers.shared-buffer-provider.enabled", true);
+#endif
 
 // Force all possible layers to be always active layers
 pref("layers.force-active", false);
@@ -4634,6 +4644,10 @@ pref("xpinstall.signatures.required", false);
 pref("extensions.alwaysUnpack", false);
 pref("extensions.minCompatiblePlatformVersion", "2.0");
 pref("extensions.webExtensionsMinPlatformVersion", "42.0a1");
+
+// Other webextensions prefs
+pref("extensions.webextensions.keepStorageOnUninstall", false);
+pref("extensions.webextensions.keepUuidOnUninstall", false);
 
 pref("network.buffer.cache.count", 24);
 pref("network.buffer.cache.size",  32768);
@@ -4782,6 +4796,12 @@ pref("dom.w3c_pointer_events.enabled", false);
 // W3C draft ImageCapture API
 pref("dom.imagecapture.enabled", false);
 
+// W3C MediaDevices devicechange event
+pref("media.ondevicechange.enabled", false);
+
+// W3C MediaDevices devicechange fake event
+pref("media.ondevicechange.fakeDeviceChangeEvent.enabled", false);
+
 // W3C touch-action css property (related to touch and pointer events)
 // Note that we turn this on even on platforms/configurations where touch
 // events are not supported (e.g. OS X, or Windows with e10s disabled). For
@@ -4911,24 +4931,14 @@ pref("dom.vr.enabled", false);
 #else
 pref("dom.vr.enabled", true);
 #endif
-// Oculus > 0.5
 pref("dom.vr.oculus.enabled", true);
-// Oculus <= 0.5; will only trigger if > 0.5 is not used or found
-pref("dom.vr.oculus050.enabled", true);
-// Cardboard VR device is disabled by default
-pref("dom.vr.cardboard.enabled", false);
 // OSVR device
 pref("dom.vr.osvr.enabled", false);
-// 0 = never; 1 = only if real devices aren't there; 2 = always
-pref("dom.vr.add-test-devices", 0);
 // Pose prediction reduces latency effects by returning future predicted HMD
 // poses to callers of the WebVR API.  This currently only has an effect for
 // Oculus Rift on SDK 0.8 or greater.  It is disabled by default for now due to
 // frame uniformity issues with e10s.
 pref("dom.vr.poseprediction.enabled", false);
-// true = show the VR textures in our compositing output; false = don't.
-// true might have performance impact
-pref("gfx.vr.mirror-textures", false);
 // path to OSVR DLLs
 pref("gfx.vr.osvr.utilLibPath", "");
 pref("gfx.vr.osvr.commonLibPath", "");
@@ -5125,7 +5135,7 @@ pref("browser.safebrowsing.provider.google.reportURL", "https://safebrowsing.goo
 // Prefs for v4.
 pref("browser.safebrowsing.provider.google4.pver", "4");
 pref("browser.safebrowsing.provider.google4.lists", "goog-phish-proto,googpub-phish-proto,goog-malware-proto,goog-unwanted-proto");
-pref("browser.safebrowsing.provider.google4.updateURL", "https://safebrowsing.googleapis.com/v4/threatListUpdates:fetch?$req=%REQUEST_BASE64%&$ct=application/x-protobuf&key=%GOOGLE_API_KEY%");
+pref("browser.safebrowsing.provider.google4.updateURL", "https://safebrowsing.googleapis.com/v4/threatListUpdates:fetch?$ct=application/x-protobuf&key=%GOOGLE_API_KEY%");
 pref("browser.safebrowsing.provider.google4.gethashURL", "https://safebrowsing.googleapis.com/v4/fullHashes:find?$req=%REQUEST_BASE64%&$ct=application/x-protobuf&key=%GOOGLE_API_KEY%");
 pref("browser.safebrowsing.provider.google4.reportURL", "https://safebrowsing.google.com/safebrowsing/diagnostic?client=%NAME%&hl=%LOCALE%&site=");
 
@@ -5134,7 +5144,7 @@ pref("browser.safebrowsing.reportPhishURL", "https://%LOCALE%.phish-report.mozil
 pref("browser.safebrowsing.reportMalwareMistakeURL", "https://%LOCALE%.malware-error.mozilla.com/?hl=%LOCALE%&url=");
 
 // The table and global pref for blocking plugin content
-pref("browser.safebrowsing.blockedURIs.enabled", false);
+pref("browser.safebrowsing.blockedURIs.enabled", true);
 pref("urlclassifier.blockedTable", "test-block-simple,mozplugin-block-digest256");
 
 // The protocol version we communicate with mozilla server.
@@ -5258,11 +5268,17 @@ pref("dom.beforeAfterKeyboardEvent.enabled", false);
 
 // Presentation API
 pref("dom.presentation.enabled", false);
+pref("dom.presentation.controller.enabled", false);
+pref("dom.presentation.receiver.enabled", false);
+
+// Presentation Device
 pref("dom.presentation.tcp_server.debug", false);
 pref("dom.presentation.discovery.enabled", false);
 pref("dom.presentation.discovery.legacy.enabled", false);
 pref("dom.presentation.discovery.timeout_ms", 10000);
 pref("dom.presentation.discoverable", false);
+pref("dom.presentation.discoverable.encrypted", true);
+pref("dom.presentation.discoverable.retry_ms", 5000);
 pref("dom.presentation.session_transport.data_channel.enable", false);
 
 #ifdef XP_MACOSX
@@ -5467,6 +5483,9 @@ pref("dom.input.fallbackUploadDir", "");
 // Turn rewriting of youtube embeds on/off
 pref("plugins.rewrite_youtube_embeds", true);
 
+// Don't hide Flash from navigator.plugins when it is click-to-activate
+pref("plugins.navigator_hide_disabled_flash", false);
+
 // Disable browser frames by default
 pref("dom.mozBrowserFramesEnabled", false);
 
@@ -5506,4 +5525,10 @@ pref("dom.webkitBlink.filesystem.enabled", true);
 #ifdef MOZ_STYLO
 // Is the Servo-backed style system enabled?
 pref("layout.css.servo.enabled", true);
+#endif
+
+#ifdef NIGHTLY_BUILD
+pref("dom.html_fragment_serialisation.appendLF", true);
+#else
+pref("dom.html_fragment_serialisation.appendLF", false);
 #endif

@@ -113,7 +113,6 @@ class MOZ_STACK_CLASS ModuleGenerator
     uint32_t                        lastPatchedCallsite_;
     uint32_t                        startOfUnpatchedBranches_;
     JumpSiteArray                   jumpThunks_;
-    bool                            externalTable_;
 
     // Parallel compilation
     bool                            parallel_;
@@ -142,7 +141,7 @@ class MOZ_STACK_CLASS ModuleGenerator
     explicit ModuleGenerator(ImportVector&& imports);
     ~ModuleGenerator();
 
-    MOZ_MUST_USE bool init(UniqueModuleGeneratorData shared, CompileArgs&& args,
+    MOZ_MUST_USE bool init(UniqueModuleGeneratorData shared, const CompileArgs& args,
                            Metadata* maybeAsmJSMetadata = nullptr);
 
     bool isAsmJS() const { return metadata_->kind == ModuleKind::AsmJS; }

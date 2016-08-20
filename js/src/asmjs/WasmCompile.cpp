@@ -183,7 +183,7 @@ static bool
 DecodeBrTable(FunctionDecoder& f)
 {
     uint32_t tableLength;
-    ExprType type;
+    ExprType type = ExprType::Limit;
     if (!f.iter().readBrTable(&tableLength, &type, nullptr, nullptr))
         return false;
 
@@ -741,7 +741,8 @@ DecodeResizableTable(Decoder& d, ModuleGeneratorData* init)
     if (!init->tables.empty())
         return Fail(d, "already have default table");
 
-    TableDesc table(TableKind::AnyFunction);
+    TableDesc table;
+    table.kind = TableKind::AnyFunction;
     table.initial = resizable.initial;
     table.maximum = resizable.maximum ? *resizable.maximum : UINT32_MAX;
     return init->tables.append(table);
@@ -911,7 +912,8 @@ DecodeTableSection(Decoder& d, bool newFormat, ModuleGeneratorData* init, Uint32
         if (!DecodeResizableTable(d, init))
             return false;
     } else {
-        TableDesc table(TableKind::AnyFunction);
+        TableDesc table;
+        table.kind = TableKind::AnyFunction;
         table.maximum = UINT32_MAX;
 
         if (!d.readVarU32(&table.initial))
@@ -1583,15 +1585,15 @@ DecodeUnknownSections(Decoder& d)
 }
 
 bool
-CompileArgs::initFromContext(ExclusiveContext* cx, UniqueChars f)
+CompileArgs::initFromContext(ExclusiveContext* cx, ScriptedCaller&& scriptedCaller)
 {
     alwaysBaseline = cx->options().wasmAlwaysBaseline();
-    filename = Move(f);
+    this->scriptedCaller = Move(scriptedCaller);
     return assumptions.initBuildIdFromContext(cx);
 }
 
 SharedModule
-wasm::Compile(const ShareableBytes& bytecode, CompileArgs&& args, UniqueChars* error)
+wasm::Compile(const ShareableBytes& bytecode, const CompileArgs& args, UniqueChars* error)
 {
     bool newFormat = args.assumptions.newFormat;
 
@@ -1626,7 +1628,7 @@ wasm::Compile(const ShareableBytes& bytecode, CompileArgs&& args, UniqueChars* e
         return nullptr;
 
     ModuleGenerator mg(Move(imports));
-    if (!mg.init(Move(init), Move(args)))
+    if (!mg.init(Move(init), args))
         return nullptr;
 
     if (!DecodeExportSection(d, newFormat, memoryExported, mg))

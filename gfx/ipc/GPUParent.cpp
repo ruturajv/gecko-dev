@@ -43,6 +43,7 @@ GPUParent::Init(base::ProcessId aParentPid,
 
   // Ensure gfxPrefs are initialized.
   gfxPrefs::GetSingleton();
+  gfxConfig::Init();
   gfxVars::Initialize();
   CompositorThreadHolder::Start();
   VRManager::ManagerInit();
@@ -143,6 +144,13 @@ GPUParent::RecvNewContentVRManager(Endpoint<PVRManagerParent>&& aEndpoint)
   return VRManagerParent::CreateForContent(Move(aEndpoint));
 }
 
+bool
+GPUParent::RecvDeallocateLayerTreeId(const uint64_t& aLayersId)
+{
+  CompositorBridgeParent::DeallocateLayerTreeId(aLayersId);
+  return true;
+}
+
 void
 GPUParent::ActorDestroy(ActorDestroyReason aWhy)
 {
@@ -162,6 +170,9 @@ GPUParent::ActorDestroy(ActorDestroyReason aWhy)
     mVsyncBridge->Shutdown();
   }
   CompositorThreadHolder::Shutdown();
+  gfxVars::Shutdown();
+  gfxConfig::Shutdown();
+  gfxPrefs::DestroySingleton();
   XRE_ShutdownChildProcess();
 }
 

@@ -415,7 +415,7 @@ function Startup()
   // convert strings to those in the string bundle
   let sb = document.getElementById("downloadStrings");
   let getStr = string => sb.getString(string);
-  for (let [name, value] in Iterator(gStr))
+  for (let [name, value] of Object.entries(gStr))
     gStr[name] = typeof value == "string" ? getStr(value) : value.map(getStr);
 
   initStatement();
@@ -1280,7 +1280,7 @@ function downloadMatchesSearch(aItem)
 // see bug #392386 for details
 function getLocalFileFromNativePathOrUrl(aPathOrUrl)
 {
-  if (aPathOrUrl.substring(0,7) == "file://") {
+  if (aPathOrUrl.substring(0, 7) == "file://") {
     // if this is a URL, get the file from that
     let ioSvc = Cc["@mozilla.org/network/io-service;1"].
                 getService(Ci.nsIIOService);

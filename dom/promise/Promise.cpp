@@ -926,18 +926,18 @@ Promise::MaybeReject(JSContext* aCx,
 #endif // SPIDERMONKEY_PROMISE
 
 void
+Promise::MaybeResolveWithUndefined()
+{
+  NS_ASSERT_OWNINGTHREAD(Promise);
+
+  MaybeResolve(JS::UndefinedHandleValue);
+}
+
+void
 Promise::MaybeReject(const RefPtr<MediaStreamError>& aArg) {
   NS_ASSERT_OWNINGTHREAD(Promise);
 
   MaybeSomething(aArg, &Promise::MaybeReject);
-}
-
-void
-Promise::MaybeRejectWithNull()
-{
-  NS_ASSERT_OWNINGTHREAD(Promise);
-
-  MaybeSomething(JS::NullHandleValue, &Promise::MaybeReject);
 }
 
 void
@@ -947,7 +947,6 @@ Promise::MaybeRejectWithUndefined()
 
   MaybeSomething(JS::UndefinedHandleValue, &Promise::MaybeReject);
 }
-
 
 #ifdef SPIDERMONKEY_PROMISE
 void
@@ -992,7 +991,7 @@ Promise::PerformMicroTaskCheckpoint()
     return false;
   }
 
-  AutoSafeJSContext cx;
+  AutoSlowOperation aso;
 
   do {
     nsCOMPtr<nsIRunnable> runnable = microtaskQueue.front().forget();
@@ -1004,7 +1003,7 @@ Promise::PerformMicroTaskCheckpoint()
     if (NS_WARN_IF(NS_FAILED(rv))) {
       return false;
     }
-    JS_CheckForInterrupt(cx);
+    aso.CheckForInterrupt();
     runtime->AfterProcessMicrotask();
   } while (!microtaskQueue.empty());
 
@@ -2769,7 +2768,7 @@ Promise::Settle(JS::Handle<JS::Value> aValue, PromiseState aState)
     worker->AssertIsOnWorkerThread();
 
     mWorkerHolder = new PromiseReportRejectWorkerHolder(this);
-    if (NS_WARN_IF(!mWorkerHolder->HoldWorker(worker))) {
+    if (NS_WARN_IF(!mWorkerHolder->HoldWorker(worker, Closing))) {
       mWorkerHolder = nullptr;
       // Worker is shutting down, report rejection immediately since it is
       // unlikely that reject callbacks will be added after this point.
@@ -3026,7 +3025,7 @@ PromiseWorkerProxy::AddRefObject()
 
   MOZ_ASSERT(!mWorkerHolder);
   mWorkerHolder.reset(new PromiseWorkerHolder(this));
-  if (NS_WARN_IF(!mWorkerHolder->HoldWorker(mWorkerPrivate))) {
+  if (NS_WARN_IF(!mWorkerHolder->HoldWorker(mWorkerPrivate, Canceling))) {
     mWorkerHolder = nullptr;
     return false;
   }

@@ -210,9 +210,14 @@ public:
      * This function is static so that it can be accessed from
      * PluginInstanceChild (where we can't call gfxPlatform::GetPlatform()
      * because the prefs service can only be accessed from the main process).
+     *
+     * aIsPlugin is used to tell the backend that they can optimize this surface
+     * specifically because it's used for a plugin. This is mostly for Skia.
      */
     static already_AddRefed<SourceSurface>
-      GetSourceSurfaceForSurface(mozilla::gfx::DrawTarget *aTarget, gfxASurface *aSurface);
+      GetSourceSurfaceForSurface(mozilla::gfx::DrawTarget *aTarget,
+                                 gfxASurface *aSurface,
+                                 bool aIsPlugin = false);
 
     static void ClearSourceSurfaceForSurface(gfxASurface *aSurface);
 
@@ -231,7 +236,7 @@ public:
     already_AddRefed<DrawTarget>
       CreateSimilarSoftwareDrawTarget(DrawTarget* aDT, const IntSize &aSize, mozilla::gfx::SurfaceFormat aFormat);
 
-    virtual already_AddRefed<DrawTarget>
+    static already_AddRefed<DrawTarget>
       CreateDrawTargetForData(unsigned char* aData, const mozilla::gfx::IntSize& aSize, 
                               int32_t aStride, mozilla::gfx::SurfaceFormat aFormat);
 
@@ -266,10 +271,6 @@ public:
     /// non-accelerated canvas.
     virtual bool UseAcceleratedCanvas();
     virtual void InitializeSkiaCacheLimits();
-
-    /// These should be used instead of directly accessing the preference,
-    /// as different platforms may override the behaviour.
-    virtual bool UseProgressivePaint();
 
     static bool AsyncPanZoomEnabled();
 

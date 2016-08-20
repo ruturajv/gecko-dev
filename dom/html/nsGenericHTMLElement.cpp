@@ -122,7 +122,7 @@ class nsAutoFocusEvent : public Runnable
 public:
   explicit nsAutoFocusEvent(nsGenericHTMLFormElement* aElement) : mElement(aElement) {}
 
-  NS_IMETHOD Run() {
+  NS_IMETHOD Run() override {
     nsFocusManager* fm = nsFocusManager::GetFocusManager();
     if (!fm) {
       return NS_ERROR_NULL_POINTER;
@@ -209,37 +209,10 @@ nsGenericHTMLElement::CopyInnerTo(Element* aDst)
   return NS_OK;
 }
 
-already_AddRefed<nsDOMStringMap>
-nsGenericHTMLElement::Dataset()
-{
-  nsDOMSlots *slots = DOMSlots();
-
-  if (!slots->mDataset) {
-    // mDataset is a weak reference so assignment will not AddRef.
-    // AddRef is called before returning the pointer.
-    slots->mDataset = new nsDOMStringMap(this);
-  }
-
-  RefPtr<nsDOMStringMap> ret = slots->mDataset;
-  return ret.forget();
-}
-
 NS_IMETHODIMP
 nsGenericHTMLElement::GetDataset(nsISupports** aDataset)
 {
   *aDataset = Dataset().take();
-  return NS_OK;
-}
-
-nsresult
-nsGenericHTMLElement::ClearDataset()
-{
-  nsDOMSlots *slots = GetExistingDOMSlots();
-
-  NS_ASSERTION(slots && slots->mDataset,
-               "Slots should exist and dataset should not be null.");
-  slots->mDataset = nullptr;
-
   return NS_OK;
 }
 
@@ -313,7 +286,7 @@ nsGenericHTMLElement::GetOffsetRect(CSSIntRect& aRect)
     parent = frame;
   }
   else {
-    const bool isPositioned = frame->IsAbsPosContaininingBlock();
+    const bool isPositioned = frame->IsAbsPosContainingBlock();
     const bool isAbsolutelyPositioned = frame->IsAbsolutelyPositioned();
     origin += frame->GetPositionIgnoringScrolling();
 
@@ -321,7 +294,7 @@ nsGenericHTMLElement::GetOffsetRect(CSSIntRect& aRect)
       content = parent->GetContent();
 
       // Stop at the first ancestor that is positioned.
-      if (parent->IsAbsPosContaininingBlock()) {
+      if (parent->IsAbsPosContainingBlock()) {
         offsetParent = content;
         break;
       }
@@ -1382,9 +1355,9 @@ nsGenericHTMLElement::MapImageAlignAttributeInto(const nsMappedAttributes* aAttr
       nsCSSValue* cssFloat = aRuleData->ValueForFloat();
       if (cssFloat->GetUnit() == eCSSUnit_Null) {
         if (align == NS_STYLE_TEXT_ALIGN_LEFT) {
-          cssFloat->SetIntValue(NS_STYLE_FLOAT_LEFT, eCSSUnit_Enumerated);
+          cssFloat->SetIntValue(StyleFloat::Left, eCSSUnit_Enumerated);
         } else if (align == NS_STYLE_TEXT_ALIGN_RIGHT) {
-          cssFloat->SetIntValue(NS_STYLE_FLOAT_RIGHT, eCSSUnit_Enumerated);
+          cssFloat->SetIntValue(StyleFloat::Right, eCSSUnit_Enumerated);
         }
       }
       nsCSSValue* verticalAlign = aRuleData->ValueForVerticalAlign();
@@ -2581,34 +2554,6 @@ nsGenericHTMLFormElement::IsLabelable() const
 }
 
 //----------------------------------------------------------------------
-
-void
-nsGenericHTMLElement::Blur(mozilla::ErrorResult& aError)
-{
-  if (!ShouldBlur(this)) {
-    return;
-  }
-
-  nsIDocument* doc = GetComposedDoc();
-  if (!doc) {
-    return;
-  }
-
-  nsPIDOMWindowOuter* win = doc->GetWindow();
-  nsIFocusManager* fm = nsFocusManager::GetFocusManager();
-  if (win && fm) {
-    aError = fm->ClearFocus(win);
-  }
-}
-
-void
-nsGenericHTMLElement::Focus(ErrorResult& aError)
-{
-  nsIFocusManager* fm = nsFocusManager::GetFocusManager();
-  if (fm) {
-    aError = fm->SetFocus(this, 0);
-  }
-}
 
 void
 nsGenericHTMLElement::Click()

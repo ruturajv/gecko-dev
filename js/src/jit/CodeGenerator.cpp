@@ -3554,13 +3554,15 @@ CodeGenerator::visitPostWriteBarrierCommonO(LPostBarrierType* lir, OutOfLineCode
         // Constant nursery objects cannot appear here, see LIRGenerator::visitPostWriteElementBarrier.
         MOZ_ASSERT(!IsInsideNursery(&lir->object()->toConstant()->toObject()));
     } else {
-        masm.branchPtrInNurseryRange(Assembler::Equal, ToRegister(lir->object()), temp,
+        masm.branchPtrInNurseryChunk(Assembler::Equal, ToRegister(lir->object()), temp,
                                      ool->rejoin());
     }
 
     maybeEmitGlobalBarrierCheck(lir->object(), ool);
 
-    masm.branchPtrInNurseryRange(Assembler::Equal, ToRegister(lir->value()), temp, ool->entry());
+    Register valueObj = ToRegister(lir->value());
+    masm.branchTestPtr(Assembler::Zero, valueObj, valueObj, ool->rejoin());
+    masm.branchPtrInNurseryChunk(Assembler::Equal, ToRegister(lir->value()), temp, ool->entry());
 
     masm.bind(ool->rejoin());
 }
@@ -3577,7 +3579,7 @@ CodeGenerator::visitPostWriteBarrierCommonV(LPostBarrierType* lir, OutOfLineCode
         // Constant nursery objects cannot appear here, see LIRGenerator::visitPostWriteElementBarrier.
         MOZ_ASSERT(!IsInsideNursery(&lir->object()->toConstant()->toObject()));
     } else {
-        masm.branchPtrInNurseryRange(Assembler::Equal, ToRegister(lir->object()), temp,
+        masm.branchPtrInNurseryChunk(Assembler::Equal, ToRegister(lir->object()), temp,
                                      ool->rejoin());
     }
 
@@ -5401,7 +5403,8 @@ CodeGenerator::visitNewArrayDynamicLength(LNewArrayDynamicLength* lir)
 
 typedef TypedArrayObject* (*TypedArrayConstructorOneArgFn)(JSContext*, HandleObject, int32_t length);
 static const VMFunction TypedArrayConstructorOneArgInfo =
-    FunctionInfo<TypedArrayConstructorOneArgFn>(TypedArrayCreateWithTemplate);
+    FunctionInfo<TypedArrayConstructorOneArgFn>(TypedArrayCreateWithTemplate,
+                                                "TypedArrayCreateWithTemplate");
 
 void
 CodeGenerator::visitNewTypedArray(LNewTypedArray* lir)
@@ -7590,6 +7593,46 @@ JitRuntime::generateLazyLinkStub(JSContext* cx)
     writePerfSpewerJitCodeProfile(code, "LazyLinkStub");
 #endif
     return code;
+}
+
+bool
+JitRuntime::generateTLEventVM(JSContext* cx, MacroAssembler& masm, const VMFunction& f,
+                              bool enter)
+{
+#ifdef JS_TRACE_LOGGING
+    TraceLoggerThread* logger = TraceLoggerForMainThread(cx->runtime());
+
+    bool vmEventEnabled = TraceLogTextIdEnabled(TraceLogger_VM);
+    bool vmSpecificEventEnabled = TraceLogTextIdEnabled(TraceLogger_VMSpecific);
+
+    if (vmEventEnabled || vmSpecificEventEnabled) {
+        AllocatableRegisterSet regs(RegisterSet::Volatile());
+        Register loggerReg = regs.takeAnyGeneral();
+        masm.Push(loggerReg);
+        masm.movePtr(ImmPtr(logger), loggerReg);
+
+        if (vmEventEnabled) {
+            if (enter)
+                masm.tracelogStartId(loggerReg, TraceLogger_VM, /* force = */ true);
+            else
+                masm.tracelogStopId(loggerReg, TraceLogger_VM, /* force = */ true);
+        }
+        if (vmSpecificEventEnabled) {
+            TraceLoggerEvent event(logger, f.name());
+            if (!event.hasPayload())
+                return false;
+
+            if (enter)
+                masm.tracelogStartId(loggerReg, event.payload()->textId(), /* force = */ true);
+            else
+                masm.tracelogStopId(loggerReg, event.payload()->textId(), /* force = */ true);
+        }
+
+        masm.Pop(loggerReg);
+    }
+#endif
+
+    return true;
 }
 
 typedef bool (*CharCodeAtFn)(JSContext*, HandleString, int32_t, uint32_t*);
@@ -11255,23 +11298,6 @@ CodeGenerator::visitAsmJSVoidReturn(LAsmJSVoidReturn* lir)
 }
 
 void
-CodeGenerator::visitAsmJSLoadFuncPtr(LAsmJSLoadFuncPtr* ins)
-{
-    const MAsmJSLoadFuncPtr* mir = ins->mir();
-
-    Register index = ToRegister(ins->index());
-    Register out = ToRegister(ins->output());
-
-    if (mir->hasLimit()) {
-        masm.branch32(Assembler::Condition::AboveOrEqual, index, Imm32(mir->limit()),
-                      wasm::JumpTarget::OutOfBounds);
-    }
-
-    masm.loadWasmGlobalPtr(mir->globalDataOffset(), out);
-    masm.loadPtr(BaseIndex(out, index, ScalePointer), out);
-}
-
-void
 CodeGenerator::emitAssertRangeI(const Range* r, Register input)
 {
     // Check the lower bound.
@@ -11641,6 +11667,22 @@ CodeGenerator::visitCheckReturn(LCheckReturn* ins)
     masm.branchTestMagicValue(Assembler::Equal, thisValue, JS_UNINITIALIZED_LEXICAL, &bail);
     bailoutFrom(&bail, ins->snapshot());
     masm.bind(&noChecks);
+}
+
+typedef bool (*ThrowCheckIsObjectFn)(JSContext*, CheckIsObjectKind);
+static const VMFunction ThrowCheckIsObjectInfo =
+    FunctionInfo<ThrowCheckIsObjectFn>(ThrowCheckIsObject, "ThrowCheckIsObject");
+
+void
+CodeGenerator::visitCheckIsObj(LCheckIsObj* ins)
+{
+    ValueOperand checkValue = ToValue(ins, LCheckIsObj::CheckValue);
+
+    OutOfLineCode* ool = oolCallVM(ThrowCheckIsObjectInfo, ins,
+                                   ArgList(Imm32(ins->mir()->checkKind())),
+                                   StoreNothing());
+    masm.branchTestObject(Assembler::NotEqual, checkValue, ool->entry());
+    masm.bind(ool->rejoin());
 }
 
 typedef bool (*ThrowObjCoercibleFn)(JSContext*, HandleValue);

@@ -16,8 +16,8 @@ XPCOMUtils.defineLazyModuleGetter(
 XPCOMUtils.defineLazyModuleGetter(
     this, "clearInterval", "resource://gre/modules/Timer.jsm");
 
-XPCOMUtils.defineLazyGetter(this, "retrieval",
-    () => Cc["@mozilla.org/accessibleRetrieval;1"].getService(Ci.nsIAccessibleRetrieval));
+XPCOMUtils.defineLazyGetter(this, "service",
+    () => Cc["@mozilla.org/accessibilityService;1"].getService(Ci.nsIAccessibilityService));
 
 this.EXPORTED_SYMBOLS = ["accessibility"];
 
@@ -117,7 +117,7 @@ accessibility.Checks = class {
    */
   getAccessible(element, mustHaveAccessible = false) {
     return new Promise((resolve, reject) => {
-      let acc = retrieval.getAccessibleFor(element);
+      let acc = service.getAccessibleFor(element);
 
       // if accessible object is found, return it;
       // if it is not required, also resolve
@@ -135,7 +135,7 @@ accessibility.Checks = class {
       } else {
         let attempts = GET_ACCESSIBLE_ATTEMPTS;
         let intervalId = setInterval(() => {
-          let acc = retrieval.getAccessibleFor(element);
+          let acc = service.getAccessibleFor(element);
           if (acc || --attempts <= 0) {
             clearInterval(intervalId);
             if (acc) {
@@ -163,7 +163,7 @@ accessibility.Checks = class {
    */
   isActionableRole(accessible) {
     return accessibility.ActionableRoles.has(
-        retrieval.getStringRole(accessible.role));
+        service.getStringRole(accessible.role));
   }
 
   /**
@@ -266,7 +266,7 @@ accessibility.Checks = class {
    *     If |element|'s visibility state does not correspond to
    *     |accessible|'s.
    */
-  checkVisible(accessible, element, visible) {
+  assertVisible(accessible, element, visible) {
     if (!accessible) {
       return;
     }
@@ -298,7 +298,7 @@ accessibility.Checks = class {
    * @throws ElementNotAccessibleError
    *     If |element|'s enabled state does not match |accessible|'s.
    */
-  checkEnabled(accessible, element, enabled) {
+  assertEnabled(accessible, element, enabled) {
     if (!accessible) {
       return;
     }
@@ -333,7 +333,7 @@ accessibility.Checks = class {
    * @throws ElementNotAccessibleError
    *     If it is impossible to activate |element| with |accessible|.
    */
-  checkActionable(accessible, element) {
+  assertActionable(accessible, element) {
     if (!accessible) {
       return;
     }
@@ -368,7 +368,7 @@ accessibility.Checks = class {
    *     If |element|'s selected state does not correspond to
    *     |accessible|'s.
    */
-  checkSelected(accessible, element, selected) {
+  assertSelected(accessible, element, selected) {
     if (!accessible) {
       return;
     }

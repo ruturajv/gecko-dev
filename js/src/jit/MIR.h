@@ -3099,7 +3099,7 @@ TemporaryTypeSet*
 MakeSingletonTypeSet(CompilerConstraintList* constraints, ObjectGroup* obj);
 
 MOZ_MUST_USE bool
-MergeTypes(MIRType* ptype, TemporaryTypeSet** ptypeSet,
+MergeTypes(TempAllocator& alloc, MIRType* ptype, TemporaryTypeSet** ptypeSet,
            MIRType newType, TemporaryTypeSet* newTypeSet);
 
 bool
@@ -7380,7 +7380,7 @@ class MPhi final
         triedToSpecialize_ = true;
         setResultType(type);
     }
-    bool specializeType();
+    bool specializeType(TempAllocator& alloc);
 
 #ifdef DEBUG
     // Assert that this is a phi in a loop header with a unique predecessor and
@@ -7409,7 +7409,8 @@ class MPhi final
 
     // Add types for this phi which speculate about new inputs that may come in
     // via a loop backedge.
-    MOZ_MUST_USE bool addBackedgeType(MIRType type, TemporaryTypeSet* typeSet);
+    MOZ_MUST_USE bool addBackedgeType(TempAllocator& alloc, MIRType type,
+                                      TemporaryTypeSet* typeSet);
 
     // Initializes the operands vector to the given capacity,
     // permitting use of addInput() instead of addInputSlow().
@@ -7437,7 +7438,7 @@ class MPhi final
 
     // Update the type of this phi after adding |ins| as an input. Set
     // |*ptypeChange| to true if the type changed.
-    bool checkForTypeChange(MDefinition* ins, bool* ptypeChange);
+    bool checkForTypeChange(TempAllocator& alloc, MDefinition* ins, bool* ptypeChange);
 
     MDefinition* foldsTo(TempAllocator& alloc) override;
     MDefinition* foldsTernary();
@@ -13049,6 +13050,32 @@ class MDebugger : public MNullaryInstruction
     TRIVIAL_NEW_WRAPPERS
 };
 
+class MCheckIsObj
+  : public MUnaryInstruction,
+    public BoxInputsPolicy::Data
+{
+    uint8_t checkKind_;
+
+    explicit MCheckIsObj(MDefinition* toCheck, uint8_t checkKind)
+      : MUnaryInstruction(toCheck), checkKind_(checkKind)
+    {
+        setResultType(MIRType::Value);
+        setResultTypeSet(toCheck->resultTypeSet());
+        setGuard();
+    }
+
+  public:
+    INSTRUCTION_HEADER(CheckIsObj)
+    TRIVIAL_NEW_WRAPPERS
+    NAMED_OPERANDS((0, checkValue))
+
+    uint8_t checkKind() const { return checkKind_; }
+
+    AliasSet getAliasSet() const override {
+        return AliasSet::None();
+    }
+};
+
 class MCheckObjCoercible
   : public MUnaryInstruction,
     public BoxInputsPolicy::Data
@@ -13065,7 +13092,6 @@ class MCheckObjCoercible
     INSTRUCTION_HEADER(CheckObjCoercible)
     TRIVIAL_NEW_WRAPPERS
     NAMED_OPERANDS((0, checkValue))
-
 };
 
 class MDebugCheckSelfHosted
@@ -13146,6 +13172,7 @@ class MWasmMemoryAccess
     MemoryBarrierBits barrierBefore() const { return barrierBefore_; }
     MemoryBarrierBits barrierAfter() const { return barrierAfter_; }
     bool isAtomicAccess() const { return (barrierBefore_ | barrierAfter_) != MembarNobits; }
+    bool isUnaligned() const { return align() && align() < byteSize(); }
 
     void removeBoundsCheck() { needsBoundsCheck_ = false; }
     void setOffset(uint32_t o) { offset_ = o; }
@@ -13446,46 +13473,6 @@ class MWasmStoreGlobalVar
     }
 };
 
-class MAsmJSLoadFuncPtr
-  : public MUnaryInstruction,
-    public NoTypePolicy::Data
-{
-    MAsmJSLoadFuncPtr(MDefinition* index, uint32_t limit, unsigned globalDataOffset)
-      : MUnaryInstruction(index), limit_(limit), globalDataOffset_(globalDataOffset)
-    {
-        setResultType(MIRType::Pointer);
-    }
-
-    uint32_t limit_;
-    unsigned globalDataOffset_;
-
-  public:
-    INSTRUCTION_HEADER(AsmJSLoadFuncPtr)
-
-    static const uint32_t NoLimit = UINT32_MAX;
-
-    static MAsmJSLoadFuncPtr* New(TempAllocator& alloc, MDefinition* index, uint32_t limit,
-                                  unsigned globalDataOffset)
-    {
-        MOZ_ASSERT(limit != NoLimit);
-        return new(alloc) MAsmJSLoadFuncPtr(index, limit, globalDataOffset);
-    }
-
-    static MAsmJSLoadFuncPtr* New(TempAllocator& alloc, MDefinition* index,
-                                  unsigned globalDataOffset)
-    {
-        return new(alloc) MAsmJSLoadFuncPtr(index, NoLimit, globalDataOffset);
-    }
-
-    MDefinition* index() const { return getOperand(0); }
-    bool hasLimit() const { return limit_ != NoLimit; }
-    uint32_t limit() const { MOZ_ASSERT(hasLimit()); return limit_; }
-    unsigned globalDataOffset() const { return globalDataOffset_; }
-
-    HashNumber valueHash() const override;
-    bool congruentTo(const MDefinition* ins) const override;
-};
-
 class MAsmJSParameter : public MNullaryInstruction
 {
     ABIArg abi_;
@@ -13558,88 +13545,18 @@ class MWasmCall final
   : public MVariadicInstruction,
     public NoTypePolicy::Data
 {
-  public:
-    class Callee {
-      public:
-        enum Which { Internal, Import, Dynamic, Builtin };
-      private:
-        Which which_;
-        union U {
-            U() {}
-            uint32_t internalFuncIndex_;
-            struct {
-                uint32_t globalDataOffset_;
-                uint32_t tlsStackOffset_;
-            } import;
-            struct {
-                MDefinition* callee_;
-                wasm::SigIdDesc sigId_;
-            } dynamic;
-            wasm::SymbolicAddress builtin_;
-        } u;
-      public:
-        Callee() {}
-        static Callee internal(uint32_t callee) {
-            Callee c;
-            c.which_ = Internal;
-            c.u.internalFuncIndex_ = callee;
-            return c;
-        }
-        static Callee import(uint32_t globalDataOffset, uint32_t tlsStackOffset) {
-            Callee c;
-            c.which_ = Import;
-            c.u.import.globalDataOffset_ = globalDataOffset;
-            c.u.import.tlsStackOffset_ = tlsStackOffset;
-            return c;
-        }
-        explicit Callee(MDefinition* callee, wasm::SigIdDesc sigId = wasm::SigIdDesc())
-          : which_(Dynamic)
-        {
-            u.dynamic.callee_ = callee;
-            u.dynamic.sigId_ = sigId;
-        }
-        explicit Callee(wasm::SymbolicAddress callee) : which_(Builtin) {
-            u.builtin_ = callee;
-        }
-        Which which() const {
-            return which_;
-        }
-        uint32_t internalFuncIndex() const {
-            MOZ_ASSERT(which_ == Internal);
-            return u.internalFuncIndex_;
-        }
-        uint32_t importGlobalDataOffset() const {
-            MOZ_ASSERT(which_ == Import);
-            return u.import.globalDataOffset_;
-        }
-        uint32_t importTlsStackOffset() const {
-            MOZ_ASSERT(which_ == Import);
-            return u.import.tlsStackOffset_;
-        }
-        MDefinition* dynamicPtr() const {
-            MOZ_ASSERT(which_ == Dynamic);
-            return u.dynamic.callee_;
-        }
-        wasm::SigIdDesc dynamicSigId() const {
-            MOZ_ASSERT(which_ == Dynamic);
-            return u.dynamic.sigId_;
-        }
-        wasm::SymbolicAddress builtin() const {
-            MOZ_ASSERT(which_ == Builtin);
-            return u.builtin_;
-        }
-    };
-
-  private:
     wasm::CallSiteDesc desc_;
-    Callee callee_;
+    wasm::CalleeDesc callee_;
     FixedList<AnyRegister> argRegs_;
-    size_t spIncrement_;
+    uint32_t spIncrement_;
+    uint32_t tlsStackOffset_;
 
-    MWasmCall(const wasm::CallSiteDesc& desc, Callee callee, size_t spIncrement)
+    MWasmCall(const wasm::CallSiteDesc& desc, const wasm::CalleeDesc& callee, uint32_t spIncrement,
+              uint32_t tlsStackOffset)
       : desc_(desc),
         callee_(callee),
-        spIncrement_(spIncrement)
+        spIncrement_(spIncrement),
+        tlsStackOffset_(tlsStackOffset)
     { }
 
   public:
@@ -13652,8 +13569,12 @@ class MWasmCall final
     };
     typedef Vector<Arg, 8, SystemAllocPolicy> Args;
 
-    static MWasmCall* New(TempAllocator& alloc, const wasm::CallSiteDesc& desc, Callee callee,
-                          const Args& args, MIRType resultType, size_t spIncrement);
+    static const uint32_t DontSaveTls = UINT32_MAX;
+
+    static MWasmCall* New(TempAllocator& alloc, const wasm::CallSiteDesc& desc,
+                          const wasm::CalleeDesc& callee, const Args& args, MIRType resultType,
+                          uint32_t spIncrement, uint32_t tlsStackOffset,
+                          MDefinition* tableIndex = nullptr);
 
     size_t numArgs() const {
         return argRegs_.length();
@@ -13665,16 +13586,18 @@ class MWasmCall final
     const wasm::CallSiteDesc& desc() const {
         return desc_;
     }
-    Callee callee() const {
+    const wasm::CalleeDesc &callee() const {
         return callee_;
     }
-    size_t dynamicCalleeOperandIndex() const {
-        MOZ_ASSERT(callee_.which() == Callee::Dynamic);
-        MOZ_ASSERT(numArgs() == numOperands() - 1);
-        return numArgs();
-    }
-    size_t spIncrement() const {
+    uint32_t spIncrement() const {
         return spIncrement_;
+    }
+    bool saveTls() const {
+        return tlsStackOffset_ != DontSaveTls;
+    }
+    uint32_t tlsStackOffset() const {
+        MOZ_ASSERT(saveTls());
+        return tlsStackOffset_;
     }
 
     bool possiblyCalls() const override {
@@ -13904,9 +13827,10 @@ BarrierKind PropertyReadNeedsTypeBarrier(JSContext* propertycx,
                                          CompilerConstraintList* constraints,
                                          MDefinition* obj, PropertyName* name,
                                          TemporaryTypeSet* observed);
-BarrierKind PropertyReadOnPrototypeNeedsTypeBarrier(IonBuilder* builder,
-                                                    MDefinition* obj, PropertyName* name,
-                                                    TemporaryTypeSet* observed);
+ResultWithOOM<BarrierKind>
+PropertyReadOnPrototypeNeedsTypeBarrier(IonBuilder* builder,
+                                        MDefinition* obj, PropertyName* name,
+                                        TemporaryTypeSet* observed);
 bool PropertyReadIsIdempotent(CompilerConstraintList* constraints,
                               MDefinition* obj, PropertyName* name);
 void AddObjectsForPropertyRead(MDefinition* obj, PropertyName* name,

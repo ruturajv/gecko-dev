@@ -150,13 +150,10 @@ mochitest-media:
     suite: mochitest/mochitest-media
     treeherder-symbol: tc-M(mda)
     instance-size: xlarge
-    chunks: 2
+    chunks: 3
     loopback-video: true
     e10s: false
-    max-run-time:
-        by-test-platform:
-            android-4.3-arm7-api-15/debug: 5400
-            default: 3600
+    max-run-time: 5400
     mozharness:
         script: mozharness/scripts/android_emulator_unittest.py
         no-read-buildbot-config: true
@@ -175,11 +172,7 @@ mochitest-webgl:
     loopback-video: true
     e10s: false
     max-run-time: 7200
-    instance-size:
-        by-test-platform:
-            android-4.3-arm7-api-15/opt: default
-            android-4.3-arm7-api-15-gradle/opt: default
-            android-4.3-arm7-api-15/debug: xlarge
+    instance-size: xlarge
     mozharness:
         script: mozharness/scripts/android_emulator_unittest.py
         no-read-buildbot-config: true
@@ -243,10 +236,7 @@ xpcshell:
             default: 3
             android-4.2-x86/opt: 4
     instance-size: xlarge
-    max-run-time:
-        by-test-platform:
-            default: 7200
-            android-4.2-x86/opt: 3600
+    max-run-time: 7200
     loopback-video: true
     e10s: false
     mozharness:

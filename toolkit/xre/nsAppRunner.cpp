@@ -837,6 +837,18 @@ nsXULAppInfo::GetProcessID(uint32_t* aResult)
   return NS_OK;
 }
 
+NS_IMETHODIMP
+nsXULAppInfo::GetUniqueProcessID(uint64_t* aResult)
+{
+  if (XRE_IsContentProcess()) {
+    ContentChild* cc = ContentChild::GetSingleton();
+    *aResult = cc->GetID();
+  } else {
+    *aResult = 0;
+  }
+  return NS_OK;
+}
+
 static bool gBrowserTabsRemoteAutostart = false;
 static uint64_t gBrowserTabsRemoteStatus = 0;
 static bool gBrowserTabsRemoteAutostartInitialized = false;
@@ -1003,6 +1015,17 @@ nsXULAppInfo::GetIsOfficial(bool* aResult)
 {
 #ifdef MOZILLA_OFFICIAL
   *aResult = true;
+#else
+  *aResult = false;
+#endif
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsXULAppInfo::GetWindowsDLLBlocklistStatus(bool* aResult)
+{
+#if defined(XP_WIN)
+  *aResult = gAppData->flags & NS_XRE_DLL_BLOCKLIST_ENABLED;
 #else
   *aResult = false;
 #endif

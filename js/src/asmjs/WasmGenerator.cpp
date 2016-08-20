@@ -52,7 +52,6 @@ ModuleGenerator::ModuleGenerator(ImportVector&& imports)
     masm_(MacroAssembler::AsmJSToken(), masmAlloc_),
     lastPatchedCallsite_(0),
     startOfUnpatchedBranches_(0),
-    externalTable_(false),
     parallel_(false),
     outstanding_(0),
     activeFunc_(nullptr),
@@ -60,13 +59,6 @@ ModuleGenerator::ModuleGenerator(ImportVector&& imports)
     finishedFuncDefs_(false)
 {
     MOZ_ASSERT(IsCompilingAsmJS());
-
-    for (const Import& import : imports_) {
-        if (import.kind == DefinitionKind::Table) {
-            externalTable_ = true;
-            break;
-        }
-    }
 }
 
 ModuleGenerator::~ModuleGenerator()
@@ -105,9 +97,10 @@ ModuleGenerator::~ModuleGenerator()
 }
 
 bool
-ModuleGenerator::init(UniqueModuleGeneratorData shared, CompileArgs&& args,
+ModuleGenerator::init(UniqueModuleGeneratorData shared, const CompileArgs& args,
                       Metadata* maybeAsmJSMetadata)
 {
+    shared_ = Move(shared);
     alwaysBaseline_ = args.alwaysBaseline;
 
     if (!exportedFuncs_.init())
@@ -117,19 +110,23 @@ ModuleGenerator::init(UniqueModuleGeneratorData shared, CompileArgs&& args,
 
     // asm.js passes in an AsmJSMetadata subclass to use instead.
     if (maybeAsmJSMetadata) {
-        MOZ_ASSERT(shared->kind == ModuleKind::AsmJS);
         metadata_ = maybeAsmJSMetadata;
+        MOZ_ASSERT(isAsmJS());
     } else {
         metadata_ = js_new<Metadata>();
         if (!metadata_)
             return false;
+        MOZ_ASSERT(!isAsmJS());
     }
 
-    metadata_->kind = shared->kind;
-    metadata_->filename = Move(args.filename);
-    metadata_->assumptions = Move(args.assumptions);
+    if (args.scriptedCaller.filename) {
+        metadata_->filename = DuplicateString(args.scriptedCaller.filename.get());
+        if (!metadata_->filename)
+            return false;
+    }
 
-    shared_ = Move(shared);
+    if (!metadata_->assumptions.clone(args.assumptions))
+        return false;
 
     // For asm.js, the Vectors in ModuleGeneratorData are max-sized reservations
     // and will be initialized in a linear order via init* functions as the
@@ -146,6 +143,14 @@ ModuleGenerator::init(UniqueModuleGeneratorData shared, CompileArgs&& args,
             linkData_.globalDataLength += sizeof(FuncImportTls);
             if (!addFuncImport(*funcImport.sig, funcImport.globalDataOffset))
                 return false;
+        }
+
+        for (const Import& import : imports_) {
+            if (import.kind == DefinitionKind::Table) {
+                MOZ_ASSERT(shared_->tables.length() == 1);
+                shared_->tables[0].external = true;
+                break;
+            }
         }
 
         for (TableDesc& table : shared_->tables) {
@@ -743,7 +748,8 @@ bool
 ModuleGenerator::addTableExport(UniqueChars fieldName)
 {
     MOZ_ASSERT(elemSegments_.empty());
-    externalTable_ = true;
+    MOZ_ASSERT(shared_->tables.length() == 1);
+    shared_->tables[0].external = true;
     return exports_.emplaceBack(Move(fieldName), DefinitionKind::Table);
 }
 
@@ -897,7 +903,9 @@ ModuleGenerator::finishFuncDefs()
 bool
 ModuleGenerator::addElemSegment(ElemSegment&& seg)
 {
-    if (externalTable_) {
+    MOZ_ASSERT(shared_->tables.length() == 1);
+
+    if (shared_->tables[0].external) {
         for (uint32_t funcIndex : seg.elems) {
             if (!exportedFuncs_.put(funcIndex))
                 return false;

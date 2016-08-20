@@ -26,6 +26,17 @@
 #include "mozilla/ServoElementSnapshot.h"
 #include "mozilla/dom/Element.h"
 
+#define IMPL_STRONG_REF_TYPE(name, T)           \
+  already_AddRefed<T> name::Consume() {         \
+    RefPtr<T> result = dont_AddRef(mPtr);       \
+    mPtr = nullptr;                             \
+    return result.forget();                     \
+  };
+
+
+IMPL_STRONG_REF_TYPE(ServoComputedValuesStrong, ServoComputedValues);
+IMPL_STRONG_REF_TYPE(RawServoStyleSheetStrong, RawServoStyleSheet);
+
 uint32_t
 Gecko_ChildrenCount(RawGeckoNode* aNode)
 {
@@ -155,7 +166,7 @@ nsIAtom*
 Gecko_Namespace(RawGeckoElement* aElement)
 {
   int32_t id = aElement->NodeInfo()->NamespaceID();
-  return nsContentUtils::NameSpaceManager()->NameSpaceURIAtom(id);
+  return nsContentUtils::NameSpaceManager()->NameSpaceURIAtomForServo(id);
 }
 
 nsIAtom*
@@ -198,7 +209,7 @@ Gecko_GetStyleContext(RawGeckoNode* aNode)
 
 nsChangeHint
 Gecko_CalcStyleDifference(nsStyleContext* aOldStyleContext,
-                          ServoComputedValues* aComputedValues)
+                          ServoComputedValuesBorrowed aComputedValues)
 {
   MOZ_ASSERT(aOldStyleContext);
   MOZ_ASSERT(aComputedValues);
@@ -224,12 +235,23 @@ void
 Gecko_StoreStyleDifference(RawGeckoNode* aNode, nsChangeHint aChangeHintToStore)
 {
 #ifdef MOZ_STYLO
-  // XXXEmilio probably storing it in the nearest content parent is a sane thing
-  // to do if this case can ever happen?
   MOZ_ASSERT(aNode->IsContent());
+  MOZ_ASSERT(aNode->IsDirtyForServo(),
+             "Change hint stored in a not-dirty node");
 
-  nsIContent* aContent = aNode->AsContent();
-  nsIFrame* primaryFrame = aContent->GetPrimaryFrame();
+  // For elements, we need to store the change hint in the proper style context.
+  // For text nodes, we want to store the change hint in the parent element,
+  // since Gecko's change list only operates on Elements, and we'll fail to
+  // compute the change hint for the element properly because the property won't
+  // always be in the cache of the parent's nsStyleContext.
+  //
+  // For Gecko this is not a problem, because they access the inherited structs
+  // from the parent style context in order to inherit them, so they're found in
+  // the cache and get compared.
+  Element* aElement =
+    aNode->IsElement() ? aNode->AsElement() : aNode->GetParentElement();
+
+  nsIFrame* primaryFrame = aElement->GetPrimaryFrame();
   if (!primaryFrame) {
     // TODO: Pick the undisplayed content map from the frame-constructor, and
     // stick it there. For now we're generating ReconstructFrame
@@ -724,6 +746,28 @@ Gecko_SetStyleCoordCalcValue(nsStyleUnit* aUnit, nsStyleUnion* aValue, nsStyleCo
   calcRef->AddRef();
 }
 
+void
+Gecko_CopyClipPathValueFrom(mozilla::StyleClipPath* aDst, const mozilla::StyleClipPath* aSrc)
+{
+  MOZ_ASSERT(aDst);
+  MOZ_ASSERT(aSrc);
+
+  *aDst = *aSrc;
+}
+
+void
+Gecko_DestroyClipPath(mozilla::StyleClipPath* aClip)
+{
+  aClip->~StyleClipPath();
+}
+
+mozilla::StyleBasicShape*
+Gecko_NewBasicShape(mozilla::StyleBasicShapeType aType)
+{
+  RefPtr<StyleBasicShape> ptr = new mozilla::StyleBasicShape(aType);
+  return ptr.forget().take();
+}
+
 NS_IMPL_THREADSAFE_FFI_REFCOUNTING(nsStyleCoord::Calc, Calc);
 
 #define STYLE_STRUCT(name, checkdata_cb)                                      \
@@ -752,230 +796,17 @@ Gecko_Destroy_nsStyle##name(nsStyle##name* ptr)                               \
 #undef STYLE_STRUCT
 
 #ifndef MOZ_STYLO
-void
-Servo_DropNodeData(ServoNodeData* data)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_DropNodeData in a "
-            "non-MOZ_STYLO build");
-}
-
-RawServoStyleSheet*
-Servo_StylesheetFromUTF8Bytes(const uint8_t* bytes, uint32_t length,
-                              mozilla::css::SheetParsingMode mode,
-                              const uint8_t* base_bytes, uint32_t base_length,
-                              ThreadSafeURIHolder* base,
-                              ThreadSafeURIHolder* referrer,
-                              ThreadSafePrincipalHolder* principal)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_StylesheetFromUTF8Bytes in a "
-            "non-MOZ_STYLO build");
-}
-
-void
-Servo_AddRefStyleSheet(RawServoStyleSheet* sheet)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_AddRefStylesheet in a "
-            "non-MOZ_STYLO build");
-}
-
-void
-Servo_ReleaseStyleSheet(RawServoStyleSheet* sheet)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_ReleaseStylesheet in a "
-            "non-MOZ_STYLO build");
-}
-
-void
-Servo_AppendStyleSheet(RawServoStyleSheet* sheet, RawServoStyleSet* set)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_AppendStyleSheet in a "
-            "non-MOZ_STYLO build");
-}
-
-void Servo_PrependStyleSheet(RawServoStyleSheet* sheet, RawServoStyleSet* set)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_PrependStyleSheet in a "
-            "non-MOZ_STYLO build");
-}
-
-void Servo_RemoveStyleSheet(RawServoStyleSheet* sheet, RawServoStyleSet* set)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_RemoveStyleSheet in a "
-            "non-MOZ_STYLO build");
-}
-
-void
-Servo_InsertStyleSheetBefore(RawServoStyleSheet* sheet,
-                             RawServoStyleSheet* reference,
-                             RawServoStyleSet* set)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_InsertStyleSheetBefore in a "
-            "non-MOZ_STYLO build");
-}
-
-bool
-Servo_StyleSheetHasRules(RawServoStyleSheet* sheet)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_StyleSheetHasRules in a "
-            "non-MOZ_STYLO build");
-}
-
-RawServoStyleSet*
-Servo_InitStyleSet()
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_InitStyleSet in a "
-            "non-MOZ_STYLO build");
-}
-
-void
-Servo_DropStyleSet(RawServoStyleSet* set)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_DropStyleSet in a "
-            "non-MOZ_STYLO build");
-}
-
-ServoDeclarationBlock*
-Servo_ParseStyleAttribute(const uint8_t* bytes, uint32_t length,
-                          nsHTMLCSSStyleSheet* cache)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_ParseStyleAttribute in a "
-            "non-MOZ_STYLO build");
-}
-
-void
-Servo_DropDeclarationBlock(ServoDeclarationBlock* declarations)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_DropDeclarationBlock in a "
-            "non-MOZ_STYLO build");
-}
-
-nsHTMLCSSStyleSheet*
-Servo_GetDeclarationBlockCache(ServoDeclarationBlock* declarations)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_GetDeclarationBlockCache in a "
-            "non-MOZ_STYLO build");
-}
-
-void
-Servo_SetDeclarationBlockImmutable(ServoDeclarationBlock* declarations)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_SetDeclarationBlockImmutable in a "
-            "non-MOZ_STYLO build");
-}
-
-void
-Servo_ClearDeclarationBlockCachePointer(ServoDeclarationBlock* declarations)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_ClearDeclarationBlockCachePointer in a "
-            "non-MOZ_STYLO build");
-}
-
-bool
-Servo_CSSSupports(const uint8_t* name, uint32_t name_length,
-                  const uint8_t* value, uint32_t value_length)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_CSSSupports in a "
-            "non-MOZ_STYLO build");
-}
-
-ServoComputedValues*
-Servo_GetComputedValues(RawGeckoNode* node)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_GetComputedValues in a "
-            "non-MOZ_STYLO build");
-}
-
-ServoComputedValues*
-Servo_GetComputedValuesForAnonymousBox(ServoComputedValues* parentStyleOrNull,
-                                       nsIAtom* pseudoTag,
-                                       RawServoStyleSet* set)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_GetComputedValuesForAnonymousBox in a "
-            "non-MOZ_STYLO build");
-}
-
-ServoComputedValues*
-Servo_GetComputedValuesForPseudoElement(ServoComputedValues* parent_style,
-                                        RawGeckoElement* match_element,
-                                        nsIAtom* pseudo_tag,
-                                        RawServoStyleSet* set,
-                                        bool is_probe)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_GetComputedValuesForPseudoElement in a "
-            "non-MOZ_STYLO build");
-}
-
-ServoComputedValues*
-Servo_InheritComputedValues(ServoComputedValues* parent_style)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_InheritComputedValues in a "
-            "non-MOZ_STYLO build");
-}
-
-void
-Servo_AddRefComputedValues(ServoComputedValues*)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_AddRefComputedValues in a "
-            "non-MOZ_STYLO build");
-}
-
-void
-Servo_ReleaseComputedValues(ServoComputedValues*)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_ReleaseComputedValues in a "
-            "non-MOZ_STYLO build");
-}
-
-void
-Servo_Initialize()
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_Initialize in a "
-            "non-MOZ_STYLO build");
-}
-
-void
-Servo_Shutdown()
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_Shutdown in a "
-            "non-MOZ_STYLO build");
-}
-
-// Restyle hints.
-nsRestyleHint
-Servo_ComputeRestyleHint(RawGeckoElement* element,
-                         ServoElementSnapshot* snapshot, RawServoStyleSet* set)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_ComputeRestyleHint in a "
-            "non-MOZ_STYLO build");
-}
-
-void
-Servo_RestyleDocument(RawGeckoDocument* doc, RawServoStyleSet* set)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_RestyleDocument in a "
-            "non-MOZ_STYLO build");
-}
-
-void Servo_RestyleSubtree(RawGeckoNode* node, RawServoStyleSet* set)
-{
-  MOZ_CRASH("stylo: shouldn't be calling Servo_RestyleSubtree in a "
-            "non-MOZ_STYLO build");
-}
-
-#define STYLE_STRUCT(name_, checkdata_cb_)                                     \
-const nsStyle##name_*                                                          \
-Servo_GetStyle##name_(ServoComputedValues*)                                    \
-{                                                                              \
-  MOZ_CRASH("stylo: shouldn't be calling Servo_GetStyle" #name_ " in a "       \
-            "non-MOZ_STYLO build");                                            \
-}
-#include "nsStyleStructList.h"
-#undef STYLE_STRUCT
+#define SERVO_BINDING_FUNC(name_, return_, ...)                               \
+  return_ name_(__VA_ARGS__) {                                                \
+    MOZ_CRASH("stylo: shouldn't be calling " #name_ "in a non-stylo build");  \
+  }
+#include "ServoBindingList.h"
+#undef SERVO_BINDING_FUNC
 #endif
 
 #ifdef MOZ_STYLO
 const nsStyleVariables*
-Servo_GetStyleVariables(ServoComputedValues* aComputedValues)
+Servo_GetStyleVariables(ServoComputedValuesBorrowed aComputedValues)
 {
   // Servo can't provide us with Variables structs yet, so instead of linking
   // to a Servo_GetStyleVariables defined in Servo we define one here that

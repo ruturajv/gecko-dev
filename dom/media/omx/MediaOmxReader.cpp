@@ -82,7 +82,7 @@ public:
     MOZ_ASSERT(mOmxReader.get());
   }
 
-  NS_IMETHOD Run()
+  NS_IMETHOD Run() override
   {
     MOZ_ASSERT(mOmxReader->OnTaskQueue());
     NotifyDataArrived();
@@ -172,7 +172,7 @@ MediaOmxReader::Shutdown()
   return p;
 }
 
-void MediaOmxReader::ReleaseMediaResources()
+void MediaOmxReader::ReleaseResources()
 {
   mMediaResourceRequest.DisconnectIfExists();
   mMetadataPromise.RejectIfExists(ReadMetadataFailureReason::METADATA_ERROR, __func__);
@@ -419,8 +419,8 @@ bool MediaOmxReader::DecodeVideoFrame(bool &aKeyframeSkip,
                                        -1,
                                        picture);
     } else {
-      v = VideoData::CreateAndCopyData(mInfo.mVideo,
-                                       mDecoder->GetImageContainer(),
+      v = VideoData::CreateAndCopyIntoTextureClient(
+                                       mInfo.mVideo,
                                        pos,
                                        frame.mTimeUs,
                                        1, // We don't know the duration.

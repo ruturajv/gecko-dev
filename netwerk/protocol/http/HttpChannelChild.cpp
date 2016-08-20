@@ -864,7 +864,10 @@ HttpChannelChild::OnStopRequest(const nsresult& channelStatus,
   LOG(("HttpChannelChild::OnStopRequest [this=%p status=%x]\n",
        this, channelStatus));
 
-  mUploadStream = nullptr;
+  if (mUploadStream) {
+    mUploadStream->Close();
+    mUploadStream = nullptr;
+  }
 
   if (mDivertingToParent) {
     MOZ_RELEASE_ASSERT(!mFlushedForDiversion,
@@ -1556,7 +1559,7 @@ public:
   {
   }
 
-  NS_IMETHOD Run() {
+  NS_IMETHOD Run() override {
     mChannel->Redirect3Complete();
     mNewChannel->OverrideWithSynthesizedResponse(mHead, mInput, mListener);
     return NS_OK;
@@ -1758,6 +1761,13 @@ HttpChannelChild::AsyncOpen(nsIStreamListener *listener, nsISupports *aContext)
              "security flags in loadInfo but asyncOpen2() not called");
 
   LOG(("HttpChannelChild::AsyncOpen [this=%p uri=%s]\n", this, mSpec.get()));
+
+  MOZ_ASSERT(mLoadInfo->GetUsePrivateBrowsing() == (mLoadInfo->GetOriginAttributes().mPrivateBrowsingId != 0),
+             "PrivateBrowsing mismatch on LoadInfo.");
+
+#ifdef DEBUG
+  CheckPrivateBrowsing();
+#endif
 
   if (mCanceled)
     return mStatus;

@@ -38,7 +38,7 @@ const PanelUI = {
 
   _initialized: false,
   init: function() {
-    for (let [k, v] of Iterator(this.kElements)) {
+    for (let [k, v] of Object.entries(this.kElements)) {
       // Need to do fresh let-bindings per iteration
       let getKey = k;
       let id = v;
@@ -335,6 +335,9 @@ const PanelUI = {
       tempPanel.setAttribute("id", "customizationui-widget-panel");
       tempPanel.setAttribute("class", "cui-widget-panel");
       tempPanel.setAttribute("viewId", aViewId);
+      if (aAnchor.getAttribute("tabspecific")) {
+        tempPanel.setAttribute("tabspecific", true);
+      }
       if (this._disableAnimations) {
         tempPanel.setAttribute("animate", "false");
       }

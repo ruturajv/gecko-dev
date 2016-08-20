@@ -160,7 +160,7 @@
          popuponly menulist to be its immediate parent. -->
     <menulist popuponly="true" id="ContentSelectDropdown" hidden="true">
       <menupopup rolluponmousewheel="true"
-                 activateontab="true"
+                 activateontab="true" position="after_start"
 #ifdef XP_WIN
                  consumeoutsideclicks="false" ignorekeys="handled"
 #endif
@@ -177,6 +177,7 @@
            orient="vertical"
            ignorekeys="true"
            hidden="true"
+           tabspecific="true"
            onpopupshown="StarUI.panelShown(event);"
            aria-labelledby="editBookmarkPanelTitle">
       <row id="editBookmarkPanelHeader" align="center" hidden="true">
@@ -706,6 +707,7 @@
                 <image id="identity-icon"
                        consumeanchor="identity-box"
                        onclick="PageProxyClickHandler(event);"/>
+                <image id="sharing-icon" mousethrough="always"/>
                 <box id="blocked-permissions-container" align="center" tooltiptext="">
                   <image data-permission-id="geo" class="notification-anchor-icon geo-icon blocked" role="button"
                          aria-label="&urlbar.geolocationNotificationAnchor.label;"/>
@@ -746,16 +748,10 @@
                          aria-label="&urlbar.webNotsNotificationAnchor3.label;"/>
                   <image id="webRTC-shareDevices-notification-icon" class="notification-anchor-icon camera-icon" role="button"
                          aria-label="&urlbar.webRTCShareDevicesNotificationAnchor.label;"/>
-                  <image id="webRTC-sharingDevices-notification-icon" class="notification-anchor-icon camera-icon in-use" role="button"
-                         aria-label="&urlbar.webRTCSharingDevicesNotificationAnchor.label;"/>
                   <image id="webRTC-shareMicrophone-notification-icon" class="notification-anchor-icon microphone-icon" role="button"
                          aria-label="&urlbar.webRTCShareMicrophoneNotificationAnchor.label;"/>
-                  <image id="webRTC-sharingMicrophone-notification-icon" class="notification-anchor-icon microphone-icon in-use" role="button"
-                         aria-label="&urlbar.webRTCSharingMicrophoneNotificationAnchor.label;"/>
                   <image id="webRTC-shareScreen-notification-icon" class="notification-anchor-icon screen-icon" role="button"
                          aria-label="&urlbar.webRTCShareScreenNotificationAnchor.label;"/>
-                  <image id="webRTC-sharingScreen-notification-icon" class="notification-anchor-icon screen-icon in-use" role="button"
-                         aria-label="&urlbar.webRTCSharingScreenNotificationAnchor.label;"/>
                   <image id="pointerLock-notification-icon" class="notification-anchor-icon pointerLock-icon" role="button"
                          aria-label="&urlbar.pointerLockNotificationAnchor.label;"/>
                   <image id="servicesInstall-notification-icon" class="notification-anchor-icon service-icon" role="button"
@@ -787,6 +783,10 @@
                        class="urlbar-icon"
                        hidden="true"
                        onclick="ReaderParent.buttonClick(event);"/>
+                <toolbarbutton id="urlbar-zoom-button"
+                       onclick="FullZoom.reset();"
+                       tooltiptext="&urlbar.zoomReset.tooltip;"
+                       hidden="true"/>
               </hbox>
               <hbox id="userContext-icons" hidden="true">
                 <label id="userContext-label"/>

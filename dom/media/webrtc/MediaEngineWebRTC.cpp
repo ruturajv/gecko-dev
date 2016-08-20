@@ -110,7 +110,8 @@ MediaEngineWebRTC::MediaEngineWebRTC(MediaEnginePrefs &aPrefs)
     mAudioInput(nullptr),
     mFullDuplex(aPrefs.mFullDuplex),
     mExtendedFilter(aPrefs.mExtendedFilter),
-    mDelayAgnostic(aPrefs.mDelayAgnostic)
+    mDelayAgnostic(aPrefs.mDelayAgnostic),
+    mHasTabVideoSource(false)
 {
 #ifndef MOZ_B2G_CAMERA
   nsCOMPtr<nsIComponentRegistrar> compMgr;
@@ -126,8 +127,16 @@ MediaEngineWebRTC::MediaEngineWebRTC(MediaEnginePrefs &aPrefs)
   // XXX
   gFarendObserver = new AudioOutputObserver();
 
-  NS_NewNamedThread("AudioGUM", getter_AddRefs(mThread));
-  MOZ_ASSERT(mThread);
+  camera::GetChildAndCall(
+    &camera::CamerasChild::AddDeviceChangeCallback,
+    this);
+}
+
+void
+MediaEngineWebRTC::SetFakeDeviceChangeEvents()
+{
+  camera::GetChildAndCall(
+    &camera::CamerasChild::SetFakeDeviceChangeEvents);
 }
 
 void
@@ -409,7 +418,7 @@ MediaEngineWebRTC::EnumerateAudioDevices(dom::MediaSourceEnum aMediaSource,
         // XXX Small window where the device list/index could change!
         audioinput = new mozilla::AudioInputCubeb(mVoiceEngine, i);
       }
-      aSource = new MediaEngineWebRTCMicrophoneSource(mThread, mVoiceEngine, audioinput,
+      aSource = new MediaEngineWebRTCMicrophoneSource(mVoiceEngine, audioinput,
                                                       i, deviceName, uniqueId);
       mAudioSources.Put(uuid, aSource); // Hashtable takes ownership.
       aASources->AppendElement(aSource);
@@ -422,6 +431,11 @@ MediaEngineWebRTC::Shutdown()
 {
   // This is likely paranoia
   MutexAutoLock lock(mMutex);
+
+  if (camera::GetCamerasChildIfExists()) {
+    camera::GetChildAndCall(
+      &camera::CamerasChild::RemoveDeviceChangeCallback, this);
+  }
 
   LOG(("%s", __FUNCTION__));
   // Shutdown all the sources, since we may have dangling references to the
@@ -450,11 +464,6 @@ MediaEngineWebRTC::Shutdown()
 
   mozilla::camera::Shutdown();
   AudioInputCubeb::CleanupGlobalData();
-
-  if (mThread) {
-    mThread->Shutdown();
-    mThread = nullptr;
-  }
 }
 
 }

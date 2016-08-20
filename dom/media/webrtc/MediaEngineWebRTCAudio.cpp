@@ -184,7 +184,6 @@ AudioOutputObserver::InsertFarEnd(const AudioDataValue *aBuffer, uint32_t aFrame
 }
 
 MediaEngineWebRTCMicrophoneSource::MediaEngineWebRTCMicrophoneSource(
-    nsIThread* aThread,
     webrtc::VoiceEngine* aVoiceEnginePtr,
     mozilla::AudioInput* aAudioInput,
     int aIndex,
@@ -194,9 +193,9 @@ MediaEngineWebRTCMicrophoneSource::MediaEngineWebRTCMicrophoneSource(
   , mVoiceEngine(aVoiceEnginePtr)
   , mAudioInput(aAudioInput)
   , mMonitor("WebRTCMic.Monitor")
-  , mThread(aThread)
   , mCapIndex(aIndex)
   , mChannel(-1)
+  , mTrackID(TRACK_NONE)
   , mStarted(false)
   , mSampleFrequency(MediaEngine::DEFAULT_SAMPLE_RATE)
   , mPlayoutDelay(0)
@@ -616,11 +615,7 @@ MediaEngineWebRTCMicrophoneSource::InsertInGraph(const T* aBuffer,
                          mPrincipalHandles[i]);
     segment->GetStartTime(insertTime);
 
-    RUN_ON_THREAD(mThread,
-                  WrapRunnable(mSources[i], &SourceMediaStream::AppendToTrack,
-                               mTrackID, segment,
-                               static_cast<AudioSegment*>(nullptr)),
-                  NS_DISPATCH_NORMAL);
+    mSources[i]->AppendToTrack(mTrackID, segment);
   }
 }
 

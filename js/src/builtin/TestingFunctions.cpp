@@ -8,7 +8,7 @@
 
 #include "mozilla/FloatingPoint.h"
 #include "mozilla/Move.h"
-#include "mozilla/Snprintf.h"
+#include "mozilla/Sprintf.h"
 #include "mozilla/unused.h"
 
 #include <cmath>
@@ -319,8 +319,8 @@ GC(JSContext* cx, unsigned argc, Value* vp)
 
     char buf[256] = { '\0' };
 #ifndef JS_MORE_DETERMINISTIC
-    snprintf_literal(buf, "before %" PRIuSIZE ", after %" PRIuSIZE "\n",
-                     preBytes, cx->runtime()->gc.usage.gcBytes());
+    SprintfLiteral(buf, "before %" PRIuSIZE ", after %" PRIuSIZE "\n",
+                   preBytes, cx->runtime()->gc.usage.gcBytes());
 #endif
     JSString* str = JS_NewStringCopyZ(cx, buf);
     if (!str)
@@ -473,7 +473,7 @@ SetAllowRelazification(JSContext* cx, bool allow)
     MOZ_ASSERT(rt->allowRelazificationForTesting != allow);
     rt->allowRelazificationForTesting = allow;
 
-    for (AllFramesIter i(cx); !i.done(); ++i)
+    for (AllScriptFramesIter i(cx); !i.done(); ++i)
         i.script()->setDoNotRelazify(allow);
 }
 
@@ -1042,8 +1042,8 @@ class HasChildTracer : public JS::CallbackTracer
     }
 
   public:
-    HasChildTracer(JSRuntime* rt, HandleValue child)
-      : JS::CallbackTracer(rt, TraceWeakMapKeysValues), child_(rt, child), found_(false)
+    HasChildTracer(JSContext* cx, HandleValue child)
+      : JS::CallbackTracer(cx, TraceWeakMapKeysValues), child_(cx, child), found_(false)
     {}
 
     bool found() const { return found_; }
@@ -1061,7 +1061,7 @@ HasChild(JSContext* cx, unsigned argc, Value* vp)
         return true;
     }
 
-    HasChildTracer trc(cx->runtime(), child);
+    HasChildTracer trc(cx, child);
     TraceChildren(&trc, parent.toGCThing(), parent.traceKind());
     args.rval().setBoolean(trc.found());
     return true;
@@ -1655,7 +1655,7 @@ ReadSPSProfilingStack(JSContext* cx, unsigned argc, Value* vp)
     JS::ProfilingFrameIterator::RegisterState state;
     uint32_t physicalFrameNo = 0;
     const unsigned propAttrs = JSPROP_ENUMERATE;
-    for (JS::ProfilingFrameIterator i(cx->runtime(), state); !i.done(); ++i, ++physicalFrameNo) {
+    for (JS::ProfilingFrameIterator i(cx, state); !i.done(); ++i, ++physicalFrameNo) {
         MOZ_ASSERT(i.stackAddress() != nullptr);
 
         // Array holding all inline frames in a single physical jit stack frame.
@@ -2212,7 +2212,7 @@ Serialize(JSContext* cx, unsigned argc, Value* vp)
 {
     CallArgs args = CallArgsFromVp(argc, vp);
 
-    JSAutoStructuredCloneBuffer clonebuf;
+    JSAutoStructuredCloneBuffer clonebuf(JS::StructuredCloneScope::SameProcessSameThread, nullptr, nullptr);
     if (!clonebuf.write(cx, args.get(0), args.get(1)))
         return false;
 
@@ -2254,7 +2254,10 @@ Deserialize(JSContext* cx, unsigned argc, Value* vp)
 
     RootedValue deserialized(cx);
     if (!JS_ReadStructuredClone(cx, obj->data(), obj->nbytes(),
-                                JS_STRUCTURED_CLONE_VERSION, &deserialized, nullptr, nullptr)) {
+                                JS_STRUCTURED_CLONE_VERSION,
+                                JS::StructuredCloneScope::SameProcessSameThread,
+                                &deserialized, nullptr, nullptr))
+    {
         return false;
     }
     args.rval().set(deserialized);
@@ -2270,38 +2273,18 @@ DetachArrayBuffer(JSContext* cx, unsigned argc, Value* vp)
 {
     CallArgs args = CallArgsFromVp(argc, vp);
 
-    if (args.length() != 2) {
-        JS_ReportError(cx, "wrong number of arguments to detachArrayBuffer()");
+    if (args.length() != 1) {
+        JS_ReportError(cx, "detachArrayBuffer() requires a single argument");
         return false;
     }
 
-    RootedObject obj(cx);
-    if (!JS_ValueToObject(cx, args[0], &obj))
-        return false;
-
-    if (!obj) {
+    if (!args[0].isObject()) {
         JS_ReportError(cx, "detachArrayBuffer must be passed an object");
         return false;
     }
 
-    RootedString str(cx, JS::ToString(cx, args[1]));
-    if (!str)
-        return false;
-    JSAutoByteString dataDisposition(cx, str);
-    if (!dataDisposition)
-        return false;
-
-    DetachDataDisposition changeData;
-    if (strcmp(dataDisposition.ptr(), "same-data") == 0) {
-        changeData = KeepData;
-    } else if (strcmp(dataDisposition.ptr(), "change-data") == 0) {
-        changeData = ChangeData;
-    } else {
-        JS_ReportError(cx, "unknown parameter 2 to detachArrayBuffer()");
-        return false;
-    }
-
-    if (!JS_DetachArrayBuffer(cx, obj, changeData))
+    RootedObject obj(cx, &args[0].toObject());
+    if (!JS_DetachArrayBuffer(cx, obj))
         return false;
 
     args.rval().setUndefined();
@@ -2402,7 +2385,7 @@ ObjectAddress(JSContext* cx, unsigned argc, Value* vp)
 #else
     void* ptr = js::UncheckedUnwrap(&args[0].toObject(), true);
     char buffer[64];
-    snprintf_literal(buffer, "%p", ptr);
+    SprintfLiteral(buffer, "%p", ptr);
 
     JSString* str = JS_NewStringCopyZ(cx, buffer);
     if (!str)
@@ -2443,8 +2426,8 @@ SharedAddress(JSContext* cx, unsigned argc, Value* vp)
     }
     char buffer[64];
     uint32_t nchar =
-        snprintf_literal(buffer, "%p",
-                         obj->as<SharedArrayBufferObject>().dataPointerShared().unwrap(/*safeish*/));
+        SprintfLiteral(buffer, "%p",
+                       obj->as<SharedArrayBufferObject>().dataPointerShared().unwrap(/*safeish*/));
 
     JSString* str = JS_NewStringCopyN(cx, buffer, nchar);
     if (!str)
@@ -3938,11 +3921,9 @@ gc::ZealModeHelpText),
 "  Deserialize data generated by serialize."),
 
     JS_FN_HELP("detachArrayBuffer", DetachArrayBuffer, 1, 0,
-"detachArrayBuffer(buffer, \"change-data\"|\"same-data\")",
+"detachArrayBuffer(buffer)",
 "  Detach the given ArrayBuffer object from its memory, i.e. as if it\n"
-"  had been transferred to a WebWorker. \"change-data\" will update\n"
-"  the internal data pointer.  \"same-data\" will leave it set to \n"
-"  its original value, mimicking, e.g.,  asm.js ArrayBuffer detaching."),
+"  had been transferred to a WebWorker."),
 
     JS_FN_HELP("helperThreadCount", HelperThreadCount, 0, 0,
 "helperThreadCount()",

@@ -48,9 +48,10 @@
 
 #include "MediaError.h"
 #include "MediaDecoder.h"
-#include "nsICategoryManager.h"
+#include "MediaPrefs.h"
 #include "MediaResource.h"
 
+#include "nsICategoryManager.h"
 #include "nsIContentPolicy.h"
 #include "nsContentPolicyUtils.h"
 #include "nsCycleCollectionParticipant.h"
@@ -241,7 +242,7 @@ public:
   {
   }
 
-  NS_IMETHOD Run()
+  NS_IMETHOD Run() override
   {
     // Silently cancel if our load has been cancelled.
     if (IsCancelled())
@@ -263,7 +264,7 @@ public:
   {
   }
 
-  NS_IMETHOD Run() {
+  NS_IMETHOD Run() override {
     // Silently cancel if our load has been cancelled.
     if (IsCancelled())
       return NS_OK;
@@ -572,14 +573,6 @@ public:
       return;
     }
 
-    // This is a workaround and it will be fix in bug 1264230.
-    nsCOMPtr<nsILoadInfo> loadInfo = channel->GetLoadInfo();
-    if (loadInfo) {
-      NeckoOriginAttributes originAttrs;
-      NS_GetOriginAttributes(channel, originAttrs);
-      loadInfo->SetOriginAttributes(originAttrs);
-    }
-
     // The listener holds a strong reference to us.  This creates a
     // reference cycle, once we've set mChannel, which is manually broken
     // in the listener's OnStartRequest method after it is finished with
@@ -878,11 +871,7 @@ HTMLMediaElement::Ended()
     return stream->IsFinished();
   }
 
-  if (mDecoder) {
-    return mDecoder->IsEndedOrShutdown();
-  }
-
-  return false;
+  return mDecoder && mDecoder->IsEnded();
 }
 
 NS_IMETHODIMP HTMLMediaElement::GetEnded(bool* aEnded)
@@ -1063,7 +1052,7 @@ public:
   {
   }
 
-  NS_IMETHOD Run() {
+  NS_IMETHOD Run() override {
     // Silently cancel if our load has been cancelled.
     if (IsCancelled())
       return NS_OK;
@@ -1733,7 +1722,7 @@ HTMLMediaElement::Seek(double aTime,
 
   if (mSrcStream) {
     // do nothing since media streams have an empty Seekable range.
-    promise->MaybeRejectWithUndefined();
+    promise->MaybeReject(NS_ERROR_DOM_INVALID_STATE_ERR);
     return promise.forget();
   }
 
@@ -1751,14 +1740,14 @@ HTMLMediaElement::Seek(double aTime,
 
   if (mReadyState == nsIDOMHTMLMediaElement::HAVE_NOTHING) {
     mDefaultPlaybackStartPosition = aTime;
-    promise->MaybeRejectWithUndefined();
+    promise->MaybeReject(NS_ERROR_DOM_INVALID_STATE_ERR);
     return promise.forget();
   }
 
   if (!mDecoder) {
     // mDecoder must always be set in order to reach this point.
     NS_ASSERTION(mDecoder, "SetCurrentTime failed: no decoder");
-    promise->MaybeRejectWithUndefined();
+    promise->MaybeReject(NS_ERROR_DOM_INVALID_STATE_ERR);
     return promise.forget();
   }
 
@@ -1773,7 +1762,7 @@ HTMLMediaElement::Seek(double aTime,
   uint32_t length = 0;
   seekable->GetLength(&length);
   if (!length) {
-    promise->MaybeRejectWithUndefined();
+    promise->MaybeReject(NS_ERROR_DOM_INVALID_STATE_ERR);
     return promise.forget();
   }
 
@@ -1889,7 +1878,7 @@ already_AddRefed<TimeRanges>
 HTMLMediaElement::Seekable() const
 {
   RefPtr<TimeRanges> ranges = new TimeRanges(ToSupports(OwnerDoc()));
-  if (mDecoder && mReadyState > nsIDOMHTMLMediaElement::HAVE_NOTHING) {
+  if (mDecoder) {
     mDecoder->GetSeekable().ToTimeRanges(ranges);
   }
   return ranges.forget();
@@ -2570,6 +2559,10 @@ HTMLMediaElement::~HTMLMediaElement()
   if (mProgressTimer) {
     StopProgress();
   }
+  if (mVideoDecodeSuspendTimer) {
+    mVideoDecodeSuspendTimer->Cancel();
+    mVideoDecodeSuspendTimer = nullptr;
+  }
   if (mSrcStream) {
     EndSrcMediaStreamPlayback();
   }
@@ -2625,20 +2618,6 @@ HTMLMediaElement::NotifyXPCOMShutdown()
 }
 
 void
-HTMLMediaElement::ResetConnectionState()
-{
-  SetCurrentTime(0);
-  FireTimeUpdate(false);
-  DispatchAsyncEvent(NS_LITERAL_STRING("ended"));
-  ChangeNetworkState(nsIDOMHTMLMediaElement::NETWORK_EMPTY);
-  ChangeDelayLoadStatus(false);
-  ChangeReadyState(nsIDOMHTMLMediaElement::HAVE_NOTHING);
-  if (mDecoder) {
-    ShutdownDecoder();
-  }
-}
-
-void
 HTMLMediaElement::Play(ErrorResult& aRv)
 {
   nsresult rv = PlayInternal(nsContentUtils::IsCallerChrome());
@@ -2678,7 +2657,7 @@ HTMLMediaElement::PlayInternal(bool aCallerIsChrome)
   // Even if we just did Load() or ResumeLoad(), we could already have a decoder
   // here if we managed to clone an existing decoder.
   if (mDecoder) {
-    if (mDecoder->IsEndedOrShutdown()) {
+    if (mDecoder->IsEnded()) {
       SetCurrentTime(0);
     }
     if (!mPausedForInactiveDocumentOrChannel) {
@@ -3044,6 +3023,42 @@ nsresult HTMLMediaElement::BindToTree(nsIDocument* aDocument, nsIContent* aParen
   return rv;
 }
 
+/* static */
+void HTMLMediaElement::VideoDecodeSuspendTimerCallback(nsITimer* aTimer, void* aClosure)
+{
+  MOZ_ASSERT(NS_IsMainThread());
+  auto element = static_cast<HTMLMediaElement*>(aClosure);
+  element->mVideoDecodeSuspendTime.Start();
+  element->mVideoDecodeSuspendTimer = nullptr;
+}
+
+void HTMLMediaElement::HiddenVideoStart()
+{
+  MOZ_ASSERT(NS_IsMainThread());
+  mHiddenPlayTime.Start();
+  if (mVideoDecodeSuspendTimer) {
+    // Already started, just keep it running.
+    return;
+  }
+  mVideoDecodeSuspendTimer = do_CreateInstance("@mozilla.org/timer;1");
+  mVideoDecodeSuspendTimer->InitWithNamedFuncCallback(
+    VideoDecodeSuspendTimerCallback, this,
+    MediaPrefs::MDSMSuspendBackgroundVideoDelay(), nsITimer::TYPE_ONE_SHOT,
+    "HTMLMediaElement::VideoDecodeSuspendTimerCallback");
+}
+
+void HTMLMediaElement::HiddenVideoStop()
+{
+  MOZ_ASSERT(NS_IsMainThread());
+  mHiddenPlayTime.Pause();
+  mVideoDecodeSuspendTime.Pause();
+  if (!mVideoDecodeSuspendTimer) {
+    return;
+  }
+  mVideoDecodeSuspendTimer->Cancel();
+  mVideoDecodeSuspendTimer = nullptr;
+}
+
 #ifdef MOZ_EME
 void
 HTMLMediaElement::ReportEMETelemetry()
@@ -3130,6 +3145,7 @@ HTMLMediaElement::ReportTelemetry()
     // We have a valid video.
     double playTime = mPlayTime.Total();
     double hiddenPlayTime = mHiddenPlayTime.Total();
+    double videoDecodeSuspendTime = mVideoDecodeSuspendTime.Total();
 
     Telemetry::Accumulate(Telemetry::VIDEO_PLAY_TIME_MS, SECONDS_TO_MS(playTime));
     LOG(LogLevel::Debug, ("%p VIDEO_PLAY_TIME_MS = %f", this, playTime));
@@ -3138,8 +3154,7 @@ HTMLMediaElement::ReportTelemetry()
     LOG(LogLevel::Debug, ("%p VIDEO_HIDDEN_PLAY_TIME_MS = %f", this, hiddenPlayTime));
 
     if (playTime > 0.0) {
-      // We have actually played something -> Report hidden/total ratio.
-      uint32_t hiddenPercentage = uint32_t(hiddenPlayTime / playTime * 100.0 + 0.5);
+      // We have actually played something -> Report some valid-video telemetry.
 
       // Keyed by audio+video or video alone, and by a resolution range.
       nsCString key(mMediaInfo.HasAudio() ? "AV," : "V,");
@@ -3161,6 +3176,7 @@ HTMLMediaElement::ReportTelemetry()
       }
       key.AppendASCII(resolution);
 
+      uint32_t hiddenPercentage = uint32_t(hiddenPlayTime / playTime * 100.0 + 0.5);
       Telemetry::Accumulate(Telemetry::VIDEO_HIDDEN_PLAY_TIME_PERCENTAGE,
                             key,
                             hiddenPercentage);
@@ -3170,6 +3186,17 @@ HTMLMediaElement::ReportTelemetry()
                             hiddenPercentage);
       LOG(LogLevel::Debug, ("%p VIDEO_HIDDEN_PLAY_TIME_PERCENTAGE = %u, keys: '%s' and 'All'",
                             this, hiddenPercentage, key.get()));
+
+      uint32_t videoDecodeSuspendPercentage =
+        uint32_t(videoDecodeSuspendTime / playTime * 100.0 + 0.5);
+      Telemetry::Accumulate(Telemetry::VIDEO_INFERRED_DECODE_SUSPEND_PERCENTAGE,
+                            key,
+                            videoDecodeSuspendPercentage);
+      Telemetry::Accumulate(Telemetry::VIDEO_INFERRED_DECODE_SUSPEND_PERCENTAGE,
+                            NS_LITERAL_CSTRING("All"),
+                            videoDecodeSuspendPercentage);
+      LOG(LogLevel::Debug, ("%p VIDEO_INFERRED_DECODE_SUSPEND_PERCENTAGE = %u, keys: '%s' and 'All'",
+                            this, videoDecodeSuspendPercentage, key.get()));
 
       if (data.mInterKeyframeCount != 0) {
         uint32_t average_ms =
@@ -3198,6 +3225,21 @@ HTMLMediaElement::ReportTelemetry()
                               max_ms);
         LOG(LogLevel::Debug, ("%p VIDEO_INTER_KEYFRAME_MAX_MS = %u, keys: '%s' and 'All'",
                               this, max_ms, key.get()));
+      } else {
+        // Here, we have played *some* of the video, but didn't get more than 1
+        // keyframe. Report '0' if we have played for longer than the video-
+        // decode-suspend delay (showing recovery would be difficult).
+        uint32_t suspendDelay_ms = MediaPrefs::MDSMSuspendBackgroundVideoDelay();
+        if (uint32_t(playTime * 1000.0) > suspendDelay_ms) {
+          Telemetry::Accumulate(Telemetry::VIDEO_INTER_KEYFRAME_MAX_MS,
+                                key,
+                                0);
+          Telemetry::Accumulate(Telemetry::VIDEO_INTER_KEYFRAME_MAX_MS,
+                                NS_LITERAL_CSTRING("All"),
+                                0);
+          LOG(LogLevel::Debug, ("%p VIDEO_INTER_KEYFRAME_MAX_MS = 0 (only 1 keyframe), keys: '%s' and 'All'",
+                                this, key.get()));
+        }
       }
     }
   }
@@ -3337,19 +3379,7 @@ nsresult HTMLMediaElement::InitializeDecoderForChannel(nsIChannel* aChannel,
     mChannelLoader = nullptr;
   }
 
-  // We postpone the |FinishDecoderSetup| function call until we get
-  // |OnConnected| signal from MediaStreamController which is held by
-  // RtspMediaResource.
-  if (DecoderTraits::DecoderWaitsForOnConnected(mimeType)) {
-    decoder->SetResource(resource);
-    SetDecoder(decoder);
-    if (aListener) {
-      *aListener = nullptr;
-    }
-    return NS_OK;
-  } else {
-    return FinishDecoderSetup(decoder, resource, aListener);
-  }
+  return FinishDecoderSetup(decoder, resource, aListener);
 }
 
 nsresult HTMLMediaElement::FinishDecoderSetup(MediaDecoder* aDecoder,
@@ -4091,7 +4121,7 @@ void HTMLMediaElement::PlaybackEnded()
   // We changed state which can affect AddRemoveSelfReference
   AddRemoveSelfReference();
 
-  NS_ASSERTION(!mDecoder || mDecoder->IsEndedOrShutdown(),
+  NS_ASSERTION(!mDecoder || mDecoder->IsEnded(),
                "Decoder fired ended, but not in ended state");
 
   // Discard all output streams that have finished now.
@@ -4358,7 +4388,8 @@ HTMLMediaElement::UpdateReadyStateInternal()
     return;
   }
 
-  if (mDownloadSuspendedByCache && mDecoder && !mDecoder->IsEndedOrShutdown() &&
+  if (mDownloadSuspendedByCache &&
+      mDecoder && !mDecoder->IsEnded() &&
       mFirstFrameLoaded) {
     // The decoder has signaled that the download has been suspended by the
     // media cache. So move readyState into HAVE_ENOUGH_DATA, in case there's
@@ -4719,14 +4750,14 @@ nsresult HTMLMediaElement::DispatchAsyncEvent(const nsAString& aName)
   if ((aName.EqualsLiteral("play") || aName.EqualsLiteral("playing"))) {
     mPlayTime.Start();
     if (IsHidden()) {
-      mHiddenPlayTime.Start();
+      HiddenVideoStart();
     }
   } else if (aName.EqualsLiteral("waiting")) {
     mPlayTime.Pause();
-    mHiddenPlayTime.Pause();
+    HiddenVideoStop();
   } else if (aName.EqualsLiteral("pause")) {
     mPlayTime.Pause();
-    mHiddenPlayTime.Pause();
+    HiddenVideoStop();
   }
 
   return NS_OK;
@@ -4764,7 +4795,7 @@ bool HTMLMediaElement::IsPlaybackEnded() const
   //   the current playback position is equal to the effective end of the media resource.
   //   See bug 449157.
   return mReadyState >= nsIDOMHTMLMediaElement::HAVE_METADATA &&
-    mDecoder ? mDecoder->IsEndedOrShutdown() : false;
+         mDecoder && mDecoder->IsEnded();
 }
 
 already_AddRefed<nsIPrincipal> HTMLMediaElement::GetCurrentPrincipal()
@@ -4878,7 +4909,7 @@ void HTMLMediaElement::SuspendOrResumeElement(bool aPauseElement, bool aSuspendE
 #endif
       if (mDecoder) {
         mDecoder->Resume();
-        if (!mPaused && !mDecoder->IsEndedOrShutdown()) {
+        if (!mPaused && !mDecoder->IsEnded()) {
           mDecoder->Play();
         }
       }
@@ -4924,10 +4955,10 @@ HTMLMediaElement::NotifyOwnerDocumentActivityChangedInternal()
   bool visible = !IsHidden();
   if (visible) {
     // Visible -> Just pause hidden play time (no-op if already paused).
-    mHiddenPlayTime.Pause();
+    HiddenVideoStop();
   } else if (mPlayTime.IsStarted()) {
     // Not visible, play time is running -> Start hidden play time if needed.
-    mHiddenPlayTime.Start();
+    HiddenVideoStart();
   }
 
   if (mDecoder && !IsBeingDestroyed()) {
@@ -4964,7 +4995,7 @@ void HTMLMediaElement::AddRemoveSelfReference()
   bool needSelfReference = !mShuttingDown &&
     ownerDoc->IsActive() &&
     (mDelayingLoadEvent ||
-     (!mPaused && mDecoder && !mDecoder->IsEndedOrShutdown()) ||
+     (!mPaused && mDecoder && !mDecoder->IsEnded()) ||
      (!mPaused && mSrcStream && !mSrcStream->IsFinished()) ||
      (mDecoder && mDecoder->IsSeeking()) ||
      CanActivateAutoplay() ||
@@ -5694,7 +5725,7 @@ HTMLMediaElement::SetMediaKeys(mozilla::dom::MediaKeys* aMediaKeys,
   // 1. If mediaKeys and the mediaKeys attribute are the same object,
   // return a resolved promise.
   if (mMediaKeys == aMediaKeys) {
-    promise->MaybeResolve(JS::UndefinedHandleValue);
+    promise->MaybeResolveWithUndefined();
     return promise.forget();
   }
 
@@ -5780,7 +5811,7 @@ HTMLMediaElement::SetMediaKeys(mozilla::dom::MediaKeys* aMediaKeys,
   // 5.5 Let this object's attaching media keys value be false.
 
   // 5.6 Resolve promise.
-  promise->MaybeResolve(JS::UndefinedHandleValue);
+  promise->MaybeResolveWithUndefined();
 
   // 6. Return promise.
   return promise.forget();
@@ -6165,5 +6196,16 @@ HTMLMediaElement::OnVisibilityChange(Visibility aOldVisibility,
   }
 
 }
+
+void
+HTMLMediaElement::NotifyCueDisplayStatesChanged()
+{
+  if (!mTextTrackManager) {
+    return;
+  }
+
+  mTextTrackManager->DispatchUpdateCueDisplay();
+}
+
 } // namespace dom
 } // namespace mozilla

@@ -176,6 +176,9 @@ user_pref("layout.css.prefixes.webkit", true);
 // Enable -webkit-{min|max}-device-pixel-ratio media queries for testing
 user_pref("layout.css.prefixes.device-pixel-ratio-webkit", true);
 
+// Enable CSS shape-outside for testing
+user_pref("layout.css.shape-outside.enabled", true);
+
 // Disable spammy layout warnings because they pollute test logs
 user_pref("layout.spammy_warnings.enabled", false);
 
@@ -228,6 +231,8 @@ user_pref("browser.webapps.checkForUpdates", 0);
 
 // Enable debug logging in the tcp presentation server.
 user_pref("dom.presentation.tcp_server.debug", true);
+// Enable debug logging in the presentation core service.
+pref("logging.Presentation", "debug");
 
 // Don't connect to Yahoo! for RSS feed tests.
 // en-US only uses .types.0.uri, but set all of them just to be sure.
@@ -347,3 +352,4 @@ user_pref("webextensions.tests", true);
 user_pref("startup.homepage_welcome_url", "about:blank");
 user_pref("startup.homepage_welcome_url.additional", "");
 user_pref("browser.usedOnWindows10.introURL", "");
+user_pref("dom.html_fragment_serialisation.appendLF", true);

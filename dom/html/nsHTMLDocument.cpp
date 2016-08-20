@@ -947,7 +947,8 @@ nsHTMLDocument::SetDomain(const nsAString& aDomain, ErrorResult& rv)
     return;
   }
 
-  rv2 = newURI->SetHostPort(NS_ConvertUTF16toUTF8(aDomain));
+  // We use SetHostAndPort because we want to reset the port number if needed.
+  rv2 = newURI->SetHostAndPort(NS_ConvertUTF16toUTF8(aDomain));
   if (NS_FAILED(rv2)) {
     rv.Throw(rv2);
     return;
@@ -2446,7 +2447,7 @@ public:
   {
   }
 
-  NS_IMETHOD Run() {
+  NS_IMETHOD Run() override {
     if (mElement && mElement->OwnerDoc() == mDoc) {
       mDoc->DeferredContentEditableCountChange(mElement);
     }

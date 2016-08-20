@@ -5,15 +5,23 @@ var {classes: Cc, interfaces: Ci, utils: Cu} = Components;
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 
 Cu.import("resource://gre/modules/ExtensionUtils.jsm");
+
+XPCOMUtils.defineLazyModuleGetter(this, "AddonManager",
+                                  "resource://gre/modules/AddonManager.jsm");
+XPCOMUtils.defineLazyModuleGetter(this, "ExtensionManagement",
+                                  "resource://gre/modules/ExtensionManagement.jsm");
+
 var {
   EventManager,
+  SingletonEventManager,
   ignoreEvent,
 } = ExtensionUtils;
 
 XPCOMUtils.defineLazyModuleGetter(this, "NativeApp",
                                   "resource://gre/modules/NativeMessaging.jsm");
 
-extensions.registerSchemaAPI("runtime", (extension, context) => {
+extensions.registerSchemaAPI("runtime", context => {
+  let {extension} = context;
   return {
     runtime: {
       onStartup: new EventManager(context, "runtime.onStartup", fire => {
@@ -29,9 +37,36 @@ extensions.registerSchemaAPI("runtime", (extension, context) => {
 
       onConnect: context.messenger.onConnect("runtime.onConnect"),
 
+      onUpdateAvailable: new SingletonEventManager(context, "runtime.onUpdateAvailable", fire => {
+        let instanceID = extension.addonData.instanceID;
+        AddonManager.addUpgradeListener(instanceID, upgrade => {
+          extension.upgrade = upgrade;
+          let details = {
+            version: upgrade.version,
+          };
+          context.runSafe(fire, details);
+        });
+        return () => {
+          AddonManager.removeUpgradeListener(instanceID);
+        };
+      }).api(),
+
+      reload: () => {
+        if (extension.upgrade) {
+          // If there is a pending update, install it now.
+          extension.upgrade.install();
+        } else {
+          // Otherwise, reload the current extension.
+          AddonManager.getAddonByID(extension.id, addon => {
+            addon.reload();
+          });
+        }
+      },
+
       connect: function(extensionId, connectInfo) {
         let name = connectInfo !== null && connectInfo.name || "";
-        let recipient = extensionId !== null ? {extensionId} : {extensionId: extension.id};
+        extensionId = extensionId || extension.id;
+        let recipient = {extensionId};
 
         return context.messenger.connect(Services.cpmm, name, recipient);
       },
@@ -46,7 +81,8 @@ extensions.registerSchemaAPI("runtime", (extension, context) => {
         } else {
           [extensionId, message, options, responseCallback] = args;
         }
-        let recipient = {extensionId: extensionId ? extensionId : extension.id};
+        extensionId = extensionId || extension.id;
+        let recipient = {extensionId};
 
         if (!GlobalManager.extensionMap.has(recipient.extensionId)) {
           return context.wrapPromise(Promise.reject({message: "Invalid extension ID"}),

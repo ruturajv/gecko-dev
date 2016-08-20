@@ -744,6 +744,13 @@ toolbar .toolbarbutton-1 > .toolbarbutton-menubutton-dropmarker > .dropmarker-ic
 %include ../shared/toolbarbuttons.inc.css
 %include ../shared/menupanel.inc.css
 
+:-moz-any(@primaryToolbarButtons@)[cui-areatype="menu-panel"][panel-multiview-anchor=true] > .toolbarbutton-icon,
+:-moz-any(@primaryToolbarButtons@)[cui-areatype="menu-panel"][panel-multiview-anchor=true] > .toolbarbutton-badge-stack > .toolbarbutton-icon,
+:-moz-any(@primaryToolbarButtons@)[cui-areatype="menu-panel"][panel-multiview-anchor=true] > .toolbarbutton-menubutton-button > .toolbarbutton-icon {
+  filter: url(chrome://browser/skin/filters.svg#fill);
+  fill: currentColor;
+}
+
 @media not all and (min-resolution: 1.1dppx) {
   #back-button:hover:active:not([disabled="true"]) {
     -moz-image-region: rect(18px, 36px, 36px, 18px);
@@ -1063,11 +1070,6 @@ toolbar .toolbarbutton-1 > .toolbarbutton-menubutton-dropmarker > .dropmarker-ic
 
   #panic-button@toolbarButtonPressed@ {
     -moz-image-region: rect(36px, 1404px, 72px, 1368px);
-  }
-
-  #add-share-provider {
-    list-style-image: url(chrome://browser/skin/menuPanel-small@2x.png);
-    -moz-image-region: rect(0px, 192px, 32px, 160px);
   }
 }
 
@@ -1655,8 +1657,46 @@ toolbar .toolbarbutton-1 > .toolbarbutton-menubutton-button {
   height: 16px;
 }
 
+/* ::::: URL Bar Zoom Reset Button ::::: */
+@keyframes urlbar-zoom-reset-pulse {
+  0% {
+    transform: scale(0);
+  }
+  75% {
+    transform: scale(1.5);
+  }
+  100% {
+    transform: scale(1.0);
+  }
+}
+
+#urlbar-zoom-button {
+  margin: 0 3px;
+  font-size: .8em;
+  padding: 0 8px;
+  border-radius: 1em;
+  background-color: hsla(0,0%,0%,.05);
+  border: 1px solid hsla(0,0%,0%,.1);
+}
+
+#urlbar-zoom-button[animate="true"] {
+  animation-name: urlbar-zoom-reset-pulse;
+  animation-duration: 250ms;
+}
+#urlbar-zoom-button:hover:active {
+  background-color: hsla(0,0%,0%,.1);
+}
+
+#urlbar-zoom-button > .toolbarbutton-text {
+  display: -moz-box;
+}
+
+#urlbar-zoom-button > .toolbarbutton-icon {
+  display: none;
+}
+
 #urlbar-search-footer {
-  border-top: 1px solid hsla(210,4%,10%,.14);
+  border-top: 1px solid var(--panel-separator-color);
   background-color: hsla(210,4%,10%,.07);
 }
 
@@ -2909,27 +2949,6 @@ toolbarbutton.chevron > .toolbarbutton-menu-dropmarker {
   }
 }
 
-.alltabs-item[tabIsVisible] {
-  /* box-shadow instead of background-color to work around native styling */
-  box-shadow: inset -5px 0 ThreeDShadow;
-}
-
-.alltabs-endimage[muted] {
-  list-style-image: url(chrome://browser/skin/tabbrowser/tab-audio.svg#tab-audio-menu-muted);
-}
-
-.alltabs-endimage[soundplaying] {
-  list-style-image: url(chrome://browser/skin/tabbrowser/tab-audio.svg#tab-audio-menu);
-}
-
-menuitem:hover > hbox > .alltabs-endimage[muted] {
-  list-style-image: url(chrome://browser/skin/tabbrowser/tab-audio.svg#tab-audio-menu-muted-hover);
-}
-
-menuitem:hover > hbox > .alltabs-endimage[soundplaying] {
-  list-style-image: url(chrome://browser/skin/tabbrowser/tab-audio.svg#tab-audio-menu-hover);
-}
-
 /* Bookmarks toolbar */
 #PlacesToolbarDropIndicator {
   list-style-image: url(chrome://browser/skin/places/toolbarDropMarker.png);
@@ -3116,11 +3135,11 @@ menulist.translate-infobar-element > .menulist-dropmarker {
 #ctrlTab-panel {
   -moz-appearance: none;
   -moz-window-shadow: none;
-  background: rgba(27%,27%,27%,.7);
+  background: hsla(0,0%,33%,.85);
   color: white;
   border-style: none;
   padding: 20px 10px 10px;
-  text-shadow: 0 0 1px rgb(27%,27%,27%), 0 0 2px rgb(27%,27%,27%);
+  text-shadow: 0 0 1px hsl(0,0%,12%), 0 0 2px hsl(0,0%,12%);
 }
 
 .ctrlTab-favicon[src] {
@@ -3131,7 +3150,7 @@ menulist.translate-infobar-element > .menulist-dropmarker {
 }
 
 .ctrlTab-preview-inner > .tabPreview-canvas {
-  box-shadow: 1px 1px 2px rgb(12%,12%,12%);
+  box-shadow: 1px 1px 2px hsl(0,0%,12%);
 }
 
 .ctrlTab-preview:not(#ctrlTab-showAll) > * > .ctrlTab-preview-inner > .tabPreview-canvas {
@@ -3461,4 +3480,12 @@ menulist.translate-infobar-element > .menulist-dropmarker {
 .browser-extension-panel > .panel-arrowcontainer > .panel-arrowcontent {
   padding: 0;
   overflow: hidden;
+}
+
+.cui-widget-panelview[id^=PanelUI-webext-] {
+  border-radius: 3.5px;
+}
+
+.webextension-popup-browser {
+  border-radius: inherit;
 }

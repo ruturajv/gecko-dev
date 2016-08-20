@@ -14,7 +14,7 @@
 #include "mozilla/mozalloc.h"
 #include "mozilla/PodOperations.h"
 #include "mozilla/SizePrintfMacros.h"
-#include "mozilla/Snprintf.h"
+#include "mozilla/Sprintf.h"
 #include "mozilla/TimeStamp.h"
 
 #ifdef XP_WIN
@@ -150,6 +150,17 @@ static const TimeDuration MAX_TIMEOUT_INTERVAL = TimeDuration::FromSeconds(1800.
 
 #ifdef SPIDERMONKEY_PROMISE
 using JobQueue = GCVector<JSObject*, 0, SystemAllocPolicy>;
+
+struct ShellAsyncTasks
+{
+    explicit ShellAsyncTasks(JSContext* cx)
+      : outstanding(0),
+        finished(cx)
+    {}
+
+    size_t outstanding;
+    Vector<JS::AsyncTask*> finished;
+};
 #endif // SPIDERMONKEY_PROMISE
 
 // Per-context shell state.
@@ -168,6 +179,7 @@ struct ShellContext
 #ifdef SPIDERMONKEY_PROMISE
     JS::PersistentRootedValue promiseRejectionTrackerCallback;
     JS::PersistentRooted<JobQueue> jobQueue;
+    ExclusiveData<ShellAsyncTasks> asyncTasks;
 #endif // SPIDERMONKEY_PROMISE
 
     /*
@@ -329,6 +341,7 @@ ShellContext::ShellContext(JSContext* cx)
     lastWarning(cx, NullValue()),
 #ifdef SPIDERMONKEY_PROMISE
     promiseRejectionTrackerCallback(cx, NullValue()),
+    asyncTasks(cx),
 #endif // SPIDERMONKEY_PROMISE
     exitCode(0),
     quitting(false),
@@ -643,6 +656,28 @@ ShellEnqueuePromiseJobCallback(JSContext* cx, JS::HandleObject job, JS::HandleOb
     MOZ_ASSERT(job);
     return sc->jobQueue.append(job);
 }
+
+static bool
+ShellStartAsyncTaskCallback(JSContext* cx, JS::AsyncTask* task)
+{
+    ShellContext* sc = GetShellContext(cx);
+    task->user = sc;
+
+    ExclusiveData<ShellAsyncTasks>::Guard asyncTasks = sc->asyncTasks.lock();
+    asyncTasks->outstanding++;
+    return true;
+}
+
+static bool
+ShellFinishAsyncTaskCallback(JS::AsyncTask* task)
+{
+    ShellContext* sc = (ShellContext*)task->user;
+
+    ExclusiveData<ShellAsyncTasks>::Guard asyncTasks = sc->asyncTasks.lock();
+    MOZ_ASSERT(asyncTasks->outstanding > 0);
+    asyncTasks->outstanding--;
+    return asyncTasks->finished.append(task);
+}
 #endif // SPIDERMONKEY_PROMISE
 
 static bool
@@ -652,6 +687,25 @@ DrainJobQueue(JSContext* cx)
     ShellContext* sc = GetShellContext(cx);
     if (sc->quitting)
         return true;
+
+    // Wait for any outstanding async tasks to finish so that the
+    // finishedAsyncTasks list is fixed.
+    while (true) {
+        if (!sc->asyncTasks.lock()->outstanding)
+            break;
+        AutoLockHelperThreadState lock;
+        HelperThreadState().wait(lock, GlobalHelperThreadState::CONSUMER);
+    }
+
+    // Lock the whole time while flushing the asyncTasks finished queue so that
+    // any new tasks created during finish() cannot racily join the job queue.
+    {
+        ExclusiveData<ShellAsyncTasks>::Guard asyncTasks = sc->asyncTasks.lock();
+        for (JS::AsyncTask* task : asyncTasks->finished)
+            task->finish(cx);
+        asyncTasks->finished.clear();
+    }
+
     RootedObject job(cx);
     JS::HandleValueArray args(JS::HandleValueArray::empty());
     RootedValue rval(cx);
@@ -698,6 +752,9 @@ ForwardingPromiseRejectionTrackerCallback(JSContext* cx, JS::HandleObject promis
     FixedInvokeArgs<2> args(cx);
     args[0].setObject(*promise);
     args[1].setInt32(static_cast<int32_t>(state));
+
+    if (!JS_WrapValue(cx, args[0]))
+        return;
 
     RootedValue rval(cx);
     if (!Call(cx, callback, UndefinedHandleValue, args, &rval))
@@ -1224,7 +1281,6 @@ my_LargeAllocFailCallback(void* data)
         return;
 
     MOZ_ASSERT(!rt->isHeapBusy());
-    MOZ_ASSERT(!rt->currentThreadHasExclusiveAccess());
 
     JS::PrepareForFullGC(cx);
     AutoKeepAtoms keepAtoms(cx->perThreadData);
@@ -1509,9 +1565,9 @@ Evaluate(JSContext* cx, unsigned argc, Value* vp)
         if (loadBytecode && assertEqBytecode) {
             if (saveLength != loadLength) {
                 char loadLengthStr[16];
-                snprintf_literal(loadLengthStr, "%" PRIu32, loadLength);
+                SprintfLiteral(loadLengthStr, "%" PRIu32, loadLength);
                 char saveLengthStr[16];
-                snprintf_literal(saveLengthStr,"%" PRIu32, saveLength);
+                SprintfLiteral(saveLengthStr,"%" PRIu32, saveLength);
 
                 JS_ReportErrorNumber(cx, my_GetErrorMessage, nullptr, JSSMSG_CACHE_EQ_SIZE_FAILED,
                                      loadLengthStr, saveLengthStr);
@@ -2975,6 +3031,7 @@ WorkerMain(void* arg)
     sc->jobQueue.init(cx, JobQueue(SystemAllocPolicy()));
     JS::SetEnqueuePromiseJobCallback(cx, ShellEnqueuePromiseJobCallback);
     JS::SetGetIncumbentGlobalCallback(cx, ShellGetIncumbentGlobalCallback);
+    JS::SetAsyncTaskCallbacks(cx, ShellStartAsyncTaskCallback, ShellFinishAsyncTaskCallback);
 #endif // SPIDERMONKEY_PROMISE
 
     EnvironmentPreparer environmentPreparer(cx);
@@ -3021,7 +3078,7 @@ WorkerMain(void* arg)
 
 // Workers can spawn other workers, so we need a lock to access workerThreads.
 static Mutex* workerThreadsLock = nullptr;
-static Vector<PRThread*, 0, SystemAllocPolicy> workerThreads;
+static Vector<js::Thread*, 0, SystemAllocPolicy> workerThreads;
 
 class MOZ_RAII AutoLockWorkerThreads : public LockGuard<Mutex>
 {
@@ -3082,10 +3139,8 @@ EvalInWorker(JSContext* cx, unsigned argc, Value* vp)
         return false;
     }
 
-    PRThread* thread = PR_CreateThread(PR_USER_THREAD, WorkerMain, input,
-                                       PR_PRIORITY_NORMAL, PR_GLOBAL_THREAD, PR_JOINABLE_THREAD,
-                                       gMaxStackSize + 128 * 1024);
-    if (!thread) {
+    auto thread = js_new<Thread>(Thread::Options().setStackSize(gMaxStackSize + 128 * 1024));
+    if (!thread || !thread->init(WorkerMain, input)) {
         ReportOutOfMemory(cx);
         return false;
     }
@@ -3093,7 +3148,7 @@ EvalInWorker(JSContext* cx, unsigned argc, Value* vp)
     AutoLockWorkerThreads alwt;
     if (!workerThreads.append(thread)) {
         ReportOutOfMemory(cx);
-        PR_JoinThread(thread);
+        thread->join();
         return false;
     }
 
@@ -3111,6 +3166,22 @@ ShapeOf(JSContext* cx, unsigned argc, JS::Value* vp)
     }
     JSObject* obj = &args[0].toObject();
     args.rval().set(JS_NumberValue(double(uintptr_t(obj->maybeShape()) >> 3)));
+    return true;
+}
+
+static bool
+GroupOf(JSContext* cx, unsigned argc, JS::Value* vp)
+{
+    CallArgs args = CallArgsFromVp(argc, vp);
+    if (!args.get(0).isObject()) {
+        JS_ReportError(cx, "groupOf: object expected");
+        return false;
+    }
+    JSObject* obj = &args[0].toObject();
+    ObjectGroup* group = obj->getGroup(cx);
+    if (!group)
+        return false;
+    args.rval().set(JS_NumberValue(double(uintptr_t(group) >> 3)));
     return true;
 }
 
@@ -3251,14 +3322,14 @@ KillWorkerThreads()
         // We need to leave the AutoLockWorkerThreads scope before we call
         // PR_JoinThread, to avoid deadlocks when AutoLockWorkerThreads is
         // used by the worker thread.
-        PRThread* thread;
+        Thread* thread;
         {
             AutoLockWorkerThreads alwt;
             if (workerThreads.empty())
                 break;
             thread = workerThreads.popCopy();
         }
-        PR_JoinThread(thread);
+        thread->join();
     }
 
     js_delete(workerThreadsLock);
@@ -4515,7 +4586,7 @@ PrintProfilerEvents(JSContext* cx, unsigned argc, Value* vp)
 {
     CallArgs args = CallArgsFromVp(argc, vp);
     if (cx->runtime()->spsProfiler.enabled())
-        js::RegisterRuntimeProfilingEventMarker(cx->runtime(), &PrintProfilerEvents_Callback);
+        js::RegisterContextProfilingEventMarker(cx, &PrintProfilerEvents_Callback);
     args.rval().setUndefined();
     return true;
 }
@@ -4527,10 +4598,10 @@ Vector<StackChars, 0, SystemAllocPolicy> stacks;
 static void
 SingleStepCallback(void* arg, jit::Simulator* sim, void* pc)
 {
-    JSRuntime* rt = reinterpret_cast<JSRuntime*>(arg);
+    JSContext* cx = reinterpret_cast<JSContext*>(arg);
 
     // If profiling is not enabled, don't do anything.
-    if (!rt->spsProfiler.enabled())
+    if (!cx->spsProfiler.enabled())
         return;
 
     JS::ProfilingFrameIterator::RegisterState state;
@@ -4547,7 +4618,7 @@ SingleStepCallback(void* arg, jit::Simulator* sim, void* pc)
     StackChars stack;
     uint32_t frameNo = 0;
     AutoEnterOOMUnsafeRegion oomUnsafe;
-    for (JS::ProfilingFrameIterator i(rt, state); !i.done(); ++i) {
+    for (JS::ProfilingFrameIterator i(cx, state); !i.done(); ++i) {
         MOZ_ASSERT(i.stackAddress() != nullptr);
         MOZ_ASSERT(lastStackAddress <= i.stackAddress());
         lastStackAddress = i.stackAddress();
@@ -4582,7 +4653,7 @@ EnableSingleStepProfiling(JSContext* cx, unsigned argc, Value* vp)
     CallArgs args = CallArgsFromVp(argc, vp);
 
     jit::Simulator* sim = cx->runtime()->simulator();
-    sim->enable_single_stepping(SingleStepCallback, cx->runtime());
+    sim->enable_single_stepping(SingleStepCallback, cx);
 
     args.rval().setUndefined();
     return true;
@@ -4640,13 +4711,13 @@ EnableSPSProfiling(JSContext* cx, unsigned argc, Value* vp)
     ShellContext* sc = GetShellContext(cx);
 
     // Disable before re-enabling; see the assertion in |SPSProfiler::setProfilingStack|.
-    if (cx->runtime()->spsProfiler.installed())
-        cx->runtime()->spsProfiler.enable(false);
+    if (cx->spsProfiler.installed())
+        cx->spsProfiler.enable(false);
 
-    SetRuntimeProfilingStack(cx->runtime(), sc->spsProfilingStack, &sc->spsProfilingStackSize,
+    SetContextProfilingStack(cx, sc->spsProfilingStack, &sc->spsProfilingStackSize,
                              ShellContext::SpsProfilingMaxStackSize);
-    cx->runtime()->spsProfiler.enableSlowAssertions(false);
-    cx->runtime()->spsProfiler.enable(true);
+    cx->spsProfiler.enableSlowAssertions(false);
+    cx->spsProfiler.enable(true);
 
     args.rval().setUndefined();
     return true;
@@ -4660,25 +4731,25 @@ EnableSPSProfilingWithSlowAssertions(JSContext* cx, unsigned argc, Value* vp)
 
     ShellContext* sc = GetShellContext(cx);
 
-    if (cx->runtime()->spsProfiler.enabled()) {
+    if (cx->spsProfiler.enabled()) {
         // If profiling already enabled with slow assertions disabled,
         // this is a no-op.
-        if (cx->runtime()->spsProfiler.slowAssertionsEnabled())
+        if (cx->spsProfiler.slowAssertionsEnabled())
             return true;
 
         // Slow assertions are off.  Disable profiling before re-enabling
         // with slow assertions on.
-        cx->runtime()->spsProfiler.enable(false);
+        cx->spsProfiler.enable(false);
     }
 
     // Disable before re-enabling; see the assertion in |SPSProfiler::setProfilingStack|.
-    if (cx->runtime()->spsProfiler.installed())
-        cx->runtime()->spsProfiler.enable(false);
+    if (cx->spsProfiler.installed())
+        cx->spsProfiler.enable(false);
 
-    SetRuntimeProfilingStack(cx->runtime(), sc->spsProfilingStack, &sc->spsProfilingStackSize,
+    SetContextProfilingStack(cx, sc->spsProfilingStack, &sc->spsProfilingStackSize,
                              ShellContext::SpsProfilingMaxStackSize);
-    cx->runtime()->spsProfiler.enableSlowAssertions(true);
-    cx->runtime()->spsProfiler.enable(true);
+    cx->spsProfiler.enableSlowAssertions(true);
+    cx->spsProfiler.enable(true);
 
     return true;
 }
@@ -5456,6 +5527,10 @@ static const JSFunctionSpecWithHelp shell_functions[] = {
     JS_FN_HELP("shapeOf", ShapeOf, 1, 0,
 "shapeOf(obj)",
 "  Get the shape of obj (an implementation detail)."),
+
+    JS_FN_HELP("groupOf", GroupOf, 1, 0,
+"groupOf(obj)",
+"  Get the group of obj (an implementation detail)."),
 
 #ifdef DEBUG
     JS_FN_HELP("arrayInfo", ArrayInfo, 1, 0,
@@ -6827,6 +6902,15 @@ SetContextOptions(JSContext* cx, const OptionParser& op)
     if (op.getBoolOption("no-unboxed-objects"))
         jit::JitOptions.disableUnboxedObjects = true;
 
+    if (const char* str = op.getStringOption("cache-ir-stubs")) {
+        if (strcmp(str, "on") == 0)
+            jit::JitOptions.disableCacheIR = false;
+        else if (strcmp(str, "off") == 0)
+            jit::JitOptions.disableCacheIR = true;
+        else
+            return OptionFailure("cache-ir-stubs", str);
+    }
+
     if (const char* str = op.getStringOption("ion-scalar-replacement")) {
         if (strcmp(str, "on") == 0)
             jit::JitOptions.disableScalarReplacement = false;
@@ -7279,8 +7363,10 @@ main(int argc, char** argv, char** envp)
 #  endif
             )
 #endif
+        || !op.addStringOption('\0', "cache-ir-stubs", "on/off",
+                               "Use CacheIR stubs (default: on, off to disable)")
         || !op.addStringOption('\0', "ion-shared-stubs", "on/off",
-                               "Use shared stubs (default: on, off to enable)")
+                               "Use shared stubs (default: on, off to disable)")
         || !op.addStringOption('\0', "ion-scalar-replacement", "on/off",
                                "Scalar Replacement (default: on, off to disable)")
         || !op.addStringOption('\0', "ion-gvn", "[mode]",
@@ -7492,6 +7578,7 @@ main(int argc, char** argv, char** envp)
     sc->jobQueue.init(cx, JobQueue(SystemAllocPolicy()));
     JS::SetEnqueuePromiseJobCallback(cx, ShellEnqueuePromiseJobCallback);
     JS::SetGetIncumbentGlobalCallback(cx, ShellGetIncumbentGlobalCallback);
+    JS::SetAsyncTaskCallbacks(cx, ShellStartAsyncTaskCallback, ShellFinishAsyncTaskCallback);
 #endif // SPIDERMONKEY_PROMISE
 
     EnvironmentPreparer environmentPreparer(cx);

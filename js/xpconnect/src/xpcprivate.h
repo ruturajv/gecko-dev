@@ -1402,8 +1402,7 @@ class XPCNativeSet final
     size_t SizeOfIncludingThis(mozilla::MallocSizeOf mallocSizeOf);
 
   protected:
-    static XPCNativeSet* NewInstance(XPCNativeInterface** array,
-                                     uint16_t count);
+    static XPCNativeSet* NewInstance(nsTArray<XPCNativeInterface*>&& array);
     static XPCNativeSet* NewInstanceMutate(XPCNativeSet*       otherSet,
                                            XPCNativeInterface* newInterface,
                                            uint16_t            position);
@@ -1427,40 +1426,33 @@ class XPCNativeSet final
 /***************************************************************************/
 // XPCNativeScriptableFlags is a wrapper class that holds the flags returned
 // from calls to nsIXPCScriptable::GetScriptableFlags(). It has convenience
-// methods to check for particular bitflags. Since we also use this class as
-// a member of the gc'd class XPCNativeScriptableShared, this class holds the
-// bit and exposes the inlined methods to support marking.
-
-#define XPC_WN_SJSFLAGS_MARK_FLAG JS_BIT(31) // only high bit of 32 is set
+// methods to check for particular bitflags.
 
 class XPCNativeScriptableFlags final
 {
-private:
-    uint32_t mFlags;
-
 public:
-
     explicit XPCNativeScriptableFlags(uint32_t flags = 0) : mFlags(flags) {}
 
-    uint32_t GetFlags() const {return mFlags & ~XPC_WN_SJSFLAGS_MARK_FLAG;}
-    void     SetFlags(uint32_t flags) {mFlags = flags;}
+    uint32_t GetFlags() const { return mFlags; }
+    void SetFlags(uint32_t flags) { mFlags = flags; }
 
-    operator uint32_t() const {return GetFlags();}
+    operator uint32_t() const { return GetFlags(); }
 
     XPCNativeScriptableFlags(const XPCNativeScriptableFlags& r)
-        {mFlags = r.GetFlags();}
+    {
+        mFlags = r.GetFlags();
+    }
 
     XPCNativeScriptableFlags& operator= (const XPCNativeScriptableFlags& r)
-        {mFlags = r.GetFlags(); return *this;}
-
-    void Mark()       {mFlags |= XPC_WN_SJSFLAGS_MARK_FLAG;}
-    void Unmark()     {mFlags &= ~XPC_WN_SJSFLAGS_MARK_FLAG;}
-    bool IsMarked() const {return 0 != (mFlags & XPC_WN_SJSFLAGS_MARK_FLAG);}
+    {
+        mFlags = r.GetFlags();
+        return *this;
+    }
 
 #ifdef GET_IT
 #undef GET_IT
 #endif
-#define GET_IT(f_) const {return 0 != (mFlags & nsIXPCScriptable:: f_ );}
+#define GET_IT(f_) const { return 0 != (mFlags & nsIXPCScriptable:: f_ ); }
 
     bool WantPreCreate()                GET_IT(WANT_PRECREATE)
     bool WantAddProperty()              GET_IT(WANT_ADDPROPERTY)
@@ -1485,6 +1477,9 @@ public:
     bool DontReflectInterfaceNames()    GET_IT(DONT_REFLECT_INTERFACE_NAMES)
 
 #undef GET_IT
+
+private:
+    uint32_t mFlags;
 };
 
 /***************************************************************************/
@@ -1500,17 +1495,13 @@ public:
 class XPCNativeScriptableShared final
 {
 public:
+    NS_INLINE_DECL_REFCOUNTING(XPCNativeScriptableShared)
+
     const XPCNativeScriptableFlags& GetFlags() const { return mFlags; }
 
     const JSClass* GetJSClass() { return Jsvalify(&mJSClass); }
 
     XPCNativeScriptableShared(uint32_t aFlags, char* aName, bool aPopulate);
-
-    ~XPCNativeScriptableShared() {
-        free((void*)mJSClass.name);
-        free((void*)mJSClass.cOps);
-        MOZ_COUNT_DTOR(XPCNativeScriptableShared);
-    }
 
     char* TransferNameOwnership() {
         char* name = (char*)mJSClass.name;
@@ -1518,11 +1509,9 @@ public:
         return name;
     }
 
-    void Mark()   { mFlags.Mark(); }
-    void Unmark() { mFlags.Unmark(); }
-    bool IsMarked() const { return mFlags.IsMarked(); }
-
 private:
+    ~XPCNativeScriptableShared();
+
     XPCNativeScriptableFlags mFlags;
 
     // This is an unusual js::Class instance: its name and cOps members are
@@ -1542,31 +1531,28 @@ public:
     Construct(const XPCNativeScriptableCreateInfo* sci);
 
     nsIXPCScriptable*
-    GetCallback() const {return mCallback;}
+    GetCallback() const { return mCallback; }
 
     const XPCNativeScriptableFlags&
-    GetFlags() const      {return mShared->GetFlags();}
+    GetFlags() const { return mShared->GetFlags(); }
 
     const JSClass*
-    GetJSClass()          {return mShared->GetJSClass();}
+    GetJSClass() { return mShared->GetJSClass(); }
 
     void
-    SetScriptableShared(XPCNativeScriptableShared* shared) {mShared = shared;}
-
-    void Mark() {
-        if (mShared)
-            mShared->Mark();
-    }
-
-    void TraceJS(JSTracer* trc) {}
-    void AutoTrace(JSTracer* trc) {}
+    SetScriptableShared(already_AddRefed<XPCNativeScriptableShared>&& shared) { mShared = shared; }
 
 protected:
     explicit XPCNativeScriptableInfo(nsIXPCScriptable* scriptable)
-        : mCallback(scriptable), mShared(nullptr)
-                               {MOZ_COUNT_CTOR(XPCNativeScriptableInfo);}
+        : mCallback(scriptable)
+    {
+        MOZ_COUNT_CTOR(XPCNativeScriptableInfo);
+    }
 public:
-    ~XPCNativeScriptableInfo() {MOZ_COUNT_DTOR(XPCNativeScriptableInfo);}
+    ~XPCNativeScriptableInfo()
+    {
+        MOZ_COUNT_DTOR(XPCNativeScriptableInfo);
+    }
 private:
 
     // disable copy ctor and assignment
@@ -1574,8 +1560,8 @@ private:
     XPCNativeScriptableInfo& operator= (const XPCNativeScriptableInfo& r) = delete;
 
 private:
-    nsCOMPtr<nsIXPCScriptable>  mCallback;
-    XPCNativeScriptableShared*  mShared;
+    nsCOMPtr<nsIXPCScriptable> mCallback;
+    RefPtr<XPCNativeScriptableShared> mShared;
 };
 
 /***************************************************************************/
@@ -1666,8 +1652,6 @@ public:
     void TraceInside(JSTracer* trc) {
         if (trc->isMarkingTracer()) {
             mSet->Mark();
-            if (mScriptableInfo)
-                mScriptableInfo->Mark();
         }
 
         GetScope()->TraceSelf(trc);
@@ -1687,10 +1671,7 @@ public:
     // NOP. This is just here to make the AutoMarkingPtr code compile.
     inline void AutoTrace(JSTracer* trc) {}
 
-    // Yes, we *do* need to mark the mScriptableInfo in both cases.
-    void Mark() const
-        {mSet->Mark();
-         if (mScriptableInfo) mScriptableInfo->Mark();}
+    void Mark() const {mSet->Mark();}
 
 #ifdef DEBUG
     void ASSERT_SetNotMarked() const {mSet->ASSERT_NotMarked();}
@@ -1950,16 +1931,12 @@ public:
     void Mark() const
     {
         mSet->Mark();
-        if (mScriptableInfo) mScriptableInfo->Mark();
         if (HasProto()) GetProto()->Mark();
     }
 
-    // Yes, we *do* need to mark the mScriptableInfo in both cases.
     inline void TraceInside(JSTracer* trc) {
         if (trc->isMarkingTracer()) {
             mSet->Mark();
-            if (mScriptableInfo)
-                mScriptableInfo->Mark();
         }
         if (HasProto())
             GetProto()->TraceSelf(trc);
@@ -2906,36 +2883,19 @@ typedef TypedAutoMarkingPtr<XPCNativeSet> AutoMarkingNativeSetPtr;
 typedef TypedAutoMarkingPtr<XPCWrappedNative> AutoMarkingWrappedNativePtr;
 typedef TypedAutoMarkingPtr<XPCWrappedNativeTearOff> AutoMarkingWrappedNativeTearOffPtr;
 typedef TypedAutoMarkingPtr<XPCWrappedNativeProto> AutoMarkingWrappedNativeProtoPtr;
-typedef TypedAutoMarkingPtr<XPCNativeScriptableInfo> AutoMarkingNativeScriptableInfoPtr;
 
 template<class T>
 class ArrayAutoMarkingPtr : public AutoMarkingPtr
 {
   public:
-    explicit ArrayAutoMarkingPtr(JSContext* cx)
-      : AutoMarkingPtr(cx), mPtr(nullptr), mCount(0) {}
-    ArrayAutoMarkingPtr(JSContext* cx, T** ptr, uint32_t count, bool clear)
-      : AutoMarkingPtr(cx), mPtr(ptr), mCount(count)
-    {
-        if (!mPtr) mCount = 0;
-        else if (clear) memset(mPtr, 0, mCount*sizeof(T*));
-    }
-
-    T** get() const { return mPtr; }
-    operator T**() const { return mPtr; }
-    T** operator->() const { return mPtr; }
-
-    ArrayAutoMarkingPtr<T>& operator =(const ArrayAutoMarkingPtr<T>& other)
-    {
-        mPtr = other.mPtr;
-        mCount = other.mCount;
-        return *this;
-    }
+    ArrayAutoMarkingPtr(JSContext* cx, nsTArray<T*>& ptr)
+      : AutoMarkingPtr(cx), mPtr(ptr)
+    {}
 
   protected:
     virtual void TraceJS(JSTracer* trc)
     {
-        for (uint32_t i = 0; i < mCount; i++) {
+        for (uint32_t i = 0; i < mPtr.Length(); i++) {
             if (mPtr[i]) {
                 mPtr[i]->TraceJS(trc);
                 mPtr[i]->AutoTrace(trc);
@@ -2945,15 +2905,14 @@ class ArrayAutoMarkingPtr : public AutoMarkingPtr
 
     virtual void MarkAfterJSFinalize()
     {
-        for (uint32_t i = 0; i < mCount; i++) {
+        for (uint32_t i = 0; i < mPtr.Length(); i++) {
             if (mPtr[i])
                 mPtr[i]->Mark();
         }
     }
 
   private:
-    T** mPtr;
-    uint32_t mCount;
+    nsTArray<T*>& mPtr;
 };
 
 typedef ArrayAutoMarkingPtr<XPCNativeInterface> AutoMarkingNativeInterfacePtrArrayPtr;

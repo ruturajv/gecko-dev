@@ -9,9 +9,9 @@
 #include "nsTArray.h"
 #include "nsReadableUtils.h"
 #include "plbase64.h"
-#include "prprf.h"
 #include "nsPrintfCString.h"
 #include "safebrowsing.pb.h"
+#include "mozilla/Sprintf.h"
 
 #define DEFAULT_PROTOCOL_VERSION "2.2"
 
@@ -211,6 +211,9 @@ static const struct {
   { "googpub-phish-proto", SOCIAL_ENGINEERING_PUBLIC}, // 2
   { "goog-unwanted-proto", UNWANTED_SOFTWARE},         // 3
   { "goog-phish-proto", SOCIAL_ENGINEERING},           // 5
+
+  // For testing purpose.
+  { "test-phish-proto",    SOCIAL_ENGINEERING_PUBLIC}, // 2
 };
 
 NS_IMETHODIMP
@@ -484,7 +487,7 @@ nsUrlClassifierUtils::CanonicalNum(const nsACString& num,
 
   while (bytes--) {
     char buf[20];
-    PR_snprintf(buf, sizeof(buf), "%u", val & 0xff);
+    SprintfLiteral(buf, "%u", val & 0xff);
     if (_retval.IsEmpty()) {
       _retval.Assign(buf);
     } else {

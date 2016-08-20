@@ -15,7 +15,6 @@
 #include "mozilla/DebugOnly.h"
 #include "mozilla/Monitor.h"
 #include "mozilla/Vector.h"
-#include "mozilla/WeakPtr.h"
 #if defined(OS_WIN)
 #include "mozilla/ipc/Neutering.h"
 #endif // defined(OS_WIN)
@@ -127,7 +126,12 @@ class MessageChannel : HasResultCodes
       // handling to prevent deadlocks. Should only be used for protocols
       // that manage child processes which might create native UI, like
       // plugins.
-      REQUIRE_DEFERRED_MESSAGE_PROTECTION     = 1 << 0
+      REQUIRE_DEFERRED_MESSAGE_PROTECTION     = 1 << 0,
+      // Windows: When this flag is specified, any wait that occurs during
+      // synchronous IPC will be alertable, thus allowing a11y code in the
+      // chrome process to reenter content while content is waiting on a
+      // synchronous call.
+      REQUIRE_A11Y_REENTRY                    = 1 << 1,
     };
     void SetChannelFlags(ChannelFlags aFlags) { mFlags = aFlags; }
     ChannelFlags GetChannelFlags() { return mFlags; }
@@ -243,7 +247,10 @@ class MessageChannel : HasResultCodes
 
   private:
     void SpinInternalEventLoop();
-#endif
+#if defined(ACCESSIBILITY)
+    bool WaitForSyncNotifyWithA11yReentry();
+#endif // defined(ACCESSIBILITY)
+#endif // defined(OS_WIN)
 
   private:
     void CommonThreadOpenInit(MessageChannel *aTargetChan, Side aSide);
@@ -348,7 +355,7 @@ class MessageChannel : HasResultCodes
     }
 
     MessageListener *Listener() const {
-        return mListener.get();
+        return mListener;
     }
 
     void DebugAbort(const char* file, int line, const char* cond,
@@ -568,7 +575,9 @@ class MessageChannel : HasResultCodes
     };
 
   private:
-    mozilla::WeakPtr<MessageListener> mListener;
+    // Based on presumption the listener owns and overlives the channel,
+    // this is never nullified.
+    MessageListener* mListener;
     ChannelState mChannelState;
     RefPtr<RefCountedMonitor> mMonitor;
     Side mSide;

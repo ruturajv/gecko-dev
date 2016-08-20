@@ -7,7 +7,11 @@
 // HttpLog.h should generally be included first
 #include "HttpLog.h"
 
+#include <inttypes.h>
+
 #include "mozilla/dom/nsCSPContext.h"
+#include "mozilla/Sprintf.h"
+
 #include "nsHttp.h"
 #include "nsHttpChannel.h"
 #include "nsHttpHandler.h"
@@ -32,7 +36,6 @@
 #include "nsNetUtil.h"
 #include "nsIURL.h"
 #include "nsIStreamTransportService.h"
-#include "prprf.h"
 #include "prnetdb.h"
 #include "nsEscape.h"
 #include "nsStreamUtils.h"
@@ -84,7 +87,6 @@
 #include "mozilla/Telemetry.h"
 #include "AlternateServices.h"
 #include "InterceptedChannel.h"
-#include "imgLoader.h"
 #include "nsIHttpPushListener.h"
 #include "nsIX509Cert.h"
 #include "ScopedNSSTypes.h"
@@ -837,7 +839,7 @@ nsHttpChannel::SetupTransaction()
 
     if (mResuming) {
         char byteRange[32];
-        PR_snprintf(byteRange, sizeof(byteRange), "bytes=%llu-", mStartPos);
+        SprintfLiteral(byteRange, "bytes=%" PRIu64 "-", mStartPos);
         mRequestHead.SetHeader(nsHttp::Range, nsDependentCString(byteRange));
 
         if (!mEntityID.IsEmpty()) {
@@ -999,8 +1001,7 @@ ProcessXCTO(nsHttpResponseHead* aResponseHead, nsILoadInfo* aLoadInfo)
     }
 
     if (aLoadInfo->GetExternalContentPolicyType() == nsIContentPolicy::TYPE_IMAGE) {
-        if (imgLoader::SupportImageWithMimeType(contentType.get(),
-                                                AcceptedMimeTypes::IMAGES_AND_DOCUMENTS)) {
+        if (StringBeginsWith(contentType, NS_LITERAL_CSTRING("image/"))) {
             return NS_OK;
         }
         return NS_ERROR_CORRUPTED_CONTENT;
@@ -2800,7 +2801,7 @@ nsHttpChannel::SetupByteRangeRequest(int64_t partialLen)
     }
 
     char buf[64];
-    PR_snprintf(buf, sizeof(buf), "bytes=%lld-", partialLen);
+    SprintfLiteral(buf, "bytes=%" PRId64 "-", partialLen);
 
     mRequestHead.SetHeader(nsHttp::Range, nsDependentCString(buf));
     mRequestHead.SetHeader(nsHttp::If_Range, val);
@@ -4171,7 +4172,7 @@ nsHttpChannel::AssembleCacheKey(const char *spec, uint32_t postID,
 
     if (postID) {
         char buf[32];
-        PR_snprintf(buf, sizeof(buf), "id=%x&", postID);
+        SprintfLiteral(buf, "id=%x&", postID);
         cacheKey.Append(buf);
     }
 
@@ -5462,6 +5463,10 @@ nsHttpChannel::AsyncOpen(nsIStreamListener *listener, nsISupports *context)
 
     NS_CompareLoadInfoAndLoadContext(this);
 
+#ifdef DEBUG
+    CheckPrivateBrowsing();
+#endif
+
     NS_ENSURE_ARG_POINTER(listener);
     NS_ENSURE_TRUE(!mIsPending, NS_ERROR_IN_PROGRESS);
     NS_ENSURE_TRUE(!mWasOpened, NS_ERROR_ALREADY_OPENED);
@@ -6341,7 +6346,14 @@ nsHttpChannel::OnStopRequest(nsIRequest *request, nsISupports *ctxt, nsresult st
     MOZ_ASSERT(NS_IsMainThread(),
                "OnStopRequest should only be called from the main thread");
 
-    mUploadStream = nullptr;
+    if (!mAuthRetryPending) {
+        // We must not release the upload stream (that may contain POST data)
+        // before we finish any authentication loops happing during lifetime
+        // of this very channel.  Otherwise, we may loose the upload data when
+        // authenticating to e.g. an NTLM authenticated site.
+        LOG(("  dropping upload stream"));
+        mUploadStream = nullptr;
+    }
 
     if (NS_FAILED(status)) {
         ProcessSecurityReport(status);
@@ -6584,7 +6596,7 @@ public:
         MOZ_ASSERT(!NS_IsMainThread(), "Shouldn't be created on main thread");
     }
 
-    NS_IMETHOD Run()
+    NS_IMETHOD Run() override
     {
         MOZ_ASSERT(NS_IsMainThread(), "Should run on main thread");
         if (mEventSink) {

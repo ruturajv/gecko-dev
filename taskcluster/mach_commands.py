@@ -4,6 +4,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+
 from __future__ import absolute_import, print_function, unicode_literals
 
 import json
@@ -131,6 +132,11 @@ class MachCommands(MachCommandBase):
     @CommandArgument('--pushlog-id',
                      dest='pushlog_id',
                      required=True,
+                     default=0)
+    @CommandArgument('--pushdate',
+                     dest='pushdate',
+                     required=True,
+                     type=int,
                      default=0)
     @CommandArgument('--owner',
                      required=True,

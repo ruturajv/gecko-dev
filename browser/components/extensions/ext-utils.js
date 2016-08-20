@@ -4,8 +4,18 @@
 
 XPCOMUtils.defineLazyModuleGetter(this, "CustomizableUI",
                                   "resource:///modules/CustomizableUI.jsm");
+XPCOMUtils.defineLazyModuleGetter(this, "NetUtil",
+                                  "resource://gre/modules/NetUtil.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "PrivateBrowsingUtils",
                                   "resource://gre/modules/PrivateBrowsingUtils.jsm");
+
+XPCOMUtils.defineLazyServiceGetter(this, "styleSheetService",
+                                   "@mozilla.org/content/style-sheet-service;1",
+                                   "nsIStyleSheetService");
+
+XPCOMUtils.defineLazyGetter(this, "colorUtils", () => {
+  return require("devtools/shared/css-color").colorUtils;
+});
 
 Cu.import("resource://gre/modules/ExtensionUtils.jsm");
 Cu.import("resource://gre/modules/AppConstants.jsm");
@@ -42,21 +52,35 @@ function promisePopupShown(popup) {
   });
 }
 
-XPCOMUtils.defineLazyGetter(global, "stylesheets", () => {
-  let styleSheetService = Cc["@mozilla.org/content/style-sheet-service;1"]
-      .getService(Components.interfaces.nsIStyleSheetService);
-  let styleSheetURI = Services.io.newURI("chrome://browser/content/extension.css",
-                                         null, null);
+XPCOMUtils.defineLazyGetter(this, "stylesheets", () => {
+  let styleSheetURI = NetUtil.newURI("chrome://browser/content/extension.css");
   let styleSheet = styleSheetService.preloadSheet(styleSheetURI,
                                                   styleSheetService.AGENT_SHEET);
   let stylesheets = [styleSheet];
 
   if (AppConstants.platform === "macosx") {
-    styleSheetURI = Services.io.newURI("chrome://browser/content/extension-mac.css",
-                                       null, null);
+    styleSheetURI = NetUtil.newURI("chrome://browser/content/extension-mac.css");
     let macStyleSheet = styleSheetService.preloadSheet(styleSheetURI,
                                                        styleSheetService.AGENT_SHEET);
     stylesheets.push(macStyleSheet);
+  }
+  return stylesheets;
+});
+
+XPCOMUtils.defineLazyGetter(this, "standaloneStylesheets", () => {
+  let stylesheets = [];
+
+  if (AppConstants.platform === "macosx") {
+    let styleSheetURI = NetUtil.newURI("chrome://browser/content/extension-mac-panel.css");
+    let macStyleSheet = styleSheetService.preloadSheet(styleSheetURI,
+                                                       styleSheetService.AGENT_SHEET);
+    stylesheets.push(macStyleSheet);
+  }
+  if (AppConstants.platform === "win") {
+    let styleSheetURI = NetUtil.newURI("chrome://browser/content/extension-win-panel.css");
+    let winStyleSheet = styleSheetService.preloadSheet(styleSheetURI,
+                                                       styleSheetService.AGENT_SHEET);
+    stylesheets.push(winStyleSheet);
   }
   return stylesheets;
 });
@@ -75,16 +99,15 @@ class BasePopup {
     this.browserStyle = browserStyle;
     this.window = viewNode.ownerGlobal;
 
-    this.panel = this.viewNode;
-    while (this.panel.localName != "panel") {
-      this.panel = this.panel.parentNode;
-    }
-
     this.contentReady = new Promise(resolve => {
       this._resolveContentReady = resolve;
     });
 
     this.viewNode.addEventListener(this.DESTROY_EVENT, this);
+
+    let doc = viewNode.ownerDocument;
+    let arrowContent = doc.getAnonymousElementByAttribute(this.panel, "class", "panel-arrowcontent");
+    this.borderColor = doc.defaultView.getComputedStyle(arrowContent).borderTopColor;
 
     this.browser = null;
     this.browserReady = this.createBrowser(viewNode, popupURI);
@@ -101,6 +124,9 @@ class BasePopup {
       this.viewNode.style.maxHeight = "";
       this.browser.remove();
 
+      this.panel.style.setProperty("--panel-arrowcontent-background", "");
+      this.panel.style.setProperty("--panel-arrow-image-vertical", "");
+
       this.browser = null;
       this.viewNode = null;
     });
@@ -116,6 +142,14 @@ class BasePopup {
     return false;
   }
 
+  get panel() {
+    let panel = this.viewNode;
+    while (panel.localName != "panel") {
+      panel = panel.parentNode;
+    }
+    return panel;
+  }
+
   handleEvent(event) {
     switch (event.type) {
       case this.DESTROY_EVENT:
@@ -123,11 +157,20 @@ class BasePopup {
         break;
 
       case "DOMWindowCreated":
-        if (this.browserStyle && event.target === this.browser.contentDocument) {
+        if (event.target === this.browser.contentDocument) {
           let winUtils = this.browser.contentWindow
-              .QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
-          for (let stylesheet of global.stylesheets) {
-            winUtils.addSheet(stylesheet, winUtils.AGENT_SHEET);
+                             .QueryInterface(Ci.nsIInterfaceRequestor)
+                             .getInterface(Ci.nsIDOMWindowUtils);
+
+          if (this.browserStyle) {
+            for (let stylesheet of stylesheets) {
+              winUtils.addSheet(stylesheet, winUtils.AGENT_SHEET);
+            }
+          }
+          if (!this.fixedWidth) {
+            for (let stylesheet of standaloneStylesheets) {
+              winUtils.addSheet(stylesheet, winUtils.AGENT_SHEET);
+            }
           }
         }
         break;
@@ -174,6 +217,8 @@ class BasePopup {
     this.browser = document.createElementNS(XUL_NS, "browser");
     this.browser.setAttribute("type", "content");
     this.browser.setAttribute("disableglobalhistory", "true");
+    this.browser.setAttribute("transparent", "true");
+    this.browser.setAttribute("class", "webextension-popup-browser");
     this.browser.setAttribute("webextension-view-type", "popup");
 
     // We only need flex sizing for the sake of the slide-in sub-views of the
@@ -216,17 +261,36 @@ class BasePopup {
   // Resizes the browser to match the preferred size of the content (debounced).
   resizeBrowser() {
     if (this.resizeTimeout == null) {
-      this._resizeBrowser();
-      this.resizeTimeout = this.window.setTimeout(this._resizeBrowser.bind(this), RESIZE_TIMEOUT);
+      this.resizeTimeout = this.window.setTimeout(() => {
+        try {
+          this._resizeBrowser();
+        } finally {
+          this.resizeTimeout = null;
+        }
+      }, RESIZE_TIMEOUT);
+      this._resizeBrowser(false);
     }
   }
 
-  _resizeBrowser() {
-    this.resizeTimeout = null;
-
+  _resizeBrowser(clearTimeout = true) {
     if (!this.browser) {
       return;
     }
+
+    let doc = this.browser.contentDocument;
+    if (!doc || !doc.documentElement) {
+      return;
+    }
+
+    let root = doc.documentElement;
+    let body = doc.body;
+    if (!body || doc.compatMode == "BackCompat") {
+      // In quirks mode, the root element is used as the scroll frame, and the
+      // body lies about its scroll geometry, and returns the values for the
+      // root instead.
+      body = root;
+    }
+
 
     if (this.fixedWidth) {
       // If we're in a fixed-width area (namely a slide-in subview of the main
@@ -234,20 +298,6 @@ class BasePopup {
       // preferred height of the content document's root scrollable element at the
       // current width, rather than the complete preferred dimensions of the
       // content window.
-
-      let doc = this.browser.contentDocument;
-      if (!doc || !doc.documentElement) {
-        return;
-      }
-
-      let root = doc.documentElement;
-      let body = doc.body;
-      if (!body || doc.compatMode == "BackCompat") {
-        // In quirks mode, the root element is used as the scroll frame, and the
-        // body lies about its scroll geometry, and returns the values for the
-        // root instead.
-        body = root;
-      }
 
       // Compensate for any offsets (margin, padding, ...) between the scroll
       // area of the body and the outer height of the document.
@@ -272,6 +322,32 @@ class BasePopup {
       height = Math.max(height, this.viewHeight);
       this.viewNode.style.maxHeight = `${height}px`;
     } else {
+      // Copy the background color of the document's body to the panel if it's
+      // fully opaque.
+      let panelBackground = "";
+      let panelArrow = "";
+
+      let background = doc.defaultView.getComputedStyle(body).backgroundColor;
+      if (background != "transparent") {
+        let bgColor = colorUtils.colorToRGBA(background);
+        if (bgColor.a == 1) {
+          panelBackground = background;
+          let borderColor = this.borderColor || background;
+
+          panelArrow = `url("data:image/svg+xml,${encodeURIComponent(`<?xml version="1.0" encoding="UTF-8"?>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="10">
+              <path d="M 0,10 L 10,0 20,10 z" fill="${borderColor}"/>
+              <path d="M 1,10 L 10,1 19,10 z" fill="${background}"/>
+            </svg>
+          `)}")`;
+        }
+      }
+
+      this.panel.style.setProperty("--panel-arrowcontent-background", panelBackground);
+      this.panel.style.setProperty("--panel-arrow-image-vertical", panelArrow);
+
+
+      // Adjust the size of the browser based on its content's preferred size.
       let width, height;
       try {
         let w = {}, h = {};
@@ -511,8 +587,9 @@ ExtensionTabManager.prototype = {
 
     if (this.hasTabPermission(tab)) {
       result.url = browser.currentURI.spec;
-      if (browser.contentTitle) {
-        result.title = browser.contentTitle;
+      let title = browser.contentTitle || tab.label;
+      if (title) {
+        result.title = title;
       }
       let icon = window.gBrowser.getIcon(tab);
       if (icon) {
@@ -524,7 +601,9 @@ ExtensionTabManager.prototype = {
   },
 
   getTabs(window) {
-    return Array.from(window.gBrowser.tabs, tab => this.convert(tab));
+    return Array.from(window.gBrowser.tabs)
+                .filter(tab => !tab.closing)
+                .map(tab => this.convert(tab));
   },
 };
 
@@ -605,7 +684,21 @@ global.TabManager = {
     return -1;
   },
 
-  getTab(tabId) {
+  /**
+   * Returns the XUL <tab> element associated with the given tab ID. If no tab
+   * with the given ID exists, and no default value is provided, an error is
+   * raised, belonging to the scope of the given context.
+   *
+   * @param {integer} tabId
+   *        The ID of the tab to retrieve.
+   * @param {ExtensionContext} context
+   *        The context of the caller.
+   * @param {*} default_
+   *        The value to return if no tab exists with the given ID.
+   * @returns {Element<tab>}
+   *        A XUL <tab> element.
+   */
+  getTab(tabId, context, default_ = undefined) {
     // FIXME: Speed this up without leaking memory somehow.
     for (let window of WindowListManager.browserWindows()) {
       if (!window.gBrowser) {
@@ -617,7 +710,10 @@ global.TabManager = {
         }
       }
     }
-    return null;
+    if (default_ !== undefined) {
+      return default_;
+    }
+    throw new context.cloneScope.Error(`Invalid tab ID: ${tabId}`);
   },
 
   get activeTab() {

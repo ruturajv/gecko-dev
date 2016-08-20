@@ -55,12 +55,13 @@ var TestRunner = {
    *               iterator.
    */
   next: function (aValue) {
-    let { done, value } = TestRunner._iter.next(aValue);
-    if (done) {
+    let obj = TestRunner._iter.next(aValue);
+    if (obj.done) {
       finish();
       return;
     }
 
+    let value = obj.value || obj;
     if (value && typeof value.then == "function") {
       value.then(result => {
         next(result);
@@ -130,7 +131,7 @@ function captureAndCheckColor(aRed, aGreen, aBlue, aMessage) {
   // Capture the screenshot.
   PageThumbs.captureAndStore(browser, function () {
     retrieveImageDataForURL(browser.currentURI.spec, function ([r, g, b]) {
-      is("" + [r,g,b], "" + [aRed, aGreen, aBlue], aMessage);
+      is("" + [r, g, b], "" + [aRed, aGreen, aBlue], aMessage);
       next();
     });
   });

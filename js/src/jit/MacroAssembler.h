@@ -994,9 +994,9 @@ class MacroAssembler : public MacroAssemblerSpecific
     template <typename T>
     inline CodeOffsetJump branchPtrWithPatch(Condition cond, Address lhs, T rhs, RepatchLabel* label) PER_SHARED_ARCH;
 
-    void branchPtrInNurseryRange(Condition cond, Register ptr, Register temp, Label* label)
+    void branchPtrInNurseryChunk(Condition cond, Register ptr, Register temp, Label* label)
         DEFINED_ON(arm, arm64, mips_shared, x86, x64);
-    void branchPtrInNurseryRange(Condition cond, const Address& address, Register temp, Label* label)
+    void branchPtrInNurseryChunk(Condition cond, const Address& address, Register temp, Label* label)
         DEFINED_ON(x86);
     void branchValueIsNurseryObject(Condition cond, const Address& address, Register temp, Label* label) PER_ARCH;
     void branchValueIsNurseryObject(Condition cond, ValueOperand value, Register temp, Label* label) PER_ARCH;
@@ -1208,8 +1208,7 @@ class MacroAssembler : public MacroAssemblerSpecific
     inline void branchPtrImpl(Condition cond, const T& lhs, const S& rhs, Label* label)
         DEFINED_ON(x86_shared);
 
-    template <typename T>
-    void branchPtrInNurseryRangeImpl(Condition cond, const T& ptr, Register temp, Label* label)
+    void branchPtrInNurseryChunkImpl(Condition cond, Register ptr, Label* label)
         DEFINED_ON(x86);
     template <typename T>
     void branchValueIsNurseryObjectImpl(Condition cond, const T& value, Register temp, Label* label)
@@ -1323,6 +1322,13 @@ class MacroAssembler : public MacroAssemblerSpecific
 
     void outOfLineWasmTruncateDoubleToInt64(FloatRegister input, bool isUnsigned, Label* rejoin) DEFINED_ON(x86_shared);
     void outOfLineWasmTruncateFloat32ToInt64(FloatRegister input, bool isUnsigned, Label* rejoin) DEFINED_ON(x86_shared);
+
+    // This function takes care of loading the callee's TLS and pinned regs but
+    // it is the caller's responsibility to save/restore TLS or pinned regs.
+    void wasmCallImport(const wasm::CallSiteDesc& desc, const wasm::CalleeDesc& callee);
+
+    // WasmTableCallIndexReg must contain the index of the indirect call.
+    void wasmCallIndirect(const wasm::CallSiteDesc& desc, const wasm::CalleeDesc& callee);
 
     //}}} check_macroassembler_style
   public:

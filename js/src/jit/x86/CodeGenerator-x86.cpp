@@ -402,7 +402,7 @@ CodeGeneratorX86::emitWasmCall(LWasmCallBase* ins)
     emitWasmCallBase(ins);
 
     if (IsFloatingPointType(mir->type()) &&
-        mir->callee().which() == MWasmCall::Callee::Builtin)
+        mir->callee().which() == wasm::CalleeDesc::Builtin)
     {
         if (mir->type() == MIRType::Float32) {
             masm.reserveStack(sizeof(float));
@@ -1476,11 +1476,10 @@ CodeGeneratorX86::visitAsmSelectI64(LAsmSelectI64* lir)
     MOZ_ASSERT(lir->mir()->type() == MIRType::Int64);
 
     Register cond = ToRegister(lir->condExpr());
-    Register64 trueExpr = ToRegister64(lir->trueExpr());
     Register64 falseExpr = ToRegister64(lir->falseExpr());
     Register64 out = ToOutRegister64(lir);
 
-    masm.move64(trueExpr, out);
+    MOZ_ASSERT(ToRegister64(lir->trueExpr()) == out, "true expr is reused for input");
 
     Label done;
     masm.branchTest32(Assembler::NonZero, cond, cond, &done);

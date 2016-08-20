@@ -569,6 +569,11 @@ var DebuggerServer = {
       constructor: "PerformanceEntriesActor",
       type: { tab: true }
     });
+    this.registerModule("devtools/server/actors/emulation", {
+      prefix: "emulation",
+      constructor: "EmulationActor",
+      type: { tab: true }
+    });
   },
 
   /**
@@ -863,10 +868,25 @@ var DebuggerServer = {
           transport.hooks = {
             onClosed: () => {
               if (!dbg.isClosed) {
-                dbg.postMessage(JSON.stringify({
-                  type: "disconnect",
-                  id,
-                }));
+                // If the worker happens to be shutting down while we are trying
+                // to close the connection, there is a small interval during
+                // which no more runnables can be dispatched to the worker, but
+                // the worker debugger has not yet been closed. In that case,
+                // the call to postMessage below will fail. The onClosed hook on
+                // DebuggerTransport is not supposed to throw exceptions, so we
+                // need to make sure to catch these early.
+                try {
+                  dbg.postMessage(JSON.stringify({
+                    type: "disconnect",
+                    id,
+                  }));
+                } catch (e) {
+                  // We can safely ignore these exceptions. The only time the
+                  // call to postMessage can fail is if the worker is either
+                  // shutting down, or has finished shutting down. In both
+                  // cases, there is nothing to clean up, so we don't care
+                  // whether this message arrives or not.
+                }
               }
 
               connection.cancelForwarding(id);
@@ -985,19 +1005,37 @@ var DebuggerServer = {
     // or else fallback to asking the frameLoader itself.
     let mm = frame.messageManager || frame.frameLoader.messageManager;
     mm.loadFrameScript("resource://devtools/server/child.js", false);
-    this._childMessageManagers.add(mm);
+
+    let trackMessageManager = () => {
+      frame.addEventListener("DevTools:BrowserSwap", onBrowserSwap);
+      mm.addMessageListener("debug:setup-in-parent", onSetupInParent);
+      if (!actor) {
+        mm.addMessageListener("debug:actor", onActorCreated);
+      }
+      DebuggerServer._childMessageManagers.add(mm);
+    };
+
+    let untrackMessageManager = () => {
+      frame.removeEventListener("DevTools:BrowserSwap", onBrowserSwap);
+      mm.removeMessageListener("debug:setup-in-parent", onSetupInParent);
+      if (!actor) {
+        mm.removeMessageListener("debug:actor", onActorCreated);
+      }
+      DebuggerServer._childMessageManagers.delete(mm);
+    };
 
     let actor, childTransport;
     let prefix = connection.allocID("child");
-    let netMonitor = null;
+    // Compute the same prefix that's used by DebuggerServerConnection
+    let connPrefix = prefix + "/";
 
     // provides hook to actor modules that need to exchange messages
     // between e10s parent and child processes
+    let parentModules = [];
     let onSetupInParent = function (msg) {
       // We may have multiple connectToChild instance running for the same tab
-      // and need to filter the messages. Also the DebuggerServerConnection's
-      // prefix has an additional '/' and the end, so use `includes`.
-      if (!msg.json.prefix.includes(prefix)) {
+      // and need to filter the messages.
+      if (msg.json.prefix != connPrefix) {
         return false;
       }
 
@@ -1008,11 +1046,11 @@ var DebuggerServer = {
         m = require(module);
 
         if (!setupParent in m) {
-          dumpn(`ERROR: module '${module}' does not export 'setupParent'`);
+          dumpn(`ERROR: module '${module}' does not export '${setupParent}'`);
           return false;
         }
 
-        m[setupParent]({ mm, prefix });
+        parentModules.push(m[setupParent]({ mm, prefix: connPrefix }));
 
         return true;
       } catch (e) {
@@ -1024,7 +1062,6 @@ var DebuggerServer = {
         return false;
       }
     };
-    mm.addMessageListener("debug:setup-in-parent", onSetupInParent);
 
     let onActorCreated = DevToolsUtils.makeInfallible(function (msg) {
       if (msg.json.prefix != prefix) {
@@ -1045,20 +1082,45 @@ var DebuggerServer = {
       dumpn("establishing forwarding for app with prefix " + prefix);
 
       actor = msg.json.actor;
-
-      let { NetworkMonitorManager } = require("devtools/shared/webconsole/network-monitor");
-      netMonitor = new NetworkMonitorManager(frame, actor.actor);
-
-      events.emit(DebuggerServer, "new-child-process", { mm });
-
       deferred.resolve(actor);
     }).bind(this);
-    mm.addMessageListener("debug:actor", onActorCreated);
+
+    // Listen for browser frame swap
+    let onBrowserSwap = ({ detail: newFrame }) => {
+      // Remove listeners from old frame and mm
+      untrackMessageManager();
+      // Update frame and mm to point to the new browser frame
+      frame = newFrame;
+      // Get messageManager from XUL browser (which might be a specialized tunnel for RDM)
+      // or else fallback to asking the frameLoader itself.
+      mm = frame.messageManager || frame.frameLoader.messageManager;
+      // Add listeners to new frame and mm
+      trackMessageManager();
+
+      // provides hook to actor modules that need to exchange messages
+      // between e10s parent and child processes
+      parentModules.forEach(mod => {
+        if (mod.onBrowserSwap) {
+          mod.onBrowserSwap(mm);
+        }
+      });
+
+      if (childTransport) {
+        childTransport.swapBrowser(mm);
+      }
+    };
 
     let destroy = DevToolsUtils.makeInfallible(function () {
       // provides hook to actor modules that need to exchange messages
       // between e10s parent and child processes
-      DebuggerServer.emit("disconnected-from-child:" + prefix, { mm, prefix });
+      parentModules.forEach(mod => {
+        if (mod.onDisconnected) {
+          mod.onDisconnected();
+        }
+      });
+      // TODO: Remove this deprecated path once it's no longer needed by add-ons.
+      DebuggerServer.emit("disconnected-from-child:" + connPrefix,
+                          { mm, prefix: connPrefix });
 
       if (childTransport) {
         // If we have a child transport, the actor has already
@@ -1089,25 +1151,18 @@ var DebuggerServer = {
         actor = null;
       }
 
-      if (netMonitor) {
-        netMonitor.destroy();
-        netMonitor = null;
-      }
-
       if (onDestroy) {
         onDestroy(mm);
       }
 
       // Cleanup all listeners
+      untrackMessageManager();
       Services.obs.removeObserver(onMessageManagerClose, "message-manager-close");
-      mm.removeMessageListener("debug:setup-in-parent", onSetupInParent);
-      if (!actor) {
-        mm.removeMessageListener("debug:actor", onActorCreated);
-      }
       events.off(connection, "closed", destroy);
-
-      DebuggerServer._childMessageManagers.delete(mm);
     });
+
+    // Listen for various messages and frame events
+    trackMessageManager();
 
     // Listen for app process exit
     let onMessageManagerClose = function (subject, topic, data) {
@@ -1444,6 +1499,26 @@ DebuggerServerConnection.prototype = {
    *        otherwise.
    */
   removeActorPool(actorPool, noCleanup) {
+    // When a connection is closed, it removes each of its actor pools. When an
+    // actor pool is removed, it calls the disconnect method on each of its
+    // actors. Some actors, such as ThreadActor, manage their own actor pools.
+    // When the disconnect method is called on these actors, they manually
+    // remove their actor pools. Consequently, this method is reentrant.
+    //
+    // In addition, some actors, such as ThreadActor, perform asynchronous work
+    // (in the case of ThreadActor, because they need to resume), before they
+    // remove each of their actor pools. Since we don't wait for this work to
+    // be completed, we can end up in this function recursively after the
+    // connection already set this._extraPools to null.
+    //
+    // This is a bug: if the disconnect method can perform asynchronous work,
+    // then we should wait for that work to be completed before setting this.
+    // _extraPools to null. As a temporary solution, it should be acceptable
+    // to just return early (if this._extraPools has been set to null, all
+    // actors pools for this connection should already have been removed).
+    if (this._extraPools === null) {
+      return;
+    }
     let index = this._extraPools.lastIndexOf(actorPool);
     if (index > -1) {
       let pool = this._extraPools.splice(index, 1);

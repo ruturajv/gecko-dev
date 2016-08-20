@@ -267,7 +267,7 @@ class BaseCompiler
 
     struct RegI64
     {
-        RegI64() : reg(Register::Invalid()) {}
+        RegI64() : reg(Register64::Invalid()) {}
         explicit RegI64(Register64 reg) : reg(reg) {}
         Register64 reg;
         bool operator==(const RegI64& that) { return reg == that.reg; }
@@ -567,11 +567,7 @@ class BaseCompiler
     }
 
     void storeToFrameI64(Register64 r, int32_t offset) {
-#ifdef JS_CODEGEN_X64
-        masm.movq(r.reg, Operand(StackPointer, localOffsetToSPOffset(offset)));
-#else
-        MOZ_CRASH("BaseCompiler platform hook: storeToFrameI64");
-#endif
+        masm.store64(r, Address(StackPointer, localOffsetToSPOffset(offset)));
     }
 
     void storeToFramePtr(Register r, int32_t offset) {
@@ -591,11 +587,7 @@ class BaseCompiler
     }
 
     void loadFromFrameI64(Register64 r, int32_t offset) {
-#ifdef JS_CODEGEN_X64
-        masm.movq(Operand(StackPointer, localOffsetToSPOffset(offset)), r.reg);
-#else
-        MOZ_CRASH("BaseCompiler platform hook: loadFromFrameI64");
-#endif
+        masm.load64(Address(StackPointer, localOffsetToSPOffset(offset)), r);
     }
 
     void loadFromFramePtr(Register r, int32_t offset) {
@@ -650,6 +642,55 @@ class BaseCompiler
 
     void freeGPR(Register r) {
         availGPR_.add(r);
+    }
+
+    bool isAvailable(Register64 r) {
+#ifdef JS_PUNBOX64
+        return isAvailable(r.reg);
+#else
+        return isAvailable(r.low) && isAvailable(r.high);
+#endif
+    }
+
+    bool hasInt64() {
+#ifdef JS_PUNBOX64
+        return !availGPR_.empty();
+#else
+        if (availGPR_.empty())
+            return false;
+        Register r = allocGPR();
+        bool available = !availGPR_.empty();
+        freeGPR(r);
+        return available;
+#endif
+    }
+
+    void allocInt64(Register64 r) {
+        MOZ_ASSERT(isAvailable(r));
+#ifdef JS_PUNBOX64
+        availGPR_.take(r.reg);
+#else
+        availGPR_.take(r.low);
+        availGPR_.take(r.high);
+#endif
+    }
+
+    Register64 allocInt64() {
+        MOZ_ASSERT(hasInt64());
+#ifdef JS_PUNBOX64
+        return Register64(availGPR_.takeAny());
+#else
+        return Register64(availGPR_.takeAny(), availGPR_.takeAny());
+#endif
+    }
+
+    void freeInt64(Register64 r) {
+#ifdef JS_PUNBOX64
+        availGPR_.add(r.reg);
+#else
+        availGPR_.add(r.low);
+        availGPR_.add(r.high);
+#endif
     }
 
     // Notes on float register allocation.
@@ -840,7 +881,7 @@ class BaseCompiler
 #ifdef JS_PUNBOX64
         return RegI32(r.reg.reg);
 #else
-        MOZ_CRASH("BaseCompiler platform hook: fromI64");
+        return RegI32(r.reg.low);
 #endif
     }
 
@@ -848,7 +889,7 @@ class BaseCompiler
 #ifdef JS_PUNBOX64
         return RegI64(Register64(r.reg));
 #else
-        MOZ_CRASH("BaseCompiler platform hook: fromI32");
+        return RegI64(Register64(needI32().reg, r.reg)); // TODO: BUG if sync is called.
 #endif
     }
 
@@ -857,11 +898,7 @@ class BaseCompiler
     }
 
     void freeI64(RegI64 r) {
-#ifdef JS_PUNBOX64
-        freeGPR(r.reg.reg);
-#else
-        MOZ_CRASH("BaseCompiler platform hook: freeI64");
-#endif
+        freeInt64(r.reg);
     }
 
     void freeF64(RegF64 r) {
@@ -890,29 +927,25 @@ class BaseCompiler
 
     void need2xI32(RegI32 r0, RegI32 r1) {
         needI32(r0);
-        needI32(r1);
+        needI32(r1); // TODO: BUG if sync is called.
     }
 
     MOZ_MUST_USE
     RegI64 needI64() {
-        if (!hasGPR())
+        if (!hasInt64())
             sync();            // TODO / OPTIMIZE: improve this
-        return RegI64(Register64(allocGPR()));
+        return RegI64(allocInt64());
     }
 
     void needI64(RegI64 specific) {
-#ifdef JS_PUNBOX64
-        if (!isAvailable(specific.reg.reg))
+        if (!isAvailable(specific.reg))
             sync();            // TODO / OPTIMIZE: improve this
-        allocGPR(specific.reg.reg);
-#else
-        MOZ_CRASH("BaseCompiler platform hook: needI64");
-#endif
+        allocInt64(specific.reg);
     }
 
     void need2xI64(RegI64 r0, RegI64 r1) {
         needI64(r0);
-        needI64(r1);
+        needI64(r1); // TODO: BUG if sync is called.
     }
 
     MOZ_MUST_USE
@@ -1128,12 +1161,16 @@ class BaseCompiler
                 break;
               }
               case Stk::LocalI64: {
-#ifdef JS_PUNBOX64
                 ScratchI32 scratch(*this);
+#ifdef JS_PUNBOX64
                 loadI64(Register64(scratch), v);
                 masm.Push(scratch);
 #else
-                MOZ_CRASH("BaseCompiler platform hook: sync LocalI64");
+                int32_t offset = frameOffsetFromSlot(v.slot(), MIRType::Int64);
+                loadFromFrameI32(scratch, offset + INT64LOW_OFFSET);
+                masm.Push(scratch);
+                loadFromFrameI32(scratch, offset + INT64HIGH_OFFSET);
+                masm.Push(scratch);
 #endif
                 v.setOffs(Stk::MemI64, masm.framePushed());
                 break;
@@ -1143,7 +1180,9 @@ class BaseCompiler
                 masm.Push(v.i64reg().reg.reg);
                 freeI64(v.i64reg());
 #else
-                MOZ_CRASH("BaseCompiler platform hook: sync RegI64");
+                masm.Push(v.i64reg().reg.low);
+                masm.Push(v.i64reg().reg.high);
+                freeI64(v.i64reg());
 #endif
                 v.setOffs(Stk::MemI64, masm.framePushed());
                 break;
@@ -1776,7 +1815,7 @@ class BaseCompiler
                 break;
               case MIRType::Int64:
                 if (i->argInRegister())
-                    storeToFrameI64(Register64(i->gpr()), l.offs());
+                    storeToFrameI64(i->gpr64(), l.offs());
                 break;
               case MIRType::Double:
                 if (i->argInRegister())
@@ -2082,11 +2121,6 @@ class BaseCompiler
         masm.call(desc, calleeIndex);
     }
 
-    void callDynamic(Register callee, const FunctionCall& call) {
-        CallSiteDesc desc(call.lineOrBytecode_, CallSiteDesc::Register);
-        masm.call(desc, callee);
-    }
-
     void callSymbolic(wasm::SymbolicAddress callee, const FunctionCall& call) {
         CallSiteDesc desc(call.lineOrBytecode_, CallSiteDesc::Register);
         masm.call(callee);
@@ -2094,56 +2128,47 @@ class BaseCompiler
 
     // Precondition: sync()
 
-    void funcPtrCall(const SigWithId& sig, uint32_t length, uint32_t globalDataOffset,
-                     Stk& indexVal, const FunctionCall& call)
+    void callIndirect(uint32_t sigIndex, Stk& indexVal, const FunctionCall& call)
     {
-        Register ptrReg = WasmTableCallPtrReg;
+        loadI32(WasmTableCallIndexReg, indexVal);
 
-        loadI32(ptrReg, indexVal);
+        const SigWithId& sig = mg_.sigs[sigIndex];
 
+        CalleeDesc callee;
         if (isCompilingAsmJS()) {
-            MOZ_ASSERT(IsPowerOfTwo(length));
-            masm.andPtr(Imm32((length - 1)), ptrReg);
+            MOZ_ASSERT(sig.id.kind() == SigIdDesc::Kind::None);
+            const TableDesc& table = mg_.tables[mg_.asmJSSigToTableIndex[sigIndex]];
+
+            MOZ_ASSERT(IsPowerOfTwo(table.initial));
+            masm.andPtr(Imm32((table.initial - 1)), WasmTableCallIndexReg);
+
+            callee = CalleeDesc::asmJSTable(table);
         } else {
-            masm.branch32(Assembler::Condition::AboveOrEqual, ptrReg, Imm32(length),
-                          wasm::JumpTarget::OutOfBounds);
+            MOZ_ASSERT(sig.id.kind() != SigIdDesc::Kind::None);
+            MOZ_ASSERT(mg_.tables.length() == 1);
+            const TableDesc& table = mg_.tables[0];
+
+            callee = CalleeDesc::wasmTable(table, sig.id);
         }
 
-        switch (sig.id.kind()) {
-          case SigIdDesc::Kind::Global:
-            masm.loadWasmGlobalPtr(sig.id.globalDataOffset(), WasmTableCallSigReg);
-            break;
-          case SigIdDesc::Kind::Immediate:
-            masm.move32(Imm32(sig.id.immediate()), WasmTableCallSigReg);
-            break;
-          case SigIdDesc::Kind::None:
-            break;
-        }
+        CallSiteDesc desc(call.lineOrBytecode_, CallSiteDesc::Register);
+        masm.wasmCallIndirect(desc, callee);
 
-        {
-            ScratchI32 scratch(*this);
-            masm.loadWasmGlobalPtr(globalDataOffset, scratch);
-            masm.loadPtr(BaseIndex(scratch, ptrReg, ScalePointer, 0), ptrReg);
-        }
-
-        callDynamic(ptrReg, call);
+        // After return, restore the caller's TLS and pinned registers.
+        loadFromFramePtr(WasmTlsReg, frameOffsetFromSlot(tlsSlot_, MIRType::Pointer));
+        masm.loadWasmPinnedRegsFromTls();
     }
 
     // Precondition: sync()
 
     void callImport(unsigned globalDataOffset, const FunctionCall& call)
     {
-        // Load the callee, before the caller's registers are clobbered.
-        Register ptrReg = ABINonArgReg0;
-        masm.loadWasmGlobalPtr(globalDataOffset + offsetof(wasm::FuncImportTls, code), ptrReg);
-
         // There is no need to preserve WasmTlsReg since it has already been
         // spilt to a local slot.
 
-        // Switch to the caller's TLS and pinned registers and make the call.
-        masm.loadWasmGlobalPtr(globalDataOffset + offsetof(wasm::FuncImportTls, tls), WasmTlsReg);
-        masm.loadWasmPinnedRegsFromTls();
-        callDynamic(ptrReg, call);
+        CallSiteDesc desc(call.lineOrBytecode_, CallSiteDesc::Register);
+        CalleeDesc callee = CalleeDesc::import(globalDataOffset);
+        masm.wasmCallImport(desc, callee);
 
         // After return, restore the caller's TLS and pinned registers.
         loadFromFramePtr(WasmTlsReg, frameOffsetFromSlot(tlsSlot_, MIRType::Pointer));
@@ -3180,7 +3205,7 @@ class BaseCompiler
 # if defined(JS_CODEGEN_X64)
         Operand dstAddr(HeapReg, ptr.reg, TimesOne, access.offset());
 
-        Register intReg;
+        Register intReg = Register::Invalid();
         if (src.tag == AnyReg::I32)
             intReg = src.i32().reg;
         else if (src.tag == AnyReg::I64)
@@ -3925,7 +3950,7 @@ BaseCompiler::emitCopysignF32()
     RegF32 r0, r1;
     pop2xF32(&r0, &r1);
     RegI32 i0 = needI32();
-    RegI32 i1 = needI32();
+    RegI32 i1 = needI32(); // TODO: BUG if sync is called.
     masm.moveFloat32ToGPR(r0.reg, i0.reg);
     masm.moveFloat32ToGPR(r1.reg, i1.reg);
     masm.and32(Imm32(INT32_MAX), i0.reg);
@@ -5315,11 +5340,7 @@ BaseCompiler::emitCallIndirect(uint32_t callOffset)
 
     Stk& callee = peek(numArgs);
 
-    const TableDesc& table = isCompilingAsmJS()
-                             ? mg_.tables[mg_.asmJSSigToTableIndex[sigIndex]]
-                             : mg_.tables[0];
-
-    funcPtrCall(sig, table.initial, table.globalDataOffset, callee, baselineCall);
+    callIndirect(sigIndex, callee, baselineCall);
 
     endCall(baselineCall);
 
@@ -6722,7 +6743,7 @@ BaseCompiler::BaseCompiler(const ModuleGeneratorData& mg,
       singleByteRegs_(GeneralRegisterSet(Registers::SingleByteRegs)),
 #endif
       joinRegI32(RegI32(ReturnReg)),
-      joinRegI64(RegI64(Register64(ReturnReg))),
+      joinRegI64(RegI64(ReturnReg64)),
       joinRegF32(RegF32(ReturnFloat32Reg)),
       joinRegF64(RegF64(ReturnDoubleReg))
 {
@@ -6749,11 +6770,6 @@ BaseCompiler::BaseCompiler(const ModuleGeneratorData& mg,
     MOZ_ASSERT(!isAvailable(f.asDouble()));
     freeFPU(f);
     MOZ_ASSERT(isAvailable(f.asDouble()));
-#endif
-
-#if defined(JS_CODEGEN_X86)
-    MOZ_ASSERT(ScratchRegX86 != WasmTableCallPtrReg);
-    MOZ_ASSERT(ScratchRegX86 != WasmTableCallSigReg);
 #endif
 
     labelPool_.setAllocator(alloc_);

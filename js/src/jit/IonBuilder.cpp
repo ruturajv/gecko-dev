@@ -603,7 +603,7 @@ IonBuilder::analyzeNewLoopTypes(MBasicBlock* entry, jsbytecode* start, jsbytecod
                     }
                     MPhi* oldPhi = oldDef->toPhi();
                     MPhi* newPhi = entry->getSlot(slot)->toPhi();
-                    if (!newPhi->addBackedgeType(oldPhi->type(), oldPhi->resultTypeSet()))
+                    if (!newPhi->addBackedgeType(alloc(), oldPhi->type(), oldPhi->resultTypeSet()))
                         return false;
                 }
             }
@@ -644,7 +644,7 @@ IonBuilder::analyzeNewLoopTypes(MBasicBlock* entry, jsbytecode* start, jsbytecod
             TemporaryTypeSet* typeSet = bytecodeTypes(last);
             if (!typeSet->empty()) {
                 MIRType type = typeSet->getKnownMIRType();
-                if (!phi->addBackedgeType(type, typeSet))
+                if (!phi->addBackedgeType(alloc(), type, typeSet))
                     return false;
             }
         } else if (*last == JSOP_GETLOCAL || *last == JSOP_GETARG) {
@@ -654,7 +654,7 @@ IonBuilder::analyzeNewLoopTypes(MBasicBlock* entry, jsbytecode* start, jsbytecod
             if (slot < info().firstStackSlot()) {
                 MPhi* otherPhi = entry->getSlot(slot)->toPhi();
                 if (otherPhi->hasBackedgeType()) {
-                    if (!phi->addBackedgeType(otherPhi->type(), otherPhi->resultTypeSet()))
+                    if (!phi->addBackedgeType(alloc(), otherPhi->type(), otherPhi->resultTypeSet()))
                         return false;
                 }
             }
@@ -726,7 +726,7 @@ IonBuilder::analyzeNewLoopTypes(MBasicBlock* entry, jsbytecode* start, jsbytecod
                 break;
             }
             if (type != MIRType::None) {
-                if (!phi->addBackedgeType(type, nullptr))
+                if (!phi->addBackedgeType(alloc(), type, nullptr))
                     return false;
             }
         }
@@ -2145,6 +2145,9 @@ IonBuilder::inspectOpcode(JSOp op)
       case JSOP_NEWTARGET:
         return jsop_newtarget();
 
+      case JSOP_CHECKISOBJ:
+        return jsop_checkisobj(GET_UINT8(pc));
+
       case JSOP_CHECKOBJCOERCIBLE:
         return jsop_checkobjcoercible();
 
@@ -2453,7 +2456,7 @@ IonBuilder::finishLoop(CFGState& state, MBasicBlock* successor)
 
     // Compute phis in the loop header and propagate them throughout the loop,
     // including the successor.
-    AbortReason r = state.loop.entry->setBackedge(current);
+    AbortReason r = state.loop.entry->setBackedge(alloc(), current);
     if (r == AbortReason_Alloc)
         return ControlStatus_Error;
     if (r == AbortReason_Disable) {
@@ -7982,7 +7985,7 @@ IonBuilder::newPendingLoopHeader(MBasicBlock* predecessor, jsbytecode* pc, bool 
             if (!typeSet)
                 return nullptr;
             MIRType type = typeSet->getKnownMIRType();
-            if (!phi->addBackedgeType(type, typeSet))
+            if (!phi->addBackedgeType(alloc(), type, typeSet))
                 return nullptr;
         }
     }
@@ -10795,6 +10798,22 @@ IonBuilder::jsop_rest()
 }
 
 bool
+IonBuilder::jsop_checkisobj(uint8_t kind)
+{
+    MDefinition* toCheck = current->peek(-1);
+
+    if (toCheck->type() == MIRType::Object) {
+        toCheck->setImplicitlyUsedUnchecked();
+        return true;
+    }
+
+    MCheckIsObj* check = MCheckIsObj::New(alloc(), current->pop(), kind);
+    current->add(check);
+    current->push(check);
+    return true;
+}
+
+bool
 IonBuilder::jsop_checkobjcoercible()
 {
     MDefinition* toCheck = current->peek(-1);
@@ -12395,11 +12414,13 @@ IonBuilder::getPropTryCache(bool* emitted, MDefinition* obj, PropertyName* name,
     // Caches can read values from prototypes, so update the barrier to
     // reflect such possible values.
     if (barrier != BarrierKind::TypeSet) {
-        BarrierKind protoBarrier =
+        ResultWithOOM<BarrierKind> protoBarrier =
             PropertyReadOnPrototypeNeedsTypeBarrier(this, obj, name, types);
-        if (protoBarrier != BarrierKind::NoBarrier) {
-            MOZ_ASSERT(barrier <= protoBarrier);
-            barrier = protoBarrier;
+        if (protoBarrier.oom)
+            return false;
+        if (protoBarrier.value != BarrierKind::NoBarrier) {
+            MOZ_ASSERT(barrier <= protoBarrier.value);
+            barrier = protoBarrier.value;
         }
     }
 

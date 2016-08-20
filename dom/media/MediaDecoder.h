@@ -85,8 +85,6 @@ public:
     MediaDecoderOwner* GetMediaOwner() const override;
     void SetInfinite(bool aInfinite) override;
     void SetMediaSeekable(bool aMediaSeekable) override;
-    void ResetConnectionState() override;
-    nsresult FinishDecoderSetup(MediaResource* aResource) override;
     void NotifyNetworkError() override;
     void NotifyDecodeError() override;
     void NotifyDataArrived() override;
@@ -241,10 +239,8 @@ public:
   // Call on the main thread only.
   bool IsSeeking() const;
 
-  // Return true if the decoder has reached the end of playback or the decoder
-  // has shutdown.
-  // Call on the main thread only.
-  bool IsEndedOrShutdown() const;
+  // Return true if the decoder has reached the end of playback.
+  bool IsEnded() const;
 
   // Return true if the MediaDecoderOwner's error attribute is not null.
   // Must be called before Shutdown().
@@ -416,9 +412,8 @@ private:
     mIgnoreProgressData = mLogicallySeeking;
   }
 
-  // Seeking has started. Inform the element on the main
-  // thread.
-  void SeekingStarted(MediaDecoderEventVisibility aEventVisibility = MediaDecoderEventVisibility::Observable);
+  // Seeking has started. Inform the element on the main thread.
+  void SeekingStarted();
 
   void UpdateLogicalPositionInternal(MediaDecoderEventVisibility aEventVisibility);
   void UpdateLogicalPosition()
@@ -464,10 +459,6 @@ private:
   static bool IsOpusEnabled();
   static bool IsWaveEnabled();
   static bool IsWebMEnabled();
-
-#ifdef NECKO_PROTOCOL_rtsp
-  static bool IsRtspEnabled();
-#endif
 
 #ifdef MOZ_OMX_DECODER
   static bool IsOmxEnabled();
@@ -530,9 +521,6 @@ protected:
 
   // Cancel a timer for heuristic dormant.
   void CancelDormantTimer();
-
-  // Return true if the decoder has reached the end of playback
-  bool IsEnded() const;
 
   bool IsShutdown() const;
 
@@ -673,9 +661,9 @@ protected:
   void OnMetadataUpdate(TimedMetadata&& aMetadata);
 
   // This should only ever be accessed from the main thread.
-  // It is set in Init and cleared in Shutdown when the element goes away.
-  // The decoder does not add a reference the element.
-  MediaDecoderOwner* const mOwner;
+  // It is set in the constructor and cleared in Shutdown when the element goes
+  // away. The decoder does not add a reference the element.
+  MediaDecoderOwner* mOwner;
 
   // Counters related to decode and presentation of frames.
   const RefPtr<FrameStatistics> mFrameStats;
@@ -737,7 +725,6 @@ protected:
   MediaEventListener mFirstFrameLoadedListener;
 
   MediaEventListener mOnPlaybackEvent;
-  MediaEventListener mOnSeekingStart;
   MediaEventListener mOnMediaNotSeekable;
 
 protected:
@@ -829,6 +816,9 @@ protected:
 
 public:
   AbstractCanonical<media::NullableTimeUnit>* CanonicalDurationOrNull() override;
+  AbstractCanonical<Maybe<double>>* CanonicalExplicitDuration() override {
+    return &mExplicitDuration;
+  }
   AbstractCanonical<double>* CanonicalVolume() {
     return &mVolume;
   }
@@ -840,9 +830,6 @@ public:
   }
   AbstractCanonical<media::NullableTimeUnit>* CanonicalEstimatedDuration() {
     return &mEstimatedDuration;
-  }
-  AbstractCanonical<Maybe<double>>* CanonicalExplicitDuration() {
-    return &mExplicitDuration;
   }
   AbstractCanonical<PlayState>* CanonicalPlayState() {
     return &mPlayState;
@@ -893,12 +880,6 @@ private:
   // When the media stream ends, we can know the duration, thus the stream is
   // no longer considered to be infinite.
   void SetInfinite(bool aInfinite);
-
-  // Reset the decoder and notify the media element that
-  // server connection is closed.
-  void ResetConnectionState();
-
-  nsresult FinishDecoderSetup(MediaResource* aResource);
 
   // Called by MediaResource when the principal of the resource has
   // changed. Called on main thread only.

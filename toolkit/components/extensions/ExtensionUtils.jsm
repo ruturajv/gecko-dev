@@ -13,13 +13,15 @@ const Cr = Components.results;
 
 const INTEGER = /^[1-9]\d*$/;
 
-Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 Cu.import("resource://gre/modules/Services.jsm");
+Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 
 XPCOMUtils.defineLazyModuleGetter(this, "AddonManager",
                                   "resource://gre/modules/AddonManager.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "AppConstants",
                                   "resource://gre/modules/AppConstants.jsm");
+XPCOMUtils.defineLazyModuleGetter(this, "ConsoleAPI",
+                                  "resource://gre/modules/Console.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "LanguageDetector",
                                   "resource:///modules/translation/LanguageDetector.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "Locale",
@@ -30,6 +32,15 @@ XPCOMUtils.defineLazyModuleGetter(this, "Preferences",
                                   "resource://gre/modules/Preferences.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "PromiseUtils",
                                   "resource://gre/modules/PromiseUtils.jsm");
+
+function getConsole() {
+  return new ConsoleAPI({
+    maxLogLevelPref: "extensions.webextensions.log.level",
+    prefix: "WebExtensions",
+  });
+}
+
+XPCOMUtils.defineLazyGetter(this, "console", getConsole);
 
 function filterStack(error) {
   return String(error.stack).replace(/(^.*(Task\.jsm|Promise-backend\.js).*\n)+/gm, "<Promise Chain>\n");
@@ -90,6 +101,12 @@ function runSafe(context, f, ...args) {
   return runSafeWithoutClone(f, ...args);
 }
 
+function getInnerWindowID(window) {
+  return window.QueryInterface(Ci.nsIInterfaceRequestor)
+    .getInterface(Ci.nsIDOMWindowUtils)
+    .currentInnerWindowID;
+}
+
 // Return true if the given value is an instance of the given
 // native type.
 function instanceOf(value, type) {
@@ -145,15 +162,58 @@ class SpreadArgs extends Array {
 let gContextId = 0;
 
 class BaseContext {
-  constructor(extensionId) {
+  constructor(extension) {
     this.onClose = new Set();
     this.checkedLastError = false;
     this._lastError = null;
-    this.contextId = ++gContextId;
+    this.contextId = `${++gContextId}-${Services.appinfo.uniqueProcessID}`;
     this.unloaded = false;
-    this.extensionId = extensionId;
+    this.extension = extension;
     this.jsonSandbox = null;
     this.active = true;
+
+    this.docShell = null;
+    this.contentWindow = null;
+    this.innerWindowID = 0;
+  }
+
+  setContentWindow(contentWindow) {
+    let {document} = contentWindow;
+    let docShell = contentWindow.QueryInterface(Ci.nsIInterfaceRequestor)
+                                .getInterface(Ci.nsIDocShell);
+
+    this.innerWindowID = getInnerWindowID(contentWindow);
+
+    let onPageShow = event => {
+      if (!event || event.target === document) {
+        this.docShell = docShell;
+        this.contentWindow = contentWindow;
+        this.active = true;
+      }
+    };
+    let onPageHide = event => {
+      if (!event || event.target === document) {
+        // Put this off until the next tick.
+        Promise.resolve().then(() => {
+          this.docShell = null;
+          this.contentWindow = null;
+          this.active = false;
+        });
+      }
+    };
+
+    onPageShow();
+    contentWindow.addEventListener("pagehide", onPageHide, true);
+    contentWindow.addEventListener("pageshow", onPageShow, true);
+    this.callOnClose({
+      close: () => {
+        onPageHide();
+        if (this.active) {
+          contentWindow.removeEventListener("pagehide", onPageHide, true);
+          contentWindow.removeEventListener("pageshow", onPageShow, true);
+        }
+      },
+    });
   }
 
   get cloneScope() {
@@ -384,7 +444,7 @@ class BaseContext {
     this.unloaded = true;
 
     MessageChannel.abortResponses({
-      extensionId: this.extensionId,
+      extensionId: this.extension.id,
       contextId: this.contextId,
     });
 
@@ -816,7 +876,7 @@ LocaleData.prototype = {
 // hasListener methods. |context| is an add-on scope (either an
 // ExtensionContext in the chrome process or ExtensionContext in a
 // content process). |name| is for debugging. |register| is a function
-// to register the listener. |register| is only called once, event if
+// to register the listener. |register| is only called once, even if
 // multiple listeners are registered. |register| should return an
 // unregister function that will unregister the listener.
 function EventManager(context, name, register) {
@@ -1219,14 +1279,7 @@ Messenger.prototype = {
       .catch(error => {
         if (error.result == MessageChannel.RESULT_NO_HANDLER) {
           return Promise.reject({message: "Could not establish connection. Receiving end does not exist."});
-        } else if (error.result == MessageChannel.RESULT_NO_RESPONSE) {
-          if (responseCallback) {
-            // As a special case, we don't call the callback variant if we
-            // receive no response. So return a promise which will never
-            // resolve.
-            return new Promise(() => {});
-          }
-        } else {
+        } else if (error.result != MessageChannel.RESULT_NO_RESPONSE) {
           return Promise.reject({message: error.message});
         }
       });
@@ -1281,8 +1334,7 @@ Messenger.prototype = {
   },
 
   connect(messageManager, name, recipient) {
-    // TODO(robwu): Use a process ID instead of the process type. bugzil.la/1287626
-    let portId = `${gNextPortId++}-${Services.appinfo.processType}`;
+    let portId = `${gNextPortId++}-${Services.appinfo.uniqueProcessID}`;
     let port = new Port(this.context, messageManager, name, portId, null);
     let msg = {name, portId};
     this._sendMessage(messageManager, "Extension:Connect", msg, recipient)
@@ -1409,7 +1461,7 @@ class ChildAPIManager {
   }
 
   close() {
-    this.messageManager.sendAsyncMessage("Extension:CloseProxyContext", {childId: this.id});
+    this.messageManager.sendAsyncMessage("API:CloseProxyContext", {childId: this.id});
   }
 
   get cloneScope() {
@@ -1521,6 +1573,8 @@ this.ExtensionUtils = {
   detectLanguage,
   extend,
   flushJarCache,
+  getConsole,
+  getInnerWindowID,
   ignoreEvent,
   injectAPI,
   instanceOf,

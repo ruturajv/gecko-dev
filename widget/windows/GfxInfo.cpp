@@ -49,7 +49,17 @@ GfxInfo::GfxInfo()
 nsresult
 GfxInfo::GetD2DEnabled(bool *aEnabled)
 {
-  *aEnabled = gfxWindowsPlatform::GetPlatform()->IsDirect2DBackend();
+  // Telemetry queries this during XPCOM initialization, and there's no
+  // gfxPlatform by then. Just bail out if gfxPlatform isn't initialized.
+  if (!gfxPlatform::Initialized()) {
+    *aEnabled = false;
+    return NS_OK;
+  }
+
+  // We check gfxConfig rather than the actual render mode, since the UI
+  // process does not use Direct2D if the GPU process is enabled. However,
+  // content processes can still use Direct2D.
+  *aEnabled = gfx::gfxConfig::IsEnabled(gfx::Feature::DIRECT2D);
   return NS_OK;
 }
 
@@ -1185,8 +1195,8 @@ GfxInfo::GetGfxDriverInfo()
     // Older than 11-18-2015
     APPEND_TO_DRIVER_BLOCKLIST2(OperatingSystem::Windows,
       (nsAString&) GfxDriverInfo::GetDeviceVendor(VendorIntel), GfxDriverInfo::allDevices,
-      nsIGfxInfo::FEATURE_WEBGL_OPENGL, nsIGfxInfo::FEATURE_DISCOURAGED, DRIVER_LESS_THAN,
-      V(20,19,15,4331), "WEBGL_NATIVE_GL_OLD_INTEL");
+      nsIGfxInfo::FEATURE_WEBGL_OPENGL, nsIGfxInfo::FEATURE_DISCOURAGED, DRIVER_BUILD_ID_LESS_THAN,
+      4331, "WEBGL_NATIVE_GL_OLD_INTEL");
 
     // Older than 2-23-2016
     APPEND_TO_DRIVER_BLOCKLIST2(OperatingSystem::Windows,
@@ -1194,6 +1204,14 @@ GfxInfo::GetGfxDriverInfo()
       nsIGfxInfo::FEATURE_WEBGL_OPENGL, nsIGfxInfo::FEATURE_DISCOURAGED, DRIVER_LESS_THAN,
       V(10,18,13,6200), "WEBGL_NATIVE_GL_OLD_NVIDIA");
 
+    ////////////////////////////////////
+    // FEATURE_DX_INTEROP2
+
+    // All AMD.
+    APPEND_TO_DRIVER_BLOCKLIST2(OperatingSystem::Windows,
+      (nsAString&) GfxDriverInfo::GetDeviceVendor(VendorAMD), GfxDriverInfo::allDevices,
+      nsIGfxInfo::FEATURE_DX_INTEROP2, nsIGfxInfo::FEATURE_BLOCKED_DRIVER_VERSION,
+      DRIVER_LESS_THAN, GfxDriverInfo::allDriverVersions, "DX_INTEROP2_AMD_CRASH");
   }
   return *mDriverInfo;
 }

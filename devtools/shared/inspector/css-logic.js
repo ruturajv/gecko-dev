@@ -41,12 +41,7 @@
  */
 
 const Services = require("Services");
-
-// This should be ok because none of the functions that use this should be used
-// on the worker thread, where Cu is not available.
-loader.lazyRequireGetter(this, "CSS", "CSS");
-
-loader.lazyRequireGetter(this, "CSSLexer", "devtools/shared/css-lexer");
+const CSSLexer = require("devtools/shared/css-lexer");
 
 /**
  * Special values for filter, in addition to an href these values can be used

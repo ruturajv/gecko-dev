@@ -226,6 +226,7 @@
 #include "vm/Debugger.h"
 #include "vm/ProxyObject.h"
 #include "vm/Shape.h"
+#include "vm/SPSProfiler.h"
 #include "vm/String.h"
 #include "vm/Symbol.h"
 #include "vm/Time.h"
@@ -778,7 +779,8 @@ Chunk::updateChunkListAfterFree(JSRuntime* rt, const AutoLockGC& lock)
         MOZ_ASSERT(unused());
         rt->gc.availableChunks(lock).remove(this);
         decommitAllArenas(rt);
-        rt->gc.emptyChunks(lock).push(this);
+        MOZ_ASSERT(info.numArenasFreeCommitted == 0);
+        rt->gc.recycleChunk(this, lock);
     }
 }
 
@@ -867,6 +869,7 @@ GCRuntime::GCRuntime(JSRuntime* rt) :
     inUnsafeRegion(0),
     noGCOrAllocationCheck(0),
     noNurseryAllocationCheck(0),
+    arenasEmptyAtShutdown(true),
 #endif
     allocTask(rt, emptyChunks_),
     decommitTask(rt),
@@ -1030,30 +1033,31 @@ GCRuntime::init(uint32_t maxbytes, uint32_t maxNurseryBytes)
     if (!rootsHash.init(256))
         return false;
 
-    /*
-     * Separate gcMaxMallocBytes from gcMaxBytes but initialize to maxbytes
-     * for default backward API compatibility.
-     */
-    AutoLockGC lock(rt);
-    MOZ_ALWAYS_TRUE(tunables.setParameter(JSGC_MAX_BYTES, maxbytes, lock));
-    setMaxMallocBytes(maxbytes);
+    {
+        AutoLockGC lock(rt);
 
-    const char* size = getenv("JSGC_MARK_STACK_LIMIT");
-    if (size)
-        setMarkStackLimit(atoi(size), lock);
+        /*
+         * Separate gcMaxMallocBytes from gcMaxBytes but initialize to maxbytes
+         * for default backward API compatibility.
+         */
+        MOZ_ALWAYS_TRUE(tunables.setParameter(JSGC_MAX_BYTES, maxbytes, lock));
+        setMaxMallocBytes(maxbytes);
 
-    jitReleaseNumber = majorGCNumber + JIT_SCRIPT_RELEASE_TYPES_PERIOD;
+        const char* size = getenv("JSGC_MARK_STACK_LIMIT");
+        if (size)
+            setMarkStackLimit(atoi(size), lock);
 
-    if (!nursery.init(maxNurseryBytes))
-        return false;
+        jitReleaseNumber = majorGCNumber + JIT_SCRIPT_RELEASE_TYPES_PERIOD;
 
-    if (!nursery.isEnabled()) {
-        MOZ_ASSERT(nursery.nurserySize() == 0);
-        ++rt->gc.generationalDisabled;
-    } else {
-        MOZ_ASSERT(nursery.nurserySize() > 0);
-        if (!storeBuffer.enable())
+        if (!nursery.init(maxNurseryBytes, lock))
             return false;
+
+        if (!nursery.isEnabled()) {
+            MOZ_ASSERT(nursery.nurserySize() == 0);
+            ++rt->gc.generationalDisabled;
+        } else {
+            MOZ_ASSERT(nursery.nurserySize() > 0);
+        }
     }
 
 #ifdef JS_GC_ZEAL
@@ -1111,15 +1115,6 @@ GCRuntime::finish()
     FinishTrace();
 
     nursery.printTotalProfileTimes();
-}
-
-void
-GCRuntime::finishRoots()
-{
-    if (rootsHash.initialized())
-        rootsHash.clear();
-
-    rt->mainThread.roots.finishPersistentRoots();
 }
 
 bool
@@ -2007,13 +2002,6 @@ ArenaList::relocateArenas(Arena* toRelocate, Arena* relocated, SliceBudget& slic
 static const double MIN_ZONE_RECLAIM_PERCENT = 2.0;
 
 static bool
-IsOOMReason(JS::gcreason::Reason reason)
-{
-    return reason == JS::gcreason::LAST_DITCH ||
-           reason == JS::gcreason::MEM_PRESSURE;
-}
-
-static bool
 ShouldRelocateZone(size_t arenaCount, size_t relocCount, JS::gcreason::Reason reason)
 {
     if (relocCount == 0)
@@ -2535,7 +2523,7 @@ GCRuntime::updatePointersToRelocatedCells(Zone* zone, AutoLockForExclusiveAccess
 
     // Mark roots to update them.
     {
-        markRuntime(&trc, MarkRuntime, lock);
+        traceRuntimeForMajorGC(&trc, lock);
 
         gcstats::AutoPhase ap(stats, gcstats::PHASE_MARK_ROOTS);
         Debugger::markAll(&trc);
@@ -3512,7 +3500,9 @@ Zone::sweepCompartments(FreeOp* fop, bool keepAtleastOne, bool destroyingRuntime
 void
 GCRuntime::sweepZones(FreeOp* fop, bool destroyingRuntime)
 {
-    MOZ_ASSERT_IF(destroyingRuntime, rt->gc.numActiveZoneIters == 0);
+    MOZ_ASSERT_IF(destroyingRuntime, numActiveZoneIters == 0);
+    MOZ_ASSERT_IF(destroyingRuntime, arenasEmptyAtShutdown);
+
     if (rt->gc.numActiveZoneIters)
         return;
 
@@ -3543,14 +3533,17 @@ GCRuntime::sweepZones(FreeOp* fop, bool destroyingRuntime)
                 // We are about to delete the Zone; this will leave the Zone*
                 // in the arena header dangling if there are any arenas
                 // remaining at this point.
-                mozilla::DebugOnly<bool> arenasEmpty = zone->arenas.checkEmptyArenaLists();
+#ifdef DEBUG
+                if (!zone->arenas.checkEmptyArenaLists())
+                    arenasEmptyAtShutdown = false;
+#endif
 
                 if (callback)
                     callback(zone);
 
                 zone->sweepCompartments(fop, false, destroyingRuntime);
                 MOZ_ASSERT(zone->compartments.empty());
-                MOZ_ASSERT_IF(arenasEmpty, zone->typeDescrObjects.empty());
+                MOZ_ASSERT_IF(arenasEmptyAtShutdown, zone->typeDescrObjects.empty());
                 fop->delete_(zone);
                 stats.sweptZone();
                 continue;
@@ -3622,6 +3615,8 @@ GCRuntime::purgeRuntime(AutoLockForExclusiveAccess& lock)
 
     if (auto cache = rt->maybeThisRuntimeSharedImmutableStrings())
         cache->purge();
+
+    rt->promiseTasksToDestroy.lock()->clear();
 }
 
 bool
@@ -3893,12 +3888,9 @@ GCRuntime::beginMarkPhase(JS::gcreason::Reason reason, AutoLockForExclusiveAcces
             /* Unmark all weak maps in the zones being collected. */
             WeakMapBase::unmarkZone(zone);
         }
-
-        if (isFull)
-            UnmarkScriptData(rt, lock);
     }
 
-    markRuntime(gcmarker, MarkRuntime, lock);
+    traceRuntimeForMajorGC(gcmarker, lock);
 
     gcstats::AutoPhase ap2(stats, gcstats::PHASE_MARK_ROOTS);
 
@@ -4183,7 +4175,7 @@ js::gc::MarkingValidator::nonIncrementalMark(AutoLockForExclusiveAccess& lock)
                 chunk->bitmap.clear();
         }
 
-        gc->markRuntime(gcmarker, GCRuntime::MarkRuntime, lock);
+        gc->traceRuntimeForMajorGC(gcmarker, lock);
 
         gc->incrementalState = State::Mark;
         auto unlimited = SliceBudget::unlimited();
@@ -4451,7 +4443,8 @@ GCRuntime::findZoneEdgesForWeakMaps()
 void
 GCRuntime::findZoneGroups(AutoLockForExclusiveAccess& lock)
 {
-    ZoneComponentFinder finder(rt->mainThread.nativeStackLimit[StackForSystemCode], lock);
+    JSContext* cx = rt->contextFromMainThread();
+    ZoneComponentFinder finder(cx->nativeStackLimit[StackForSystemCode], lock);
     if (!isIncremental || !findZoneEdgesForWeakMaps())
         finder.useOneComponent();
 
@@ -5421,8 +5414,7 @@ GCRuntime::endSweepPhase(bool destroyingRuntime, AutoLockForExclusiveAccess& loc
          * script and calls rt->destroyScriptHook, the hook can still access the
          * script's filename. See bug 323267.
          */
-        if (isFull)
-            SweepScriptData(rt, lock);
+        SweepScriptData(rt, lock);
 
         /* Clear out any small pools that we're hanging on to. */
         if (jit::JitRuntime* jitRuntime = rt->jitRuntime()) {
@@ -5482,6 +5474,12 @@ GCRuntime::compactPhase(JS::gcreason::Reason reason, SliceBudget& sliceBudget,
 
     gcstats::AutoPhase ap(stats, gcstats::PHASE_COMPACT);
 
+    // TODO: JSScripts can move. If the sampler interrupts the GC in the
+    // middle of relocating an arena, invalid JSScript pointers may be
+    // accessed. Suppress all sampling until a finer-grained solution can be
+    // found. See bug 1295775.
+    AutoSuppressProfilerSampling suppressSampling(rt);
+
     while (!zonesToMaybeCompact.isEmpty()) {
         Zone* zone = zonesToMaybeCompact.front();
         MOZ_ASSERT(zone->isGCFinished());
@@ -5504,6 +5502,8 @@ GCRuntime::compactPhase(JS::gcreason::Reason reason, SliceBudget& sliceBudget,
     JSContext* cx = rt->contextFromMainThread();
     cx->caches.newObjectCache.purge();
     cx->caches.nativeIterCache.purge();
+    if (cx->caches.evalCache.initialized())
+        cx->caches.evalCache.clear();
 
 #ifdef DEBUG
     CheckHashTablesAfterMovingGC(rt);
@@ -5573,12 +5573,6 @@ AutoTraceSession::AutoTraceSession(JSRuntime* rt, JS::HeapState heapState)
     MOZ_ASSERT(rt->heapState_ == JS::HeapState::Idle);
     MOZ_ASSERT(heapState != JS::HeapState::Idle);
     MOZ_ASSERT_IF(heapState == JS::HeapState::MajorCollecting, rt->gc.nursery.isEmpty());
-
-    // Threads with an exclusive context can hit refillFreeList while holding
-    // the exclusive access lock. To avoid deadlocking when we try to acquire
-    // this lock during GC and the other thread is waiting, make sure we hold
-    // the exclusive access lock during GC sessions.
-    MOZ_ASSERT(rt->currentThreadHasExclusiveAccess());
 
     if (rt->exclusiveThreadsPresent()) {
         // Lock the helper thread state when changing the heap state in the
@@ -6212,9 +6206,6 @@ GCRuntime::checkCanCallAPI()
     /* If we attempt to invoke the GC while we are running in the GC, assert. */
     MOZ_RELEASE_ASSERT(!rt->isHeapBusy());
 
-    /* The engine never locks across anything that could GC. */
-    MOZ_ASSERT(!rt->currentThreadHasExclusiveAccess());
-
     MOZ_ASSERT(isAllocAllowed());
 }
 
@@ -6471,17 +6462,19 @@ GCRuntime::onOutOfMallocMemory(const AutoLockGC& lock)
 }
 
 void
-GCRuntime::minorGCImpl(JS::gcreason::Reason reason, Nursery::ObjectGroupList* pretenureGroups)
+GCRuntime::minorGC(JS::gcreason::Reason reason, gcstats::Phase phase)
 {
     MOZ_ASSERT(!rt->isHeapBusy());
 
     if (rt->mainThread.suppressGC)
         return;
 
+    gcstats::AutoPhase ap(stats, phase);
+
     minorGCTriggerReason = JS::gcreason::NO_REASON;
     TraceLoggerThread* logger = TraceLoggerForMainThread(rt);
     AutoTraceLog logMinorGC(logger, TraceLogger_MinorGC);
-    nursery.collect(rt, reason, pretenureGroups);
+    nursery.collect(rt, reason);
     MOZ_ASSERT(nursery.isEmpty());
 
     blocksToFreeAfterMinorGC.freeAll();
@@ -6491,23 +6484,10 @@ GCRuntime::minorGCImpl(JS::gcreason::Reason reason, Nursery::ObjectGroupList* pr
         CheckHeapAfterMovingGC(rt);
 #endif
 
-    AutoLockGC lock(rt);
-    for (ZonesIter zone(rt, WithAtoms); !zone.done(); zone.next())
-        maybeAllocTriggerZoneGC(zone, lock);
-}
-
-// Alternate to the runtime-taking form that allows marking object groups as
-// needing pretenuring.
-void
-GCRuntime::minorGC(JSContext* cx, JS::gcreason::Reason reason)
-{
-    gcstats::AutoPhase ap(stats, gcstats::PHASE_MINOR_GC);
-
-    Nursery::ObjectGroupList pretenureGroups;
-    minorGCImpl(reason, &pretenureGroups);
-    for (size_t i = 0; i < pretenureGroups.length(); i++) {
-        if (pretenureGroups[i]->canPreTenure())
-            pretenureGroups[i]->setShouldPreTenure(cx);
+    {
+        AutoLockGC lock(rt);
+        for (ZonesIter zone(rt, WithAtoms); !zone.done(); zone.next())
+            maybeAllocTriggerZoneGC(zone, lock);
     }
 }
 
@@ -6517,7 +6497,6 @@ GCRuntime::disableGenerationalGC()
     if (isGenerationalGCEnabled()) {
         evictNursery(JS::gcreason::API);
         nursery.disable();
-        storeBuffer.disable();
     }
     ++rt->gc.generationalDisabled;
 }
@@ -6527,23 +6506,17 @@ GCRuntime::enableGenerationalGC()
 {
     MOZ_ASSERT(generationalDisabled > 0);
     --generationalDisabled;
-    if (generationalDisabled == 0) {
+    if (generationalDisabled == 0)
         nursery.enable();
-        storeBuffer.enable();
-    }
 }
 
 bool
-GCRuntime::gcIfRequested(JSContext* cx /* = nullptr */)
+GCRuntime::gcIfRequested()
 {
     // This method returns whether a major GC was performed.
 
-    if (minorGCRequested()) {
-        if (cx)
-            minorGC(cx, minorGCTriggerReason);
-        else
-            minorGC(minorGCTriggerReason);
-    }
+    if (minorGCRequested())
+        minorGC(minorGCTriggerReason);
 
     if (majorGCRequested()) {
         if (!isIncrementalGCInProgress())

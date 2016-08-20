@@ -64,7 +64,6 @@ browser/base/content/test/**
 browser/base/content/newtab/**
 browser/components/downloads/**
 browser/components/feeds/**
-browser/components/preferences/**
 browser/components/privatebrowsing/**
 browser/components/sessionstore/**
 browser/components/shell/**
@@ -80,14 +79,11 @@ devtools/client/commandline/**
 devtools/client/debugger/**
 devtools/client/eyedropper/**
 devtools/client/framework/**
+!devtools/client/framework/selection.js
 devtools/client/jsonview/lib/**
 devtools/client/memory/**
 devtools/client/netmonitor/test/**
 devtools/client/netmonitor/har/test/**
-devtools/client/performance/components/**
-devtools/client/performance/legacy/**
-devtools/client/performance/modules/**
-devtools/client/performance/test/**
 devtools/client/projecteditor/**
 devtools/client/promisedebugger/**
 devtools/client/responsivedesign/**
@@ -101,7 +97,7 @@ devtools/client/shared/redux/middleware/test/**
 devtools/client/shared/test/**
 !devtools/client/shared/test/test-actor-registry.js
 devtools/client/shared/widgets/*.jsm
-devtools/client/sourceeditor/**
+devtools/client/sourceeditor/test/*.js
 devtools/client/webaudioeditor/**
 devtools/client/webconsole/**
 !devtools/client/webconsole/panel.js
@@ -117,6 +113,7 @@ devtools/server/*.jsm
 !devtools/server/websocket-server.js
 devtools/server/actors/**
 !devtools/server/actors/inspector.js
+!devtools/server/actors/highlighters/css-grid.js
 !devtools/server/actors/highlighters/eye-dropper.js
 !devtools/server/actors/webbrowser.js
 !devtools/server/actors/webextension.js
@@ -126,6 +123,7 @@ devtools/server/actors/**
 devtools/server/performance/**
 devtools/server/tests/**
 devtools/shared/*.js
+!devtools/shared/async-storage.js
 !devtools/shared/async-utils.js
 !devtools/shared/css-lexer.js
 !devtools/shared/defer.js
@@ -144,6 +142,7 @@ devtools/shared/heapsnapshot/**
 devtools/shared/layout/**
 devtools/shared/locales/**
 devtools/shared/performance/**
+!devtools/shared/platform/**
 devtools/shared/qrcode/**
 devtools/shared/security/**
 devtools/shared/shims/**
@@ -240,7 +239,6 @@ toolkit/components/reader/Readability.js
 toolkit/components/reader/JSDOMParser.js
 
 # Uses preprocessing
-toolkit/content/widgets/videocontrols.xml
 toolkit/content/widgets/wizard.xml
 toolkit/components/jsdownloads/src/DownloadIntegration.jsm
 toolkit/components/search/nsSearchService.js

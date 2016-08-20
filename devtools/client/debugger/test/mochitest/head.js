@@ -442,12 +442,6 @@ function waitForClientEvents(aPanel, aEventName, aEventRepeat = 1) {
   return deferred.promise;
 }
 
-function waitForClipboardPromise(setup, expected) {
-  return new Promise((resolve, reject) => {
-    SimpleTest.waitForClipboard(expected, setup, resolve, reject);
-  });
-}
-
 function ensureThreadClientState(aPanel, aState) {
   let thread = aPanel.panelWin.gThreadClient;
   let state = thread.state;
@@ -1324,3 +1318,33 @@ function waitForDispatch(panel, type, eventRepeat = 1) {
     }
   });
 }
+
+function* initWorkerDebugger(TAB_URL, WORKER_URL) {
+  if (!DebuggerServer.initialized) {
+    DebuggerServer.init();
+    DebuggerServer.addBrowserActors();
+  }
+
+  let client = new DebuggerClient(DebuggerServer.connectPipe());
+  yield connect(client);
+
+  let tab = yield addTab(TAB_URL);
+  let { tabs } = yield listTabs(client);
+  let [, tabClient] = yield attachTab(client, findTab(tabs, TAB_URL));
+
+  yield createWorkerInTab(tab, WORKER_URL);
+
+  let { workers } = yield listWorkers(tabClient);
+  let [, workerClient] = yield attachWorker(tabClient,
+                                             findWorker(workers, WORKER_URL));
+
+  let toolbox = yield gDevTools.showToolbox(TargetFactory.forWorker(workerClient),
+                                            "jsdebugger",
+                                            Toolbox.HostType.WINDOW);
+
+  let debuggerPanel = toolbox.getCurrentPanel();
+  let gDebugger = debuggerPanel.panelWin;
+
+  return {client, tab, tabClient, workerClient, toolbox, gDebugger};
+}
+

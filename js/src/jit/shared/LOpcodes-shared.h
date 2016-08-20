@@ -397,7 +397,6 @@
     _(WasmStoreGlobalVarI64)        \
     _(AsmJSLoadHeap)                \
     _(AsmJSStoreHeap)               \
-    _(AsmJSLoadFuncPtr)             \
     _(AsmJSParameter)               \
     _(AsmJSParameterI64)            \
     _(AsmJSReturn)                  \
@@ -428,6 +427,7 @@
     _(NewTarget)                    \
     _(ArrowNewTarget)               \
     _(CheckReturn)                  \
+    _(CheckIsObj)                   \
     _(CheckObjCoercible)            \
     _(DebugCheckSelfHosted)
 

@@ -366,7 +366,6 @@ class CodeGenerator final : public CodeGeneratorSpecific
     void visitAsmJSReturn(LAsmJSReturn* ret);
     void visitAsmJSReturnI64(LAsmJSReturnI64* ret);
     void visitAsmJSVoidReturn(LAsmJSVoidReturn* ret);
-    void visitAsmJSLoadFuncPtr(LAsmJSLoadFuncPtr* ins);
     void visitLexicalCheck(LLexicalCheck* ins);
     void visitThrowRuntimeLexicalError(LThrowRuntimeLexicalError* ins);
     void visitGlobalNameConflictsCheck(LGlobalNameConflictsCheck* ins);
@@ -374,6 +373,7 @@ class CodeGenerator final : public CodeGeneratorSpecific
     void visitNewTarget(LNewTarget* ins);
     void visitArrowNewTarget(LArrowNewTarget* ins);
     void visitCheckReturn(LCheckReturn* ins);
+    void visitCheckIsObj(LCheckIsObj* ins);
     void visitCheckObjCoercible(LCheckObjCoercible* ins);
     void visitDebugCheckSelfHosted(LDebugCheckSelfHosted* ins);
 

@@ -283,7 +283,6 @@ class LIRGenerator : public LIRGeneratorSpecific
     void visitHasClass(MHasClass* ins);
     void visitWasmLoadGlobalVar(MWasmLoadGlobalVar* ins);
     void visitWasmStoreGlobalVar(MWasmStoreGlobalVar* ins);
-    void visitAsmJSLoadFuncPtr(MAsmJSLoadFuncPtr* ins);
     void visitAsmJSParameter(MAsmJSParameter* ins);
     void visitAsmJSReturn(MAsmJSReturn* ins);
     void visitAsmJSVoidReturn(MAsmJSVoidReturn* ins);
@@ -318,6 +317,7 @@ class LIRGenerator : public LIRGeneratorSpecific
     void visitAtomicIsLockFree(MAtomicIsLockFree* ins);
     void visitGuardSharedTypedArray(MGuardSharedTypedArray* ins);
     void visitCheckReturn(MCheckReturn* ins);
+    void visitCheckIsObj(MCheckIsObj* ins);
     void visitCheckObjCoercible(MCheckObjCoercible* ins);
     void visitDebugCheckSelfHosted(MDebugCheckSelfHosted* ins);
 };

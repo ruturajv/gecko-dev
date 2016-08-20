@@ -40,7 +40,7 @@ public:
 
   BroadcastChannelMessage()
     : StructuredCloneHolder(CloningSupported, TransferringNotSupported,
-                            DifferentProcess)
+                            StructuredCloneScope::DifferentProcess)
   {}
 
 private:
@@ -92,13 +92,7 @@ public:
       return true;
     }
 
-    bool isNullPrincipal;
-    mRv = principal->GetIsNullPrincipal(&isNullPrincipal);
-    if (NS_WARN_IF(mRv.Failed())) {
-      return true;
-    }
-
-    if (NS_WARN_IF(isNullPrincipal)) {
+    if (NS_WARN_IF(principal->GetIsNullPrincipal())) {
       mRv.Throw(NS_ERROR_FAILURE);
       return true;
     }
@@ -149,7 +143,7 @@ public:
     MOZ_ASSERT(mActor);
   }
 
-  NS_IMETHODIMP Run() override
+  NS_IMETHOD Run() override
   {
     MOZ_ASSERT(mActor);
     if (mActor->IsActorDestroyed()) {
@@ -211,7 +205,7 @@ public:
     MOZ_ASSERT(mBC);
   }
 
-  NS_IMETHODIMP Run() override
+  NS_IMETHOD Run() override
   {
     mBC->Shutdown();
     return NS_OK;
@@ -243,7 +237,7 @@ public:
     MOZ_ASSERT(mActor);
   }
 
-  NS_IMETHODIMP Run() override
+  NS_IMETHOD Run() override
   {
     MOZ_ASSERT(mActor);
     if (!mActor->IsActorDestroyed()) {
@@ -350,13 +344,7 @@ BroadcastChannel::Constructor(const GlobalObject& aGlobal,
       return nullptr;
     }
 
-    bool isNullPrincipal;
-    aRv = principal->GetIsNullPrincipal(&isNullPrincipal);
-    if (NS_WARN_IF(aRv.Failed())) {
-      return nullptr;
-    }
-
-    if (NS_WARN_IF(isNullPrincipal)) {
+    if (NS_WARN_IF(principal->GetIsNullPrincipal())) {
       aRv.Throw(NS_ERROR_FAILURE);
       return nullptr;
     }
@@ -407,7 +395,7 @@ BroadcastChannel::Constructor(const GlobalObject& aGlobal,
     }
   } else {
     bc->mWorkerHolder = new BroadcastChannelWorkerHolder(bc);
-    if (NS_WARN_IF(!bc->mWorkerHolder->HoldWorker(workerPrivate))) {
+    if (NS_WARN_IF(!bc->mWorkerHolder->HoldWorker(workerPrivate, Closing))) {
       bc->mWorkerHolder = nullptr;
       aRv.Throw(NS_ERROR_FAILURE);
       return nullptr;

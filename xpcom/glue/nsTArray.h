@@ -330,6 +330,9 @@ struct nsTArray_SafeElementAtHelper<mozilla::OwningNonNull<E>, Derived>
 
 extern "C" void Gecko_EnsureTArrayCapacity(void* aArray, size_t aCapacity, size_t aElemSize);
 
+MOZ_NORETURN MOZ_COLD void
+InvalidArrayIndex_CRASH(size_t aIndex, size_t aLength);
+
 //
 // This class serves as a base class for nsTArray.  It shouldn't be used
 // directly.  It holds common implementation code that does not depend on the
@@ -989,7 +992,9 @@ public:
   // @return A reference to the i'th element of the array.
   elem_type& ElementAt(index_type aIndex)
   {
-    MOZ_ASSERT(aIndex < Length(), "invalid array index");
+    if (MOZ_UNLIKELY(aIndex >= Length())) {
+      InvalidArrayIndex_CRASH(aIndex, Length());
+    }
     return Elements()[aIndex];
   }
 
@@ -999,7 +1004,9 @@ public:
   // @return A const reference to the i'th element of the array.
   const elem_type& ElementAt(index_type aIndex) const
   {
-    MOZ_ASSERT(aIndex < Length(), "invalid array index");
+    if (MOZ_UNLIKELY(aIndex >= Length())) {
+      InvalidArrayIndex_CRASH(aIndex, Length());
+    }
     return Elements()[aIndex];
   }
 
@@ -1595,7 +1602,8 @@ public:
   // an element, the element is removed. aPredicate will be called
   // for each element in order. It is not safe to access the array
   // inside aPredicate.
-  void RemoveElementsBy(mozilla::function<bool(const elem_type&)> aPredicate);
+  template<typename Predicate>
+  void RemoveElementsBy(Predicate aPredicate);
 
   // This helper function combines IndexOf with RemoveElementAt to "search
   // and destroy" the first element that is equal to the given element.
@@ -1902,8 +1910,9 @@ nsTArray_Impl<E, Alloc>::RemoveElementsAt(index_type aStart, size_type aCount)
 }
 
 template<typename E, class Alloc>
+template<typename Predicate>
 void
-nsTArray_Impl<E, Alloc>::RemoveElementsBy(mozilla::function<bool(const elem_type&)> aPredicate)
+nsTArray_Impl<E, Alloc>::RemoveElementsBy(Predicate aPredicate)
 {
   if (base_type::mHdr == EmptyHdr()) {
     return;
@@ -2214,6 +2223,12 @@ public:
   {
     Init();
     this->SwapElements(aOther);
+  }
+
+  MOZ_IMPLICIT AutoTArray(std::initializer_list<E> aIL)
+  {
+    Init();
+    this->AppendElements(aIL.begin(), aIL.size());
   }
 
   self_type& operator=(const self_type& aOther)

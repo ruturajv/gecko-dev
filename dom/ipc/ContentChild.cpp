@@ -164,7 +164,7 @@
 #endif
 
 #ifdef ACCESSIBILITY
-#include "nsIAccessibilityService.h"
+#include "nsAccessibilityService.h"
 #endif
 
 #ifndef MOZ_SIMPLEPUSH
@@ -588,6 +588,9 @@ ContentChild::Init(MessageLoop* aIOLoop,
   // If communications with the parent have broken down, take the process
   // down so it's not hanging around.
   GetIPCChannel()->SetAbortOnError(true);
+#if defined(XP_WIN) && defined(ACCESSIBILITY)
+  GetIPCChannel()->SetChannelFlags(MessageChannel::REQUIRE_A11Y_REENTRY);
+#endif
 
 #ifdef MOZ_X11
   // Send the parent our X socket to act as a proxy reference for our X
@@ -1639,6 +1642,15 @@ ContentChild::RecvNotifyGMPsChanged()
   return true;
 }
 
+bool
+ContentChild::RecvNotifyEmptyHTTPCache()
+{
+  MOZ_ASSERT(NS_IsMainThread());
+  nsCOMPtr<nsIObserverService> obs = mozilla::services::GetObserverService();
+  obs->NotifyObservers(nullptr, "cacheservice:empty-cache", nullptr);
+  return true;
+}
+
 PCrashReporterChild*
 ContentChild::AllocPCrashReporterChild(const mozilla::dom::NativeThreadId& id,
                                        const uint32_t& processType)
@@ -2466,8 +2478,7 @@ ContentChild::RecvActivateA11y()
 #ifdef ACCESSIBILITY
   // Start accessibility in content process if it's running in chrome
   // process.
-  nsCOMPtr<nsIAccessibilityService> accService =
-    services::GetAccessibilityService();
+  GetOrCreateAccService();
 #endif
   return true;
 }

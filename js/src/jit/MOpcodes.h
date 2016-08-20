@@ -281,7 +281,6 @@ namespace jit {
     _(AsmJSStoreHeap)                                                       \
     _(WasmLoadGlobalVar)                                                    \
     _(WasmStoreGlobalVar)                                                   \
-    _(AsmJSLoadFuncPtr)                                                     \
     _(AsmJSReturn)                                                          \
     _(AsmJSParameter)                                                       \
     _(AsmJSVoidReturn)                                                      \
@@ -303,6 +302,7 @@ namespace jit {
     _(NewTarget)                                                            \
     _(ArrowNewTarget)                                                       \
     _(CheckReturn)                                                          \
+    _(CheckIsObj)                                                             \
     _(CheckObjCoercible)                                                    \
     _(DebugCheckSelfHosted)
 

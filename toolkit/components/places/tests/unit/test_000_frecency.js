@@ -70,7 +70,7 @@ function* task_initializeBucket(bucket) {
   // generate a date within the cutoff period
   var dateInPeriod = (now - ((cutoff - 1) * 86400 * 1000)) * 1000;
 
-  for (let [bonusName, visitType] in Iterator(bonusPrefs)) {
+  for (let [bonusName, visitType] of Object.entries(bonusPrefs)) {
     var frecency = -1;
     var calculatedURI = null;
     var matchTitle = "";
@@ -209,7 +209,7 @@ add_task(function* test_frecency()
   }
 
   // sort results by frecency
-  results.sort((a,b) => b[1] - a[1]);
+  results.sort((a, b) => b[1] - a[1]);
   // Make sure there's enough results returned
   prefs.setIntPref("browser.urlbar.maxRichResults", results.length);
 

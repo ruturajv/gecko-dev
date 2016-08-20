@@ -110,7 +110,8 @@ define(function (require, exports, module) {
 
       indexes.forEach((i) => {
         let name = Object.keys(ownProperties)[i];
-        let value = ownProperties[name].value;
+        let prop = ownProperties[name];
+        let value = prop.value !== undefined ? prop.value : prop;
         props.push(PropRep(Object.assign({}, this.props, {
           key: name,
           mode: "tiny",
@@ -144,7 +145,7 @@ define(function (require, exports, module) {
           }
 
           let prop = ownProperties[name];
-          let value = prop.value;
+          let value = prop.value !== undefined ? prop.value : prop;
 
           // Type is specified in grip's "class" field and for primitive
           // values use typeof.
@@ -189,13 +190,13 @@ define(function (require, exports, module) {
             className: "objectLeftBrace",
             role: "presentation",
             object: object
-          }, " {"),
+          }, " { "),
           props,
           objectLink({
             className: "objectRightBrace",
             role: "presentation",
             object: object
-          }, "}")
+          }, " }")
         )
       );
     },

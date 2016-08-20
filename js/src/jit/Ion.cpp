@@ -224,7 +224,7 @@ JitRuntime::~JitRuntime()
 bool
 JitRuntime::initialize(JSContext* cx, AutoLockForExclusiveAccess& lock)
 {
-    AutoCompartment ac(cx, cx->atomsCompartment(lock));
+    AutoCompartment ac(cx, cx->atomsCompartment(lock), &lock);
 
     JitContext jctx(cx, nullptr);
 
@@ -358,7 +358,7 @@ JitRuntime::debugTrapHandler(JSContext* cx)
         // JitRuntime code stubs are shared across compartments and have to
         // be allocated in the atoms compartment.
         AutoLockForExclusiveAccess lock(cx);
-        AutoCompartment ac(cx, cx->runtime()->atomsCompartment(lock));
+        AutoCompartment ac(cx, cx->runtime()->atomsCompartment(lock), &lock);
         debugTrapHandler_ = generateDebugTrapHandler(cx);
     }
     return debugTrapHandler_;
@@ -613,6 +613,12 @@ jit::LazyLinkTopActivation(JSContext* cx)
 JitRuntime::Mark(JSTracer* trc, AutoLockForExclusiveAccess& lock)
 {
     MOZ_ASSERT(!trc->runtime()->isHeapMinorCollecting());
+
+    // Shared stubs are allocated in the atoms compartment, so do not iterate
+    // them after the atoms heap after it has been "finished."
+    if (trc->runtime()->atomsAreFinished())
+        return;
+
     Zone* zone = trc->runtime()->atomsCompartment(lock)->zone();
     for (auto i = zone->cellIter<JitCode>(); !i.done(); i.next()) {
         JitCode* code = i;

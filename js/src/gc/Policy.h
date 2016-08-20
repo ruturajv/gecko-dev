@@ -30,6 +30,7 @@ class ArrayObject;
 class BaseShape;
 class ClonedBlockObject;
 class DebugScopeObject;
+class DebuggerFrame;
 class ExportEntryObject;
 class GlobalObject;
 class ImportEntryObject;
@@ -86,6 +87,7 @@ class JitCode;
     D(js::BaseShape*) \
     D(js::ClonedBlockObject*) \
     D(js::DebugScopeObject*) \
+    D(js::DebuggerFrame*) \
     D(js::ExportEntryObject*) \
     D(js::GlobalObject*) \
     D(js::ImportEntryObject*) \
@@ -108,6 +110,7 @@ class JitCode;
     D(js::UnownedBaseShape*) \
     D(js::WasmInstanceObject*) \
     D(js::WasmMemoryObject*) \
+    D(js::WasmTableObject*) \
     D(js::jit::JitCode*)
 
 // Expand the given macro D for each internal tagged GC pointer type.

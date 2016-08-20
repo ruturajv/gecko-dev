@@ -51,7 +51,7 @@
 #include "mozilla/dom/Telephony.h"
 #include "mozilla/dom/Voicemail.h"
 #include "mozilla/dom/TVManager.h"
-#include "mozilla/dom/VRDevice.h"
+#include "mozilla/dom/VRDisplay.h"
 #include "mozilla/dom/workers/RuntimeService.h"
 #include "mozilla/Hal.h"
 #include "nsISiteSpecificUserAgent.h"
@@ -267,7 +267,7 @@ NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN(Navigator)
 #ifdef MOZ_GAMEPAD
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mGamepadServiceTest)
 #endif
-  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mVRGetDevicesPromises)
+  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mVRGetDisplaysPromises)
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE_SCRIPT_OBJECTS
 NS_IMPL_CYCLE_COLLECTION_TRAVERSE_END
 
@@ -412,7 +412,7 @@ Navigator::Invalidate()
   }
 #endif
 
-  mVRGetDevicesPromises.Clear();
+  mVRGetDisplaysPromises.Clear();
 }
 
 //*****************************************************************************
@@ -1696,7 +1696,7 @@ Navigator::GetFeature(const nsAString& aName, ErrorResult& aRv)
     return p.forget();
   }
 
-  p->MaybeResolve(JS::UndefinedHandleValue);
+  p->MaybeResolveWithUndefined();
   return p.forget();
 }
 
@@ -1795,12 +1795,12 @@ Navigator::HasFeature(const nsAString& aName, ErrorResult& aRv)
       return p.forget();
     }
 
-    p->MaybeResolve(JS::UndefinedHandleValue);
+    p->MaybeResolveWithUndefined();
     return p.forget();
   }
 
   // resolve with <undefined> because the feature name is not supported
-  p->MaybeResolve(JS::UndefinedHandleValue);
+  p->MaybeResolveWithUndefined();
 
   return p.forget();
 }
@@ -2037,12 +2037,15 @@ Navigator::RequestGamepadServiceTest()
 #endif
 
 already_AddRefed<Promise>
-Navigator::GetVRDevices(ErrorResult& aRv)
+Navigator::GetVRDisplays(ErrorResult& aRv)
 {
   if (!mWindow || !mWindow->GetDocShell()) {
     aRv.Throw(NS_ERROR_UNEXPECTED);
     return nullptr;
   }
+
+  nsGlobalWindow* win = nsGlobalWindow::Cast(mWindow);
+  win->NotifyVREventListenerAdded();
 
   nsCOMPtr<nsIGlobalObject> go = do_QueryInterface(mWindow);
   RefPtr<Promise> p = Promise::Create(go, aRv);
@@ -2050,35 +2053,35 @@ Navigator::GetVRDevices(ErrorResult& aRv)
     return nullptr;
   }
 
-  // We pass ourself to RefreshVRDevices, so NotifyVRDevicesUpdated will
-  // be called asynchronously, resolving the promises in mVRGetDevicesPromises.
-  if (!VRDevice::RefreshVRDevices(this)) {
+  // We pass ourself to RefreshVRDisplays, so NotifyVRDisplaysUpdated will
+  // be called asynchronously, resolving the promises in mVRGetDisplaysPromises.
+  if (!VRDisplay::RefreshVRDisplays(this)) {
     p->MaybeReject(NS_ERROR_FAILURE);
     return p.forget();
   }
 
-  mVRGetDevicesPromises.AppendElement(p);
+  mVRGetDisplaysPromises.AppendElement(p);
   return p.forget();
 }
 
 void
-Navigator::NotifyVRDevicesUpdated()
+Navigator::NotifyVRDisplaysUpdated()
 {
   // Synchronize the VR devices and resolve the promises in
-  // mVRGetDevicesPromises
+  // mVRGetDisplaysPromises
   nsGlobalWindow* win = nsGlobalWindow::Cast(mWindow);
 
-  nsTArray<RefPtr<VRDevice>> vrDevs;
-  if (win->UpdateVRDevices(vrDevs)) {
-    for (auto p: mVRGetDevicesPromises) {
-      p->MaybeResolve(vrDevs);
+  nsTArray<RefPtr<VRDisplay>> vrDisplays;
+  if (win->UpdateVRDisplays(vrDisplays)) {
+    for (auto p : mVRGetDisplaysPromises) {
+      p->MaybeResolve(vrDisplays);
     }
   } else {
-    for (auto p: mVRGetDevicesPromises) {
+    for (auto p : mVRGetDisplaysPromises) {
       p->MaybeReject(NS_ERROR_FAILURE);
     }
   }
-  mVRGetDevicesPromises.Clear();
+  mVRGetDisplaysPromises.Clear();
 }
 
 //*****************************************************************************
@@ -2327,58 +2330,6 @@ Navigator::HasMobileIdSupport(JSContext* aCx, JSObject* aGlobal)
          permission == nsIPermissionManager::ALLOW_ACTION;
 }
 #endif
-
-/* static */
-bool
-Navigator::HasPresentationSupport(JSContext* aCx, JSObject* aGlobal)
-{
-  JS::Rooted<JSObject*> global(aCx, aGlobal);
-
-  nsCOMPtr<nsPIDOMWindowInner> inner = GetWindowFromGlobal(global);
-  if (NS_WARN_IF(!inner)) {
-    return false;
-  }
-
-  // Grant access if it has the permission.
-  if (CheckPermission(inner, "presentation")) {
-    return true;
-  }
-
-  // Grant access to browser receiving pages and their same-origin iframes. (App
-  // pages should be controlled by "presentation" permission in app manifests.)
-  nsCOMPtr<nsIDocShell> docshell = inner->GetDocShell();
-  if (!docshell) {
-    return false;
-  }
-
-  if (!docshell->GetIsInMozBrowserOrApp()) {
-    return false;
-  }
-
-  nsAutoString presentationURL;
-  nsContentUtils::GetPresentationURL(docshell, presentationURL);
-
-  if (presentationURL.IsEmpty()) {
-    return false;
-  }
-
-  nsCOMPtr<nsIScriptSecurityManager> securityManager =
-    do_GetService(NS_SCRIPTSECURITYMANAGER_CONTRACTID);
-  if (!securityManager) {
-    return false;
-  }
-
-  nsCOMPtr<nsIURI> presentationURI;
-  nsresult rv = NS_NewURI(getter_AddRefs(presentationURI), presentationURL);
-  if (NS_FAILED(rv)) {
-    return false;
-  }
-
-  nsCOMPtr<nsIURI> docURI = inner->GetDocumentURI();
-  return NS_SUCCEEDED(securityManager->CheckSameOriginURI(presentationURI,
-                                                          docURI,
-                                                          false));
-}
 
 /* static */
 bool

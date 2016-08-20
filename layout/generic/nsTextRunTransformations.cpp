@@ -32,7 +32,7 @@ using namespace mozilla;
 #define GREEK_SMALL_LETTER_FINAL_SIGMA         0x03C2
 #define GREEK_SMALL_LETTER_SIGMA               0x03C3
 
-UniquePtr<nsTransformedTextRun>
+already_AddRefed<nsTransformedTextRun>
 nsTransformedTextRun::Create(const gfxTextRunFactory::Parameters* aParams,
                              nsTransformingTextRunFactory* aFactory,
                              gfxFontGroup* aFontGroup,
@@ -49,10 +49,11 @@ nsTransformedTextRun::Create(const gfxTextRunFactory::Parameters* aParams,
     return nullptr;
   }
 
-  return UniquePtr<nsTransformedTextRun>(
+  RefPtr<nsTransformedTextRun> result =
     new (storage) nsTransformedTextRun(aParams, aFactory, aFontGroup,
                                        aString, aLength, aFlags,
-                                       Move(aStyles), aOwnsFactory));
+                                       Move(aStyles), aOwnsFactory);
+  return result.forget();
 }
 
 void
@@ -98,7 +99,7 @@ nsTransformedTextRun::SizeOfIncludingThis(mozilla::MallocSizeOf aMallocSizeOf)
   return aMallocSizeOf(this) + SizeOfExcludingThis(aMallocSizeOf);
 }
 
-UniquePtr<nsTransformedTextRun>
+already_AddRefed<nsTransformedTextRun>
 nsTransformingTextRunFactory::MakeTextRun(const char16_t* aString, uint32_t aLength,
                                           const gfxTextRunFactory::Parameters* aParams,
                                           gfxFontGroup* aFontGroup, uint32_t aFlags,
@@ -110,7 +111,7 @@ nsTransformingTextRunFactory::MakeTextRun(const char16_t* aString, uint32_t aLen
                                       aOwnsFactory);
 }
 
-UniquePtr<nsTransformedTextRun>
+already_AddRefed<nsTransformedTextRun>
 nsTransformingTextRunFactory::MakeTextRun(const uint8_t* aString, uint32_t aLength,
                                           const gfxTextRunFactory::Parameters* aParams,
                                           gfxFontGroup* aFontGroup, uint32_t aFlags,
@@ -306,6 +307,9 @@ nsCaseTransformTextRunFactory::TransformString(
   mozilla::GreekCasing::State greekState;
   mozilla::IrishCasing::State irishState;
   uint32_t irishMark = uint32_t(-1); // location of possible prefix letter(s)
+                                     // in the output string
+  uint32_t irishMarkSrc; // corresponding location in source string (may differ
+                         // from output due to expansions like eszet -> 'SS')
 
   for (uint32_t i = 0; i < length; ++i) {
     uint32_t ch = str[i];
@@ -456,6 +460,7 @@ nsCaseTransformTextRunFactory::TransformString(
         ch = mozilla::IrishCasing::UpperCase(ch, irishState, mark, action);
         if (mark) {
           irishMark = aConvertedString.Length();
+          irishMarkSrc = i;
           break;
         } else if (action) {
           nsString& str = aConvertedString; // shorthand
@@ -481,7 +486,7 @@ nsCaseTransformTextRunFactory::TransformString(
             NS_ASSERTION(str.Length() >= 2 && irishMark == str.Length() - 2,
                          "bad irishMark!");
             str.Replace(irishMark, 2, ToLowerCase(str[irishMark]));
-            aDeletedCharsArray[irishMark + 1] = true;
+            aDeletedCharsArray[irishMarkSrc + 1] = true;
             // Remove the trailing entries (corresponding to the deleted hyphen)
             // from the auxiliary arrays.
             aCharsToMergeArray.SetLength(aCharsToMergeArray.Length() - 1);
@@ -631,8 +636,8 @@ nsCaseTransformTextRunFactory::RebuildTextRun(nsTransformedTextRun* aTextRun,
     GetParametersForInner(aTextRun, &flags, aRefDrawTarget);
   gfxFontGroup* fontGroup = aTextRun->GetFontGroup();
 
-  UniquePtr<nsTransformedTextRun> transformedChild;
-  UniquePtr<gfxTextRun> cachedChild;
+  RefPtr<nsTransformedTextRun> transformedChild;
+  RefPtr<gfxTextRun> cachedChild;
   gfxTextRun* child;
 
   if (mInnerTransformingTextRunFactory) {

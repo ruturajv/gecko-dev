@@ -980,7 +980,7 @@ MediaStreamGraphImpl::OpenAudioInput(int aID,
   if (!NS_IsMainThread()) {
     NS_DispatchToMainThread(WrapRunnable(this,
                                          &MediaStreamGraphImpl::OpenAudioInput,
-                                         aID, aListener));
+                                         aID, RefPtr<AudioDataListener>(aListener)));
     return NS_OK;
   }
   class Message : public ControlMessage {
@@ -1049,7 +1049,7 @@ MediaStreamGraphImpl::CloseAudioInput(AudioDataListener *aListener)
   if (!NS_IsMainThread()) {
     NS_DispatchToMainThread(WrapRunnable(this,
                                          &MediaStreamGraphImpl::CloseAudioInput,
-                                         aListener));
+                                         RefPtr<AudioDataListener>(aListener)));
     return;
   }
   class Message : public ControlMessage {
@@ -1453,7 +1453,7 @@ public:
   explicit MediaStreamGraphShutDownRunnable(MediaStreamGraphImpl* aGraph)
     : mGraph(aGraph)
   {}
-  NS_IMETHOD Run()
+  NS_IMETHOD Run() override
   {
     NS_ASSERTION(mGraph->mDetectedNotRunning,
                  "We should know the graph thread control loop isn't running!");
@@ -1519,7 +1519,7 @@ public:
     , mSourceIsMSG(aSourceIsMSG)
   {
   }
-  NS_IMETHOD Run()
+  NS_IMETHOD Run() override
   {
     if (mGraph) {
       mGraph->RunInStableState(mSourceIsMSG);
@@ -3533,7 +3533,7 @@ public:
   , mGraph(aGraph)
   { }
 
-  NS_IMETHOD Run() {
+  NS_IMETHOD Run() override {
     mGraph->NotifyWhenGraphStarted(mStream);
     return NS_OK;
   }

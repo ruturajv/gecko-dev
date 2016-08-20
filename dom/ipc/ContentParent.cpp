@@ -589,6 +589,7 @@ static const char* sObserverTopics[] = {
   "profiler-subprocess",
 #endif
   "gmp-changed",
+  "cacheservice:empty-cache",
 };
 
 // PreallocateAppProcess is called by the PreallocatedProcessManager.
@@ -1006,10 +1007,7 @@ ContentParent::RecvUngrabPointer(const uint32_t& aTime)
   NS_RUNTIMEABORT("This message only makes sense on GTK platforms");
   return false;
 #else
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   gdk_pointer_ungrab(aTime);
-#pragma GCC diagnostic pop
   return true;
 #endif
 }
@@ -1131,9 +1129,7 @@ ContentParent::CreateBrowserOrApp(const TabContext& aContext,
       if (loadContext && loadContext->UsePrivateBrowsing()) {
         chromeFlags |= nsIWebBrowserChrome::CHROME_PRIVATE_WINDOW;
       }
-      bool affectLifetime;
-      docShell->GetAffectPrivateSessionLifetime(&affectLifetime);
-      if (affectLifetime) {
+      if (docShell->GetAffectPrivateSessionLifetime()) {
         chromeFlags |= nsIWebBrowserChrome::CHROME_PRIVATE_LIFETIME;
       }
 
@@ -1804,7 +1800,7 @@ struct DelayedDeleteContentParentTask : public Runnable
   explicit DelayedDeleteContentParentTask(ContentParent* aObj) : mObj(aObj) { }
 
   // No-op
-  NS_IMETHODIMP Run() { return NS_OK; }
+  NS_IMETHOD Run() override { return NS_OK; }
 
   RefPtr<ContentParent> mObj;
 };
@@ -2909,6 +2905,9 @@ ContentParent::Observe(nsISupports* aSubject,
 #endif
   else if (!strcmp(aTopic, "gmp-changed")) {
     Unused << SendNotifyGMPsChanged();
+  }
+  else if (!strcmp(aTopic, "cacheservice:empty-cache")) {
+    Unused << SendNotifyEmptyHTTPCache();
   }
   return NS_OK;
 }

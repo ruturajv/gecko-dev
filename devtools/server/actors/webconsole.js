@@ -33,9 +33,9 @@ for (let name of ["WebConsoleUtils", "ConsoleServiceListener",
         prop = "Utils";
       }
       if (isWorker) {
-        return require("devtools/shared/webconsole/worker-utils")[prop];
+        return require("devtools/server/actors/utils/webconsole-worker-utils")[prop];
       } else {
-        return require("devtools/shared/webconsole/utils")[prop];
+        return require("devtools/server/actors/utils/webconsole-utils")[prop];
       }
     }.bind(null, name),
     configurable: true,
@@ -87,8 +87,6 @@ function WebConsoleActor(aConnection, aParentActor)
     selectedObjectActor: true, // 44+
   };
 }
-
-WebConsoleActor.l10n = new WebConsoleUtils.L10n("chrome://global/locale/console.properties");
 
 WebConsoleActor.prototype =
 {
@@ -617,8 +615,8 @@ WebConsoleActor.prototype =
               // Start a network monitor in the parent process to listen to
               // most requests than happen in parent
               this.networkMonitor =
-                new NetworkMonitorChild(appId, messageManager,
-                                        this.parentActor.actorID, this);
+                new NetworkMonitorChild(appId, this.parentActor.outerWindowID,
+                                        messageManager, this.conn, this);
               this.networkMonitor.init();
               // Spawn also one in the child to listen to service workers
               this.networkMonitorChild = new NetworkMonitor({ window }, this);
@@ -1513,15 +1511,13 @@ WebConsoleActor.prototype =
    *
    * @param object aEvent
    *        The initial network request event information.
-   * @param nsIHttpChannel aChannel
-   *        The network request nsIHttpChannel object.
    * @return object
    *         A new NetworkEventActor is returned. This is used for tracking the
    *         network request and response.
    */
-  onNetworkEvent: function WCA_onNetworkEvent(aEvent, aChannel)
+  onNetworkEvent: function WCA_onNetworkEvent(aEvent)
   {
-    let actor = this.getNetworkEventActor(aChannel);
+    let actor = this.getNetworkEventActor(aEvent.channelId);
     actor.init(aEvent);
 
     let packet = {
@@ -1536,24 +1532,23 @@ WebConsoleActor.prototype =
   },
 
   /**
-   * Get the NetworkEventActor for a nsIChannel, if it exists,
+   * Get the NetworkEventActor for a nsIHttpChannel, if it exists,
    * otherwise create a new one.
    *
-   * @param nsIHttpChannel aChannel
-   *        The channel for the network event.
+   * @param string channelId
+   *        The id of the channel for the network event.
    * @return object
    *         The NetworkEventActor for the given channel.
    */
-  getNetworkEventActor: function WCA_getNetworkEventActor(aChannel) {
-    let actor = this._netEvents.get(aChannel);
+  getNetworkEventActor: function WCA_getNetworkEventActor(channelId) {
+    let actor = this._netEvents.get(channelId);
     if (actor) {
       // delete from map as we should only need to do this check once
-      this._netEvents.delete(aChannel);
-      actor.channel = null;
+      this._netEvents.delete(channelId);
       return actor;
     }
 
-    actor = new NetworkEventActor(aChannel, this);
+    actor = new NetworkEventActor(this);
     this._actorPool.addActor(actor);
     return actor;
   },
@@ -1577,10 +1572,11 @@ WebConsoleActor.prototype =
     }
     request.send(details.body);
 
-    let actor = this.getNetworkEventActor(request.channel);
+    let channel = request.channel.QueryInterface(Ci.nsIHttpChannel);
+    let actor = this.getNetworkEventActor(channel.channelId);
 
     // map channel to actor so we can associate future events with it
-    this._netEvents.set(request.channel, actor);
+    this._netEvents.set(channel.channelId, actor);
 
     return {
       from: this.actorID,
@@ -1804,16 +1800,12 @@ exports.WebConsoleActor = WebConsoleActor;
  * Creates an actor for a network event.
  *
  * @constructor
- * @param object aChannel
- *        The nsIChannel associated with this event.
- * @param object aWebConsoleActor
+ * @param object webConsoleActor
  *        The parent WebConsoleActor instance for this object.
  */
-function NetworkEventActor(aChannel, aWebConsoleActor)
-{
-  this.parent = aWebConsoleActor;
+function NetworkEventActor(webConsoleActor) {
+  this.parent = webConsoleActor;
   this.conn = this.parent.conn;
-  this.channel = aChannel;
 
   this._request = {
     method: null,

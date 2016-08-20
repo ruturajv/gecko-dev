@@ -1024,21 +1024,25 @@ FindStartOfUndefinedAndUninitializedSlots(NativeObject* templateObj, uint32_t ns
 }
 
 static void
-AllocateObjectBufferWithInit(JSContext* cx, TypedArrayObject* obj, uint32_t count)
+AllocateObjectBufferWithInit(JSContext* cx, TypedArrayObject* obj, int32_t count)
 {
     JS::AutoCheckCannotGC nogc(cx);
 
     obj->initPrivate(nullptr);
-    obj->setFixedSlot(TypedArrayObject::LENGTH_SLOT, Int32Value(count));
 
     // Typed arrays with a non-compile-time known size that have a count of zero
     // eventually are essentially typed arrays with inline elements. The bounds
     // check will make sure that no elements are read or written to that memory.
-    if (count == 0) {
-        obj->setInlineElements();
+    // Negative numbers will bail out to the slow path, which in turn will raise
+    // an invalid argument exception.
+    if (count <= 0) {
+        if (count == 0)
+            obj->setInlineElements();
+        obj->setFixedSlot(TypedArrayObject::LENGTH_SLOT, Int32Value(0));
         return;
     }
 
+    obj->setFixedSlot(TypedArrayObject::LENGTH_SLOT, Int32Value(count));
     size_t nbytes;
 
     switch (obj->type()) {
@@ -1054,28 +1058,11 @@ JS_FOR_EACH_TYPED_ARRAY(CREATE_TYPED_ARRAY)
     }
 
     nbytes = JS_ROUNDUP(nbytes, sizeof(Value));
-
-    // Elements can only be stored in the nursery since typed arrays have a
-    // finalizer that frees the memory, but the finalizer is only called for
-    // tenured objects. Allocating the memory in the nursery is done to avoid
-    // memory leaks.
-    if (nbytes > Nursery::MaxNurseryBufferSize)
-        return;
-
     Nursery& nursery = cx->runtime()->gc.nursery;
-    void* buf = nursery.allocateBuffer(obj->zone(), nbytes);
+    void* buf = nursery.allocateBuffer(obj, nbytes);
     if (buf) {
-        if (nursery.isInside(buf) || obj->isTenured()) {
-            obj->initPrivate(buf);
-            memset(buf, 0, nbytes);
-        } else {
-            // If the nursery is full, |allocateBuffer| will try to allocate
-            // the memory in the tenured heap. This will leak memory when the
-            // object is not tenured since the finalizer will not be called for
-            // non-tenured objects.
-            nursery.removeMallocedBuffer(buf);
-            js_free(buf);
-        }
+        obj->initPrivate(buf);
+        memset(buf, 0, nbytes);
     }
 }
 
@@ -2731,6 +2718,82 @@ MacroAssembler::maybeBranchTestType(MIRType type, MDefinition* maybeDef, Registe
             MOZ_CRASH("Unsupported type");
         }
     }
+}
+
+void
+MacroAssembler::wasmCallImport(const wasm::CallSiteDesc& desc, const wasm::CalleeDesc& callee)
+{
+    // Load the callee, before the caller's registers are clobbered.
+    uint32_t globalDataOffset = callee.importGlobalDataOffset();
+    loadWasmGlobalPtr(globalDataOffset + offsetof(wasm::FuncImportTls, code), ABINonArgReg0);
+
+    MOZ_ASSERT(ABINonArgReg0 != WasmTlsReg, "by constraint");
+
+    // Switch to the callee's TLS and pinned registers and make the call.
+    loadWasmGlobalPtr(globalDataOffset + offsetof(wasm::FuncImportTls, tls), WasmTlsReg);
+    loadWasmPinnedRegsFromTls();
+
+    call(desc, ABINonArgReg0);
+}
+
+void
+MacroAssembler::wasmCallIndirect(const wasm::CallSiteDesc& desc, const wasm::CalleeDesc& callee)
+{
+    Register scratch = WasmTableCallScratchReg;
+    Register index = WasmTableCallIndexReg;
+
+    if (callee.which() == wasm::CalleeDesc::AsmJSTable) {
+        // asm.js tables require no signature check, have had their index masked
+        // into range and thus need no bounds check and cannot be external.
+        loadWasmGlobalPtr(callee.tableGlobalDataOffset(), scratch);
+        loadPtr(BaseIndex(scratch, index, ScalePointer), scratch);
+        call(desc, scratch);
+        return;
+    }
+
+    MOZ_ASSERT(callee.which() == wasm::CalleeDesc::WasmTable);
+
+    // Write the sig-id into the ABI sig-id register.
+    wasm::SigIdDesc sigId = callee.wasmTableSigId();
+    switch (sigId.kind()) {
+      case wasm::SigIdDesc::Kind::Global:
+        loadWasmGlobalPtr(sigId.globalDataOffset(), WasmTableCallSigReg);
+        break;
+      case wasm::SigIdDesc::Kind::Immediate:
+        move32(Imm32(sigId.immediate()), WasmTableCallSigReg);
+        break;
+      case wasm::SigIdDesc::Kind::None:
+        break;
+    }
+
+    // WebAssembly throws if the index is out-of-bounds.
+    branch32(Assembler::Condition::AboveOrEqual,
+             index, Imm32(callee.wasmTableLength()),
+             wasm::JumpTarget::OutOfBounds);
+
+    // Load the base pointer of the table.
+    loadWasmGlobalPtr(callee.tableGlobalDataOffset(), scratch);
+
+    // Load the callee from the table.
+    if (callee.wasmTableIsExternal()) {
+        static_assert(sizeof(wasm::ExternalTableElem) == 8 || sizeof(wasm::ExternalTableElem) == 16,
+                      "elements of external tables are two words");
+        if (sizeof(wasm::ExternalTableElem) == 8) {
+            computeEffectiveAddress(BaseIndex(scratch, index, TimesEight), scratch);
+        } else {
+            lshift32(Imm32(4), index);
+            addPtr(index, scratch);
+        }
+
+        loadPtr(Address(scratch, offsetof(wasm::ExternalTableElem, tls)), WasmTlsReg);
+        loadWasmPinnedRegsFromTls();
+
+        loadPtr(Address(scratch, offsetof(wasm::ExternalTableElem, code)), scratch);
+    } else {
+        loadPtr(BaseIndex(scratch, index, ScalePointer), scratch);
+    }
+
+    call(desc, scratch);
 }
 
 //}}} check_macroassembler_style

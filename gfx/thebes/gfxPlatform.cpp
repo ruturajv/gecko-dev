@@ -16,7 +16,6 @@
 
 #include "mozilla/Logging.h"
 #include "mozilla/Services.h"
-#include "prprf.h"
 
 #include "gfxCrashReporterUtils.h"
 #include "gfxPlatform.h"
@@ -610,16 +609,14 @@ gfxPlatform::Init()
     {
       nsAutoCString forcedPrefs;
       // D2D prefs
-      forcedPrefs.AppendPrintf("FP(D%d%d%d",
+      forcedPrefs.AppendPrintf("FP(D%d%d",
                                gfxPrefs::Direct2DDisabled(),
-                               gfxPrefs::Direct2DForceEnabled(),
-                               gfxPrefs::DirectWriteFontRenderingForceEnabled());
+                               gfxPrefs::Direct2DForceEnabled());
       // Layers prefs
-      forcedPrefs.AppendPrintf("-L%d%d%d%d%d",
+      forcedPrefs.AppendPrintf("-L%d%d%d%d",
                                gfxPrefs::LayersAMDSwitchableGfxEnabled(),
                                gfxPrefs::LayersAccelerationDisabledDoNotUseDirectly(),
                                gfxPrefs::LayersAccelerationForceEnabledDoNotUseDirectly(),
-                               gfxPrefs::LayersD3D11DisableWARP(),
                                gfxPrefs::LayersD3D11ForceWARP());
       // WebGL prefs
       forcedPrefs.AppendPrintf("-W%d%d%d%d%d%d%d%d",
@@ -1006,7 +1003,9 @@ gfxPlatform::ClearSourceSurfaceForSurface(gfxASurface *aSurface)
 }
 
 /* static */ already_AddRefed<SourceSurface>
-gfxPlatform::GetSourceSurfaceForSurface(DrawTarget *aTarget, gfxASurface *aSurface)
+gfxPlatform::GetSourceSurfaceForSurface(DrawTarget *aTarget,
+                                        gfxASurface *aSurface,
+                                        bool aIsPlugin)
 {
   if (!aSurface->CairoSurface() || aSurface->CairoStatus()) {
     return nullptr;
@@ -1064,7 +1063,9 @@ gfxPlatform::GetSourceSurfaceForSurface(DrawTarget *aTarget, gfxASurface *aSurfa
     // the same data, then optimize it for aTarget:
     RefPtr<DataSourceSurface> surf = GetWrappedDataSourceSurface(aSurface);
     if (surf) {
-      srcBuffer = aTarget->OptimizeSourceSurface(surf);
+      srcBuffer = aIsPlugin ? aTarget->OptimizeSourceSurfaceForUnknownAlpha(surf)
+                            : aTarget->OptimizeSourceSurface(surf);
+
       if (srcBuffer == surf) {
         // GetWrappedDataSourceSurface returns a SourceSurface that holds a
         // strong reference to aSurface since it wraps aSurface's data and
@@ -1422,14 +1423,13 @@ gfxPlatform::CreateSimilarSoftwareDrawTarget(DrawTarget* aDT,
   return dt.forget();
 }
 
-already_AddRefed<DrawTarget>
+/* static */ already_AddRefed<DrawTarget>
 gfxPlatform::CreateDrawTargetForData(unsigned char* aData, const IntSize& aSize, int32_t aStride, SurfaceFormat aFormat)
 {
-  NS_ASSERTION(mContentBackend != BackendType::NONE, "No backend.");
+  BackendType backendType = gfxVars::ContentBackend();
+  NS_ASSERTION(backendType != BackendType::NONE, "No backend.");
 
-  BackendType backendType = mContentBackend;
-
-  if (!Factory::DoesBackendSupportDataDrawtarget(mContentBackend)) {
+  if (!Factory::DoesBackendSupportDataDrawtarget(backendType)) {
     backendType = BackendType::CAIRO;
   }
 
@@ -2123,17 +2123,27 @@ gfxPlatform::InitAcceleration()
                                false);
 
   if (XRE_IsParentProcess()) {
+    FeatureState& gpuProc = gfxConfig::GetFeature(Feature::GPU_PROCESS);
     if (gfxPrefs::GPUProcessDevEnabled()) {
       // We want to hide this from about:support, so only set a default if the
       // pref is known to be true.
-      gfxConfig::SetDefaultFromPref(
-        Feature::GPU_PROCESS,
+      gpuProc.SetDefaultFromPref(
         gfxPrefs::GetGPUProcessDevEnabledPrefName(),
         true,
         gfxPrefs::GetGPUProcessDevEnabledPrefDefault());
+
+      // We require E10S - otherwise, there is very little benefit to the GPU
+      // process, since the UI process must still use acceleration for
+      // performance.
+      if (!BrowserTabsRemoteAutostart()) {
+        gpuProc.Disable(
+          FeatureStatus::Unavailable,
+          "Multi-process mode is not enabled",
+          NS_LITERAL_CSTRING("FEATURE_FAILURE_NO_E10S"));
+      }
     }
 
-    if (gfxConfig::IsEnabled(Feature::GPU_PROCESS)) {
+    if (gpuProc.IsEnabled()) {
       GPUProcessManager* gpu = GPUProcessManager::Get();
       gpu->EnableGPUProcess();
     }
@@ -2347,17 +2357,11 @@ gfxPlatform::AsyncPanZoomEnabled()
     return false;
   }
 #endif
-#ifdef MOZ_ANDROID_APZ
+#ifdef MOZ_WIDGET_ANDROID
   return true;
 #else
   return gfxPrefs::AsyncPanZoomEnabledDoNotUseDirectly();
 #endif
-}
-
-/*virtual*/ bool
-gfxPlatform::UseProgressivePaint()
-{
-  return gfxPrefs::ProgressivePaintDoNotUseDirectly();
 }
 
 /*static*/ bool

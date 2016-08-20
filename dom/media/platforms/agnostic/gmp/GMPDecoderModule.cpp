@@ -10,9 +10,9 @@
 #include "GMPVideoDecoder.h"
 #include "MediaDataDecoderProxy.h"
 #include "MediaPrefs.h"
+#include "VideoUtils.h"
 #include "mozIGeckoMediaPluginService.h"
 #include "nsServiceManagerUtils.h"
-#include "mozilla/EMEUtils.h"
 #include "mozilla/StaticMutex.h"
 #include "gmp-audio-decode.h"
 #include "gmp-video-decode.h"
@@ -94,9 +94,9 @@ GMPDecoderModule::DecoderNeedsConversion(const TrackInfo& aConfig) const
 {
   // GMPVideoCodecType::kGMPVideoCodecH264 specifies that encoded frames must be in AVCC format.
   if (aConfig.IsVideo() && MP4Decoder::IsH264(aConfig.mMimeType)) {
-    return kNeedAVCC;
+    return ConversionRequired::kNeedAVCC;
   } else {
-    return kNeedNone;
+    return ConversionRequired::kNeedNone;
   }
 }
 

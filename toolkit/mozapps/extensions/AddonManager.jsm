@@ -67,10 +67,11 @@ const TOOLKIT_ID                      = "toolkit@mozilla.org";
 
 const VALID_TYPES_REGEXP = /^[\w\-]+$/;
 
-const WEBAPI_INSTALL_HOSTS = ["addons.mozilla.org", "addons.cdn.mozilla.net"];
+const WEBAPI_INSTALL_HOSTS = ["addons.mozilla.org", "addons.cdn.mozilla.net", "testpilot.firefox.com"];
 const WEBAPI_TEST_INSTALL_HOSTS = [
   "addons.allizom.org", "addons-stage-cdn.allizom.org",
   "addons-dev.allizom.org", "addons-dev-cdn-allizom.org",
+  "testpilot.stage.mozaws.net", "testpilot.dev.mozaws.net",
   "example.com",
 ];
 
@@ -2261,7 +2262,7 @@ var AddonManagerInternal = {
    * Adds new or overrides existing UpgradeListener.
    *
    * @param  aInstanceID
-   *         The instance ID of an addon to listen to register a listener for.
+   *         The instance ID of an addon to register a listener for.
    * @param  aCallback
    *         The callback to invoke when updates are available for this addon.
    * @throws if there is no addon matching the instanceID
@@ -2280,7 +2281,7 @@ var AddonManagerInternal = {
        throw Error("No addon matching instanceID:", aInstanceID.toString());
      }
      let addonId = wrapper.addonId();
-     logger.debug(`Registering upgrade listener for ${addonId}`)
+     logger.debug(`Registering upgrade listener for ${addonId}`);
      this.upgradeListeners.set(addonId, aCallback);
    });
   },

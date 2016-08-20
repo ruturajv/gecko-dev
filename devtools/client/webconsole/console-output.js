@@ -24,7 +24,7 @@ const XHTML_NS = "http://www.w3.org/1999/xhtml";
 const XUL_NS = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
 const STRINGS_URI = "chrome://devtools/locale/webconsole.properties";
 
-const WebConsoleUtils = require("devtools/shared/webconsole/utils").Utils;
+const WebConsoleUtils = require("devtools/client/webconsole/utils").Utils;
 const { getSourceNames } = require("devtools/client/shared/source-utils");
 const {Task} = require("devtools/shared/task");
 const l10n = new WebConsoleUtils.L10n(STRINGS_URI);
@@ -3551,13 +3551,6 @@ Widgets.Stacktrace.prototype = extend(Widgets.BaseWidget.prototype, {
    */
   stacktrace: null,
 
-  onViewSourceInDebugger(frame) {
-    this.output.openLocationInDebugger({
-      url: frame.source,
-      line: frame.line
-    });
-  },
-
   render() {
     if (this.element) {
       return this;
@@ -3569,7 +3562,7 @@ Widgets.Stacktrace.prototype = extend(Widgets.BaseWidget.prototype, {
     if (this.stacktrace) {
       this.output.owner.ReactDOM.render(this.output.owner.StackTraceView({
         stacktrace: this.stacktrace,
-        onViewSourceInDebugger: frame => this.onViewSourceInDebugger(frame)
+        onViewSourceInDebugger: frame => this.output.openLocationInDebugger(frame)
       }), result);
     }
 

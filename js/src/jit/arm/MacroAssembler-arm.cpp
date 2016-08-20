@@ -5220,7 +5220,7 @@ MacroAssembler::pushFakeReturnAddress(Register scratch)
 // Branch functions
 
 void
-MacroAssembler::branchPtrInNurseryRange(Condition cond, Register ptr, Register temp,
+MacroAssembler::branchPtrInNurseryChunk(Condition cond, Register ptr, Register temp,
                                         Label* label)
 {
     AutoRegisterScope scratch2(*this, secondScratchReg_);
@@ -5229,13 +5229,10 @@ MacroAssembler::branchPtrInNurseryRange(Condition cond, Register ptr, Register t
     MOZ_ASSERT(ptr != temp);
     MOZ_ASSERT(ptr != scratch2);
 
-    const Nursery& nursery = GetJitContext()->runtime->gcNursery();
-    uintptr_t startChunk = nursery.start() >> Nursery::ChunkShift;
-
-    ma_mov(Imm32(startChunk), scratch2);
-    as_rsb(scratch2, scratch2, lsr(ptr, Nursery::ChunkShift));
-    branch32(cond == Assembler::Equal ? Assembler::Below : Assembler::AboveOrEqual,
-             scratch2, Imm32(nursery.numChunks()), label);
+    ma_lsr(Imm32(gc::ChunkShift), ptr, scratch2);
+    ma_lsl(Imm32(gc::ChunkShift), scratch2, scratch2);
+    load32(Address(scratch2, gc::ChunkLocationOffset), scratch2);
+    branch32(cond, scratch2, Imm32(int32_t(gc::ChunkLocation::Nursery)), label);
 }
 
 void
@@ -5245,10 +5242,10 @@ MacroAssembler::branchValueIsNurseryObject(Condition cond, const Address& addres
     MOZ_ASSERT(cond == Assembler::Equal || cond == Assembler::NotEqual);
 
     Label done;
-
     branchTestObject(Assembler::NotEqual, address, cond == Assembler::Equal ? &done : label);
+
     loadPtr(address, temp);
-    branchPtrInNurseryRange(cond, temp, InvalidReg, label);
+    branchPtrInNurseryChunk(cond, temp, InvalidReg, label);
 
     bind(&done);
 }
@@ -5260,9 +5257,9 @@ MacroAssembler::branchValueIsNurseryObject(Condition cond, ValueOperand value,
     MOZ_ASSERT(cond == Assembler::Equal || cond == Assembler::NotEqual);
 
     Label done;
-
     branchTestObject(Assembler::NotEqual, value, cond == Assembler::Equal ? &done : label);
-    branchPtrInNurseryRange(cond, value.payloadReg(), temp, label);
+
+    branchPtrInNurseryChunk(cond, value.payloadReg(), InvalidReg, label);
 
     bind(&done);
 }
@@ -5319,3 +5316,37 @@ MacroAssembler::storeUnboxedValue(ConstantOrRegister value, MIRType valueType,
                                   const BaseIndex& dest, MIRType slotType);
 
 //}}} check_macroassembler_style
+
+void
+MacroAssemblerARM::emitUnalignedLoad(bool isSigned, unsigned byteSize, Register ptr, Register tmp,
+                                     Register dest, unsigned offset)
+{
+    // Preconditions.
+    MOZ_ASSERT(ptr != tmp);
+    MOZ_ASSERT(ptr != dest);
+    MOZ_ASSERT(tmp != dest);
+    MOZ_ASSERT(byteSize <= 4);
+
+    for (unsigned i = 0; i < byteSize; i++) {
+        // Only the last byte load shall be signed, if needed.
+        bool signedByteLoad = isSigned && (i == byteSize - 1);
+        ma_dataTransferN(IsLoad, 8, signedByteLoad, ptr, Imm32(offset + i), i ? tmp : dest);
+        if (i)
+            as_orr(dest, dest, lsl(tmp, 8 * i));
+    }
+}
+
+void
+MacroAssemblerARM::emitUnalignedStore(unsigned byteSize, Register ptr, Register val,
+                                      unsigned offset)
+{
+    // Preconditions.
+    MOZ_ASSERT(ptr != val);
+    MOZ_ASSERT(byteSize <= 4);
+
+    for (unsigned i = 0; i < byteSize; i++) {
+        ma_dataTransferN(IsStore, 8 /* bits */, /* signed */ false, ptr, Imm32(offset + i), val);
+        if (i < byteSize - 1)
+            ma_lsr(Imm32(8), val, val);
+    }
+}

@@ -1366,7 +1366,7 @@ public:
      , mDoRecv(doRecv)
     {}
 
-    NS_IMETHOD Run()
+    NS_IMETHOD Run() override
     {
         MOZ_ASSERT(PR_GetCurrentThread() == gSocketThread);
 
@@ -1526,7 +1526,7 @@ nsHttpConnection::CloseTransaction(nsAHttpTransaction *trans, nsresult reason)
     mIsReused = true;
 }
 
-NS_METHOD
+nsresult
 nsHttpConnection::ReadFromStream(nsIInputStream *input,
                                  void *closure,
                                  const char *buf,

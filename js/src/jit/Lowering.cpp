@@ -4105,12 +4105,6 @@ LIRGenerator::visitWasmStoreGlobalVar(MWasmStoreGlobalVar* ins)
 }
 
 void
-LIRGenerator::visitAsmJSLoadFuncPtr(MAsmJSLoadFuncPtr* ins)
-{
-    define(new(alloc()) LAsmJSLoadFuncPtr(useRegister(ins->index())), ins);
-}
-
-void
 LIRGenerator::visitAsmJSParameter(MAsmJSParameter* ins)
 {
     ABIArg abi = ins->abi();
@@ -4216,22 +4210,14 @@ LIRGenerator::visitWasmCall(MWasmCall* ins)
     for (unsigned i = 0; i < ins->numArgs(); i++)
         args[i] = useFixed(ins->getOperand(i), ins->registerForArg(i));
 
-    if (ins->callee().which() == MWasmCall::Callee::Dynamic) {
-        args[ins->dynamicCalleeOperandIndex()] =
-            useFixed(ins->callee().dynamicPtr(), WasmTableCallPtrReg);
-    }
-
-    LDefinition maybeTemp;
-    if (ins->callee().which() == MWasmCall::Callee::Import)
-        maybeTemp = tempFixed(CallTempReg0);
-    else
-        maybeTemp = LDefinition::BogusTemp();
+    if (ins->callee().isTable())
+        args[ins->numArgs()] = useFixed(ins->getOperand(ins->numArgs()), WasmTableCallIndexReg);
 
     LInstruction* lir;
     if (ins->type() == MIRType::Int64)
-        lir = new(alloc()) LWasmCallI64(args, ins->numOperands(), maybeTemp);
+        lir = new(alloc()) LWasmCallI64(args, ins->numOperands());
     else
-        lir = new(alloc()) LWasmCall(args, ins->numOperands(), maybeTemp);
+        lir = new(alloc()) LWasmCall(args, ins->numOperands());
 
     if (ins->type() == MIRType::None)
         add(lir, ins);
@@ -4580,6 +4566,18 @@ LIRGenerator::visitCheckReturn(MCheckReturn* ins)
     assignSnapshot(lir, Bailout_BadDerivedConstructorReturn);
     add(lir, ins);
     redefine(ins, retVal);
+}
+
+void
+LIRGenerator::visitCheckIsObj(MCheckIsObj* ins)
+{
+    MDefinition* checkVal = ins->checkValue();
+    MOZ_ASSERT(checkVal->type() == MIRType::Value);
+
+    LCheckIsObj* lir = new(alloc()) LCheckIsObj(useBoxAtStart(checkVal));
+    redefine(ins, checkVal);
+    add(lir, ins);
+    assignSafepoint(lir, ins);
 }
 
 void

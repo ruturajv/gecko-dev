@@ -989,6 +989,7 @@ class Marionette(object):
         finally:
             self.set_prefs(original_prefs)
 
+    @do_process_check
     def enforce_gecko_prefs(self, prefs):
         """
         Checks if the running instance has the given prefs. If not, it will kill the
@@ -1056,6 +1057,7 @@ class Marionette(object):
                 self.cleanup()
                 raise exc, 'Requested restart of the application was aborted', tb
 
+    @do_process_check
     def restart(self, clean=False, in_app=False):
         """
         This will terminate the currently running instance, and spawn a new instance
@@ -1097,6 +1099,7 @@ class Marionette(object):
         '''
         return "%s%s" % (self.baseurl, relative_url)
 
+    @do_process_check
     def start_session(self, desired_capabilities=None, session_id=None, timeout=60):
         """Create a new Marionette session.
 
@@ -1139,8 +1142,8 @@ class Marionette(object):
 
     @test_name.setter
     def test_name(self, test_name):
-        if self._send_message("setTestName", {"value": test_name}):
-            self._test_name = test_name
+        self._send_message("setTestName", {"value": test_name})
+        self._test_name = test_name
 
     def delete_session(self):
         """Close the current session and disconnect from the server."""
