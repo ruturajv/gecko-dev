@@ -1293,9 +1293,7 @@ NetworkMonitor.prototype = {
 
     let timings = httpActivity.timings;
     let harTimings = {};
-    console.log(new Date(), httpActivity.url, timings);
 
-    // Not clear how we can determine "blocked" time.
     if (timings.STATUS_RESOLVING && timings.STATUS_CONNECTING_TO) {
       harTimings.blocked = timings.STATUS_RESOLVING.first -
                            timings.REQUEST_HEADER.first;
