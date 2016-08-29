@@ -54,9 +54,6 @@ EyeDropper.prototype = {
 
   ID_CLASS_PREFIX: "eye-dropper-",
 
-  globalX: 0,
-  globalY: 0,
-
   get win() {
     return this.highlighterEnv.window;
   },
@@ -343,9 +340,6 @@ EyeDropper.prototype = {
   },
 
   moveTo(x, y) {
-    this.globalX = x;
-    this.globalY = y;
-
     let root = this.getElement("root");
     root.setAttribute("style", `top:${y}px;left:${x}px;`);
 
@@ -382,36 +376,13 @@ EyeDropper.prototype = {
   },
 
   /**
-   * Do not allow keyboard browsing of magnifier outside window bounds
-   */
-  isKeyboardBrowsable(e) {
-    if (e.keyCode === e.DOM_VK_LEFT && this.globalX === 0) {
-      return false;
-    } else if (e.keyCode === e.DOM_VK_RIGHT && this.globalX === this.win.innerWidth) {
-      return false;
-    } else if (e.keyCode === e.DOM_VK_UP && this.globalY === 0) {
-      return false;
-    } else if (e.keyCode === e.DOM_VK_DOWN && this.globalY === this.win.innerHeight) {
-      return false;
-    }
-
-    return true;
-  },
-
-  /**
    * Handler for the keydown event. Either select the color or move the panel in a
    * direction depending on the key pressed.
    */
   handleKeyDown(e) {
-    console.log(e, [this.globalX, this.globalY], [this.win.innerWidth, this.win.innerHeight]);
     // Bail out early if any unsupported modifier is used, so that we let
     // keyboard shortcuts through.
     if (e.metaKey || e.ctrlKey || e.altKey) {
-      return;
-    }
-
-    if (!this.isKeyboardBrowsable(e)) {
-      e.preventDefault();
       return;
     }
 
@@ -450,30 +421,20 @@ EyeDropper.prototype = {
     offsetX *= modifier;
 
     if (offsetX !== 0 || offsetY !== 0) {
-      this.magnifiedArea.x += offsetX;
-      this.magnifiedArea.y += offsetY;
-
-      let moveToX = this.magnifiedArea.x / this.pageZoom;
-      let moveToY = this.magnifiedArea.y / this.pageZoom;
-
-      // If the offsets are extending the bounds, then snap to the end position
-      if (moveToX < 0) {
-        moveToX = 0;
-      } else if (moveToX > this.win.innerWidth) {
-        moveToX = this.win.innerWidth;
-      }
-      if (moveToY < 0) {
-        moveToY = 0;
-      } else if (moveToY > this.win.innerHeight) {
-        moveToY = this.win.innerHeight;
-      }
+      this.magnifiedArea.x = this.cap(this.magnifiedArea.x + offsetX, 0, this.win.innerWidth * this.pageZoom);
+      this.magnifiedArea.y = this.cap(this.magnifiedArea.y + offsetY, 0, this.win.innerHeight * this.pageZoom);
 
       this.draw();
 
-      this.moveTo(moveToX, moveToY);
+      this.moveTo(this.magnifiedArea.x / this.pageZoom,
+                  this.magnifiedArea.y / this.pageZoom);
 
       e.preventDefault();
     }
+  },
+
+  cap(newOffset, min, max) {
+    return Math.max(min, Math.min(newOffset, max));
   },
 
   /**
