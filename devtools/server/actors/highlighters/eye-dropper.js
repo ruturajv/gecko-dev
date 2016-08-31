@@ -421,8 +421,10 @@ EyeDropper.prototype = {
     offsetX *= modifier;
 
     if (offsetX !== 0 || offsetY !== 0) {
-      this.magnifiedArea.x = this.cap(this.magnifiedArea.x + offsetX, 0, this.win.innerWidth * this.pageZoom);
-      this.magnifiedArea.y = this.cap(this.magnifiedArea.y + offsetY, 0, this.win.innerHeight * this.pageZoom);
+      this.magnifiedArea.x = cap(this.magnifiedArea.x + offsetX,
+                                 0, this.win.innerWidth * this.pageZoom);
+      this.magnifiedArea.y = cap(this.magnifiedArea.y + offsetY, 0,
+                                 this.win.innerHeight * this.pageZoom);
 
       this.draw();
 
@@ -431,10 +433,6 @@ EyeDropper.prototype = {
 
       e.preventDefault();
     }
-  },
-
-  cap(newOffset, min, max) {
-    return Math.max(min, Math.min(newOffset, max));
   },
 
   /**
@@ -521,4 +519,8 @@ function toColorString(rgb, format) {
 function hexString([r, g, b]) {
   let val = (1 << 24) + (r << 16) + (g << 8) + (b << 0);
   return "#" + val.toString(16).substr(-6).toUpperCase();
+}
+
+function cap(value, min, max) {
+  return Math.max(min, Math.min(value, max));
 }

@@ -19,6 +19,17 @@ const MOVE_EVENTS_DATA = [
   {type: "keyboard", key: "VK_DOWN", shift: true, expected: {x: 100, y: 211}},
   {type: "keyboard", key: "VK_UP", expected: {x: 100, y: 210}},
   {type: "keyboard", key: "VK_UP", shift: true, expected: {x: 100, y: 200}},
+  {type: "mouse", x: 7, y: 7, expected: {x: 7, y: 7}},
+  {type: "keyboard", key: "VK_LEFT", shift: true, expected: {x: 0, y: 7}},
+  {type: "keyboard", key: "VK_UP", shift: true, expected: {x: 0, y: 0}},
+  {type: "mouse", x: window.innerWidth - 5, y: 0,
+    expected: {x: window.innerWidth - 5, y: 0}},
+  {type: "keyboard", key: "VK_RIGHT", shift: true,
+    expected: {x: window.innerWidth, y: 0}},
+  {type: "mouse", x: 0, y: window.innerHeight - 5,
+    expected: {x: 0, y: window.innerHeight - 5}},
+  {type: "keyboard", key: "VK_DOWN", shift: true,
+    expected: {x: 0, y: window.innerHeight}},
 ];
 
 add_task(function* () {
