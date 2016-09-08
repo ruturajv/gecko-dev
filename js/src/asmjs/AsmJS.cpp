@@ -337,8 +337,10 @@ struct js::AsmJSMetadata : Metadata, AsmJSMetadataCacheablePod
     ScriptSource* maybeScriptSource() const override {
         return scriptSource.get();
     }
-    bool getFuncName(JSContext* cx, const Bytes*, uint32_t funcIndex, TwoByteName* name) const override {
-        const char* p = asmJSFuncNames[funcIndex].get();
+    bool getFuncDefName(JSContext* cx, const Bytes*, uint32_t funcDefIndex,
+                        TwoByteName* name) const override
+    {
+        const char* p = asmJSFuncNames[funcDefIndex].get();
         UTF8Chars utf8(p, strlen(p));
 
         size_t twoByteLength;
@@ -781,7 +783,7 @@ ParseVarOrConstStatement(AsmJSParser& parser, ParseNode** var)
         return true;
     }
 
-    *var = parser.statement(YieldIsName);
+    *var = parser.statementListItem(YieldIsName);
     if (!*var)
         return false;
 
@@ -1772,10 +1774,10 @@ class MOZ_STACK_CLASS ModuleValidator
         if (!args.initFromContext(cx_, Move(scriptedCaller)))
             return false;
 
-        auto genData = MakeUnique<ModuleGeneratorData>(args.assumptions.usesSignal, ModuleKind::AsmJS);
+        auto genData = MakeUnique<ModuleGeneratorData>(ModuleKind::AsmJS);
         if (!genData ||
             !genData->sigs.resize(MaxSigs) ||
-            !genData->funcSigs.resize(MaxFuncs) ||
+            !genData->funcDefSigs.resize(MaxFuncs) ||
             !genData->funcImports.resize(MaxImports) ||
             !genData->tables.resize(MaxTables) ||
             !genData->asmJSSigToTableIndex.resize(MaxSigs))
@@ -1967,6 +1969,9 @@ class MOZ_STACK_CLASS ModuleValidator
     bool addAtomicsBuiltinFunction(PropertyName* var, AsmJSAtomicsBuiltinFunction func,
                                    PropertyName* field)
     {
+        if (!JitOptions.wasmTestMode)
+            return failCurrentOffset("asm.js Atomics only enabled in wasm test mode");
+
         atomicsPresent_ = true;
 
         UniqueChars fieldChars = StringToNewUTF8CharsZ(cx_, *field);
@@ -2065,8 +2070,8 @@ class MOZ_STACK_CLASS ModuleValidator
             return false;
 
         // Declare which function is exported which gives us an index into the
-        // module FuncExportVector.
-        if (!mg_.addFuncExport(Move(fieldChars), func.index()))
+        // module FuncDefExportVector.
+        if (!mg_.addFuncDefExport(Move(fieldChars), mg_.numFuncImports() + func.index()))
             return false;
 
         // The exported function might have already been exported in which case
@@ -2082,7 +2087,7 @@ class MOZ_STACK_CLASS ModuleValidator
         uint32_t funcIndex = numFunctions();
         if (funcIndex >= MaxFuncs)
             return failCurrentOffset("too many functions");
-        mg_.initFuncSig(funcIndex, sigIndex);
+        mg_.initFuncDefSig(funcIndex, sigIndex);
         Global* global = validationLifo_.new_<Global>(Global::Function);
         if (!global)
             return false;
@@ -4656,7 +4661,7 @@ CheckFunctionSignature(ModuleValidator& m, ParseNode* usepn, Sig&& sig, Property
         return m.addFunction(name, usepn->pn_pos.begin, Move(sig), func);
     }
 
-    if (!CheckSignatureAgainstExisting(m, usepn, sig, m.mg().funcSig(existing->index())))
+    if (!CheckSignatureAgainstExisting(m, usepn, sig, m.mg().funcDefSig(existing->index())))
         return false;
 
     *func = existing;
@@ -7100,7 +7105,7 @@ CheckFuncPtrTable(ModuleValidator& m, ParseNode* var)
         if (!func)
             return m.fail(elem, "function-pointer table's elements must be names of functions");
 
-        const Sig& funcSig = m.mg().funcSig(func->index());
+        const Sig& funcSig = m.mg().funcDefSig(func->index());
         if (sig) {
             if (*sig != funcSig)
                 return m.fail(elem, "all functions in table must have same signature");
@@ -7206,7 +7211,7 @@ CheckModuleReturn(ModuleValidator& m)
     }
     ts.ungetToken();
 
-    ParseNode* returnStmt = m.parser().statement(YieldIsName);
+    ParseNode* returnStmt = m.parser().statementListItem(YieldIsName);
     if (!returnStmt)
         return false;
 
@@ -7806,9 +7811,11 @@ CheckBuffer(JSContext* cx, const AsmJSMetadata& metadata, HandleValue bufferVal,
 
     if (buffer->is<ArrayBufferObject>()) {
         Rooted<ArrayBufferObject*> abheap(cx, &buffer->as<ArrayBufferObject>());
-        bool useSignalHandlers = metadata.assumptions.usesSignal.forOOB;
-        if (!ArrayBufferObject::prepareForAsmJS(cx, abheap, useSignalHandlers))
+        if (!ArrayBufferObject::prepareForAsmJS(cx, abheap))
             return LinkFail(cx, "Unable to prepare ArrayBuffer for asm.js use");
+    } else {
+        if (!buffer->as<SharedArrayBufferObject>().isPreparedForAsmJS())
+            return LinkFail(cx, "SharedArrayBuffer must be created with wasm test mode enabled");
     }
 
     return true;
@@ -8505,6 +8512,9 @@ BuildConsoleMessage(ExclusiveContext* cx, unsigned time, JS::AsmJSCacheResult ca
       case JS::AsmJSCache_InternalError:
         cacheString = "unable to store in cache due to internal error (consider filing a bug)";
         break;
+      case JS::AsmJSCache_Disabled_PrivateBrowsing:
+        cacheString = "caching disabled by private browsing mode";
+        break;
       case JS::AsmJSCache_LIMIT:
         MOZ_CRASH("bad AsmJSCacheResult");
         break;
@@ -8780,7 +8790,7 @@ js::AsmJSFunctionToString(JSContext* cx, HandleFunction fun)
     MOZ_ASSERT(IsAsmJSFunction(fun));
 
     const AsmJSMetadata& metadata = ExportedFunctionToInstance(fun).metadata().asAsmJS();
-    const AsmJSExport& f = metadata.lookupAsmJSExport(ExportedFunctionToIndex(fun));
+    const AsmJSExport& f = metadata.lookupAsmJSExport(ExportedFunctionToDefinitionIndex(fun));
 
     uint32_t begin = metadata.srcStart + f.startOffsetInModule();
     uint32_t end = metadata.srcStart + f.endOffsetInModule();
@@ -8817,28 +8827,17 @@ js::AsmJSFunctionToString(JSContext* cx, HandleFunction fun)
     return out.finishString();
 }
 
-/*****************************************************************************/
-// asm.js heap
-
+// The asm.js valid heap lengths are precisely the WASM valid heap lengths for ARM
+// greater or equal to MinHeapLength
 static const size_t MinHeapLength = PageSize;
-
-// From the asm.js spec Linking section:
-//  the heap object's byteLength must be either
-//    2^n for n in [12, 24)
-//  or
-//    2^24 * n for n >= 1.
 
 bool
 js::IsValidAsmJSHeapLength(uint32_t length)
 {
-    bool valid = length >= MinHeapLength &&
-                 (IsPowerOfTwo(length) ||
-                  (length & 0x00ffffff) == 0);
+    if (length < MinHeapLength)
+        return false;
 
-    MOZ_ASSERT_IF(valid, length % PageSize == 0);
-    MOZ_ASSERT_IF(valid, length == RoundUpToNextValidAsmJSHeapLength(length));
-
-    return valid;
+    return wasm::IsValidARMLengthImmediate(length);
 }
 
 uint32_t
@@ -8847,9 +8846,5 @@ js::RoundUpToNextValidAsmJSHeapLength(uint32_t length)
     if (length <= MinHeapLength)
         return MinHeapLength;
 
-    if (length <= 16 * 1024 * 1024)
-        return mozilla::RoundUpPow2(length);
-
-    MOZ_ASSERT(length <= 0xff000000);
-    return (length + 0x00ffffff) & ~0x00ffffff;
+    return wasm::RoundUpToNextValidARMLengthImmediate(length);
 }

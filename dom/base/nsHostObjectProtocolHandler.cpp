@@ -140,8 +140,8 @@ BroadcastBlobURLRegistration(const nsACString& aURI,
     return;
   }
 
-  NS_WARN_IF(!cc->SendStoreAndBroadcastBlobURLRegistration(nsCString(aURI), actor,
-                                                           IPC::Principal(aPrincipal)));
+  Unused << NS_WARN_IF(!cc->SendStoreAndBroadcastBlobURLRegistration(
+    nsCString(aURI), actor, IPC::Principal(aPrincipal)));
 }
 
 void
@@ -156,7 +156,8 @@ BroadcastBlobURLUnregistration(const nsACString& aURI, DataInfo* aInfo)
   }
 
   ContentChild* cc = ContentChild::GetSingleton();
-  NS_WARN_IF(!cc->SendUnstoreAndBroadcastBlobURLUnregistration(nsCString(aURI)));
+  Unused << NS_WARN_IF(!cc->SendUnstoreAndBroadcastBlobURLUnregistration(
+    nsCString(aURI)));
 }
 
 class HostObjectURLsReporter final : public nsIMemoryReporter
@@ -220,7 +221,6 @@ class BlobURLsReporter final : public nsIMemoryReporter
           "blob cannot be freed until all URLs for it have been explicitly "
           "invalidated with URL.revokeObjectURL.");
         nsAutoCString path, url, owner, specialDesc;
-        nsCOMPtr<nsIURI> principalURI;
         uint64_t size = 0;
         uint32_t refCount = 1;
         DebugOnly<bool> blobImplWasCounted;

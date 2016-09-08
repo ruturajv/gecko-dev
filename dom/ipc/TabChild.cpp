@@ -112,6 +112,7 @@
 #include "nsSandboxFlags.h"
 #include "FrameLayerBuilder.h"
 #include "VRManagerChild.h"
+#include "nsICommandParams.h"
 
 #ifdef NS_PRINTING
 #include "nsIPrintSession.h"
@@ -508,7 +509,7 @@ TabChild::Create(nsIContentChild* aManager,
         child->mManager = aManager;
         child->SetTabId(aTabId);
         child->SetTabContext(aContext);
-        child->NotifyTabContextUpdated();
+        child->NotifyTabContextUpdated(true);
         return child.forget();
     }
 
@@ -726,6 +727,7 @@ TabChild::Init()
   }
 
   webBrowser->SetContainerWindow(this);
+  webBrowser->SetOriginAttributes(OriginAttributesRef());
   mWebNav = do_QueryInterface(webBrowser);
   NS_ASSERTION(mWebNav, "nsWebBrowser doesn't implement nsIWebNavigation?");
 
@@ -754,7 +756,7 @@ TabChild::Init()
   baseWindow->Create();
 
   // Set the tab context attributes then pass to docShell
-  NotifyTabContextUpdated();
+  NotifyTabContextUpdated(false);
 
   // IPC uses a WebBrowser object for which DNS prefetching is turned off
   // by default. But here we really want it, so enable it explicitly
@@ -824,7 +826,7 @@ TabChild::Init()
 }
 
 void
-TabChild::NotifyTabContextUpdated()
+TabChild::NotifyTabContextUpdated(bool aIsPreallocated)
 {
   nsCOMPtr<nsIDocShell> docShell = do_GetInterface(WebNavigation());
   MOZ_ASSERT(docShell);
@@ -834,7 +836,10 @@ TabChild::NotifyTabContextUpdated()
   }
 
   UpdateFrameType();
-  nsDocShell::Cast(docShell)->SetOriginAttributes(OriginAttributesRef());
+
+  if (aIsPreallocated)  {
+    nsDocShell::Cast(docShell)->SetOriginAttributes(OriginAttributesRef());
+  }
 
   // Set SANDBOXED_AUXILIARY_NAVIGATION flag if this is a receiver page.
   if (!PresentationURL().IsEmpty()) {
@@ -1749,7 +1754,7 @@ TabChild::HandleTap(GeckoContentController::TapType aType,
     break;
   case GeckoContentController::TapType::eLongTapUp:
     if (mGlobal && mTabChildGlobal) {
-      mAPZEventState->ProcessLongTapUp();
+      mAPZEventState->ProcessLongTapUp(presShell, point, scale, aModifiers);
     }
     break;
   case GeckoContentController::TapType::eSentinel:
@@ -2145,6 +2150,39 @@ TabChild::RecvSelectionEvent(const WidgetSelectionEvent& event)
   Unused << SendOnEventNeedingAckHandled(event.mMessage);
   return true;
 }
+
+bool
+TabChild::RecvPasteTransferable(const IPCDataTransfer& aDataTransfer,
+                                const bool& aIsPrivateData,
+                                const IPC::Principal& aRequestingPrincipal)
+{
+  nsresult rv;
+  nsCOMPtr<nsITransferable> trans =
+    do_CreateInstance("@mozilla.org/widget/transferable;1", &rv);
+  NS_ENSURE_SUCCESS(rv, true);
+  trans->Init(nullptr);
+
+  rv = nsContentUtils::IPCTransferableToTransferable(aDataTransfer,
+                                                     aIsPrivateData,
+                                                     aRequestingPrincipal,
+                                                     trans, nullptr, this);
+  NS_ENSURE_SUCCESS(rv, true);
+
+  nsCOMPtr<nsIDocShell> ourDocShell = do_GetInterface(WebNavigation());
+  if (NS_WARN_IF(!ourDocShell)) {
+    return true;
+  }
+
+  nsCOMPtr<nsICommandParams> params = do_CreateInstance("@mozilla.org/embedcomp/command-params;1", &rv);
+  NS_ENSURE_SUCCESS(rv, true);
+
+  rv = params->SetISupportsValue("transferable", trans);
+  NS_ENSURE_SUCCESS(rv, true);
+
+  ourDocShell->DoCommandWithParams("cmd_pasteTransferable", params);
+  return true;
+}
+
 
 a11y::PDocAccessibleChild*
 TabChild::AllocPDocAccessibleChild(PDocAccessibleChild*, const uint64_t&)

@@ -883,7 +883,7 @@ TextureClient::InitIPDLActor(CompositableForwarder* aForwarder)
       // It's Ok for a texture to move from a ShadowLayerForwarder to another, but
       // not form a CompositorBridgeChild to another (they use different channels).
       if (currentTexFwd && currentTexFwd != aForwarder->AsTextureForwarder()) {
-        gfxCriticalError() << "Attempt to move a texture to a different channel.";
+        gfxCriticalError() << "Attempt to move a texture to a different channel CF.";
         return false;
       }
       if (currentFwd && currentFwd->GetCompositorBackendType() != aForwarder->GetCompositorBackendType()) {
@@ -905,7 +905,13 @@ TextureClient::InitIPDLActor(CompositableForwarder* aForwarder)
                                                                 aForwarder->GetCompositorBackendType(),
                                                                 GetFlags(),
                                                                 mSerial));
-  MOZ_ASSERT(mActor);
+  if (!mActor) {
+    gfxCriticalError() << static_cast<int32_t>(desc.type()) << ", "
+                       << static_cast<int32_t>(aForwarder->GetCompositorBackendType()) << ", "
+                       << static_cast<uint32_t>(GetFlags())
+                       << ", " << mSerial;
+    MOZ_CRASH("GFX: Invalid actor");
+  }
   mActor->mCompositableForwarder = aForwarder;
   mActor->mTextureForwarder = aForwarder->AsTextureForwarder();
   mActor->mTextureClient = this;
@@ -934,7 +940,7 @@ TextureClient::InitIPDLActor(TextureForwarder* aForwarder, LayersBackend aBacken
     }
 
     if (currentTexFwd && currentTexFwd != aForwarder) {
-      gfxCriticalError() << "Attempt to move a texture to a different channel.";
+      gfxCriticalError() << "Attempt to move a texture to a different channel TF.";
       return false;
     }
     mActor->mTextureForwarder = aForwarder;
@@ -1112,7 +1118,8 @@ TextureClient::CreateForDrawing(TextureForwarder* aAllocator,
 
   // Can't do any better than a buffer texture client.
   return TextureClient::CreateForRawBufferAccess(aAllocator, aFormat, aSize,
-                                                 moz2DBackend, aTextureFlags, aAllocFlags);
+                                                 moz2DBackend, aLayersBackend,
+                                                 aTextureFlags, aAllocFlags);
 }
 
 // static
@@ -1186,6 +1193,22 @@ TextureClient::CreateForRawBufferAccess(ClientIPCAllocator* aAllocator,
                                         TextureFlags aTextureFlags,
                                         TextureAllocationFlags aAllocFlags)
 {
+  auto fwd = aAllocator->AsCompositableForwarder();
+  auto backend = fwd ? fwd->GetCompositorBackendType() : LayersBackend::LAYERS_NONE;
+  return CreateForRawBufferAccess(aAllocator, aFormat, aSize, aMoz2DBackend,
+                                  backend, aTextureFlags, aAllocFlags);
+}
+
+// static
+already_AddRefed<TextureClient>
+TextureClient::CreateForRawBufferAccess(ClientIPCAllocator* aAllocator,
+                                        gfx::SurfaceFormat aFormat,
+                                        gfx::IntSize aSize,
+                                        gfx::BackendType aMoz2DBackend,
+                                        LayersBackend aLayersBackend,
+                                        TextureFlags aTextureFlags,
+                                        TextureAllocationFlags aAllocFlags)
+{
   // also test the validity of aAllocator
   MOZ_ASSERT(aAllocator && aAllocator->IPCOpen());
   if (!aAllocator || !aAllocator->IPCOpen()) {
@@ -1207,8 +1230,8 @@ TextureClient::CreateForRawBufferAccess(ClientIPCAllocator* aAllocator,
   }
 
   TextureData* texData = BufferTextureData::Create(aSize, aFormat, aMoz2DBackend,
-                                                   aTextureFlags, aAllocFlags,
-                                                   aAllocator);
+                                                   aLayersBackend, aTextureFlags,
+                                                   aAllocFlags, aAllocator);
   if (!texData) {
     return nullptr;
   }

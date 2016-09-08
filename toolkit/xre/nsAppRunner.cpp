@@ -1428,9 +1428,11 @@ ScopedXPCOMStartup::Initialize()
     mServiceManager = nullptr;
   }
   else {
+#ifdef DEBUG
     nsCOMPtr<nsIComponentRegistrar> reg =
       do_QueryInterface(mServiceManager);
     NS_ASSERTION(reg, "Service Manager doesn't QI to Registrar.");
+#endif
   }
 
   return rv;
@@ -1749,9 +1751,7 @@ static nsresult LaunchChild(nsINativeAppSupport* aNative,
 #else
 #if defined(XP_MACOSX)
   CommandLineServiceMac::SetupMacCommandLine(gRestartArgc, gRestartArgv, true);
-  uint32_t restartMode = 0;
-  restartMode = gRestartMode;
-  LaunchChildMac(gRestartArgc, gRestartArgv, restartMode);
+  LaunchChildMac(gRestartArgc, gRestartArgv);
 #else
   nsCOMPtr<nsIFile> lf;
   nsresult rv = XRE_GetBinaryPath(gArgv[0], getter_AddRefs(lf));
@@ -4322,6 +4322,12 @@ XREMain::XRE_mainRun()
     }
   }
 
+#ifdef MOZ_STYLO
+    // This, along with the call to Servo_Initialize, should eventually move back
+    // to nsLayoutStatics.cpp.
+    Servo_Shutdown();
+#endif
+
   return rv;
 }
 
@@ -4652,7 +4658,7 @@ enum {
   kE10sDisabledForBidi = 6,
   kE10sDisabledForAddons = 7,
   kE10sForceDisabled = 8,
-  kE10sDisabledForXPAcceleration = 9,
+  // kE10sDisabledForXPAcceleration = 9, removed in bug 1296353
   kE10sDisabledForOperatingSystem = 10,
 };
 
@@ -4742,18 +4748,6 @@ MultiprocessBlockPolicy() {
   if (Preferences::GetDefaultCString("app.update.channel").EqualsLiteral("release") &&
       !IsVistaOrLater()) {
     gMultiprocessBlockPolicy = kE10sDisabledForOperatingSystem;
-    return gMultiprocessBlockPolicy;
-  }
-
-  /**
-   * We block on Windows XP if layers acceleration is requested. This is due to
-   * bug 1237769 where D3D9 and e10s behave badly together on XP.
-   */
-  bool layersAccelerationRequested = !Preferences::GetBool("layers.acceleration.disabled") ||
-                                      Preferences::GetBool("layers.acceleration.force-enabled");
-
-  if (layersAccelerationRequested && !IsVistaOrLater()) {
-    gMultiprocessBlockPolicy = kE10sDisabledForXPAcceleration;
     return gMultiprocessBlockPolicy;
   }
 #endif // XP_WIN

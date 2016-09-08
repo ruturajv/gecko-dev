@@ -158,12 +158,12 @@ public:
     DECODER_STATE_DECODING_METADATA,
     DECODER_STATE_WAIT_FOR_CDM,
     DECODER_STATE_DORMANT,
+    DECODER_STATE_DECODING_FIRSTFRAME,
     DECODER_STATE_DECODING,
     DECODER_STATE_SEEKING,
     DECODER_STATE_BUFFERING,
     DECODER_STATE_COMPLETED,
-    DECODER_STATE_SHUTDOWN,
-    DECODER_STATE_ERROR
+    DECODER_STATE_SHUTDOWN
   };
 
   void DumpDebugInfo();
@@ -308,18 +308,6 @@ private:
   // Should be called by main thread.
   bool HaveNextFrameData();
 
-  // Must be called with the decode monitor held.
-  bool IsBuffering() const {
-    MOZ_ASSERT(OnTaskQueue());
-    return mState == DECODER_STATE_BUFFERING;
-  }
-
-  // Must be called with the decode monitor held.
-  bool IsSeeking() const {
-    MOZ_ASSERT(OnTaskQueue());
-    return mState == DECODER_STATE_SEEKING;
-  }
-
   // Returns the state machine task queue.
   TaskQueue* OwnerThread() const { return mTaskQueue; }
 
@@ -368,8 +356,8 @@ protected:
   virtual ~MediaDecoderStateMachine();
 
   void SetState(State aState);
-  void ExitState(State aState);
-  void EnterState(State aState);
+  void ExitState();
+  void EnterState();
 
   void BufferedRangeUpdated();
 
@@ -486,8 +474,10 @@ protected:
   // If we don't, switch to buffering mode.
   void MaybeStartBuffering();
 
-  // Moves the decoder into decoding state. Called on the state machine
-  // thread. The decoder monitor must be held.
+  // The entry action of DECODER_STATE_DECODING_FIRSTFRAME.
+  void DecodeFirstFrame();
+
+  // The entry action of DECODER_STATE_DECODING.
   void StartDecoding();
 
   // Moves the decoder into the shutdown state, and dispatches an error
@@ -495,11 +485,6 @@ protected:
   // The decoder monitor must be held. This is only called on the
   // decode thread.
   void DecodeError();
-
-  // Dispatches a task to the decode task queue to begin decoding metadata.
-  // This is threadsafe and can be called on any thread.
-  // The decoder monitor must be held.
-  nsresult EnqueueDecodeMetadataTask();
 
   // Dispatches a LoadedMetadataEvent.
   // This is threadsafe and can be called on any thread.
@@ -511,25 +496,19 @@ protected:
   // Clears any previous seeking state and initiates a new seek on the decoder.
   RefPtr<MediaDecoder::SeekPromise> InitiateSeek(SeekJob aSeekJob);
 
-  nsresult DispatchAudioDecodeTaskIfNeeded();
+  void DispatchAudioDecodeTaskIfNeeded();
+  void DispatchVideoDecodeTaskIfNeeded();
 
-  // Ensures a task to decode audio has been dispatched to the decode task queue.
-  // If a task to decode has already been dispatched, this does nothing,
-  // otherwise this dispatches a task to do the decode.
-  // This is called on the state machine or decode threads.
-  // The decoder monitor must be held.
-  nsresult EnsureAudioDecodeTaskQueued();
+  // Dispatch a task to decode audio if there is not.
+  void EnsureAudioDecodeTaskQueued();
+
+  // Dispatch a task to decode video if there is not.
+  void EnsureVideoDecodeTaskQueued();
+
   // Start a task to decode audio.
   // The decoder monitor must be held.
   void RequestAudioData();
 
-  nsresult DispatchVideoDecodeTaskIfNeeded();
-
-  // Ensures a task to decode video has been dispatched to the decode task queue.
-  // If a task to decode has already been dispatched, this does nothing,
-  // otherwise this dispatches a task to do the decode.
-  // The decoder monitor must be held.
-  nsresult EnsureVideoDecodeTaskQueued();
   // Start a task to decode video.
   // The decoder monitor must be held.
   void RequestVideoData();
@@ -563,28 +542,26 @@ protected:
   void OnMetadataRead(MetadataHolder* aMetadata);
   void OnMetadataNotRead(ReadMetadataFailureReason aReason);
 
-  // Checks whether we're finished decoding first audio and/or video packets.
-  // If so will trigger firing loadeddata event.
-  // If there are any queued seek, will change state to DECODER_STATE_SEEKING
-  // and return true.
-  bool MaybeFinishDecodeFirstFrame();
-  // Return true if we are currently decoding the first frames.
-  bool IsDecodingFirstFrame();
+  // Notify FirstFrameLoaded if having decoded first frames and
+  // transition to SEEKING if there is any pending seek, or DECODING otherwise.
+  void MaybeFinishDecodeFirstFrame();
+
   void FinishDecodeFirstFrame();
 
   // Completes the seek operation, moves onto the next appropriate state.
   void SeekCompleted();
 
   // Queries our state to see whether the decode has finished for all streams.
-  // If so, we move into DECODER_STATE_COMPLETED and schedule the state machine
-  // to run.
-  // The decoder monitor must be held.
-  void CheckIfDecodeComplete();
+  bool CheckIfDecodeComplete();
 
-  // Performs one "cycle" of the state machine. Polls the state, and may send
-  // a video frame to be displayed, and generally manages the decode. Called
-  // periodically via timer to ensure the video stays in sync.
-  nsresult RunStateMachine();
+  // Performs one "cycle" of the state machine.
+  void RunStateMachine();
+  // Perform one cycle of the DECODING state.
+  void StepDecoding();
+  // Perform one cycle of the BUFFERING state.
+  void StepBuffering();
+  // Perform one cycle of the COMPLETED state.
+  void StepCompleted();
 
   bool IsStateMachineScheduled() const;
 
@@ -889,18 +866,14 @@ private:
   // Track our request to update the buffered ranges
   MozPromiseRequestHolder<MediaDecoderReader::BufferedUpdatePromise> mBufferedUpdateRequest;
 
-  // True if we need to call FinishDecodeFirstFrame() upon frame decoding
-  // succeeding.
-  bool mDecodingFirstFrame;
-
   // True if we are back from DECODER_STATE_DORMANT state and
   // LoadedMetadataEvent was already sent.
   bool mSentLoadedMetadataEvent;
-  // True if we are back from DECODER_STATE_DORMANT state and
-  // FirstFrameLoadedEvent was already sent, then we can skip
-  // SetStartTime because the mStartTime already set before. Also we don't need
-  // to decode any audio/video since the MediaDecoder will trigger a seek
-  // operation soon.
+
+  // True if we've decoded first frames (thus having the start time) and
+  // notified the FirstFrameLoaded event. Note we can't initiate seek until the
+  // start time is known which happens when the first frames are decoded or we
+  // are playing an MSE stream (the start time is always assumed 0).
   bool mSentFirstFrameLoadedEvent;
 
   bool mSentPlaybackEndedEvent;

@@ -400,6 +400,11 @@ public:
   RecvSelectionEvent(const mozilla::WidgetSelectionEvent& aEvent) override;
 
   virtual bool
+  RecvPasteTransferable(const IPCDataTransfer& aDataTransfer,
+                        const bool& aIsPrivateData,
+                        const IPC::Principal& aRequestingPrincipal) override;
+
+  virtual bool
   RecvActivateFrameEvent(const nsString& aType, const bool& aCapture) override;
 
   virtual bool RecvLoadRemoteScript(const nsString& aURL,
@@ -682,12 +687,13 @@ private:
   void HandleDoubleTap(const CSSPoint& aPoint, const Modifiers& aModifiers,
                        const ScrollableLayerGuid& aGuid);
 
-  // Notify others that our TabContext has been updated.  (At the moment, this
-  // sets the appropriate origin attributes on our docshell.)
+  // Notify others that our TabContext has been updated.
   //
   // You should call this after calling TabContext::SetTabContext().  We also
   // call this during Init().
-  void NotifyTabContextUpdated();
+  //
+  // @param aIsPreallocated  true if this is called for Preallocated Tab.
+  void NotifyTabContextUpdated(bool aIsPreallocated);
 
   // Update the frameType on our docshell.
   void UpdateFrameType();

@@ -20,7 +20,6 @@
 #include "jswrapper.h"
 
 #include "asmjs/WasmInstance.h"
-#include "builtin/Promise.h"
 #include "frontend/BytecodeCompiler.h"
 #include "frontend/Parser.h"
 #include "gc/Marking.h"
@@ -651,6 +650,17 @@ Debugger::Debugger(JSContext* cx, NativeObject* dbg)
 
     JS_INIT_CLIST(&breakpoints);
     JS_INIT_CLIST(&onNewGlobalObjectWatchersLink);
+
+#ifdef JS_TRACE_LOGGING
+    TraceLoggerThread* logger = TraceLoggerForMainThread(cx->runtime());
+    if (logger) {
+#ifdef NIGHTLY_BUILD
+        logger->getIterationAndSize(&traceLoggerLastDrainedIteration, &traceLoggerLastDrainedSize);
+#endif
+        logger->getIterationAndSize(&traceLoggerScriptedCallsLastDrainedIteration,
+                                    &traceLoggerScriptedCallsLastDrainedSize);
+    }
+#endif
 }
 
 Debugger::~Debugger()
@@ -750,7 +760,7 @@ Debugger::getScriptFrameWithIter(JSContext* cx, AbstractFramePtr referent,
         RootedNativeObject debugger(cx, object);
 
         RootedDebuggerFrame frame(cx, DebuggerFrame::create(cx, proto, referent, maybeIter,
-                                                               debugger));
+                                                            debugger));
         if (!frame)
             return false;
 
@@ -4845,7 +4855,7 @@ Debugger::setupTraceLogger(JSContext* cx, unsigned argc, Value* vp)
 
         uint32_t textId = TLStringToTextId(linear);
 
-        if (!TLTextIdIsToggable(textId)) {
+        if (!TLTextIdIsTogglable(textId)) {
             args.rval().setBoolean(false);
             return true;
         }
@@ -4876,28 +4886,29 @@ bool
 Debugger::drainTraceLogger(JSContext* cx, unsigned argc, Value* vp)
 {
     THIS_DEBUGGER(cx, argc, vp, "drainTraceLogger", args, dbg);
-    if (!args.requireAtLeast(cx, "Debugger.drainTraceLogger", 0))
-        return false;
 
-    size_t num;
     TraceLoggerThread* logger = TraceLoggerForMainThread(cx->runtime());
     bool lostEvents = logger->lostEvents(dbg->traceLoggerLastDrainedIteration,
                                          dbg->traceLoggerLastDrainedSize);
+
+    size_t numEvents;
     EventEntry* events = logger->getEventsStartingAt(&dbg->traceLoggerLastDrainedIteration,
                                                      &dbg->traceLoggerLastDrainedSize,
-                                                     &num);
+                                                     &numEvents);
 
     RootedObject array(cx, NewDenseEmptyArray(cx));
-    JSAtom* dataAtom = Atomize(cx, "data", strlen("data"));
     if (!array)
         return false;
+
+    JSAtom* dataAtom = Atomize(cx, "data", strlen("data"));
     if (!dataAtom)
         return false;
+
     RootedId dataId(cx, AtomToId(dataAtom));
 
     /* Add all events to the array. */
     uint32_t index = 0;
-    for (EventEntry* eventItem = events; eventItem < events + num; eventItem++, index++) {
+    for (EventEntry* eventItem = events; eventItem < events + numEvents; eventItem++, index++) {
         RootedObject item(cx, NewObjectWithGivenProto(cx, &PlainObject::class_, nullptr));
         if (!item)
             return false;
@@ -5027,37 +5038,45 @@ bool
 Debugger::drainTraceLoggerScriptCalls(JSContext* cx, unsigned argc, Value* vp)
 {
     THIS_DEBUGGER(cx, argc, vp, "drainTraceLoggerScriptCalls", args, dbg);
-    if (!args.requireAtLeast(cx, "Debugger.drainTraceLoggerScriptCalls", 0))
-        return false;
 
-    size_t num;
     TraceLoggerThread* logger = TraceLoggerForMainThread(cx->runtime());
     bool lostEvents = logger->lostEvents(dbg->traceLoggerScriptedCallsLastDrainedIteration,
                                          dbg->traceLoggerScriptedCallsLastDrainedSize);
+
+    size_t numEvents;
     EventEntry* events = logger->getEventsStartingAt(
                                          &dbg->traceLoggerScriptedCallsLastDrainedIteration,
                                          &dbg->traceLoggerScriptedCallsLastDrainedSize,
-                                         &num);
+                                         &numEvents);
 
     RootedObject array(cx, NewDenseEmptyArray(cx));
     if (!array)
         return false;
-    RootedId fileNameId(cx, AtomToId(cx->names().fileName));
-    RootedId lineNumberId(cx, AtomToId(cx->names().lineNumber));
-    RootedId columnNumberId(cx, AtomToId(cx->names().columnNumber));
+
     JSAtom* logTypeAtom = Atomize(cx, "logType", strlen("logType"));
     if (!logTypeAtom)
         return false;
+
+    RootedId fileNameId(cx, AtomToId(cx->names().fileName));
+    RootedId lineNumberId(cx, AtomToId(cx->names().lineNumber));
+    RootedId columnNumberId(cx, AtomToId(cx->names().columnNumber));
     RootedId logTypeId(cx, AtomToId(logTypeAtom));
 
     /* Add all events to the array. */
     uint32_t index = 0;
-    for (EventEntry* eventItem = events; eventItem < events + num; eventItem++) {
+    for (EventEntry* eventItem = events; eventItem < events + numEvents; eventItem++) {
         RootedObject item(cx, NewObjectWithGivenProto(cx, &PlainObject::class_, nullptr));
         if (!item)
             return false;
 
+        // Filter out internal time.
         uint32_t textId = eventItem->textId;
+        if (textId == TraceLogger_Internal) {
+            eventItem++;
+            MOZ_ASSERT(eventItem->textId == TraceLogger_Stop);
+            continue;
+        }
+
         if (textId != TraceLogger_Stop && !logger->textIdIsScriptEvent(textId))
             continue;
 
@@ -6189,11 +6208,13 @@ Debugger::replaceFrameGuts(JSContext* cx, AbstractFramePtr from, AbstractFramePt
 {
     auto removeFromDebuggerFramesOnExit = MakeScopeExit([&] {
         // Remove any remaining old entries on exit, as the 'from' frame will
-        // be gone. On success, the range will be empty.
-        Debugger::forEachDebuggerFrame(from, [&](NativeObject* frameobj) {
-            frameobj->setPrivate(nullptr);
-            Debugger::fromChildJSObject(frameobj)->frames.remove(from);
-        });
+        // be gone. This is only done in the failure case. On failure, the
+        // removeToDebuggerFramesOnExit lambda below will rollback any frames
+        // that were replaced, resulting in !frameMaps(to). On success, the
+        // range will be empty, as all from Frame.Debugger instances will have
+        // been removed.
+        MOZ_ASSERT_IF(inFrameMaps(to), !inFrameMaps(from));
+        removeFromFrameMapsAndClearBreakpointsIn(cx, from);
 
         // Rekey missingScopes to maintain Debugger.Environment identity and
         // forward liveScopes to point to the new frame.
@@ -6202,8 +6223,13 @@ Debugger::replaceFrameGuts(JSContext* cx, AbstractFramePtr from, AbstractFramePt
 
     // Forward live Debugger.Frame objects.
     Rooted<DebuggerFrameVector> frames(cx, DebuggerFrameVector(cx));
-    if (!getDebuggerFrames(from, &frames))
+    if (!getDebuggerFrames(from, &frames)) {
+        // An OOM here means that all Debuggers' frame maps still contain
+        // entries for 'from' and no entries for 'to'. Since the 'from' frame
+        // will be gone, they are removed by removeFromDebuggerFramesOnExit
+        // above.
         return false;
+    }
 
     // If during the loop below we hit an OOM, we must also rollback any of
     // the frames that were successfully replaced. For OSR frames, OOM here
@@ -6220,8 +6246,18 @@ Debugger::replaceFrameGuts(JSContext* cx, AbstractFramePtr from, AbstractFramePt
         // Update frame object's ScriptFrameIter::data pointer.
         DebuggerFrame_freeScriptFrameIterData(cx->runtime()->defaultFreeOp(), frameobj);
         ScriptFrameIter::Data* data = iter.copyData();
-        if (!data)
+        if (!data) {
+            // An OOM here means that some Debuggers' frame maps may still
+            // contain entries for 'from' and some Debuggers' frame maps may
+            // also contain entries for 'to'. Thus both
+            // removeFromDebuggerFramesOnExit and
+            // removeToDebuggerFramesOnExit must both run.
+            //
+            // The current frameobj in question is still in its Debugger's
+            // frame map keyed by 'from', so it will be covered by
+            // removeFromDebuggerFramesOnExit.
             return false;
+        }
         frameobj->setPrivate(data);
 
         // Remove old frame.
@@ -6229,6 +6265,17 @@ Debugger::replaceFrameGuts(JSContext* cx, AbstractFramePtr from, AbstractFramePt
 
         // Add the frame object with |to| as key.
         if (!dbg->frames.putNew(to, frameobj)) {
+            // This OOM is subtle. At this point, both
+            // removeFromDebuggerFramesOnExit and removeToDebuggerFramesOnExit
+            // must both run for the same reason given above.
+            //
+            // The difference is that the current frameobj is no longer in its
+            // Debugger's frame map, so it will not be cleaned up by neither
+            // lambda. Manually clean it up here.
+            FreeOp* fop = cx->runtime()->defaultFreeOp();
+            DebuggerFrame_freeScriptFrameIterData(fop, frameobj);
+            DebuggerFrame_maybeDecrementFrameScriptStepModeCount(fop, to, frameobj);
+
             ReportOutOfMemory(cx);
             return false;
         }
@@ -8572,7 +8619,7 @@ DebuggerObject::proxyTargetGetter(JSContext* cx, unsigned argc, Value* vp)
     }
 
     Rooted<DebuggerObject*> result(cx);
-    if (!DebuggerObject::scriptedProxyTarget(cx, object, &result))
+    if (!DebuggerObject::getScriptedProxyTarget(cx, object, &result))
         return false;
 
     args.rval().setObjectOrNull(result);
@@ -8589,7 +8636,7 @@ DebuggerObject::proxyHandlerGetter(JSContext* cx, unsigned argc, Value* vp)
         return true;
     }
     Rooted<DebuggerObject*> result(cx);
-    if (!DebuggerObject::scriptedProxyHandler(cx, object, &result))
+    if (!DebuggerObject::getScriptedProxyHandler(cx, object, &result))
         return false;
 
     args.rval().setObjectOrNull(result);
@@ -8602,74 +8649,93 @@ DebuggerObject::isPromiseGetter(JSContext* cx, unsigned argc, Value* vp)
 {
     THIS_DEBUGOBJECT(cx, argc, vp, "get isPromise", args, object)
 
-    bool result;
-    if (!DebuggerObject::isPromise(cx, object, result))
-      return false;
-
-    args.rval().setBoolean(result);
+    args.rval().setBoolean(object->isPromise());
     return true;
 }
 
 /* static */ bool
 DebuggerObject::promiseStateGetter(JSContext* cx, unsigned argc, Value* vp)
 {
-    THIS_DEBUGOBJECT_OWNER_PROMISE(cx, argc, vp, "get promiseState", args, dbg, refobj);
+    THIS_DEBUGOBJECT(cx, argc, vp, "get promiseState", args, object);
 
-    RootedPlainObject obj(cx, NewBuiltinClassInstance<PlainObject>(cx));
-    RootedValue result(cx, UndefinedValue());
-    RootedValue reason(cx, UndefinedValue());
-    if (!obj)
+    if (!DebuggerObject::requirePromise(cx, object))
         return false;
-    RootedValue state(cx);
-    switch (promise->state()) {
+
+    RootedValue result(cx);
+    switch (object->promiseState()) {
       case JS::PromiseState::Pending:
-        state.setString(cx->names().pending);
+        result.setString(cx->names().pending);
         break;
       case JS::PromiseState::Fulfilled:
-        state.setString(cx->names().fulfilled);
-        result = promise->value();
+        result.setString(cx->names().fulfilled);
         break;
       case JS::PromiseState::Rejected:
-        state.setString(cx->names().rejected);
-        reason = promise->reason();
+        result.setString(cx->names().rejected);
         break;
     }
 
-    if (!dbg->wrapDebuggeeValue(cx, &result))
-        return false;
-    if (!dbg->wrapDebuggeeValue(cx, &reason))
+    args.rval().set(result);
+    return true;
+}
+
+/* static */ bool
+DebuggerObject::promiseValueGetter(JSContext* cx, unsigned argc, Value* vp)
+{
+    THIS_DEBUGOBJECT(cx, argc, vp, "get promiseValue", args, object);
+
+    if (!DebuggerObject::requirePromise(cx, object))
         return false;
 
-    if (!DefineProperty(cx, obj, cx->names().state.get(), state))
+    if (object->promiseState() != JS::PromiseState::Fulfilled) {
+        JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_DEBUG_PROMISE_NOT_FULFILLED);
         return false;
-    if (!DefineProperty(cx, obj, cx->names().value.get(), result))
+    }
+
+    return DebuggerObject::getPromiseValue(cx, object, args.rval());;
+}
+
+/* static */ bool
+DebuggerObject::promiseReasonGetter(JSContext* cx, unsigned argc, Value* vp)
+{
+    THIS_DEBUGOBJECT(cx, argc, vp, "get promiseReason", args, object);
+
+    if (!DebuggerObject::requirePromise(cx, object))
         return false;
-    if (!DefineProperty(cx, obj, cx->names().reason.get(), reason))
+
+    if (object->promiseState() != JS::PromiseState::Rejected) {
+        JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_DEBUG_PROMISE_NOT_REJECTED);
         return false;
-    args.rval().setObject(*obj);
-    return true;
+    }
+
+    return DebuggerObject::getPromiseReason(cx, object, args.rval());;
 }
 
 /* static */ bool
 DebuggerObject::promiseLifetimeGetter(JSContext* cx, unsigned argc, Value* vp)
 {
-    THIS_DEBUGOBJECT_PROMISE(cx, argc, vp, "get promiseLifetime", args, refobj);
+    THIS_DEBUGOBJECT(cx, argc, vp, "get promiseLifetime", args, object);
 
-    args.rval().setNumber(promise->lifetime());
+    if (!DebuggerObject::requirePromise(cx, object))
+        return false;
+
+    args.rval().setNumber(object->promiseLifetime());
     return true;
 }
 
 /* static */ bool
 DebuggerObject::promiseTimeToResolutionGetter(JSContext* cx, unsigned argc, Value* vp)
 {
-    THIS_DEBUGOBJECT_PROMISE(cx, argc, vp, "get promiseTimeToResolution", args, refobj);
+    THIS_DEBUGOBJECT(cx, argc, vp, "get promiseTimeToResolution", args, object);
 
-    if (promise->state() == JS::PromiseState::Pending) {
+    if (!DebuggerObject::requirePromise(cx, object))
+        return false;
+
+    if (object->promiseState() == JS::PromiseState::Pending) {
         JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_DEBUG_PROMISE_NOT_RESOLVED);
         return false;
     }
 
-    args.rval().setNumber(promise->timeToResolution());
+    args.rval().setNumber(object->promiseTimeToResolution());
     return true;
 }
 
@@ -9186,6 +9252,8 @@ const JSPropertySpec DebuggerObject::properties_[] = {
 const JSPropertySpec DebuggerObject::promiseProperties_[] = {
     JS_PSG("isPromise", DebuggerObject::isPromiseGetter, 0),
     JS_PSG("promiseState", DebuggerObject::promiseStateGetter, 0),
+    JS_PSG("promiseValue", DebuggerObject::promiseValueGetter, 0),
+    JS_PSG("promiseReason", DebuggerObject::promiseReasonGetter, 0),
     JS_PSG("promiseLifetime", DebuggerObject::promiseLifetimeGetter, 0),
     JS_PSG("promiseTimeToResolution", DebuggerObject::promiseTimeToResolutionGetter, 0),
     JS_PSG("promiseAllocationSite", DebuggerObject::promiseAllocationSiteGetter, 0),
@@ -9304,23 +9372,21 @@ DebuggerObject::isScriptedProxy() const
     return js::IsScriptedProxy(referent());
 }
 
-/* static */ bool
-DebuggerObject::isPromise(JSContext* cx, HandleDebuggerObject object,
-                          bool& result)
+#ifdef SPIDERMONKEY_PROMISE
+bool
+DebuggerObject::isPromise() const
 {
-    JSObject* referent = object->referent();
+    JSObject* referent = this->referent();
+
     if (IsCrossCompartmentWrapper(referent)) {
         referent = CheckedUnwrap(referent);
-
-        if (!referent) {
-            JS_ReportError(cx, "Permission denied to access object");
+        if (!referent)
             return false;
-        }
-      }
+    }
 
-    result = referent->is<PromiseObject>();
-    return true;
+    return referent->is<PromiseObject>();
 }
+#endif // SPIDERMONKEY_PROMISE
 
 /* static */ bool
 DebuggerObject::getClassName(JSContext* cx, HandleDebuggerObject object,
@@ -9367,6 +9433,26 @@ DebuggerObject::displayName() const
     MOZ_ASSERT(isFunction());
 
     return referent()->as<JSFunction>().displayAtom();
+}
+
+JS::PromiseState
+DebuggerObject::promiseState() const
+{
+    return promise()->state();
+}
+
+double
+DebuggerObject::promiseLifetime() const
+{
+    return promise()->lifetime();
+}
+
+double
+DebuggerObject::promiseTimeToResolution() const
+{
+    MOZ_ASSERT(promiseState() != JS::PromiseState::Pending);
+
+    return promise()->timeToResolution();
 }
 
 /* static */ bool
@@ -9507,6 +9593,28 @@ DebuggerObject::getErrorMessageName(JSContext* cx, HandleDebuggerObject object,
     result.set(nullptr);
     return true;
 }
+
+#ifdef SPIDERMONKEY_PROMISE
+/* static */ bool
+DebuggerObject::getPromiseValue(JSContext* cx, HandleDebuggerObject object,
+                                MutableHandleValue result)
+{
+    MOZ_ASSERT(object->promiseState() == JS::PromiseState::Fulfilled);
+
+    result.set(object->promise()->value());
+    return object->owner()->wrapDebuggeeValue(cx, result);
+}
+
+/* static */ bool
+DebuggerObject::getPromiseReason(JSContext* cx, HandleDebuggerObject object,
+                                 MutableHandleValue result)
+{
+    MOZ_ASSERT(object->promiseState() == JS::PromiseState::Rejected);
+
+    result.set(object->promise()->reason());
+    return object->owner()->wrapDebuggeeValue(cx, result);
+}
+#endif // SPIDERMONKEY_PROMISE
 
 /* static */ bool
 DebuggerObject::isExtensible(JSContext* cx, HandleDebuggerObject object, bool& result)
@@ -9977,9 +10085,33 @@ DebuggerObject::requireGlobal(JSContext* cx, HandleDebuggerObject object)
     return true;
 }
 
+#ifdef SPIDERMONKEY_PROMISE
 /* static */ bool
-DebuggerObject::scriptedProxyTarget(JSContext* cx, HandleDebuggerObject object,
-                                    MutableHandleDebuggerObject result)
+DebuggerObject::requirePromise(JSContext* cx, HandleDebuggerObject object)
+{
+   RootedObject referent(cx, object->referent());
+
+   if (IsCrossCompartmentWrapper(referent)) {
+       referent = CheckedUnwrap(referent);
+       if (!referent) {
+           JS_ReportError(cx, "Permission denied to access object");
+           return false;
+       }
+   }
+
+   if (!referent->is<PromiseObject>()) {
+      JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_NOT_EXPECTED_TYPE,
+                           "Debugger", "Promise", object->getClass()->name);
+      return false;
+   }
+
+   return true;
+}
+#endif // SPIDERMONKEY_PROMISE
+
+/* static */ bool
+DebuggerObject::getScriptedProxyTarget(JSContext* cx, HandleDebuggerObject object,
+                                       MutableHandleDebuggerObject result)
 {
     MOZ_ASSERT(object->isScriptedProxy());
     RootedObject referent(cx, object->referent());
@@ -9993,8 +10125,8 @@ DebuggerObject::scriptedProxyTarget(JSContext* cx, HandleDebuggerObject object,
 }
 
 /* static */ bool
-DebuggerObject::scriptedProxyHandler(JSContext* cx, HandleDebuggerObject object,
-                                     MutableHandleDebuggerObject result)
+DebuggerObject::getScriptedProxyHandler(JSContext* cx, HandleDebuggerObject object,
+                                        MutableHandleDebuggerObject result)
 {
     MOZ_ASSERT(object->isScriptedProxy());
     RootedObject referent(cx, object->referent());

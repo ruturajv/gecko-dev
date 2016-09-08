@@ -24,7 +24,7 @@ sys.path.insert(1, os.path.dirname(sys.path[0]))
 from mozprocess import ProcessHandler
 
 from mozharness.base.log import FATAL
-from mozharness.base.script import BaseScript, PreScriptAction
+from mozharness.base.script import BaseScript, PreScriptAction, PostScriptAction
 from mozharness.base.vcs.vcsbase import VCSMixin
 from mozharness.mozilla.blob_upload import BlobUploadMixin, blobupload_config_options
 from mozharness.mozilla.mozbase import MozbaseMixin
@@ -85,7 +85,7 @@ class AndroidEmulatorTest(BlobUploadMixin, TestingMixin, EmulatorMixin, VCSMixin
                          'verify-emulator',
                          'install',
                          'run-tests',
-                         'stop-emulator'],
+                        ],
             default_actions=['clobber',
                              'start-emulator',
                              'download-and-extract',
@@ -93,7 +93,7 @@ class AndroidEmulatorTest(BlobUploadMixin, TestingMixin, EmulatorMixin, VCSMixin
                              'verify-emulator',
                              'install',
                              'run-tests',
-                             'stop-emulator'],
+                            ],
             require_config_file=require_config_file,
             config={
                 'virtualenv_modules': self.virtualenv_modules,
@@ -154,6 +154,11 @@ class AndroidEmulatorTest(BlobUploadMixin, TestingMixin, EmulatorMixin, VCSMixin
             abs_dirs['abs_work_dir'], 'emulator')
         dirs['abs_mochitest_dir'] = os.path.join(
             dirs['abs_test_install_dir'], 'mochitest')
+        dirs['abs_marionette_dir'] = os.path.join(
+            dirs['abs_test_install_dir'], 'marionette', 'marionette')
+        dirs['abs_marionette_tests_dir'] = os.path.join(
+            dirs['abs_test_install_dir'], 'marionette', 'tests', 'testing',
+            'marionette', 'harness', 'marionette', 'tests')
         dirs['abs_avds_dir'] = self.config.get("avds_dir", "/home/cltbld/.android")
 
         for key in dirs.keys():
@@ -165,13 +170,16 @@ class AndroidEmulatorTest(BlobUploadMixin, TestingMixin, EmulatorMixin, VCSMixin
     @PreScriptAction('create-virtualenv')
     def _pre_create_virtualenv(self, action):
         dirs = self.query_abs_dirs()
-
+        requirements = None
         if os.path.isdir(dirs['abs_mochitest_dir']):
             # mochitest is the only thing that needs this
             requirements = os.path.join(dirs['abs_mochitest_dir'],
                         'websocketprocessbridge',
                         'websocketprocessbridge_requirements.txt')
-
+        elif self.test_suite == 'marionette':
+            requirements = os.path.join(dirs['abs_test_install_dir'],
+                                    'config', 'marionette_requirements.txt')
+        if requirements:
             self.register_virtualenv_module(requirements=[requirements],
                                             two_pass=True)
 
@@ -459,6 +467,13 @@ class AndroidEmulatorTest(BlobUploadMixin, TestingMixin, EmulatorMixin, VCSMixin
             'raw_log_file': raw_log_file,
             'error_summary_file': error_summary_file,
             'dm_trans': c['device_manager'],
+            # marionette options
+            'address': c.get('marionette_address'),
+            'gecko_log': os.path.join(dirs["abs_blob_upload_dir"], 'gecko.log'),
+            'test_manifest': os.path.join(
+                dirs['abs_marionette_tests_dir'],
+                self.config.get('marionette_test_manifest', '')
+            ),
         }
         for option in self.config["suite_definitions"][self.test_suite]["options"]:
             opt = option.split('=')[0]
@@ -709,7 +724,8 @@ class AndroidEmulatorTest(BlobUploadMixin, TestingMixin, EmulatorMixin, VCSMixin
         self._dump_emulator_log()
         self.buildbot_status(tbpl_status, level=log_level)
 
-    def stop_emulator(self):
+    @PostScriptAction('run-tests')
+    def stop_emulator(self, action, success=None):
         '''
         Report emulator health, then make sure that the emulator has been stopped
         '''
@@ -722,7 +738,11 @@ class AndroidEmulatorTest(BlobUploadMixin, TestingMixin, EmulatorMixin, VCSMixin
         first (if the emulator is still running, logcat may still be running, which
         may lock the blob upload directory, causing a hang).
         '''
-        self._kill_processes(self.config["emulator_process_name"])
+        if self.config.get('blob_upload_branch'):
+            # Except on interactive workers, we want the emulator to keep running
+            # after the script is finished. So only kill it if blobber would otherwise
+            # have run anyway (it doesn't get run on interactive workers).
+            self._kill_processes(self.config["emulator_process_name"])
         super(AndroidEmulatorTest, self).upload_blobber_files()
 
 if __name__ == '__main__':

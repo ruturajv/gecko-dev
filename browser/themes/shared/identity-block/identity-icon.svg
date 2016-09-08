@@ -8,6 +8,8 @@
     <style>
       path {
         fill-rule: evenodd;
+        fill: -moz-fieldtext;
+        fill-opacity: .5;
       }
     </style>
   </defs>

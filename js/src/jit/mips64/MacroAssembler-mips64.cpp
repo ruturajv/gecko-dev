@@ -206,29 +206,37 @@ MacroAssemblerMIPS64::ma_li(Register dest, CodeOffset* label)
 void
 MacroAssemblerMIPS64::ma_li(Register dest, ImmWord imm)
 {
-    if ((int64_t)imm.value >= INT16_MIN  && (int64_t)imm.value <= INT16_MAX) {
-        as_addiu(dest, zero, imm.value);
+    int64_t value = imm.value;
+
+    if (value >= INT16_MIN && value <= INT16_MAX) {
+        as_addiu(dest, zero, value);
     } else if (imm.value <= UINT16_MAX) {
-        as_ori(dest, zero, Imm16::Lower(Imm32(imm.value)).encode());
-    } else if (0 == (imm.value & 0xffff) && 0 == (imm.value >> 32)) {
-        as_lui(dest, Imm16::Upper(Imm32(imm.value)).encode());
+        as_ori(dest, zero, Imm16::Lower(Imm32(value)).encode());
+    } else if (value >= INT32_MIN && value <= INT32_MAX) {
+        as_lui(dest, Imm16::Upper(Imm32(value)).encode());
+        if (value & 0xffff)
+            as_ori(dest, dest, Imm16::Lower(Imm32(value)).encode());
     } else if (imm.value <= UINT32_MAX) {
-        as_lui(dest, Imm16::Upper(Imm32(imm.value)).encode());
-        as_ori(dest, dest, Imm16::Lower(Imm32(imm.value)).encode());
+        as_lui(dest, Imm16::Upper(Imm32(value)).encode());
+        if (value & 0xffff)
+            as_ori(dest, dest, Imm16::Lower(Imm32(value)).encode());
+        as_dinsu(dest, zero, 32, 32);
     } else {
+        uint64_t high = imm.value >> 32;
+
         if (imm.value >> 48) {
-            as_lui(dest, Imm16::Upper(Imm32(imm.value >> 32)).encode());
-            if ((imm.value >> 32) & 0xffff)
-              as_ori(dest, dest, Imm16::Lower(Imm32(imm.value >> 32)).encode());
+            as_lui(dest, Imm16::Upper(Imm32(high)).encode());
+            if (high & 0xffff)
+                as_ori(dest, dest, Imm16::Lower(Imm32(high)).encode());
             as_dsll(dest, dest, 16);
         } else {
-            as_lui(dest, Imm16::Lower(Imm32(imm.value >> 32)).encode());
+            as_lui(dest, Imm16::Lower(Imm32(high)).encode());
         }
         if ((imm.value >> 16) & 0xffff)
-          as_ori(dest, dest, Imm16::Upper(Imm32(imm.value)).encode());
+            as_ori(dest, dest, Imm16::Upper(Imm32(value)).encode());
         as_dsll(dest, dest, 16);
-        if (imm.value & 0xffff)
-          as_ori(dest, dest, Imm16::Lower(Imm32(imm.value)).encode());
+        if (value & 0xffff)
+            as_ori(dest, dest, Imm16::Lower(Imm32(value)).encode());
     }
 }
 
@@ -1211,31 +1219,6 @@ MacroAssemblerMIPS64Compat::storePtr(Register src, AbsoluteAddress dest)
     storePtr(src, Address(ScratchRegister, 0));
 }
 
-void
-MacroAssemblerMIPS64Compat::clampIntToUint8(Register reg)
-{
-    // look at (reg >> 8) if it is 0, then src shouldn't be clamped
-    // if it is <0, then we want to clamp to 0,
-    // otherwise, we wish to clamp to 255
-    Label done;
-    ma_move(ScratchRegister, reg);
-    asMasm().rshiftPtrArithmetic(Imm32(8), ScratchRegister);
-    ma_b(ScratchRegister, ScratchRegister, &done, Assembler::Zero, ShortJump);
-    {
-        Label negative;
-        ma_b(ScratchRegister, ScratchRegister, &negative, Assembler::Signed, ShortJump);
-        {
-            ma_li(reg, Imm32(255));
-            ma_b(&done, ShortJump);
-        }
-        bind(&negative);
-        {
-            ma_move(reg, zero);
-        }
-    }
-    bind(&done);
-}
-
 // Note: this function clobbers the input register.
 void
 MacroAssembler::clampDoubleToUint8(FloatRegister input, Register output)
@@ -1330,15 +1313,13 @@ MacroAssemblerMIPS64Compat::unboxNonDouble(const BaseIndex& src, Register dest)
 void
 MacroAssemblerMIPS64Compat::unboxInt32(const ValueOperand& operand, Register dest)
 {
-    ma_dsll(dest, operand.valueReg(), Imm32(32));
-    ma_dsra(dest, dest, Imm32(32));
+    ma_sll(dest, operand.valueReg(), Imm32(0));
 }
 
 void
 MacroAssemblerMIPS64Compat::unboxInt32(Register src, Register dest)
 {
-    ma_dsll(dest, src, Imm32(32));
-    ma_dsra(dest, dest, Imm32(32));
+    ma_sll(dest, src, Imm32(0));
 }
 
 void

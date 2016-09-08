@@ -38,6 +38,7 @@
 #include "nsContentUtils.h"
 #include "nsILoadContext.h"
 #include "nsIFrame.h"
+#include "nsIScriptSecurityManager.h"
 
 using namespace mozilla::dom;
 
@@ -612,7 +613,6 @@ nsFormFillController::GetInPrivateContext(bool *aInPrivateContext)
   nsCOMPtr<nsIDOMElement> element = do_QueryInterface(mFocusedInput);
   element->GetOwnerDocument(getter_AddRefs(inputDoc));
   nsCOMPtr<nsIDocument> doc = do_QueryInterface(inputDoc);
-  nsCOMPtr<nsIDocShell> docShell = doc->GetDocShell();
   nsCOMPtr<nsILoadContext> loadContext = doc->GetLoadContext();
   *aInPrivateContext = loadContext && loadContext->UsePrivateBrowsing();
   return NS_OK;
@@ -622,6 +622,13 @@ NS_IMETHODIMP
 nsFormFillController::GetNoRollupOnCaretMove(bool *aNoRollupOnCaretMove)
 {
   *aNoRollupOnCaretMove = false;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+nsFormFillController::GetUserContextId(uint32_t* aUserContextId)
+{
+  *aUserContextId = nsIScriptSecurityManager::DEFAULT_USER_CONTEXT_ID;
   return NS_OK;
 }
 

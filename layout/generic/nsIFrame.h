@@ -285,9 +285,10 @@ typedef uint32_t nsReflowStatus;
 #define NS_INLINE_IS_BREAK_BEFORE(_status) \
   (NS_INLINE_BREAK == ((_status) & (NS_INLINE_BREAK|NS_INLINE_BREAK_AFTER)))
 
-#define NS_INLINE_GET_BREAK_TYPE(_status) (((_status) >> 12) & 0xF)
+#define NS_INLINE_GET_BREAK_TYPE(_status) \
+  (static_cast<StyleClear>(((_status) >> 12) & 0xF))
 
-#define NS_INLINE_MAKE_BREAK_TYPE(_type)  ((_type) << 12)
+#define NS_INLINE_MAKE_BREAK_TYPE(_type)  (static_cast<int>(_type) << 12)
 
 // Construct a line-break-before status. Note that there is no
 // completion status for a line-break before because we *know* that
@@ -295,7 +296,7 @@ typedef uint32_t nsReflowStatus;
 // status doesn't matter.
 #define NS_INLINE_LINE_BREAK_BEFORE()                                   \
   (NS_INLINE_BREAK | NS_INLINE_BREAK_BEFORE |                           \
-   NS_INLINE_MAKE_BREAK_TYPE(NS_STYLE_CLEAR_LINE))
+   NS_INLINE_MAKE_BREAK_TYPE(StyleClear::Line))
 
 // Take a completion status and add to it the desire to have a
 // line-break after. For this macro we do need the completion status
@@ -303,7 +304,7 @@ typedef uint32_t nsReflowStatus;
 // continue the frame or not.
 #define NS_INLINE_LINE_BREAK_AFTER(_completionStatus)                   \
   ((_completionStatus) | NS_INLINE_BREAK | NS_INLINE_BREAK_AFTER |      \
-   NS_INLINE_MAKE_BREAK_TYPE(NS_STYLE_CLEAR_LINE))
+   NS_INLINE_MAKE_BREAK_TYPE(StyleClear::Line))
 
 // A frame is "truncated" if the part of the frame before the first
 // possible break point was unable to fit in the available vertical
@@ -1828,10 +1829,17 @@ public:
   };
 
   struct InlinePrefISizeData : public InlineIntrinsicISizeData {
+    InlinePrefISizeData()
+      : mLineIsEmpty(true)
+    {}
+
     void ForceBreak();
 
     // The default implementation for nsIFrame::AddInlinePrefISize.
     void DefaultAddInlinePrefISize(nscoord aISize);
+
+    // True if the current line contains nothing other than placeholders.
+    bool mLineIsEmpty;
   };
 
   /**
@@ -2878,20 +2886,18 @@ public:
   virtual bool SupportsVisibilityHidden() { return true; }
 
   /**
-   * Returns true if the frame has a valid clip rect set via the 'clip'
-   * property, and the 'clip' property applies to this frame. The 'clip'
-   * property applies to HTML frames if they are absolutely positioned. The
-   * 'clip' property applies to SVG frames regardless of the value of the
-   * 'position' property.
+   * Returns the clip rect set via the 'clip' property, if the 'clip' property
+   * applies to this frame; otherwise returns Nothing(). The 'clip' property
+   * applies to HTML frames if they are absolutely positioned. The 'clip'
+   * property applies to SVG frames regardless of the value of the 'position'
+   * property.
    *
-   * If this method returns true, then we also set aRect to the computed clip
-   * rect, with coordinates relative to this frame's origin. aRect must not be
-   * null!
+   * The coordinates of the returned rectangle are relative to this frame's
+   * origin.
    */
-  bool GetClipPropClipRect(const nsStyleDisplay* aDisp,
-                           const nsStyleEffects* aEffects,
-                           nsRect* aRect,
-                           const nsSize& aSize) const;
+  Maybe<nsRect> GetClipPropClipRect(const nsStyleDisplay* aDisp,
+                                    const nsStyleEffects* aEffects,
+                                    const nsSize& aSize) const;
 
   /**
    * Check if this frame is focusable and in the current tab order.
@@ -3174,7 +3180,7 @@ public:
   inline bool IsBlockInside() const;
   inline bool IsBlockOutside() const;
   inline bool IsInlineOutside() const;
-  inline uint8_t GetDisplay() const;
+  inline mozilla::StyleDisplay GetDisplay() const;
   inline bool IsFloating() const;
   inline bool IsAbsPosContainingBlock() const;
   inline bool IsFixedPosContainingBlock() const;
@@ -3275,6 +3281,17 @@ public:
    * Returns true if the frame is scrolled out of view.
    */
   bool IsScrolledOutOfView();
+
+  /**
+   * If this returns true, the frame it's called on should get the
+   * NS_FRAME_HAS_DIRTY_CHILDREN bit set on it by the caller; either directly
+   * if it's already in reflow, or via calling FrameNeedsReflow() to schedule a
+   * reflow.
+   */
+  virtual bool RenumberFrameAndDescendants(int32_t* aOrdinal,
+                                           int32_t aDepth,
+                                           int32_t aIncrement,
+                                           bool aForCounting) { return false; }
 
 protected:
   // Members

@@ -81,6 +81,7 @@
 #include "vm/SelfHosting.h"
 #include "vm/Shape.h"
 #include "vm/StopIterationObject.h"
+#include "vm/String.h"
 #include "vm/StringBuffer.h"
 #include "vm/Symbol.h"
 #include "vm/TypedArrayCommon.h"
@@ -2941,6 +2942,15 @@ JS_FreezeObject(JSContext* cx, HandleObject obj)
     return FreezeObject(cx, obj);
 }
 
+static bool
+DeepFreezeSlot(JSContext* cx, const Value& v)
+{
+    if (v.isPrimitive())
+        return true;
+    RootedObject obj(cx, &v.toObject());
+    return JS_DeepFreezeObject(cx, obj);
+}
+
 JS_PUBLIC_API(bool)
 JS_DeepFreezeObject(JSContext* cx, HandleObject obj)
 {
@@ -2960,12 +2970,13 @@ JS_DeepFreezeObject(JSContext* cx, HandleObject obj)
 
     /* Walk slots in obj and if any value is a non-null object, seal it. */
     if (obj->isNative()) {
-        for (uint32_t i = 0, n = obj->as<NativeObject>().slotSpan(); i < n; ++i) {
-            const Value& v = obj->as<NativeObject>().getSlot(i);
-            if (v.isPrimitive())
-                continue;
-            RootedObject obj(cx, &v.toObject());
-            if (!JS_DeepFreezeObject(cx, obj))
+        RootedNativeObject nobj(cx, &obj->as<NativeObject>());
+        for (uint32_t i = 0, n = nobj->slotSpan(); i < n; ++i) {
+            if (!DeepFreezeSlot(cx, nobj->getSlot(i)))
+                return false;
+        }
+        for (uint32_t i = 0, n = nobj->getDenseInitializedLength(); i < n; ++i) {
+            if (!DeepFreezeSlot(cx, nobj->getDenseElement(i)))
                 return false;
         }
     }
@@ -3128,17 +3139,31 @@ JS_DefineProperties(JSContext* cx, HandleObject obj, const JSPropertySpec* ps)
         if (!PropertySpecNameToId(cx, ps->name, &id))
             return false;
 
-        if (ps->isSelfHosted()) {
-            if (!DefineSelfHostedProperty(cx, obj, id,
-                                          ps->getter.selfHosted.funname,
-                                          ps->setter.selfHosted.funname,
-                                          ps->flags, 0))
-            {
-                return false;
+        if (ps->isAccessor()) {
+            if (ps->isSelfHosted()) {
+                if (!DefineSelfHostedProperty(cx, obj, id,
+                                              ps->accessors.getter.selfHosted.funname,
+                                              ps->accessors.setter.selfHosted.funname,
+                                              ps->flags, 0))
+                {
+                    return false;
+                }
+            } else {
+                if (!DefinePropertyById(cx, obj, id, JS::UndefinedHandleValue,
+                                        ps->accessors.getter.native, ps->accessors.setter.native,
+                                        ps->flags, 0))
+                {
+                    return false;
+                }
             }
         } else {
-            if (!DefinePropertyById(cx, obj, id, JS::UndefinedHandleValue,
-                                    ps->getter.native, ps->setter.native, ps->flags, 0))
+            RootedAtom atom(cx, Atomize(cx, ps->string.value, strlen(ps->string.value)));
+            if (!atom)
+                return false;
+
+            RootedValue v(cx, StringValue(atom));
+            if (!DefinePropertyById(cx, obj, id, v, NativeOpWrapper(nullptr),
+                                    NativeOpWrapper(nullptr), ps->flags & ~JSPROP_INTERNAL_USE_BIT, 0))
             {
                 return false;
             }
@@ -4725,26 +4750,9 @@ JS::CallOriginalPromiseResolve(JSContext* cx, JS::HandleValue resolutionValue)
     CHECK_REQUEST(cx);
     assertSameCompartment(cx, resolutionValue);
 
-    RootedObject promiseCtor(cx, GetPromiseConstructor(cx));
-    if (!promiseCtor)
-        return nullptr;
-
-    JSObject* obj;
-    {
-        FixedInvokeArgs<1> args(cx);
-
-        args[0].set(resolutionValue);
-
-        RootedValue thisvOrRval(cx, ObjectValue(*promiseCtor));
-        if (!CallSelfHostedFunction(cx, "Promise_static_resolve", thisvOrRval, args, &thisvOrRval))
-            return nullptr;
-
-        MOZ_ASSERT(thisvOrRval.isObject());
-        obj = &thisvOrRval.toObject();
-    }
-
-    MOZ_ASSERT(obj->is<PromiseObject>());
-    return obj;
+    RootedObject promise(cx, PromiseObject::unforgeableResolve(cx, resolutionValue));
+    MOZ_ASSERT_IF(promise, promise->is<PromiseObject>());
+    return promise;
 }
 
 JS_PUBLIC_API(JSObject*)
@@ -4754,26 +4762,9 @@ JS::CallOriginalPromiseReject(JSContext* cx, JS::HandleValue rejectionValue)
     CHECK_REQUEST(cx);
     assertSameCompartment(cx, rejectionValue);
 
-    RootedObject promiseCtor(cx, GetPromiseConstructor(cx));
-    if (!promiseCtor)
-        return nullptr;
-
-    JSObject* obj;
-    {
-        FixedInvokeArgs<1> args(cx);
-
-        args[0].set(rejectionValue);
-
-        RootedValue thisvOrRval(cx, ObjectValue(*promiseCtor));
-        if (!CallSelfHostedFunction(cx, "Promise_static_reject", thisvOrRval, args, &thisvOrRval))
-            return nullptr;
-
-        MOZ_ASSERT(thisvOrRval.isObject());
-        obj = &thisvOrRval.toObject();
-    }
-
-    MOZ_ASSERT(obj->is<PromiseObject>());
-    return obj;
+    RootedObject promise(cx, PromiseObject::unforgeableReject(cx, rejectionValue));
+    MOZ_ASSERT_IF(promise, promise->is<PromiseObject>());
+    return promise;
 }
 
 JS_PUBLIC_API(bool)
@@ -4960,6 +4951,22 @@ JS_NewStringCopyZ(JSContext* cx, const char* s)
     if (!s)
         return cx->runtime()->emptyString;
     return NewStringCopyZ<CanGC>(cx, s);
+}
+
+JS_PUBLIC_API(JSString*)
+JS_NewStringCopyUTF8Z(JSContext* cx, const JS::ConstUTF8CharsZ s)
+{
+    AssertHeapIsIdle(cx);
+    CHECK_REQUEST(cx);
+    return NewStringCopyUTF8Z<CanGC>(cx, s);
+}
+
+JS_PUBLIC_API(JSString*)
+JS_NewStringCopyUTF8N(JSContext* cx, const JS::UTF8Chars s)
+{
+    AssertHeapIsIdle(cx);
+    CHECK_REQUEST(cx);
+    return NewStringCopyUTF8N<CanGC>(cx, s);
 }
 
 JS_PUBLIC_API(bool)
@@ -6205,8 +6212,8 @@ JS_SetGlobalJitCompilerOption(JSContext* cx, JSJitCompilerOption opt, uint32_t v
       case JSJITCOMPILER_WASM_TEST_MODE:
         jit::JitOptions.wasmTestMode = !!value;
         break;
-      case JSJITCOMPILER_WASM_EXPLICIT_BOUNDS_CHECKS:
-        jit::JitOptions.wasmExplicitBoundsChecks = !!value;
+      case JSJITCOMPILER_ION_INTERRUPT_WITHOUT_SIGNAL:
+        jit::JitOptions.ionInterruptWithoutSignals = !!value;
         break;
       default:
         break;
@@ -6235,8 +6242,8 @@ JS_GetGlobalJitCompilerOption(JSContext* cx, JSJitCompilerOption opt)
         return rt->canUseOffthreadIonCompilation();
       case JSJITCOMPILER_WASM_TEST_MODE:
         return jit::JitOptions.wasmTestMode ? 1 : 0;
-      case JSJITCOMPILER_WASM_EXPLICIT_BOUNDS_CHECKS:
-        return jit::JitOptions.wasmExplicitBoundsChecks ? 1 : 0;
+      case JSJITCOMPILER_ION_INTERRUPT_WITHOUT_SIGNAL:
+        return jit::JitOptions.ionInterruptWithoutSignals ? 1 : 0;
       default:
         break;
     }

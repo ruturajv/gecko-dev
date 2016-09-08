@@ -163,7 +163,7 @@ RestyleManager::RestyleElement(Element*               aElement,
     nsStyleContext* newContext =
       FrameConstructor()->MaybeRecreateFramesForElement(aElement);
     if (newContext &&
-        newContext->StyleDisplay()->mDisplay == NS_STYLE_DISPLAY_CONTENTS) {
+        newContext->StyleDisplay()->mDisplay == StyleDisplay::Contents) {
       // Style change for a display:contents node that did not recreate frames.
       ComputeAndProcessStyleChange(newContext, aElement, aMinHint,
                                    aRestyleTracker, aRestyleHint,
@@ -299,6 +299,7 @@ RestyleManager::AttributeChanged(Element* aElement,
   // XXXbz how, exactly, would this attribute change cause us to be
   // destroyed from inside this function?
   nsCOMPtr<nsIPresShell> shell = PresContext()->GetPresShell();
+  mozilla::Unused << shell; // Unused within this function
 
   // Get the frame associated with the content which is the highest in the frame tree
   nsIFrame* primaryFrame = aElement->GetPrimaryFrame();
@@ -401,10 +402,15 @@ RestyleManager::RestyleForEmptyChange(Element* aContainer)
 }
 
 void
-RestyleManager::RestyleForAppend(Element* aContainer,
+RestyleManager::RestyleForAppend(nsIContent* aContainer,
                                  nsIContent* aFirstNewContent)
 {
-  NS_ASSERTION(aContainer, "must have container for append");
+  // The container cannot be a document, but might be a ShadowRoot.
+  if (!aContainer->IsElement()) {
+    return;
+  }
+  Element* container = aContainer->AsElement();
+
 #ifdef DEBUG
   {
     for (nsIContent* cur = aFirstNewContent; cur; cur = cur->GetNextSibling()) {
@@ -414,15 +420,15 @@ RestyleManager::RestyleForAppend(Element* aContainer,
   }
 #endif
   uint32_t selectorFlags =
-    aContainer->GetFlags() & (NODE_ALL_SELECTOR_FLAGS &
-                              ~NODE_HAS_SLOW_SELECTOR_LATER_SIBLINGS);
+    container->GetFlags() & (NODE_ALL_SELECTOR_FLAGS &
+                             ~NODE_HAS_SLOW_SELECTOR_LATER_SIBLINGS);
   if (selectorFlags == 0)
     return;
 
   if (selectorFlags & NODE_HAS_EMPTY_SELECTOR) {
     // see whether we need to restyle the container
     bool wasEmpty = true; // :empty or :-moz-only-whitespace
-    for (nsIContent* cur = aContainer->GetFirstChild();
+    for (nsIContent* cur = container->GetFirstChild();
          cur != aFirstNewContent;
          cur = cur->GetNextSibling()) {
       // We don't know whether we're testing :empty or :-moz-only-whitespace,
@@ -435,13 +441,13 @@ RestyleManager::RestyleForAppend(Element* aContainer,
       }
     }
     if (wasEmpty) {
-      RestyleForEmptyChange(aContainer);
+      RestyleForEmptyChange(container);
       return;
     }
   }
 
   if (selectorFlags & NODE_HAS_SLOW_SELECTOR) {
-    PostRestyleEvent(aContainer, eRestyle_Subtree, nsChangeHint(0));
+    PostRestyleEvent(container, eRestyle_Subtree, nsChangeHint(0));
     // Restyling the container is the most we can do here, so we're done.
     return;
   }
@@ -485,20 +491,26 @@ RestyleSiblingsStartingWith(RestyleManager* aRestyleManager,
 // The comments are written and variables are named in terms of it being
 // a ContentInserted notification.
 void
-RestyleManager::RestyleForInsertOrChange(Element* aContainer,
+RestyleManager::RestyleForInsertOrChange(nsINode* aContainer,
                                          nsIContent* aChild)
 {
+  // The container might be a document or a ShadowRoot.
+  if (!aContainer->IsElement()) {
+    return;
+  }
+  Element* container = aContainer->AsElement();
+
   NS_ASSERTION(!aChild->IsRootOfAnonymousSubtree(),
                "anonymous nodes should not be in child lists");
   uint32_t selectorFlags =
-    aContainer ? (aContainer->GetFlags() & NODE_ALL_SELECTOR_FLAGS) : 0;
+    container ? (container->GetFlags() & NODE_ALL_SELECTOR_FLAGS) : 0;
   if (selectorFlags == 0)
     return;
 
   if (selectorFlags & NODE_HAS_EMPTY_SELECTOR) {
     // see whether we need to restyle the container
     bool wasEmpty = true; // :empty or :-moz-only-whitespace
-    for (nsIContent* child = aContainer->GetFirstChild();
+    for (nsIContent* child = container->GetFirstChild();
          child;
          child = child->GetNextSibling()) {
       if (child == aChild)
@@ -513,13 +525,13 @@ RestyleManager::RestyleForInsertOrChange(Element* aContainer,
       }
     }
     if (wasEmpty) {
-      RestyleForEmptyChange(aContainer);
+      RestyleForEmptyChange(container);
       return;
     }
   }
 
   if (selectorFlags & NODE_HAS_SLOW_SELECTOR) {
-    PostRestyleEvent(aContainer, eRestyle_Subtree, nsChangeHint(0));
+    PostRestyleEvent(container, eRestyle_Subtree, nsChangeHint(0));
     // Restyling the container is the most we can do here, so we're done.
     return;
   }
@@ -532,7 +544,7 @@ RestyleManager::RestyleForInsertOrChange(Element* aContainer,
   if (selectorFlags & NODE_HAS_EDGE_CHILD_SELECTOR) {
     // restyle the previously-first element child if it is after this node
     bool passedChild = false;
-    for (nsIContent* content = aContainer->GetFirstChild();
+    for (nsIContent* content = container->GetFirstChild();
          content;
          content = content->GetNextSibling()) {
       if (content == aChild) {
@@ -549,7 +561,7 @@ RestyleManager::RestyleForInsertOrChange(Element* aContainer,
     }
     // restyle the previously-last element child if it is before this node
     passedChild = false;
-    for (nsIContent* content = aContainer->GetLastChild();
+    for (nsIContent* content = container->GetLastChild();
          content;
          content = content->GetPreviousSibling()) {
       if (content == aChild) {
@@ -568,10 +580,16 @@ RestyleManager::RestyleForInsertOrChange(Element* aContainer,
 }
 
 void
-RestyleManager::RestyleForRemove(Element* aContainer,
-                                 nsIContent* aOldChild,
-                                 nsIContent* aFollowingSibling)
+RestyleManager::ContentRemoved(nsINode* aContainer,
+                               nsIContent* aOldChild,
+                               nsIContent* aFollowingSibling)
 {
+  // The container might be a document or a ShadowRoot.
+  if (!aContainer->IsElement()) {
+    return;
+  }
+  Element* container = aContainer->AsElement();
+
   if (aOldChild->IsRootOfAnonymousSubtree()) {
     // This should be an assert, but this is called incorrectly in
     // HTMLEditor::DeleteRefToAnonymousNode and the assertions were clogging
@@ -580,14 +598,14 @@ RestyleManager::RestyleForRemove(Element* aContainer,
                "anonymous nodes should not be in child lists (bug 439258)");
   }
   uint32_t selectorFlags =
-    aContainer ? (aContainer->GetFlags() & NODE_ALL_SELECTOR_FLAGS) : 0;
+    container ? (container->GetFlags() & NODE_ALL_SELECTOR_FLAGS) : 0;
   if (selectorFlags == 0)
     return;
 
   if (selectorFlags & NODE_HAS_EMPTY_SELECTOR) {
     // see whether we need to restyle the container
     bool isEmpty = true; // :empty or :-moz-only-whitespace
-    for (nsIContent* child = aContainer->GetFirstChild();
+    for (nsIContent* child = container->GetFirstChild();
          child;
          child = child->GetNextSibling()) {
       // We don't know whether we're testing :empty or :-moz-only-whitespace,
@@ -600,13 +618,13 @@ RestyleManager::RestyleForRemove(Element* aContainer,
       }
     }
     if (isEmpty) {
-      RestyleForEmptyChange(aContainer);
+      RestyleForEmptyChange(container);
       return;
     }
   }
 
   if (selectorFlags & NODE_HAS_SLOW_SELECTOR) {
-    PostRestyleEvent(aContainer, eRestyle_Subtree, nsChangeHint(0));
+    PostRestyleEvent(container, eRestyle_Subtree, nsChangeHint(0));
     // Restyling the container is the most we can do here, so we're done.
     return;
   }
@@ -619,7 +637,7 @@ RestyleManager::RestyleForRemove(Element* aContainer,
   if (selectorFlags & NODE_HAS_EDGE_CHILD_SELECTOR) {
     // restyle the now-first element child if it was after aOldChild
     bool reachedFollowingSibling = false;
-    for (nsIContent* content = aContainer->GetFirstChild();
+    for (nsIContent* content = container->GetFirstChild();
          content;
          content = content->GetNextSibling()) {
       if (content == aFollowingSibling) {
@@ -636,7 +654,7 @@ RestyleManager::RestyleForRemove(Element* aContainer,
     }
     // restyle the now-last element child if it was before aOldChild
     reachedFollowingSibling = (aFollowingSibling == nullptr);
-    for (nsIContent* content = aContainer->GetLastChild();
+    for (nsIContent* content = container->GetLastChild();
          content;
          content = content->GetPreviousSibling()) {
       if (content->IsElement()) {
@@ -677,6 +695,7 @@ RestyleManager::RebuildAllStyleData(nsChangeHint aExtraHint,
 
   // Make sure that the viewmanager will outlive the presshell
   RefPtr<nsViewManager> vm = presShell->GetViewManager();
+  mozilla::Unused << vm; // Not used within this function
 
   // We may reconstruct frames below and hence process anything that is in the
   // tree. We don't want to get notified to process those items again after.
@@ -1768,10 +1787,10 @@ ElementRestyler::DoConditionallyRestyleUndisplayedDescendants(
   nsCSSFrameConstructor* fc = mPresContext->FrameConstructor();
   UndisplayedNode* nodes = fc->GetAllUndisplayedContentIn(aParent);
   ConditionallyRestyleUndisplayedNodes(nodes, aParent,
-                                       NS_STYLE_DISPLAY_NONE, aRestyleRoot);
+                                       StyleDisplay::None_, aRestyleRoot);
   nodes = fc->GetAllDisplayContentsIn(aParent);
   ConditionallyRestyleUndisplayedNodes(nodes, aParent,
-                                       NS_STYLE_DISPLAY_CONTENTS, aRestyleRoot);
+                                       StyleDisplay::Contents, aRestyleRoot);
 }
 
 // The structure of this method parallels RestyleUndisplayedNodes.
@@ -1780,11 +1799,11 @@ void
 ElementRestyler::ConditionallyRestyleUndisplayedNodes(
     UndisplayedNode* aUndisplayed,
     nsIContent* aUndisplayedParent,
-    const uint8_t aDisplay,
+    const StyleDisplay aDisplay,
     Element* aRestyleRoot)
 {
-  MOZ_ASSERT(aDisplay == NS_STYLE_DISPLAY_NONE ||
-             aDisplay == NS_STYLE_DISPLAY_CONTENTS);
+  MOZ_ASSERT(aDisplay == StyleDisplay::None_ ||
+             aDisplay == StyleDisplay::Contents);
   if (!aUndisplayed) {
     return;
   }
@@ -1806,9 +1825,9 @@ ElementRestyler::ConditionallyRestyleUndisplayedNodes(
     Element* element = undisplayed->mContent->AsElement();
 
     if (!ConditionallyRestyle(element, aRestyleRoot)) {
-      if (aDisplay == NS_STYLE_DISPLAY_NONE) {
+      if (aDisplay == StyleDisplay::None_) {
         ConditionallyRestyleContentDescendants(element, aRestyleRoot);
-      } else {  // NS_STYLE_DISPLAY_CONTENTS
+      } else {  // StyleDisplay::Contents
         DoConditionallyRestyleUndisplayedDescendants(element, aRestyleRoot);
       }
     }
@@ -3406,20 +3425,20 @@ ElementRestyler::DoRestyleUndisplayedDescendants(nsRestyleHint aChildRestyleHint
   nsCSSFrameConstructor* fc = mPresContext->FrameConstructor();
   UndisplayedNode* nodes = fc->GetAllUndisplayedContentIn(aParent);
   RestyleUndisplayedNodes(aChildRestyleHint, nodes, aParent,
-                          aParentContext, NS_STYLE_DISPLAY_NONE);
+                          aParentContext, StyleDisplay::None_);
   nodes = fc->GetAllDisplayContentsIn(aParent);
   RestyleUndisplayedNodes(aChildRestyleHint, nodes, aParent,
-                          aParentContext, NS_STYLE_DISPLAY_CONTENTS);
+                          aParentContext, StyleDisplay::Contents);
 }
 
 // The structure of this method parallels ConditionallyRestyleUndisplayedNodes.
 // If you update this method, you probably want to update that one too.
 void
-ElementRestyler::RestyleUndisplayedNodes(nsRestyleHint    aChildRestyleHint,
-                                         UndisplayedNode* aUndisplayed,
-                                         nsIContent*      aUndisplayedParent,
-                                         nsStyleContext*  aParentContext,
-                                         const uint8_t    aDisplay)
+ElementRestyler::RestyleUndisplayedNodes(nsRestyleHint      aChildRestyleHint,
+                                         UndisplayedNode*   aUndisplayed,
+                                         nsIContent*        aUndisplayedParent,
+                                         nsStyleContext*    aParentContext,
+                                         const StyleDisplay aDisplay)
 {
   nsIContent* undisplayedParent = aUndisplayedParent;
   UndisplayedNode* undisplayed = aUndisplayed;
@@ -3490,7 +3509,7 @@ ElementRestyler::RestyleUndisplayedNodes(nsRestyleHint    aChildRestyleHint,
       // update the undisplayed node with the new context
       undisplayed->mStyle = undisplayedContext;
 
-      if (aDisplay == NS_STYLE_DISPLAY_CONTENTS) {
+      if (aDisplay == StyleDisplay::Contents) {
         DoRestyleUndisplayedDescendants(aChildRestyleHint, element,
                                         undisplayed->mStyle);
       }
@@ -3797,7 +3816,7 @@ RestyleManager::ComputeAndProcessStyleChange(nsStyleContext*        aNewContext,
                                              const RestyleHintData& aRestyleHintData)
 {
   MOZ_ASSERT(mReframingStyleContexts, "should have rsc");
-  MOZ_ASSERT(aNewContext->StyleDisplay()->mDisplay == NS_STYLE_DISPLAY_CONTENTS);
+  MOZ_ASSERT(aNewContext->StyleDisplay()->mDisplay == StyleDisplay::Contents);
   nsIFrame* frame = GetNearestAncestorFrame(aElement);
   MOZ_ASSERT(frame, "display:contents node in map although it's a "
                     "display:none descendant?");

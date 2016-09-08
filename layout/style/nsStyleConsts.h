@@ -62,6 +62,41 @@ enum class StyleBasicShapeType : uint8_t {
   Inset,
 };
 
+// box-align
+enum class StyleBoxAlign : uint8_t {
+  Stretch,
+  Start,
+  Center,
+  Baseline,
+  End,
+};
+
+// box-decoration-break
+enum class StyleBoxDecorationBreak : uint8_t {
+  Slice,
+  Clone,
+};
+
+// box-direction
+enum class StyleBoxDirection : uint8_t {
+  Normal,
+  Reverse,
+};
+
+// box-orient
+enum class StyleBoxOrient : uint8_t {
+  Horizontal,
+  Vertical,
+};
+
+// box-pack
+enum class StyleBoxPack : uint8_t {
+  Start,
+  Center,
+  End,
+  Justify,
+};
+
 // box-sizing
 enum class StyleBoxSizing : uint8_t {
   Content,
@@ -71,6 +106,20 @@ enum class StyleBoxSizing : uint8_t {
 // box-shadow
 enum class StyleBoxShadowType : uint8_t {
   Inset,
+};
+
+// clear
+enum class StyleClear : uint8_t {
+  None_ = 0,
+  Left,
+  Right,
+  InlineStart,
+  InlineEnd,
+  Both,
+  // StyleClear::Line can be added to one of the other values in layout
+  // so it needs to use a bit value that none of the other values can have.
+  Line = 8,
+  Max = 13  // Max = (Both | Line)
 };
 
 // clip-path geometry box
@@ -167,31 +216,6 @@ enum class StyleUserSelect : uint8_t {
 #define NS_STYLE_WINDOW_DRAGGING_DEFAULT 0
 #define NS_STYLE_WINDOW_DRAGGING_DRAG    1
 #define NS_STYLE_WINDOW_DRAGGING_NO_DRAG 2
-
-// box-align
-#define NS_STYLE_BOX_ALIGN_STRETCH     0
-#define NS_STYLE_BOX_ALIGN_START       1
-#define NS_STYLE_BOX_ALIGN_CENTER      2
-#define NS_STYLE_BOX_ALIGN_BASELINE    3
-#define NS_STYLE_BOX_ALIGN_END         4
-
-// box-pack
-#define NS_STYLE_BOX_PACK_START        0
-#define NS_STYLE_BOX_PACK_CENTER       1
-#define NS_STYLE_BOX_PACK_END          2
-#define NS_STYLE_BOX_PACK_JUSTIFY      3
-
-// box-decoration-break
-#define NS_STYLE_BOX_DECORATION_BREAK_SLICE  0
-#define NS_STYLE_BOX_DECORATION_BREAK_CLONE  1
-
-// box-direction
-#define NS_STYLE_BOX_DIRECTION_NORMAL    0
-#define NS_STYLE_BOX_DIRECTION_REVERSE   1
-
-// box-orient
-#define NS_STYLE_BOX_ORIENT_HORIZONTAL 0
-#define NS_STYLE_BOX_ORIENT_VERTICAL   1
 
 // orient
 #define NS_STYLE_ORIENT_INLINE     0
@@ -393,18 +417,6 @@ enum class FillMode : uint32_t;
 #define NS_STYLE_BORDER_IMAGE_SLICE_NOFILL      0
 #define NS_STYLE_BORDER_IMAGE_SLICE_FILL        1
 
-// See nsStyleDisplay
-#define NS_STYLE_CLEAR_NONE                     0
-#define NS_STYLE_CLEAR_LEFT                     1
-#define NS_STYLE_CLEAR_RIGHT                    2
-#define NS_STYLE_CLEAR_INLINE_START             3
-#define NS_STYLE_CLEAR_INLINE_END               4
-#define NS_STYLE_CLEAR_BOTH                     5
-#define NS_STYLE_CLEAR_LINE                     8
-// @note NS_STYLE_CLEAR_LINE can be added to one of the other values in layout
-// so it needs to use a bit value that none of the other values can have.
-#define NS_STYLE_CLEAR_MAX (NS_STYLE_CLEAR_LINE | NS_STYLE_CLEAR_BOTH)
-
 // See nsStyleContent
 #define NS_STYLE_CONTENT_OPEN_QUOTE             0
 #define NS_STYLE_CONTENT_CLOSE_QUOTE            1
@@ -475,46 +487,52 @@ enum class FillMode : uint32_t;
            NS_STYLE_WRITING_MODE_SIDEWAYS_MASK)
 
 // See nsStyleDisplay
-#define NS_STYLE_DISPLAY_NONE                   0
-#define NS_STYLE_DISPLAY_BLOCK                  1
-#define NS_STYLE_DISPLAY_INLINE                 2
-#define NS_STYLE_DISPLAY_INLINE_BLOCK           3
-#define NS_STYLE_DISPLAY_LIST_ITEM              4
-#define NS_STYLE_DISPLAY_TABLE                  8
-#define NS_STYLE_DISPLAY_INLINE_TABLE           9
-#define NS_STYLE_DISPLAY_TABLE_ROW_GROUP        10
-#define NS_STYLE_DISPLAY_TABLE_COLUMN           11
-#define NS_STYLE_DISPLAY_TABLE_COLUMN_GROUP     12
-#define NS_STYLE_DISPLAY_TABLE_HEADER_GROUP     13
-#define NS_STYLE_DISPLAY_TABLE_FOOTER_GROUP     14
-#define NS_STYLE_DISPLAY_TABLE_ROW              15
-#define NS_STYLE_DISPLAY_TABLE_CELL             16
-#define NS_STYLE_DISPLAY_TABLE_CAPTION          17
-#define NS_STYLE_DISPLAY_BOX                    18
-#define NS_STYLE_DISPLAY_INLINE_BOX             19
+//
+// NOTE: Order is important! If you change it, make sure to take a look at
+// the FrameConstructorDataByDisplay stuff (both the XUL and non-XUL version),
+// and ensure it's still correct!
+enum class StyleDisplay : uint8_t {
+  None_ = 0,
+  Block,
+  Inline,
+  InlineBlock,
+  ListItem,
+  Table,
+  InlineTable,
+  TableRowGroup,
+  TableColumn,
+  TableColumnGroup,
+  TableHeaderGroup,
+  TableFooterGroup,
+  TableRow,
+  TableCell,
+  TableCaption,
+  Flex,
+  InlineFlex,
+  Grid,
+  InlineGrid,
+  Ruby,
+  RubyBase,
+  RubyBaseContainer,
+  RubyText,
+  RubyTextContainer,
+  Contents,
+  WebkitBox,
+  WebkitInlineBox,
+  Box,
+  InlineBox,
 #ifdef MOZ_XUL
-#define NS_STYLE_DISPLAY_XUL_GRID               20
-#define NS_STYLE_DISPLAY_INLINE_XUL_GRID        21
-#define NS_STYLE_DISPLAY_XUL_GRID_GROUP         22
-#define NS_STYLE_DISPLAY_XUL_GRID_LINE          23
-#define NS_STYLE_DISPLAY_STACK                  24
-#define NS_STYLE_DISPLAY_INLINE_STACK           25
-#define NS_STYLE_DISPLAY_DECK                   26
-#define NS_STYLE_DISPLAY_POPUP                  27
-#define NS_STYLE_DISPLAY_GROUPBOX               28
+  XulGrid,
+  InlineXulGrid,
+  XulGridGroup,
+  XulGridLine,
+  Stack,
+  InlineStack,
+  Deck,
+  Groupbox,
+  Popup,
 #endif
-#define NS_STYLE_DISPLAY_FLEX                   29
-#define NS_STYLE_DISPLAY_INLINE_FLEX            30
-#define NS_STYLE_DISPLAY_GRID                   31
-#define NS_STYLE_DISPLAY_INLINE_GRID            32
-#define NS_STYLE_DISPLAY_RUBY                   33
-#define NS_STYLE_DISPLAY_RUBY_BASE              34
-#define NS_STYLE_DISPLAY_RUBY_BASE_CONTAINER    35
-#define NS_STYLE_DISPLAY_RUBY_TEXT              36
-#define NS_STYLE_DISPLAY_RUBY_TEXT_CONTAINER    37
-#define NS_STYLE_DISPLAY_CONTENTS               38
-#define NS_STYLE_DISPLAY_WEBKIT_BOX             39
-#define NS_STYLE_DISPLAY_WEBKIT_INLINE_BOX      40
+};
 
 // See nsStyleDisplay
 // If these are re-ordered, nsComputedDOMStyle::DoGetContain() and

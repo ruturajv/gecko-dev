@@ -19,7 +19,7 @@ import org.mozilla.gecko.annotation.JNITarget;
 import org.mozilla.gecko.annotation.RobocopTarget;
 import org.mozilla.gecko.AppConstants.Versions;
 import org.mozilla.gecko.db.BrowserDB;
-import org.mozilla.gecko.favicons.Favicons;
+import org.mozilla.gecko.gfx.LayerView;
 import org.mozilla.gecko.mozglue.SafeIntent;
 import org.mozilla.gecko.notifications.WhatsNewReceiver;
 import org.mozilla.gecko.reader.ReaderModeUtils;
@@ -37,6 +37,7 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.os.Handler;
 import android.provider.Browser;
+import android.support.v4.content.ContextCompat;
 import android.util.Log;
 
 public class Tabs implements GeckoEventListener {
@@ -76,8 +77,10 @@ public class Tabs implements GeckoEventListener {
     private volatile boolean mInitialTabsAdded;
 
     private Context mAppContext;
+    private LayerView mLayerView;
     private ContentObserver mBookmarksContentObserver;
     private PersistTabsRunnable mPersistTabsRunnable;
+    private int mPrivateClearColor;
 
     private static class PersistTabsRunnable implements Runnable {
         private final BrowserDB db;
@@ -111,9 +114,9 @@ public class Tabs implements GeckoEventListener {
             "Content:StateChange",
             "Content:LoadError",
             "Content:PageShow",
-            "DOMContentLoaded",
             "DOMTitleChanged",
             "Link:Favicon",
+            "Link:Touchicon",
             "Link:Feed",
             "Link:OpenSearch",
             "DesktopMode:Changed",
@@ -122,9 +125,11 @@ public class Tabs implements GeckoEventListener {
             "Tab:StreamStop",
             "Tab:AudioPlayingChange");
 
+        mPrivateClearColor = Color.RED;
+
     }
 
-    public synchronized void attachToContext(Context context) {
+    public synchronized void attachToContext(Context context, LayerView layerView) {
         final Context appContext = context.getApplicationContext();
         if (mAppContext == appContext) {
             return;
@@ -136,6 +141,8 @@ public class Tabs implements GeckoEventListener {
         }
 
         mAppContext = appContext;
+        mLayerView = layerView;
+        mPrivateClearColor = ContextCompat.getColor(context, R.color.tabs_tray_grey_pressed);
         mAccountManager = AccountManager.get(appContext);
 
         mAccountListener = new OnAccountsUpdateListener() {
@@ -250,6 +257,10 @@ public class Tabs implements GeckoEventListener {
 
         mSelectedTab = tab;
         notifyListeners(tab, TabEvents.SELECTED);
+
+        if (mLayerView != null) {
+            mLayerView.setClearColor(getTabColor(tab));
+        }
 
         if (oldTab != null) {
             notifyListeners(oldTab, TabEvents.UNSELECTED);
@@ -518,27 +529,11 @@ public class Tabs implements GeckoEventListener {
                 tab.setLoadedFromCache(message.getBoolean("fromCache"));
                 tab.updateUserRequested(message.getString("userRequested"));
                 notifyListeners(tab, TabEvents.PAGE_SHOW);
-            } else if (event.equals("DOMContentLoaded")) {
-                tab.handleContentLoaded();
-                String backgroundColor = message.getString("bgColor");
-                if (backgroundColor != null) {
-                    tab.setBackgroundColor(backgroundColor);
-                } else {
-                    // Default to white if no color is given
-                    tab.setBackgroundColor(Color.WHITE);
-                }
-                tab.setErrorType(message.optString("errorType"));
-                tab.setMetadata(message.optJSONObject("metadata"));
-                notifyListeners(tab, Tabs.TabEvents.LOADED);
             } else if (event.equals("DOMTitleChanged")) {
                 tab.updateTitle(message.getString("title"));
             } else if (event.equals("Link:Favicon")) {
-                // Don't bother if the type isn't one we can decode.
-                if (!Favicons.canDecodeType(message.getString("mime"))) {
-                    return;
-                }
-
                 // Add the favicon to the set of available icons for this tab.
+
                 tab.addFavicon(message.getString("href"), message.getInt("size"), message.getString("mime"));
 
                 // Load the favicon. If the tab is still loading, we actually do the load once the
@@ -547,6 +542,8 @@ public class Tabs implements GeckoEventListener {
                 if (tab.getState() != Tab.STATE_LOADING) {
                     tab.loadFavicon();
                 }
+            } else if (event.equals("Link:Touchicon")) {
+                tab.addTouchicon(message.getString("href"), message.getInt("size"), message.getString("mime"));
             } else if (event.equals("Link:Feed")) {
                 tab.setHasFeeds(true);
                 notifyListeners(tab, TabEvents.LINK_FEED);
@@ -675,6 +672,10 @@ public class Tabs implements GeckoEventListener {
             // are also selected/unselected, so it would be redundant to also listen
             // for ADDED/CLOSED events.
             case SELECTED:
+                if (mLayerView != null) {
+                    mLayerView.setSurfaceBackgroundColor(getTabColor(tab));
+                    mLayerView.setPaintState(LayerView.PAINT_START);
+                }
                 queuePersistAllTabs();
             case UNSELECTED:
                 tab.onChange();
@@ -760,16 +761,15 @@ public class Tabs implements GeckoEventListener {
             return null;
         }
 
-        if (AboutPages.isAboutReader(url)) {
-            url = ReaderModeUtils.getUrlFromAboutReader(url);
-        }
+        url = ReaderModeUtils.stripAboutReaderUrl(url);
+
         for (Tab tab : mOrder) {
             if (isPrivate != tab.isPrivate()) {
                 continue;
             }
             String tabUrl = tab.getURL();
             if (AboutPages.isAboutReader(tabUrl)) {
-                tabUrl = ReaderModeUtils.getUrlFromAboutReader(tabUrl);
+                tabUrl = ReaderModeUtils.stripAboutReaderUrl(tabUrl);
                 if (url.equals(tabUrl)) {
                     return tab;
                 }
@@ -986,5 +986,13 @@ public class Tabs implements GeckoEventListener {
     @JNITarget
     public static int getNextTabId() {
         return sTabId.getAndIncrement();
+    }
+
+    private int getTabColor(Tab tab) {
+        if (tab != null) {
+            return tab.isPrivate() ? mPrivateClearColor : Color.WHITE;
+        }
+
+        return Color.WHITE;
     }
 }

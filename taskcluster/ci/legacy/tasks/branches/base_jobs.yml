@@ -9,6 +9,8 @@ builds:
   android-api-15:
     platforms:
       - Android
+    extra-builds:  # see RIDEALONG_BUILDS in `mach taskgraph`
+      - android-api-15-l10n
     types:
       opt:
         task: tasks/builds/android_api_15.yml
@@ -272,8 +274,8 @@ builds:
 
 # Miscellaneous tasks.
 tasks:
-  eslint-gecko:
-    task: tasks/tests/eslint-gecko.yml
+  mozlint-eslint:
+    task: tasks/tests/mozlint-eslint.yml
     root: true
     when:
       file_patterns:
@@ -282,6 +284,7 @@ tasks:
         - '**/*.jsm'
         - '**/*.jsx'
         - '**/*.html'
+        - '**/*.xhtml'
         - '**/*.xml'
         # Run when eslint policies change.
         - '**/.eslintignore'
@@ -289,9 +292,10 @@ tasks:
         # The plugin implementing custom checks.
         - 'tools/lint/eslint/eslint-plugin-mozilla/**'
         # Other misc lint related files.
+        - 'python/mozlint/**'
         - 'tools/lint/**'
         - 'testing/docker/lint/**'
-  flake8-gecko:
+  mozlint-flake8:
     task: tasks/tests/mozlint-flake8.yml
     root: true
     when:

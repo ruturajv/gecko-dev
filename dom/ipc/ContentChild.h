@@ -116,6 +116,8 @@ public:
 
   bool IsAlive() const;
 
+  bool IsShuttingDown() const;
+
   static void AppendProcessId(nsACString& aName);
 
   ContentBridgeParent* GetLastBridge()
@@ -404,9 +406,6 @@ public:
   // auto remove when alertfinished is received.
   nsresult AddRemoteAlertObserver(const nsString& aData, nsIObserver* aObserver);
 
-  virtual bool RecvSystemMemoryAvailable(const uint64_t& aGetterId,
-                                         const uint32_t& aMemoryAvailable) override;
-
   virtual bool RecvPreferenceUpdate(const PrefSetting& aPref) override;
   virtual bool RecvVarUpdate(const GfxVarUpdate& pref) override;
 
@@ -440,6 +439,7 @@ public:
   virtual bool RecvFlushMemory(const nsString& reason) override;
 
   virtual bool RecvActivateA11y() override;
+  virtual bool RecvShutdownA11y() override;
 
   virtual bool RecvGarbageCollect() override;
   virtual bool RecvCycleCollect() override;
@@ -684,7 +684,9 @@ private:
   // Hashtable to keep track of the pending GetFilesHelper objects.
   // This GetFilesHelperChild objects are removed when RecvGetFilesResponse is
   // received.
- nsRefPtrHashtable<nsIDHashKey, GetFilesHelperChild> mGetFilesPendingRequests;
+  nsRefPtrHashtable<nsIDHashKey, GetFilesHelperChild> mGetFilesPendingRequests;
+
+  bool mShuttingDown;
 
   DISALLOW_EVIL_CONSTRUCTORS(ContentChild);
 };

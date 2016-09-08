@@ -242,7 +242,6 @@ MediaDecoderStateMachine::MediaDecoderStateMachine(MediaDecoder* aDecoder,
   mQuickBuffering(false),
   mMinimizePreroll(false),
   mDecodeThreadWaiting(false),
-  mDecodingFirstFrame(true),
   mSentLoadedMetadataEvent(false),
   mSentFirstFrameLoadedEvent(false),
   mSentPlaybackEndedEvent(false),
@@ -488,7 +487,7 @@ MediaDecoderStateMachine::NeedToDecodeVideo()
              IsVideoDecoding(), mMinimizePreroll, HaveEnoughDecodedVideo());
   return IsVideoDecoding() &&
          mState != DECODER_STATE_SEEKING &&
-         ((IsDecodingFirstFrame() && VideoQueue().GetSize() == 0) ||
+         ((!mSentFirstFrameLoadedEvent && VideoQueue().GetSize() == 0) ||
           (!mMinimizePreroll && !HaveEnoughDecodedVideo()));
 }
 
@@ -496,7 +495,8 @@ bool
 MediaDecoderStateMachine::NeedToSkipToNextKeyframe()
 {
   MOZ_ASSERT(OnTaskQueue());
-  if (IsDecodingFirstFrame()) {
+  // Don't skip when we're still decoding first frames.
+  if (!mSentFirstFrameLoadedEvent) {
     return false;
   }
   MOZ_ASSERT(mState == DECODER_STATE_DECODING ||
@@ -557,7 +557,7 @@ MediaDecoderStateMachine::NeedToDecodeAudio()
 
   return IsAudioDecoding() &&
          mState != DECODER_STATE_SEEKING &&
-         ((IsDecodingFirstFrame() && AudioQueue().GetSize() == 0) ||
+         ((!mSentFirstFrameLoadedEvent && AudioQueue().GetSize() == 0) ||
           (!mMinimizePreroll && !HaveEnoughDecodedAudio()));
 }
 
@@ -573,8 +573,7 @@ MediaDecoderStateMachine::OnAudioDecoded(MediaData* aAudioSample)
   // audio->GetEndTime() is not always mono-increasing in chained ogg.
   mDecodedAudioEndTime = std::max(audio->GetEndTime(), mDecodedAudioEndTime);
 
-  SAMPLE_LOG("OnAudioDecoded [%lld,%lld] disc=%d",
-             audio->mTime, audio->GetEndTime(), audio->mDiscontinuity);
+  SAMPLE_LOG("OnAudioDecoded [%lld,%lld]", audio->mTime, audio->GetEndTime());
 
   switch (mState) {
     case DECODER_STATE_BUFFERING: {
@@ -585,11 +584,14 @@ MediaDecoderStateMachine::OnAudioDecoded(MediaData* aAudioSample)
       return;
     }
 
+    case DECODER_STATE_DECODING_FIRSTFRAME: {
+      Push(audio, MediaData::AUDIO_DATA);
+      MaybeFinishDecodeFirstFrame();
+      return;
+    }
+
     case DECODER_STATE_DECODING: {
       Push(audio, MediaData::AUDIO_DATA);
-      if (MaybeFinishDecodeFirstFrame()) {
-        return;
-      }
       if (mIsAudioPrerolling && DonePrerollingAudio()) {
         StopPrerollingAudio();
       }
@@ -683,9 +685,6 @@ MediaDecoderStateMachine::OnNotDecoded(MediaData::Type aType,
     } else {
       StopPrerollingVideo();
     }
-    if (mState == DECODER_STATE_BUFFERING || mState == DECODER_STATE_DECODING) {
-        MaybeFinishDecodeFirstFrame();
-    }
     return;
   }
 
@@ -709,13 +708,15 @@ MediaDecoderStateMachine::OnNotDecoded(MediaData::Type aType,
     StopPrerollingVideo();
   }
   switch (mState) {
+    case DECODER_STATE_DECODING_FIRSTFRAME:
+      MaybeFinishDecodeFirstFrame();
+      return;
     case DECODER_STATE_BUFFERING:
     case DECODER_STATE_DECODING: {
-      if (MaybeFinishDecodeFirstFrame()) {
+      if (CheckIfDecodeComplete()) {
+        SetState(DECODER_STATE_COMPLETED);
         return;
       }
-      CheckIfDecodeComplete();
-
       // Schedule next cycle to see if we can leave buffering state.
       if (mState == DECODER_STATE_BUFFERING) {
         ScheduleStateMachine();
@@ -728,23 +729,24 @@ MediaDecoderStateMachine::OnNotDecoded(MediaData::Type aType,
   }
 }
 
-bool
+void
 MediaDecoderStateMachine::MaybeFinishDecodeFirstFrame()
 {
   MOZ_ASSERT(OnTaskQueue());
-  if (!IsDecodingFirstFrame() ||
-      (IsAudioDecoding() && AudioQueue().GetSize() == 0) ||
+  MOZ_ASSERT(!mSentFirstFrameLoadedEvent);
+
+  if ((IsAudioDecoding() && AudioQueue().GetSize() == 0) ||
       (IsVideoDecoding() && VideoQueue().GetSize() == 0)) {
-    return false;
-  }
-  FinishDecodeFirstFrame();
-  if (!mQueuedSeek.Exists()) {
-    return false;
+    return;
   }
 
-  // We can now complete the pending seek.
-  InitiateSeek(Move(mQueuedSeek));
-  return true;
+  FinishDecodeFirstFrame();
+
+  if (mQueuedSeek.Exists()) {
+    InitiateSeek(Move(mQueuedSeek));
+  } else {
+    SetState(DECODER_STATE_DECODING);
+  }
 }
 
 void
@@ -760,8 +762,7 @@ MediaDecoderStateMachine::OnVideoDecoded(MediaData* aVideoSample,
   // Handle abnormal or negative timestamps.
   mDecodedVideoEndTime = std::max(mDecodedVideoEndTime, video->GetEndTime());
 
-  SAMPLE_LOG("OnVideoDecoded [%lld,%lld] disc=%d",
-             video->mTime, video->GetEndTime(), video->mDiscontinuity);
+  SAMPLE_LOG("OnVideoDecoded [%lld,%lld]", video->mTime, video->GetEndTime());
 
   switch (mState) {
     case DECODER_STATE_BUFFERING: {
@@ -772,11 +773,14 @@ MediaDecoderStateMachine::OnVideoDecoded(MediaData* aVideoSample,
       return;
     }
 
+    case DECODER_STATE_DECODING_FIRSTFRAME: {
+      Push(video, MediaData::VIDEO_DATA);
+      MaybeFinishDecodeFirstFrame();
+      return;
+    }
+
     case DECODER_STATE_DECODING: {
       Push(video, MediaData::VIDEO_DATA);
-      if (MaybeFinishDecodeFirstFrame()) {
-        return;
-      }
       if (mIsVideoPrerolling && DonePrerollingVideo()) {
         StopPrerollingVideo();
       }
@@ -790,8 +794,7 @@ MediaDecoderStateMachine::OnVideoDecoded(MediaData* aVideoSample,
         return;
       }
       TimeDuration decodeTime = TimeStamp::Now() - aDecodeStartTime;
-      if (!IsDecodingFirstFrame() &&
-          THRESHOLD_FACTOR * DurationToUsecs(decodeTime) > mLowAudioThresholdUsecs &&
+      if (THRESHOLD_FACTOR * DurationToUsecs(decodeTime) > mLowAudioThresholdUsecs &&
           !HasLowUndecodedData())
       {
         mLowAudioThresholdUsecs =
@@ -824,27 +827,15 @@ MediaDecoderStateMachine::IsVideoDecoding()
   return HasVideo() && !VideoQueue().IsFinished();
 }
 
-void
+bool
 MediaDecoderStateMachine::CheckIfDecodeComplete()
 {
   MOZ_ASSERT(OnTaskQueue());
-
-  if (IsShutdown() ||
-      mState == DECODER_STATE_SEEKING ||
-      mState == DECODER_STATE_COMPLETED) {
-    // Don't change our state if we've already been shutdown, or we're seeking,
-    // since we don't want to abort the shutdown or seek processes.
-    return;
-  }
-  if (!IsVideoDecoding() && !IsAudioDecoding()) {
-    // We've finished decoding all active streams,
-    // so move to COMPLETED state.
-    SetState(DECODER_STATE_COMPLETED);
-    DispatchDecodeTasksIfNeeded();
-    ScheduleStateMachine();
-  }
-  DECODER_LOG("CheckIfDecodeComplete %scompleted",
-              ((mState == DECODER_STATE_COMPLETED) ? "" : "NOT "));
+  // DecodeComplete is possible only after decoding first frames.
+  MOZ_ASSERT(mSentFirstFrameLoadedEvent);
+  MOZ_ASSERT(mState == DECODER_STATE_DECODING ||
+             mState == DECODER_STATE_BUFFERING);
+  return !IsVideoDecoding() && !IsAudioDecoding();
 }
 
 bool MediaDecoderStateMachine::IsPlaying() const
@@ -881,7 +872,8 @@ nsresult MediaDecoderStateMachine::Init(MediaDecoder* aDecoder)
   nsresult rv = mReader->Init();
   NS_ENSURE_SUCCESS(rv, rv);
 
-  OwnerThread()->Dispatch(NewRunnableMethod(this, &MediaDecoderStateMachine::ReadMetadata));
+  OwnerThread()->Dispatch(
+    NewRunnableMethod(this, &MediaDecoderStateMachine::EnterState));
 
   return NS_OK;
 }
@@ -954,6 +946,8 @@ void MediaDecoderStateMachine::StopPlayback()
 void MediaDecoderStateMachine::MaybeStartPlayback()
 {
   MOZ_ASSERT(OnTaskQueue());
+  // Should try to start playback only after decoding first frames.
+  MOZ_ASSERT(mSentFirstFrameLoadedEvent);
   MOZ_ASSERT(mState == DECODER_STATE_DECODING ||
              mState == DECODER_STATE_COMPLETED);
 
@@ -989,9 +983,11 @@ void
 MediaDecoderStateMachine::MaybeStartBuffering()
 {
   MOZ_ASSERT(OnTaskQueue());
+  // Buffering makes senses only after decoding first frames.
+  MOZ_ASSERT(mSentFirstFrameLoadedEvent);
+  MOZ_ASSERT(mState == DECODER_STATE_DECODING);
 
-  if (mState == DECODER_STATE_DECODING &&
-      mPlayState == MediaDecoder::PLAY_STATE_PLAYING &&
+  if (mPlayState == MediaDecoder::PLAY_STATE_PLAYING &&
       mResource->IsExpectingMoreData()) {
     bool shouldBuffer;
     if (mReader->UseBufferingHeuristics()) {
@@ -1003,11 +999,7 @@ MediaDecoderStateMachine::MaybeStartBuffering()
                      (OutOfDecodedVideo() && mReader->IsWaitingVideoData());
     }
     if (shouldBuffer) {
-      StartBuffering();
-      // Don't go straight back to the state machine loop since that might
-      // cause us to start decoding again and we could flip-flop between
-      // decoding and quick-buffering.
-      ScheduleStateMachineIn(USECS_PER_S);
+      SetState(DECODER_STATE_BUFFERING);
     }
   }
 }
@@ -1040,15 +1032,15 @@ void MediaDecoderStateMachine::UpdatePlaybackPosition(int64_t aTime)
 MediaDecoderStateMachine::ToStateStr(State aState)
 {
   switch (aState) {
-    case DECODER_STATE_DECODING_METADATA: return "DECODING_METADATA";
-    case DECODER_STATE_WAIT_FOR_CDM:      return "WAIT_FOR_CDM";
-    case DECODER_STATE_DORMANT:           return "DORMANT";
-    case DECODER_STATE_DECODING:          return "DECODING";
-    case DECODER_STATE_SEEKING:           return "SEEKING";
-    case DECODER_STATE_BUFFERING:         return "BUFFERING";
-    case DECODER_STATE_COMPLETED:         return "COMPLETED";
-    case DECODER_STATE_SHUTDOWN:          return "SHUTDOWN";
-    case DECODER_STATE_ERROR:             return "ERROR";
+    case DECODER_STATE_DECODING_METADATA:   return "DECODING_METADATA";
+    case DECODER_STATE_WAIT_FOR_CDM:        return "WAIT_FOR_CDM";
+    case DECODER_STATE_DORMANT:             return "DORMANT";
+    case DECODER_STATE_DECODING_FIRSTFRAME: return "DECODING_FIRSTFRAME";
+    case DECODER_STATE_DECODING:            return "DECODING";
+    case DECODER_STATE_SEEKING:             return "SEEKING";
+    case DECODER_STATE_BUFFERING:           return "BUFFERING";
+    case DECODER_STATE_COMPLETED:           return "COMPLETED";
+    case DECODER_STATE_SHUTDOWN:            return "SHUTDOWN";
     default: MOZ_ASSERT_UNREACHABLE("Invalid state.");
   }
   return "UNKNOWN";
@@ -1071,16 +1063,16 @@ MediaDecoderStateMachine::SetState(State aState)
 
   DECODER_LOG("MDSM state: %s -> %s", ToStateStr(), ToStateStr(aState));
 
-  ExitState(mState);
+  ExitState();
   mState = aState;
-  EnterState(mState);
+  EnterState();
 }
 
 void
-MediaDecoderStateMachine::ExitState(State aState)
+MediaDecoderStateMachine::ExitState()
 {
   MOZ_ASSERT(OnTaskQueue());
-  switch (aState) {
+  switch (mState) {
     case DECODER_STATE_COMPLETED:
       mSentPlaybackEndedEvent = false;
       break;
@@ -1090,11 +1082,33 @@ MediaDecoderStateMachine::ExitState(State aState)
 }
 
 void
-MediaDecoderStateMachine::EnterState(State aState)
+MediaDecoderStateMachine::EnterState()
 {
   MOZ_ASSERT(OnTaskQueue());
-  switch (aState) {
-    case DECODER_STATE_ERROR:
+  switch (mState) {
+    case DECODER_STATE_DECODING_METADATA:
+      ReadMetadata();
+      break;
+    case DECODER_STATE_DORMANT:
+      DiscardSeekTaskIfExist();
+      if (IsPlaying()) {
+        StopPlayback();
+      }
+      Reset();
+      mReader->ReleaseResources();
+      break;
+    case DECODER_STATE_DECODING_FIRSTFRAME:
+      DecodeFirstFrame();
+      break;
+    case DECODER_STATE_DECODING:
+      StartDecoding();
+      break;
+    case DECODER_STATE_BUFFERING:
+      StartBuffering();
+      break;
+    case DECODER_STATE_COMPLETED:
+      ScheduleStateMachine();
+      break;
     case DECODER_STATE_SHUTDOWN:
       mIsShutdown = true;
       break;
@@ -1198,31 +1212,11 @@ MediaDecoderStateMachine::SetDormant(bool aDormant)
     }
 
     SetState(DECODER_STATE_DORMANT);
-
-    // Discard the current seek task.
-    DiscardSeekTaskIfExist();
-
-    if (IsPlaying()) {
-      StopPlayback();
-    }
-
-    Reset();
-
-    // Note that we do not wait for the decode task queue to go idle before
-    // queuing the ReleaseResources task - instead, we disconnect promises,
-    // reset state, and put a ResetDecode in the decode task queue. Any tasks
-    // that run after ResetDecode are supposed to run with a clean slate. We
-    // rely on that in other places (i.e. seeking), so it seems reasonable to
-    // rely on it here as well.
-    mReader->ReleaseResources();
-
     return;
   }
 
   // Exit dormant state.
   SetState(DECODER_STATE_DECODING_METADATA);
-  mDecodingFirstFrame = true;
-  ReadMetadata();
 }
 
 RefPtr<ShutdownPromise>
@@ -1272,35 +1266,46 @@ MediaDecoderStateMachine::Shutdown()
     ->CompletionPromise();
 }
 
-void MediaDecoderStateMachine::StartDecoding()
+void
+MediaDecoderStateMachine::DecodeFirstFrame()
 {
   MOZ_ASSERT(OnTaskQueue());
-  if (mState == DECODER_STATE_DECODING && !mDecodingFirstFrame) {
+  MOZ_ASSERT(mState == DECODER_STATE_DECODING_FIRSTFRAME);
+
+  // Handle pending seek.
+  if (mQueuedSeek.Exists() &&
+      (mSentFirstFrameLoadedEvent || mReader->ForceZeroStartTime())) {
+    InitiateSeek(Move(mQueuedSeek));
     return;
   }
-  SetState(DECODER_STATE_DECODING);
 
-  if (mDecodingFirstFrame && mSentFirstFrameLoadedEvent) {
-    // We're resuming from dormant state, so we don't need to request
-    // the first samples in order to determine the media start time,
-    // we have the start time from last time we loaded.
-    // FinishDecodeFirstFrame will be launched upon completion of the seek when
-    // we have data ready to play.
-    MOZ_ASSERT(mQueuedSeek.Exists() && mSentFirstFrameLoadedEvent,
-               "Return from dormant must have queued seek");
+  // Transition to DECODING if we've decoded first frames.
+  if (mSentFirstFrameLoadedEvent) {
+    SetState(DECODER_STATE_DECODING);
+    return;
+  }
 
-    if (mQueuedSeek.Exists()) {
-      InitiateSeek(Move(mQueuedSeek));
-      return;
-    }
+  // Dispatch tasks to decode first frames.
+  DispatchDecodeTasksIfNeeded();
+}
+
+void
+MediaDecoderStateMachine::StartDecoding()
+{
+  MOZ_ASSERT(OnTaskQueue());
+  // Should transition to DECODING only after decoding first frames.
+  MOZ_ASSERT(mSentFirstFrameLoadedEvent);
+  MOZ_ASSERT(mState == DECODER_STATE_DECODING);
+  // Pending seek should've been handled by DECODING_FIRSTFRAME before
+  // transitioning to DECODING.
+  MOZ_ASSERT(!mQueuedSeek.Exists());
+
+  if (CheckIfDecodeComplete()) {
+    SetState(DECODER_STATE_COMPLETED);
+    return;
   }
 
   mDecodeStartTime = TimeStamp::Now();
-
-  CheckIfDecodeComplete();
-  if (mState == DECODER_STATE_COMPLETED) {
-    return;
-  }
 
   // Reset other state to pristine values before starting decode.
   mIsAudioPrerolling = !DonePrerollingAudio() && !mReader->IsWaitingAudioData();
@@ -1336,7 +1341,9 @@ void MediaDecoderStateMachine::PlayStateChanged()
   // all state transitions to the state machine task queue, but for now we just
   // make sure that none of the possible main-thread state transitions (Seek(),
   // SetDormant(), and Shutdown()) have not occurred.
-  if (mState != DECODER_STATE_DECODING && mState != DECODER_STATE_BUFFERING &&
+  if (mState != DECODER_STATE_DECODING &&
+      mState != DECODER_STATE_DECODING_FIRSTFRAME &&
+      mState != DECODER_STATE_BUFFERING &&
       mState != DECODER_STATE_COMPLETED)
   {
     DECODER_LOG("Unexpected state - Bailing out of PlayInternal()");
@@ -1347,7 +1354,7 @@ void MediaDecoderStateMachine::PlayStateChanged()
   // we are currently buffering. In other cases, we'll start playing anyway
   // when the state machine notices the decoder's state change to PLAYING.
   if (mState == DECODER_STATE_BUFFERING) {
-    StartDecoding();
+    SetState(DECODER_STATE_DECODING);
   }
 
   ScheduleStateMachine();
@@ -1528,11 +1535,14 @@ MediaDecoderStateMachine::Seek(SeekTarget aTarget)
     return MediaDecoder::SeekPromise::CreateAndReject(/* aIgnored = */ true, __func__);
   }
 
-  MOZ_ASSERT(mState > DECODER_STATE_DECODING_METADATA,
-               "We should have got duration already");
+  MOZ_ASSERT(mDuration.Ref().isSome(), "We should have got duration already");
 
-  if (mState < DECODER_STATE_DECODING ||
-      (IsDecodingFirstFrame() && !mReader->ForceZeroStartTime())) {
+  // Can't seek until the start time is known.
+  bool hasStartTime = mSentFirstFrameLoadedEvent || mReader->ForceZeroStartTime();
+  // Can't seek when state is WAIT_FOR_CDM or DORMANT.
+  bool stateAllowed = mState >= DECODER_STATE_DECODING_FIRSTFRAME;
+
+  if (!stateAllowed || !hasStartTime) {
     DECODER_LOG("Seek() Not Enough Data to continue at this stage, queuing seek");
     mQueuedSeek.RejectIfExists(__func__);
     mQueuedSeek.mTarget = aTarget;
@@ -1573,6 +1583,7 @@ MediaDecoderStateMachine::DispatchDecodeTasksIfNeeded()
   MOZ_ASSERT(OnTaskQueue());
 
   if (mState != DECODER_STATE_DECODING &&
+      mState != DECODER_STATE_DECODING_FIRSTFRAME &&
       mState != DECODER_STATE_BUFFERING &&
       mState != DECODER_STATE_SEEKING) {
     return;
@@ -1758,23 +1769,16 @@ MediaDecoderStateMachine::DiscardSeekTaskIfExist()
   }
 }
 
-nsresult
+void
 MediaDecoderStateMachine::DispatchAudioDecodeTaskIfNeeded()
 {
   MOZ_ASSERT(OnTaskQueue());
-
-  if (IsShutdown()) {
-    return NS_ERROR_FAILURE;
+  if (!IsShutdown() && NeedToDecodeAudio()) {
+    EnsureAudioDecodeTaskQueued();
   }
-
-  if (NeedToDecodeAudio()) {
-    return EnsureAudioDecodeTaskQueued();
-  }
-
-  return NS_OK;
 }
 
-nsresult
+void
 MediaDecoderStateMachine::EnsureAudioDecodeTaskQueued()
 {
   MOZ_ASSERT(OnTaskQueue());
@@ -1784,17 +1788,18 @@ MediaDecoderStateMachine::EnsureAudioDecodeTaskQueued()
               IsAudioDecoding(), AudioRequestStatus());
 
   if (mState != DECODER_STATE_DECODING &&
+      mState != DECODER_STATE_DECODING_FIRSTFRAME &&
       mState != DECODER_STATE_BUFFERING) {
-    return NS_OK;
+    return;
   }
 
-  if (!IsAudioDecoding() || mReader->IsRequestingAudioData() ||
+  if (!IsAudioDecoding() ||
+      mReader->IsRequestingAudioData() ||
       mReader->IsWaitingAudioData()) {
-    return NS_OK;
+    return;
   }
 
   RequestAudioData();
-  return NS_OK;
 }
 
 void
@@ -1809,23 +1814,16 @@ MediaDecoderStateMachine::RequestAudioData()
   mReader->RequestAudioData();
 }
 
-nsresult
+void
 MediaDecoderStateMachine::DispatchVideoDecodeTaskIfNeeded()
 {
   MOZ_ASSERT(OnTaskQueue());
-
-  if (IsShutdown()) {
-    return NS_ERROR_FAILURE;
+  if (!IsShutdown() && NeedToDecodeVideo()) {
+    EnsureVideoDecodeTaskQueued();
   }
-
-  if (NeedToDecodeVideo()) {
-    return EnsureVideoDecodeTaskQueued();
-  }
-
-  return NS_OK;
 }
 
-nsresult
+void
 MediaDecoderStateMachine::EnsureVideoDecodeTaskQueued()
 {
   MOZ_ASSERT(OnTaskQueue());
@@ -1835,17 +1833,18 @@ MediaDecoderStateMachine::EnsureVideoDecodeTaskQueued()
              IsVideoDecoding(), VideoRequestStatus());
 
   if (mState != DECODER_STATE_DECODING &&
+      mState != DECODER_STATE_DECODING_FIRSTFRAME &&
       mState != DECODER_STATE_BUFFERING) {
-    return NS_OK;
+    return;
   }
 
-  if (!IsVideoDecoding() || mReader->IsRequestingVideoData() ||
+  if (!IsVideoDecoding() ||
+      mReader->IsRequestingVideoData() ||
       mReader->IsWaitingVideoData()) {
-    return NS_OK;
+    return;
   }
 
   RequestVideoData();
-  return NS_OK;
 }
 
 void
@@ -1854,8 +1853,7 @@ MediaDecoderStateMachine::RequestVideoData()
   MOZ_ASSERT(OnTaskQueue());
   MOZ_ASSERT(mState != DECODER_STATE_SEEKING);
 
-  bool skipToNextKeyFrame = mSentFirstFrameLoadedEvent &&
-    NeedToSkipToNextKeyframe();
+  bool skipToNextKeyFrame = NeedToSkipToNextKeyframe();
 
   media::TimeUnit currentTime = media::TimeUnit::FromMicroseconds(GetMediaTime());
 
@@ -1926,8 +1924,8 @@ bool MediaDecoderStateMachine::HasLowUndecodedData()
 bool MediaDecoderStateMachine::HasLowUndecodedData(int64_t aUsecs)
 {
   MOZ_ASSERT(OnTaskQueue());
-  NS_ASSERTION(mState >= DECODER_STATE_DECODING && !IsDecodingFirstFrame(),
-               "Must have loaded first frame for mBuffered to be valid");
+  MOZ_ASSERT(mState >= DECODER_STATE_DECODING,
+             "Must have loaded first frame for mBuffered to be valid");
 
   // If we don't have a duration, mBuffered is probably not going to have
   // a useful buffered range. Return false here so that we don't get stuck in
@@ -1971,14 +1969,11 @@ MediaDecoderStateMachine::DecodeError()
     return;
   }
 
-  // Change state to error, which will cause the state machine to wait until
-  // the MediaDecoder shuts it down.
-  SetState(DECODER_STATE_ERROR);
-  ScheduleStateMachine();
-  DECODER_WARN("Decode error, changed state to ERROR");
+  DECODER_WARN("Decode error");
+  // Change state to SHUTDOWN so we have no more processing.
+  SetState(DECODER_STATE_SHUTDOWN);
 
-  // MediaDecoder::DecodeError notifies the owner, and then shuts down the state
-  // machine.
+  // Notify the decode error and MediaDecoder will shut down MDSM.
   mOnPlaybackEvent.Notify(MediaEventType::DecodeError);
 }
 
@@ -2046,9 +2041,7 @@ MediaDecoderStateMachine::OnMetadataRead(MetadataHolder* aMetadata)
     return;
   }
 
-  StartDecoding();
-
-  ScheduleStateMachine();
+  SetState(DECODER_STATE_DECODING_FIRSTFRAME);
 }
 
 void
@@ -2099,21 +2092,14 @@ MediaDecoderStateMachine::EnqueueFirstFrameLoadedEvent()
     []() { MOZ_CRASH("Should not reach"); }));
 }
 
-bool
-MediaDecoderStateMachine::IsDecodingFirstFrame()
-{
-  return mState == DECODER_STATE_DECODING && mDecodingFirstFrame;
-}
-
 void
 MediaDecoderStateMachine::FinishDecodeFirstFrame()
 {
   MOZ_ASSERT(OnTaskQueue());
+  MOZ_ASSERT(!mSentFirstFrameLoadedEvent);
   DECODER_LOG("FinishDecodeFirstFrame");
 
-  if (!mSentFirstFrameLoadedEvent) {
-    mMediaSink->Redraw(mInfo.mVideo);
-  }
+  mMediaSink->Redraw(mInfo.mVideo);
 
   // If we don't know the duration by this point, we assume infinity, per spec.
   if (mDuration.Ref().isNothing()) {
@@ -2131,9 +2117,8 @@ MediaDecoderStateMachine::FinishDecodeFirstFrame()
     // If we didn't have duration and/or start time before, we should now.
     EnqueueLoadedMetadataEvent();
   }
-  EnqueueFirstFrameLoadedEvent();
 
-  mDecodingFirstFrame = false;
+  EnqueueFirstFrameLoadedEvent();
 }
 
 void
@@ -2198,16 +2183,12 @@ MediaDecoderStateMachine::SeekCompleted()
   // SeekTask::Discard() will ask MediaDecoderReaderWrapper to discard media
   // data requests.
 
-  if (mDecodingFirstFrame) {
-    // We were resuming from dormant, or initiated a seek early.
-    // We can fire loadeddata now.
+  // Notify FirstFrameLoaded now if we haven't since we've decoded some data
+  // for readyState to transition to HAVE_CURRENT_DATA and fire 'loadeddata'.
+  if (!mSentFirstFrameLoadedEvent) {
+    // Only MSE can start seeking before finishing decoding first frames.
+    MOZ_ASSERT(mReader->ForceZeroStartTime());
     FinishDecodeFirstFrame();
-  }
-
-  if (nextState == DECODER_STATE_DECODING) {
-    StartDecoding();
-  } else {
-    SetState(nextState);
   }
 
   // Ensure timestamps are up to date.
@@ -2221,12 +2202,13 @@ MediaDecoderStateMachine::SeekCompleted()
   // if we need to buffer after the seek.
   mQuickBuffering = false;
 
-  ScheduleStateMachine();
-
   if (video) {
     mMediaSink->Redraw(mInfo.mVideo);
     mOnPlaybackEvent.Notify(MediaEventType::Invalidate);
   }
+
+  SetState(nextState);
+  MOZ_ASSERT(IsStateMachineScheduled());
 }
 
 RefPtr<ShutdownPromise>
@@ -2285,140 +2267,139 @@ MediaDecoderStateMachine::FinishShutdown()
   return OwnerThread()->BeginShutdown();
 }
 
-nsresult MediaDecoderStateMachine::RunStateMachine()
+void
+MediaDecoderStateMachine::RunStateMachine()
 {
   MOZ_ASSERT(OnTaskQueue());
 
   mDelayedScheduler.Reset(); // Must happen on state machine task queue.
   mDispatchedStateMachine = false;
 
-  MediaResource* resource = mResource;
-  NS_ENSURE_TRUE(resource, NS_ERROR_NULL_POINTER);
-
   switch (mState) {
-    case DECODER_STATE_ERROR:
-    case DECODER_STATE_SHUTDOWN:
-    case DECODER_STATE_DORMANT:
-    case DECODER_STATE_WAIT_FOR_CDM:
-    case DECODER_STATE_DECODING_METADATA:
-      return NS_OK;
+    case DECODER_STATE_DECODING:
+      StepDecoding();
+      return;
+    case DECODER_STATE_BUFFERING:
+      StepBuffering();
+      return;
+    case DECODER_STATE_COMPLETED:
+      StepCompleted();
+      return;
+    default:
+      return;
+  }
+}
 
-    case DECODER_STATE_DECODING: {
-      if (IsDecodingFirstFrame()) {
-        // We haven't completed decoding our first frames, we can't start
-        // playback yet.
-        return NS_OK;
-      }
-      if (mPlayState != MediaDecoder::PLAY_STATE_PLAYING && IsPlaying())
-      {
-        // We're playing, but the element/decoder is in paused state. Stop
-        // playing!
-        StopPlayback();
-      }
+void
+MediaDecoderStateMachine::StepDecoding()
+{
+  MOZ_ASSERT(OnTaskQueue());
 
-      // Start playback if necessary so that the clock can be properly queried.
-      MaybeStartPlayback();
-
-      UpdatePlaybackPositionPeriodically();
-      NS_ASSERTION(!IsPlaying() ||
-                   IsStateMachineScheduled(),
-                   "Must have timer scheduled");
-      MaybeStartBuffering();
-      return NS_OK;
-    }
-
-    case DECODER_STATE_BUFFERING: {
-      TimeStamp now = TimeStamp::Now();
-      NS_ASSERTION(!mBufferingStart.IsNull(), "Must know buffering start time.");
-
-      // With buffering heuristics we will remain in the buffering state if
-      // we've not decoded enough data to begin playback, or if we've not
-      // downloaded a reasonable amount of data inside our buffering time.
-      if (mReader->UseBufferingHeuristics()) {
-        TimeDuration elapsed = now - mBufferingStart;
-        bool isLiveStream = resource->IsLiveStream();
-        if ((isLiveStream || !CanPlayThrough()) &&
-              elapsed < TimeDuration::FromSeconds(mBufferingWait * mPlaybackRate) &&
-              (mQuickBuffering ? HasLowDecodedData(mQuickBufferingLowDataThresholdUsecs)
-                               : HasLowUndecodedData(mBufferingWait * USECS_PER_S)) &&
-              mResource->IsExpectingMoreData())
-        {
-          DECODER_LOG("Buffering: wait %ds, timeout in %.3lfs %s",
-                      mBufferingWait, mBufferingWait - elapsed.ToSeconds(),
-                      (mQuickBuffering ? "(quick exit)" : ""));
-          ScheduleStateMachineIn(USECS_PER_S);
-          return NS_OK;
-        }
-      } else if (OutOfDecodedAudio() || OutOfDecodedVideo()) {
-        MOZ_ASSERT(mReader->IsWaitForDataSupported(),
-                   "Don't yet have a strategy for non-heuristic + non-WaitForData");
-        DispatchDecodeTasksIfNeeded();
-        MOZ_ASSERT_IF(!mMinimizePreroll && OutOfDecodedAudio(), mReader->IsRequestingAudioData() || mReader->IsWaitingAudioData());
-        MOZ_ASSERT_IF(!mMinimizePreroll && OutOfDecodedVideo(), mReader->IsRequestingVideoData() || mReader->IsWaitingVideoData());
-        DECODER_LOG("In buffering mode, waiting to be notified: outOfAudio: %d, "
-                    "mAudioStatus: %s, outOfVideo: %d, mVideoStatus: %s",
-                    OutOfDecodedAudio(), AudioRequestStatus(),
-                    OutOfDecodedVideo(), VideoRequestStatus());
-        return NS_OK;
-      }
-
-      DECODER_LOG("Changed state from BUFFERING to DECODING");
-      DECODER_LOG("Buffered for %.3lfs", (now - mBufferingStart).ToSeconds());
-      StartDecoding();
-
-      NS_ASSERTION(IsStateMachineScheduled(), "Must have timer scheduled");
-      return NS_OK;
-    }
-
-    case DECODER_STATE_SEEKING: {
-      return NS_OK;
-    }
-
-    case DECODER_STATE_COMPLETED: {
-      if (mPlayState != MediaDecoder::PLAY_STATE_PLAYING && IsPlaying()) {
-        StopPlayback();
-      }
-      // Play the remaining media. We want to run AdvanceFrame() at least
-      // once to ensure the current playback position is advanced to the
-      // end of the media, and so that we update the readyState.
-      if ((HasVideo() && !mVideoCompleted) ||
-          (HasAudio() && !mAudioCompleted)) {
-        // Start playback if necessary to play the remaining media.
-        MaybeStartPlayback();
-        UpdatePlaybackPositionPeriodically();
-        NS_ASSERTION(!IsPlaying() ||
-                     IsStateMachineScheduled(),
-                     "Must have timer scheduled");
-        return NS_OK;
-      }
-
-      // StopPlayback in order to reset the IsPlaying() state so audio
-      // is restarted correctly.
-      StopPlayback();
-
-      if (mPlayState == MediaDecoder::PLAY_STATE_PLAYING &&
-          !mSentPlaybackEndedEvent)
-      {
-        int64_t clockTime = std::max(AudioEndTime(), VideoEndTime());
-        clockTime = std::max(int64_t(0), std::max(clockTime, Duration().ToMicroseconds()));
-        UpdatePlaybackPosition(clockTime);
-
-        // Ensure readyState is updated before firing the 'ended' event.
-        UpdateNextFrameStatus();
-
-        mOnPlaybackEvent.Notify(MediaEventType::PlaybackEnded);
-
-        mSentPlaybackEndedEvent = true;
-
-        // MediaSink::GetEndTime() must be called before stopping playback.
-        StopMediaSink();
-      }
-
-      return NS_OK;
-    }
+  if (mPlayState != MediaDecoder::PLAY_STATE_PLAYING && IsPlaying()) {
+    // We're playing, but the element/decoder is in paused state. Stop
+    // playing!
+    StopPlayback();
   }
 
-  return NS_OK;
+  // Start playback if necessary so that the clock can be properly queried.
+  MaybeStartPlayback();
+
+  UpdatePlaybackPositionPeriodically();
+
+  NS_ASSERTION(!IsPlaying() ||
+               IsStateMachineScheduled(),
+               "Must have timer scheduled");
+
+  MaybeStartBuffering();
+}
+
+void
+MediaDecoderStateMachine::StepBuffering()
+{
+  MOZ_ASSERT(OnTaskQueue());
+
+  TimeStamp now = TimeStamp::Now();
+  NS_ASSERTION(!mBufferingStart.IsNull(), "Must know buffering start time.");
+
+  // With buffering heuristics we will remain in the buffering state if
+  // we've not decoded enough data to begin playback, or if we've not
+  // downloaded a reasonable amount of data inside our buffering time.
+  if (mReader->UseBufferingHeuristics()) {
+    TimeDuration elapsed = now - mBufferingStart;
+    bool isLiveStream = mResource->IsLiveStream();
+    if ((isLiveStream || !CanPlayThrough()) &&
+        elapsed < TimeDuration::FromSeconds(mBufferingWait * mPlaybackRate) &&
+        (mQuickBuffering ? HasLowDecodedData(mQuickBufferingLowDataThresholdUsecs)
+                         : HasLowUndecodedData(mBufferingWait * USECS_PER_S)) &&
+        mResource->IsExpectingMoreData()) {
+      DECODER_LOG("Buffering: wait %ds, timeout in %.3lfs %s",
+                  mBufferingWait, mBufferingWait - elapsed.ToSeconds(),
+                  (mQuickBuffering ? "(quick exit)" : ""));
+      ScheduleStateMachineIn(USECS_PER_S);
+      return;
+    }
+  } else if (OutOfDecodedAudio() || OutOfDecodedVideo()) {
+    MOZ_ASSERT(mReader->IsWaitForDataSupported(),
+               "Don't yet have a strategy for non-heuristic + non-WaitForData");
+    DispatchDecodeTasksIfNeeded();
+    MOZ_ASSERT_IF(!mMinimizePreroll && OutOfDecodedAudio(), mReader->IsRequestingAudioData() || mReader->IsWaitingAudioData());
+    MOZ_ASSERT_IF(!mMinimizePreroll && OutOfDecodedVideo(), mReader->IsRequestingVideoData() || mReader->IsWaitingVideoData());
+    DECODER_LOG("In buffering mode, waiting to be notified: outOfAudio: %d, "
+                "mAudioStatus: %s, outOfVideo: %d, mVideoStatus: %s",
+                OutOfDecodedAudio(), AudioRequestStatus(),
+                OutOfDecodedVideo(), VideoRequestStatus());
+    return;
+  }
+
+  DECODER_LOG("Changed state from BUFFERING to DECODING");
+  DECODER_LOG("Buffered for %.3lfs", (now - mBufferingStart).ToSeconds());
+  SetState(DECODER_STATE_DECODING);
+  NS_ASSERTION(IsStateMachineScheduled(), "Must have timer scheduled");
+}
+
+void
+MediaDecoderStateMachine::StepCompleted()
+{
+  MOZ_ASSERT(OnTaskQueue());
+
+  if (mPlayState != MediaDecoder::PLAY_STATE_PLAYING && IsPlaying()) {
+    StopPlayback();
+  }
+
+  // Play the remaining media. We want to run AdvanceFrame() at least
+  // once to ensure the current playback position is advanced to the
+  // end of the media, and so that we update the readyState.
+  if ((HasVideo() && !mVideoCompleted) ||
+      (HasAudio() && !mAudioCompleted)) {
+    // Start playback if necessary to play the remaining media.
+    MaybeStartPlayback();
+    UpdatePlaybackPositionPeriodically();
+    NS_ASSERTION(!IsPlaying() ||
+                 IsStateMachineScheduled(),
+                 "Must have timer scheduled");
+    return;
+  }
+
+  // StopPlayback in order to reset the IsPlaying() state so audio
+  // is restarted correctly.
+  StopPlayback();
+
+  if (mPlayState == MediaDecoder::PLAY_STATE_PLAYING &&
+      !mSentPlaybackEndedEvent) {
+    int64_t clockTime = std::max(AudioEndTime(), VideoEndTime());
+    clockTime = std::max(int64_t(0), std::max(clockTime, Duration().ToMicroseconds()));
+    UpdatePlaybackPosition(clockTime);
+
+    // Ensure readyState is updated before firing the 'ended' event.
+    UpdateNextFrameStatus();
+
+    mOnPlaybackEvent.Notify(MediaEventType::PlaybackEnded);
+
+    mSentPlaybackEndedEvent = true;
+
+    // MediaSink::GetEndTime() must be called before stopping playback.
+    StopMediaSink();
+  }
 }
 
 void
@@ -2523,25 +2504,32 @@ void MediaDecoderStateMachine::UpdateNextFrameStatus()
 
   MediaDecoderOwner::NextFrameStatus status;
   const char* statusString;
-  if (mState <= DECODER_STATE_WAIT_FOR_CDM || IsDecodingFirstFrame()) {
-    status = MediaDecoderOwner::NEXT_FRAME_UNAVAILABLE;
-    statusString = "NEXT_FRAME_UNAVAILABLE";
-  } else if (IsBuffering()) {
-    status = MediaDecoderOwner::NEXT_FRAME_UNAVAILABLE_BUFFERING;
-    statusString = "NEXT_FRAME_UNAVAILABLE_BUFFERING";
-  } else if (IsSeeking()) {
-    status = MediaDecoderOwner::NEXT_FRAME_UNAVAILABLE_SEEKING;
-    statusString = "NEXT_FRAME_UNAVAILABLE_SEEKING";
-  } else if (HaveNextFrameData()) {
-    status = MediaDecoderOwner::NEXT_FRAME_AVAILABLE;
-    statusString = "NEXT_FRAME_AVAILABLE";
-  } else {
-    status = MediaDecoderOwner::NEXT_FRAME_UNAVAILABLE;
-    statusString = "NEXT_FRAME_UNAVAILABLE";
+
+  switch (mState.Ref()) {
+    case DECODER_STATE_BUFFERING:
+      status = MediaDecoderOwner::NEXT_FRAME_UNAVAILABLE_BUFFERING;
+      statusString = "NEXT_FRAME_UNAVAILABLE_BUFFERING";
+      break;
+    case DECODER_STATE_SEEKING:
+      status = MediaDecoderOwner::NEXT_FRAME_UNAVAILABLE_SEEKING;
+      statusString = "NEXT_FRAME_UNAVAILABLE_SEEKING";
+      break;
+    default:
+      bool b = HaveNextFrameData();
+      status = b ? MediaDecoderOwner::NEXT_FRAME_AVAILABLE :
+                   MediaDecoderOwner::NEXT_FRAME_UNAVAILABLE;
+      statusString = b ? "NEXT_FRAME_AVAILABLE" : "NEXT_FRAME_UNAVAILABLE";
+      break;
   }
 
   if (status != mNextFrameStatus) {
     DECODER_LOG("Changed mNextFrameStatus to %s", statusString);
+    if(status == MediaDecoderOwner::NEXT_FRAME_UNAVAILABLE_BUFFERING ||
+       status == MediaDecoderOwner::NEXT_FRAME_UNAVAILABLE) {
+      // Ensure currentTime is up to date prior updating mNextFrameStatus so that
+      // the MediaDecoderOwner fire events at correct currentTime.
+      UpdatePlaybackPositionPeriodically();
+    }
   }
 
   mNextFrameStatus = status;
@@ -2577,18 +2565,11 @@ MediaDecoderStateMachine::GetStatistics()
   return result;
 }
 
-void MediaDecoderStateMachine::StartBuffering()
+void
+MediaDecoderStateMachine::StartBuffering()
 {
   MOZ_ASSERT(OnTaskQueue());
-
-  if (mState != DECODER_STATE_DECODING) {
-    // We only move into BUFFERING state if we're actually decoding.
-    // If we're currently doing something else, we don't need to buffer,
-    // and more importantly, we shouldn't overwrite mState to interrupt
-    // the current operation, as that could leave us in an inconsistent
-    // state!
-    return;
-  }
+  MOZ_ASSERT(mState == DECODER_STATE_BUFFERING);
 
   if (IsPlaying()) {
     StopPlayback();
@@ -2603,13 +2584,17 @@ void MediaDecoderStateMachine::StartBuffering()
     decodeDuration < UsecsToDuration(QUICK_BUFFER_THRESHOLD_USECS);
   mBufferingStart = TimeStamp::Now();
 
-  SetState(DECODER_STATE_BUFFERING);
   DECODER_LOG("Changed state from DECODING to BUFFERING, decoded for %.3lfs",
               decodeDuration.ToSeconds());
   MediaStatistics stats = GetStatistics();
   DECODER_LOG("Playback rate: %.1lfKB/s%s download rate: %.1lfKB/s%s",
               stats.mPlaybackRate/1024, stats.mPlaybackRateReliable ? "" : " (unreliable)",
               stats.mDownloadRate/1024, stats.mDownloadRateReliable ? "" : " (unreliable)");
+
+  // Don't go straight back to the state machine loop since that might
+  // cause us to start decoding again and we could flip-flop between
+  // decoding and quick-buffering.
+  ScheduleStateMachineIn(USECS_PER_S);
 }
 
 void
@@ -2782,7 +2767,7 @@ MediaDecoderStateMachine::OnCDMProxyReady(RefPtr<CDMProxy> aProxy)
   mCDMProxy = aProxy;
   mReader->SetCDMProxy(aProxy);
   if (mState == DECODER_STATE_WAIT_FOR_CDM) {
-    StartDecoding();
+    SetState(DECODER_STATE_DECODING_FIRSTFRAME);
   }
 }
 
@@ -2855,15 +2840,17 @@ MediaDecoderStateMachine::DumpDebugInfo()
   // It is fine to capture a raw pointer here because MediaDecoder only call
   // this function before shutdown begins.
   nsCOMPtr<nsIRunnable> r = NS_NewRunnableFunction([this] () {
+    mMediaSink->DumpDebugInfo();
     DUMP_LOG(
-      "GetMediaTime=%lld GetClock=%lld "
-      "mState=%s mPlayState=%d mDecodingFirstFrame=%d IsPlaying=%d "
+      "GetMediaTime=%lld GetClock=%lld mMediaSink=%p "
+      "mState=%s mPlayState=%d mSentFirstFrameLoadedEvent=%d IsPlaying=%d "
       "mAudioStatus=%s mVideoStatus=%s mDecodedAudioEndTime=%lld mDecodedVideoEndTime=%lld "
-      "mIsAudioPrerolling=%d mIsVideoPrerolling=%d",
-      GetMediaTime(), mMediaSink->IsStarted() ? GetClock() : -1,
-      ToStateStr(), mPlayState.Ref(), mDecodingFirstFrame, IsPlaying(),
+      "mIsAudioPrerolling=%d mIsVideoPrerolling=%d "
+      "mAudioCompleted=%d mVideoCompleted=%d",
+      GetMediaTime(), mMediaSink->IsStarted() ? GetClock() : -1, mMediaSink.get(),
+      ToStateStr(), mPlayState.Ref(), mSentFirstFrameLoadedEvent, IsPlaying(),
       AudioRequestStatus(), VideoRequestStatus(), mDecodedAudioEndTime, mDecodedVideoEndTime,
-      mIsAudioPrerolling, mIsVideoPrerolling);
+      mIsAudioPrerolling, mIsVideoPrerolling, mAudioCompleted.Ref(), mVideoCompleted.Ref());
   });
 
   OwnerThread()->DispatchStateChange(r.forget());

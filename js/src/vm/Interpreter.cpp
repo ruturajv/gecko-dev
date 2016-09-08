@@ -984,7 +984,10 @@ PopEnvironment(JSContext* cx, EnvironmentIter& ei)
 {
     switch (ei.scope().kind()) {
       case ScopeKind::Lexical:
+      case ScopeKind::SimpleCatch:
       case ScopeKind::Catch:
+      case ScopeKind::NamedLambda:
+      case ScopeKind::StrictNamedLambda:
         if (MOZ_UNLIKELY(cx->compartment()->isDebuggee()))
             DebugEnvironments::onPopLexical(cx, ei);
         if (ei.scope().hasEnvironment())
@@ -1010,8 +1013,6 @@ PopEnvironment(JSContext* cx, EnvironmentIter& ei)
             ei.initialFrame().popOffEnvironmentChain<VarEnvironmentObject>();
         break;
       case ScopeKind::Eval:
-      case ScopeKind::NamedLambda:
-      case ScopeKind::StrictNamedLambda:
       case ScopeKind::Global:
       case ScopeKind::NonSyntactic:
       case ScopeKind::Module:
@@ -3896,6 +3897,12 @@ CASE(JSOP_RESUME)
         GeneratorObject::ResumeKind resumeKind = GeneratorObject::getResumeKind(REGS.pc);
         bool ok = GeneratorObject::resume(cx, activation, gen, val, resumeKind);
         SET_SCRIPT(REGS.fp()->script());
+
+        TraceLoggerThread* logger = TraceLoggerForMainThread(cx->runtime());
+        TraceLoggerEvent scriptEvent(logger, TraceLogger_Scripts, script);
+        TraceLogStartEvent(logger, scriptEvent);
+        TraceLogStartEvent(logger, TraceLogger_Interpreter);
+
         if (!ok)
             goto error;
     }
@@ -4389,15 +4396,9 @@ js::DefFunOperation(JSContext* cx, HandleScript script, HandleObject envChain,
             if (!DefineProperty(cx, parent, name, rval, nullptr, nullptr, attrs))
                 return false;
         } else {
-            if (shape->isAccessorDescriptor() || !shape->writable() || !shape->enumerable()) {
-                JSAutoByteString bytes;
-                if (AtomToPrintableString(cx, name, &bytes)) {
-                    JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_CANT_REDEFINE_PROP,
-                                         bytes.ptr());
-                }
-
-                return false;
-            }
+            MOZ_ASSERT(shape->isDataDescriptor());
+            MOZ_ASSERT(shape->writable());
+            MOZ_ASSERT(shape->enumerable());
         }
 
         // Careful: the presence of a shape, even one appearing to derive from
@@ -4428,10 +4429,9 @@ js::ThrowMsgOperation(JSContext* cx, const unsigned errorNum)
 bool
 js::GetAndClearException(JSContext* cx, MutableHandleValue res)
 {
-    bool status = cx->getPendingException(res);
-    cx->clearPendingException();
-    if (!status)
+    if (!cx->getPendingException(res))
         return false;
+    cx->clearPendingException();
 
     // Allow interrupting deeply nested exception handling.
     return CheckForInterrupt(cx);

@@ -264,6 +264,7 @@ struct ShellContext
     JS::PersistentRootedValue promiseRejectionTrackerCallback;
     JS::PersistentRooted<JobQueue> jobQueue;
     ExclusiveData<ShellAsyncTasks> asyncTasks;
+    bool drainingJobQueue;
 #endif // SPIDERMONKEY_PROMISE
 
     /*
@@ -428,6 +429,7 @@ ShellContext::ShellContext(JSContext* cx)
 #ifdef SPIDERMONKEY_PROMISE
     promiseRejectionTrackerCallback(cx, NullValue()),
     asyncTasks(cx),
+    drainingJobQueue(false),
 #endif // SPIDERMONKEY_PROMISE
     exitCode(0),
     quitting(false),
@@ -771,7 +773,7 @@ DrainJobQueue(JSContext* cx)
 {
 #ifdef SPIDERMONKEY_PROMISE
     ShellContext* sc = GetShellContext(cx);
-    if (sc->quitting)
+    if (sc->quitting || sc->drainingJobQueue)
         return true;
 
     // Wait for any outstanding async tasks to finish so that the
@@ -792,6 +794,12 @@ DrainJobQueue(JSContext* cx)
         asyncTasks->finished.clear();
     }
 
+    // It doesn't make sense for job queue draining to be reentrant. At the
+    // same time we don't want to assert against it, because that'd make
+    // drainJobQueue unsafe for fuzzers. We do want fuzzers to test this, so
+    // we simply ignore nested calls of drainJobQueue.
+    sc->drainingJobQueue = true;
+
     RootedObject job(cx);
     JS::HandleValueArray args(JS::HandleValueArray::empty());
     RootedValue rval(cx);
@@ -808,6 +816,7 @@ DrainJobQueue(JSContext* cx)
         sc->jobQueue[i].set(nullptr);
     }
     sc->jobQueue.clear();
+    sc->drainingJobQueue = false;
 #endif // SPIDERMONKEY_PROMISE
     return true;
 }
@@ -868,6 +877,30 @@ SetPromiseRejectionTrackerCallback(JSContext* cx, unsigned argc, Value* vp)
     args.rval().setUndefined();
     return true;
 }
+
+#ifdef ENABLE_INTL_API
+static bool
+AddIntlExtras(JSContext* cx, unsigned argc, Value* vp)
+{
+    CallArgs args = CallArgsFromVp(argc, vp);
+    if (!args.get(0).isObject()) {
+        JS_ReportError(cx, "addIntlExtras must be passed an object");
+        return false;
+    }
+    JS::RootedObject intl(cx, &args[0].toObject());
+
+    static const JSFunctionSpec funcs[] = {
+        JS_SELF_HOSTED_FN("getCalendarInfo", "Intl_getCalendarInfo", 1, 0),
+        JS_FS_END
+    };
+
+    if (!JS_DefineFunctions(cx, intl, funcs))
+        return false;
+
+    args.rval().setUndefined();
+    return true;
+}
+#endif // ENABLE_INTL_API
 
 static bool
 EvalAndPrint(JSContext* cx, const char* bytes, size_t length,
@@ -5791,6 +5824,16 @@ static const JSFunctionSpecWithHelp shell_functions[] = {
 "Sets the callback to be invoked whenever a Promise rejection is unhandled\n"
 "or a previously-unhandled rejection becomes handled."),
 
+#ifdef ENABLE_INTL_API
+    JS_FN_HELP("addIntlExtras", AddIntlExtras, 1, 0,
+"addIntlExtras(obj)",
+"Adds various not-yet-standardized Intl functions as properties on the\n"
+"provided object (this should generally be Intl itself).  The added\n"
+"functions and their behavior are experimental: don't depend upon them\n"
+"unless you're willing to update your code if these experimental APIs change\n"
+"underneath you."),
+#endif // ENABLE_INTL_API
+
     JS_FS_HELP_END
 };
 
@@ -6317,8 +6360,10 @@ static const JSJitInfo doFoo_methodinfo = {
 static const JSPropertySpec dom_props[] = {
     {"x",
      JSPROP_SHARED | JSPROP_ENUMERATE,
-     { { dom_genericGetter, &dom_x_getterinfo } },
-     { { dom_genericSetter, &dom_x_setterinfo } }
+     { {
+        { { dom_genericGetter, &dom_x_getterinfo } },
+        { { dom_genericSetter, &dom_x_setterinfo } }
+     } },
     },
     JS_PS_END
 };

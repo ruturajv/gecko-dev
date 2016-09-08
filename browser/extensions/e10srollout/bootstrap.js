@@ -13,10 +13,12 @@ Cu.import("resource://gre/modules/UpdateUtils.jsm");
  // The amount of people to be part of e10s
 const TEST_THRESHOLD = {
   "beta"    : 0.5,  // 50%
+  "release" : 1.0,  // 100%
 };
 
 const ADDON_ROLLOUT_POLICY = {
-  "beta"    : "2a", // Set 2 + any WebExtension
+  "beta"    : "49a", // 10 tested add-ons + any WebExtension
+  "release" : "49a", // 10 tested add-ons + any WebExtension
 };
 
 const PREF_COHORT_SAMPLE       = "e10s.rollout.cohortSample";

@@ -9,9 +9,8 @@
 
 #include "mozilla/Atomics.h"
 #include "mozilla/Maybe.h"
-#include "mozilla/Monitor.h"
-#include "mozilla/StateMirroring.h"
 #include "mozilla/TaskQueue.h"
+#include "mozilla/Monitor.h"
 
 #include "MediaDataDemuxer.h"
 #include "MediaDecoderReader.h"
@@ -170,7 +169,6 @@ private:
   void NotifyError(TrackType aTrack, MediaDataDecoderError aError = MediaDataDecoderError::FATAL_ERROR);
   void NotifyWaitingForData(TrackType aTrack);
   void NotifyEndOfStream(TrackType aTrack);
-  void NotifyDecodingRequested(TrackType aTrack);
 
   void ExtractCryptoInitData(nsTArray<uint8_t>& aInitData);
 
@@ -232,22 +230,18 @@ private:
   struct DecoderData {
     DecoderData(MediaFormatReader* aOwner,
                 MediaData::Type aType,
-                uint32_t aDecodeAhead,
                 uint32_t aNumOfMaxError)
       : mOwner(aOwner)
       , mType(aType)
       , mMonitor("DecoderData")
       , mDescription("shutdown")
-      , mDecodeAhead(aDecodeAhead)
       , mUpdateScheduled(false)
       , mDemuxEOS(false)
       , mWaitingForData(false)
       , mReceivedNewData(false)
-      , mDiscontinuity(true)
       , mDecoderInitialized(false)
-      , mDecodingRequested(false)
       , mOutputRequested(false)
-      , mInputExhausted(false)
+      , mDecodePending(false)
       , mNeedDraining(false)
       , mDraining(false)
       , mDrainComplete(false)
@@ -290,12 +284,10 @@ private:
     }
 
     // Only accessed from reader's task queue.
-    uint32_t mDecodeAhead;
     bool mUpdateScheduled;
     bool mDemuxEOS;
     bool mWaitingForData;
     bool mReceivedNewData;
-    bool mDiscontinuity;
 
     // Pending seek.
     MozPromiseRequestHolder<MediaTrackDemuxer::SeekPromise> mSeekRequest;
@@ -315,11 +307,14 @@ private:
     MozPromiseRequestHolder<MediaDataDecoder::InitPromise> mInitPromise;
     // False when decoder is created. True when decoder Init() promise is resolved.
     bool mDecoderInitialized;
-    // Set when decoding can proceed. It is reset when a decoding promise is
-    // rejected or prior a seek operation.
-    bool mDecodingRequested;
     bool mOutputRequested;
-    bool mInputExhausted;
+    // Set to true once the MediaDataDecoder has been fed a compressed sample.
+    // No more sample will be passed to the decoder while true.
+    // mDecodePending is reset when:
+    // 1- The decoder returns a sample
+    // 2- The decoder calls InputExhausted
+    // 3- The decoder is Flushed or Reset.
+    bool mDecodePending;
     bool mNeedDraining;
     bool mDraining;
     bool mDrainComplete;
@@ -379,9 +374,8 @@ private:
       if (mDecoder) {
         mDecoder->Flush();
       }
-      mDecodingRequested = false;
       mOutputRequested = false;
-      mInputExhausted = false;
+      mDecodePending = false;
       mOutput.Clear();
       mNumSamplesInput = 0;
       mNumSamplesOutput = 0;
@@ -399,12 +393,10 @@ private:
       MOZ_ASSERT(mOwner->OnTaskQueue());
       mDemuxEOS = false;
       mWaitingForData = false;
-      mDiscontinuity = true;
       mQueuedSamples.Clear();
-      mDecodingRequested = false;
       mOutputRequested = false;
-      mInputExhausted = false;
       mNeedDraining = false;
+      mDecodePending = false;
       mDraining = false;
       mDrainComplete = false;
       mTimeThreshold.reset();
@@ -445,9 +437,8 @@ private:
   public:
     DecoderDataWithPromise(MediaFormatReader* aOwner,
                            MediaData::Type aType,
-                           uint32_t aDecodeAhead,
                            uint32_t aNumOfMaxError)
-      : DecoderData(aOwner, aType, aDecodeAhead, aNumOfMaxError)
+      : DecoderData(aOwner, aType, aNumOfMaxError)
       , mHasPromise(false)
 
     {}
@@ -476,7 +467,6 @@ private:
     {
       MOZ_ASSERT(mOwner->OnTaskQueue());
       mPromise.Reject(aReason, aMethodName);
-      mDecodingRequested = false;
       mHasPromise = false;
     }
 
@@ -585,9 +575,6 @@ private:
   RefPtr<GMPCrashHelper> mCrashHelper;
 
   void SetBlankDecode(TrackType aTrack, bool aIsBlankDecode);
-
-  // The duration explicitly set by JS, mirrored from the main thread.
-  Mirror<Maybe<double>> mExplicitDuration;
 };
 
 } // namespace mozilla

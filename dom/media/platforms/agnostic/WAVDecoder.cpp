@@ -68,6 +68,8 @@ WaveDataDecoder::Input(MediaRawData* aSample)
 {
   if (!DoDecode(aSample)) {
     mCallback->Error(MediaDataDecoderError::DECODE_ERROR);
+  } else {
+    mCallback->InputExhausted();
   }
   return NS_OK;
 }
@@ -76,7 +78,7 @@ bool
 WaveDataDecoder::DoDecode(MediaRawData* aSample)
 {
   size_t aLength = aSample->Size();
-  ByteReader aReader = ByteReader(aSample->Data(), aLength);
+  ByteReader aReader(aSample->Data(), aLength);
   int64_t aOffset = aSample->mOffset;
   uint64_t aTstampUsecs = aSample->mTime;
 
@@ -115,8 +117,6 @@ WaveDataDecoder::DoDecode(MediaRawData* aSample)
       }
     }
   }
-
-  aReader.DiscardRemaining();
 
   int64_t duration = frames / mInfo.mRate;
 

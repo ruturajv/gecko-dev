@@ -13,7 +13,7 @@ import org.mozilla.gecko.GeckoProfile;
 import org.mozilla.gecko.annotation.RobocopTarget;
 import org.mozilla.gecko.db.BrowserContract.ExpirePriority;
 import org.mozilla.gecko.distribution.Distribution;
-import org.mozilla.gecko.favicons.decoders.LoadFaviconResult;
+import org.mozilla.gecko.icons.decoders.LoadFaviconResult;
 
 import android.content.ContentProviderOperation;
 import android.content.ContentResolver;
@@ -21,6 +21,7 @@ import android.content.Context;
 import android.database.ContentObserver;
 import android.database.Cursor;
 import android.graphics.drawable.BitmapDrawable;
+import android.support.v4.content.CursorLoader;
 
 /**
  * Interface for interactions with all databases. If you want an instance
@@ -79,6 +80,8 @@ public interface BrowserDB {
      */
     public abstract Cursor getTopSites(ContentResolver cr, int suggestedRangeLimit, int limit);
 
+    public abstract CursorLoader getActivityStreamTopSites(Context context, int limit);
+
     public abstract void updateVisitedHistory(ContentResolver cr, String uri);
 
     public abstract void updateHistoryTitle(ContentResolver cr, String uri, String title);
@@ -131,14 +134,12 @@ public interface BrowserDB {
      * @param faviconURL The URL of the favicon to fetch from the database.
      * @return The decoded Bitmap from the database, if any. null if none is stored.
      */
-    public abstract LoadFaviconResult getFaviconForUrl(ContentResolver cr, String faviconURL);
+    public abstract LoadFaviconResult getFaviconForUrl(Context context, ContentResolver cr, String faviconURL);
 
     /**
      * Try to find a usable favicon URL in the history or bookmarks table.
      */
     public abstract String getFaviconURLFromPageURL(ContentResolver cr, String uri);
-
-    public abstract void updateFaviconForUrl(ContentResolver cr, String pageUri, byte[] encodedFavicon, String faviconUri);
 
     public abstract byte[] getThumbnailForUrl(ContentResolver cr, String uri);
     public abstract void updateThumbnailForUrl(ContentResolver cr, String uri, BitmapDrawable thumbnail);
@@ -165,11 +166,6 @@ public interface BrowserDB {
             String title, String guid, long parent, long added, long modified,
             long position, String keyword, int type);
 
-    public abstract void updateFaviconInBatch(ContentResolver cr,
-            Collection<ContentProviderOperation> operations, String url,
-            String faviconUrl, String faviconGuid, byte[] data);
-
-
     public abstract void pinSite(ContentResolver cr, String url, String title, int position);
     public abstract void unpinSite(ContentResolver cr, int position);
 
@@ -179,4 +175,12 @@ public interface BrowserDB {
     public abstract boolean hasSuggestedImageUrl(String url);
     public abstract String getSuggestedImageUrlForUrl(String url);
     public abstract int getSuggestedBackgroundColorForUrl(String url);
+
+    /**
+     * Obtain a set of links for highlights from bookmarks and history.
+     *
+     * @param context The context to load the cursor.
+     * @param limit Maximum number of results to return.
+     */
+    CursorLoader getHighlights(Context context, int limit);
 }

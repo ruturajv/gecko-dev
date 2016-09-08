@@ -18,6 +18,7 @@ Cu.import("resource://gre/modules/Log.jsm");
 Cu.import("resource://gre/modules/TelemetryController.jsm");
 Cu.import("resource://gre/modules/FxAccounts.jsm");
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
+Cu.import("resource://gre/modules/osfile.jsm", this);
 
 let constants = {};
 Cu.import("resource://services-sync/constants.js", constants);
@@ -50,18 +51,13 @@ const PING_FORMAT_VERSION = 1;
 const ENGINES = new Set(["addons", "bookmarks", "clients", "forms", "history",
                          "passwords", "prefs", "tabs"]);
 
-// is it a wrapped auth error from browserid_identity?
-function isBrowerIdAuthError(error) {
-  // I can't think of what could throw on String conversion
-  // but we have absolutely no clue about the type, and
-  // there's probably some things out there that would
-  try {
-    if (String(error).startsWith("AuthenticationError")) {
-      return true;
-    }
-  } catch (e) {}
-  return false;
-}
+// A regex we can use to replace the profile dir in error messages. We use a
+// regexp so we can simply replace all case-insensitive occurences.
+// This escaping function is from:
+// https://developer.mozilla.org/en/docs/Web/JavaScript/Guide/Regular_Expressions
+const reProfileDir = new RegExp(
+        OS.Constants.Path.profileDir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+        "gi");
 
 function transformError(error, engineName) {
   if (Async.isShutdownException(error)) {
@@ -73,7 +69,9 @@ function transformError(error, engineName) {
       // This is hacky, but I can't imagine that it's not also accurate.
       return { name: "othererror", error };
     }
-
+    // There's a chance the profiledir is in the error string which is PII we
+    // want to avoid including in the ping.
+    error = error.replace(reProfileDir, "[profileDir]");
     return { name: "unexpectederror", error };
   }
 
@@ -99,7 +97,8 @@ function transformError(error, engineName) {
 
   return {
     name: "unexpectederror",
-    error: String(error),
+    // as above, remove the profile dir value.
+    error: String(error).replace(reProfileDir, "[profileDir]")
   }
 }
 
@@ -198,13 +197,11 @@ class TelemetryRecord {
     this.currentEngine = null;
   }
 
-  // toJSON returns the actual payload we will submit.
   toJSON() {
     let result = {
       when: this.when,
       uid: this.uid,
       took: this.took,
-      version: PING_FORMAT_VERSION,
       failureReason: this.failureReason,
       status: this.status,
     };
@@ -321,6 +318,30 @@ class SyncTelemetryImpl {
     this.allowedEngines = allowedEngines;
     this.current = null;
     this.setupObservers();
+
+    this.payloads = [];
+    this.discarded = 0;
+    this.maxPayloadCount = Svc.Prefs.get("telemetry.maxPayloadCount");
+    this.submissionInterval = Svc.Prefs.get("telemetry.submissionInterval") * 1000;
+    this.lastSubmissionTime = Telemetry.msSinceProcessStart();
+  }
+
+  getPingJSON(reason) {
+    return {
+      why: reason,
+      discarded: this.discarded || undefined,
+      version: PING_FORMAT_VERSION,
+      syncs: this.payloads.slice(),
+    };
+  }
+
+  finish(reason) {
+    // Note that we might be in the middle of a sync right now, and so we don't
+    // want to touch this.current.
+    let result = this.getPingJSON(reason);
+    this.payloads = [];
+    this.discarded = 0;
+    this.submit(result);
   }
 
   setupObservers() {
@@ -330,19 +351,26 @@ class SyncTelemetryImpl {
   }
 
   shutdown() {
+    this.finish("shutdown");
     for (let topic of TOPICS) {
       Observers.remove(topic, this, this);
     }
   }
 
   submit(record) {
-    TelemetryController.submitExternalPing("sync", record);
+    // We still call submit() with possibly illegal payloads so that tests can
+    // know that the ping was built. We don't end up submitting them, however.
+    if (record.syncs.length) {
+      TelemetryController.submitExternalPing("sync", record);
+    }
   }
+
 
   onSyncStarted() {
     if (this.current) {
       log.warn("Observed weave:service:sync:start, but we're already recording a sync!");
       // Just discard the old record, consistent with our handling of engines, above.
+      this.current = null;
     }
     this.current = new TelemetryRecord(this.allowedEngines);
   }
@@ -361,9 +389,16 @@ class SyncTelemetryImpl {
       return;
     }
     this.current.finished(error);
-    let current = this.current;
+    if (this.payloads.length < this.maxPayloadCount) {
+      this.payloads.push(this.current.toJSON());
+    } else {
+      ++this.discarded;
+    }
     this.current = null;
-    this.submit(current.toJSON());
+    if ((Telemetry.msSinceProcessStart() - this.lastSubmissionTime) > this.submissionInterval) {
+      this.finish("schedule");
+      this.lastSubmissionTime = Telemetry.msSinceProcessStart();
+    }
   }
 
   observe(subject, topic, data) {

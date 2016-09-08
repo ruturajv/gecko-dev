@@ -487,7 +487,7 @@ class MacroAssembler : public MacroAssemblerSpecific
     void call(JitCode* c) PER_SHARED_ARCH;
 
     inline void call(const wasm::CallSiteDesc& desc, const Register reg);
-    inline void call(const wasm::CallSiteDesc& desc, uint32_t callee);
+    inline void call(const wasm::CallSiteDesc& desc, uint32_t funcDefIndex);
 
     CodeOffset callWithPatch() PER_SHARED_ARCH;
     void patchCall(uint32_t callerOffset, uint32_t calleeOffset) PER_SHARED_ARCH;
@@ -1332,6 +1332,18 @@ class MacroAssembler : public MacroAssemblerSpecific
 
     // WasmTableCallIndexReg must contain the index of the indirect call.
     void wasmCallIndirect(const wasm::CallSiteDesc& desc, const wasm::CalleeDesc& callee);
+
+    // This function takes care of loading the pointer to the current instance
+    // as the implicit first argument. It preserves TLS and pinned registers.
+    // (TLS & pinned regs are non-volatile registers in the system ABI).
+    void wasmCallBuiltinInstanceMethod(const ABIArg& instanceArg,
+                                       wasm::SymbolicAddress builtin);
+
+  public:
+    // ========================================================================
+    // Clamping functions.
+
+    inline void clampIntToUint8(Register reg) PER_SHARED_ARCH;
 
     //}}} check_macroassembler_style
   public:

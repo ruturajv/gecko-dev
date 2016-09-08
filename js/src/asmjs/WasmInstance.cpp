@@ -133,7 +133,10 @@ Instance::callImport(JSContext* cx, uint32_t funcImportIndex, unsigned argc, con
             args[i].set(JS::CanonicalizedDoubleValue(*(double*)&argv[i]));
             break;
           case ValType::I64: {
-            MOZ_ASSERT(JitOptions.wasmTestMode, "no int64 in asm.js/wasm");
+            if (!JitOptions.wasmTestMode) {
+                JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_WASM_BAD_I64);
+                return false;
+            }
             RootedObject obj(cx, CreateI64Object(cx, *(int64_t*)&argv[i]));
             if (!obj)
                 return false;
@@ -159,6 +162,12 @@ Instance::callImport(JSContext* cx, uint32_t funcImportIndex, unsigned argc, con
     RootedValue thisv(cx, UndefinedValue());
     if (!Call(cx, fval, thisv, args, rval))
         return false;
+
+    // Throw an error if returning i64 and not in test mode.
+    if (!JitOptions.wasmTestMode && fi.sig().ret() == ExprType::I64) {
+        JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_WASM_BAD_I64);
+        return false;
+    }
 
     // Don't try to optimize if the function has at least one i64 arg or if
     // it returns an int64. GenerateJitExit relies on this, as does the
@@ -271,6 +280,54 @@ Instance::callImport_f64(Instance* instance, int32_t funcImportIndex, int32_t ar
     return ToNumber(cx, rval, (double*)argv);
 }
 
+/* static */ uint32_t
+Instance::growMemory_i32(Instance* instance, uint32_t delta)
+{
+    return instance->growMemory(delta);
+}
+
+/* static */ uint32_t
+Instance::currentMemory_i32(Instance* instance)
+{
+    return instance->currentMemory();
+}
+
+uint32_t
+Instance::growMemory(uint32_t delta)
+{
+    MOZ_RELEASE_ASSERT(memory_);
+
+    // Using uint64_t to avoid worrying about overflows in safety comp.
+    uint64_t curNumPages = currentMemory();
+    uint64_t newNumPages = curNumPages + (uint64_t) delta;
+
+    if (metadata().maxMemoryLength) {
+        ArrayBufferObject &buf = memory_->buffer().as<ArrayBufferObject>();
+        // Guaranteed by instantiateMemory
+        MOZ_RELEASE_ASSERT(buf.wasmMaxSize() && buf.wasmMaxSize() <= metadata().maxMemoryLength);
+
+        if (newNumPages * wasm::PageSize > buf.wasmMaxSize().value())
+            return (uint32_t) -1;
+
+        // Try to grow the memory
+        if (!buf.growForWasm(delta))
+            return (uint32_t) -1;
+    } else {
+        return -1; // TODO: implement grow_memory w/o max when we add realloc
+    }
+
+    return curNumPages;
+}
+
+uint32_t
+Instance::currentMemory()
+{
+    MOZ_RELEASE_ASSERT(memory_);
+    uint32_t curMemByteLen = memory_->buffer().wasmActualByteLength();
+    MOZ_ASSERT(curMemByteLen % wasm::PageSize == 0);
+    return curMemByteLen / wasm::PageSize;
+}
+
 Instance::Instance(JSContext* cx,
                    Handle<WasmInstanceObject*> object,
                    UniqueCode code,
@@ -297,16 +354,14 @@ Instance::Instance(JSContext* cx,
         HandleFunction f = funcImports[i];
         const FuncImport& fi = metadata().funcImports[i];
         FuncImportTls& import = funcImportTls(fi);
-        if (IsExportedFunction(f) && !isAsmJS() && !ExportedFunctionToInstance(f).isAsmJS()) {
-            Instance& calleeInstance = ExportedFunctionToInstance(f);
-            const Metadata& calleeMetadata = calleeInstance.metadata();
-            uint32_t funcIndex = ExportedFunctionToIndex(f);
-            const FuncExport& funcExport = calleeMetadata.lookupFuncExport(funcIndex);
-            const CodeRange& codeRange = calleeMetadata.codeRanges[funcExport.codeRangeIndex()];
+        if (!isAsmJS() && IsExportedWasmFunction(f)) {
+            WasmInstanceObject* calleeInstanceObj = ExportedFunctionToInstanceObject(f);
+            const CodeRange& codeRange = calleeInstanceObj->getExportedFunctionCodeRange(f);
+            Instance& calleeInstance = calleeInstanceObj->instance();
             import.tls = &calleeInstance.tlsData_;
             import.code = calleeInstance.codeSegment().base() + codeRange.funcNonProfilingEntry();
             import.baselineScript = nullptr;
-            import.obj = ExportedFunctionToInstanceObject(f);
+            import.obj = calleeInstanceObj;
         } else {
             import.tls = &tlsData_;
             import.code = codeBase() + fi.interpExitCodeOffset();
@@ -394,6 +449,28 @@ Instance::~Instance()
     }
 }
 
+size_t
+Instance::memoryMappedSize() const
+{
+    return memory_->buffer().wasmMappedSize();
+}
+
+bool
+Instance::memoryAccessInGuardRegion(uint8_t* addr, unsigned numBytes) const
+{
+    MOZ_ASSERT(numBytes > 0);
+
+    if (!metadata().usesMemory())
+        return false;
+
+    uint8_t* base = memoryBase().unwrap(/* comparison */);
+    if (addr < base)
+        return false;
+
+    size_t lastByteOffset = addr - base + (numBytes - 1);
+    return lastByteOffset >= memoryLength() && lastByteOffset < memoryMappedSize();
+}
+
 void
 Instance::tracePrivate(JSTracer* trc)
 {
@@ -435,7 +512,7 @@ Instance::memoryBase() const
 size_t
 Instance::memoryLength() const
 {
-    return memory_->buffer().byteLength();
+    return memory_->buffer().wasmActualByteLength();
 }
 
 template<typename T>
@@ -511,12 +588,12 @@ Instance::object() const
 }
 
 bool
-Instance::callExport(JSContext* cx, uint32_t funcIndex, CallArgs args)
+Instance::callExport(JSContext* cx, uint32_t funcDefIndex, CallArgs args)
 {
     if (!cx->compartment()->wasm.ensureProfilingState(cx))
         return false;
 
-    const FuncExport& func = metadata().lookupFuncExport(funcIndex);
+    const FuncDefExport& func = metadata().lookupFuncDefExport(funcDefIndex);
 
     // The calling convention for an external call into wasm is to pass an
     // array of 16-byte values where each value contains either a coerced int32
@@ -539,7 +616,10 @@ Instance::callExport(JSContext* cx, uint32_t funcIndex, CallArgs args)
                 return false;
             break;
           case ValType::I64:
-            MOZ_ASSERT(JitOptions.wasmTestMode, "no int64 in asm.js/wasm");
+            if (!JitOptions.wasmTestMode) {
+                JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_WASM_BAD_I64);
+                return false;
+            }
             if (!ReadI64Object(cx, v, (int64_t*)&exportArgs[i]))
                 return false;
             break;
@@ -655,7 +735,10 @@ Instance::callExport(JSContext* cx, uint32_t funcIndex, CallArgs args)
         args.rval().set(Int32Value(*(int32_t*)retAddr));
         break;
       case ExprType::I64:
-        MOZ_ASSERT(JitOptions.wasmTestMode, "no int64 in asm.js/wasm");
+        if (!JitOptions.wasmTestMode) {
+            JS_ReportErrorNumber(cx, GetErrorMessage, nullptr, JSMSG_WASM_BAD_I64);
+            return false;
+        }
         retObj = CreateI64Object(cx, *(int64_t*)retAddr);
         if (!retObj)
             return false;

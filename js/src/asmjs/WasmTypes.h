@@ -84,6 +84,7 @@ using mozilla::Unused;
 typedef Vector<uint32_t, 0, SystemAllocPolicy> Uint32Vector;
 
 class Code;
+class CodeRange;
 class Memory;
 class Module;
 class Instance;
@@ -775,17 +776,17 @@ WASM_DECLARE_POD_VECTOR(CallSite, CallSiteVector)
 
 class CallSiteAndTarget : public CallSite
 {
-    uint32_t targetIndex_;
+    uint32_t funcDefIndex_;
 
   public:
-    CallSiteAndTarget(CallSite cs, uint32_t targetIndex)
-      : CallSite(cs), targetIndex_(targetIndex)
+    CallSiteAndTarget(CallSite cs, uint32_t funcDefIndex)
+      : CallSite(cs), funcDefIndex_(funcDefIndex)
     { }
 
-    static const uint32_t NOT_INTERNAL = UINT32_MAX;
+    static const uint32_t NOT_DEFINITION = UINT32_MAX;
 
-    bool isInternal() const { return targetIndex_ != NOT_INTERNAL; }
-    uint32_t targetIndex() const { MOZ_ASSERT(isInternal()); return targetIndex_; }
+    bool isDefinition() const { return funcDefIndex_ != NOT_DEFINITION; }
+    uint32_t funcDefIndex() const { MOZ_ASSERT(isDefinition()); return funcDefIndex_; }
 };
 
 typedef Vector<CallSiteAndTarget, 0, SystemAllocPolicy> CallSiteAndTargetVector;
@@ -810,9 +811,9 @@ class BoundsCheck
 
 // Summarizes a heap access made by wasm code that needs to be patched later
 // and/or looked up by the wasm signal handlers. Different architectures need
-// to know different things (x64: offset and length, ARM: where to patch in
-// heap length, x86: where to patch in heap length and base).
-
+// to know different things (x64: intruction offset, wrapping and failure
+// behavior, ARM: nothing, x86: offset of end of instruction (heap length to
+// patch is last 4 bytes of instruction)).
 #if defined(JS_CODEGEN_X86)
 class MemoryAccess
 {
@@ -868,7 +869,7 @@ class MemoryAccess
 #elif defined(JS_CODEGEN_ARM) || defined(JS_CODEGEN_ARM64) || \
       defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64) || \
       defined(JS_CODEGEN_NONE)
-// Nothing! We just want bounds checks on these platforms.
+// Nothing! We don't patch or emulate memory accesses on these platforms.
 class MemoryAccess {
   public:
     void offsetBy(uint32_t) { MOZ_CRASH(); }
@@ -938,6 +939,8 @@ enum class SymbolicAddress
     TruncateDoubleToUint64,
     Uint64ToFloatingPoint,
     Int64ToFloatingPoint,
+    GrowMemory,
+    CurrentMemory,
     Limit
 };
 
@@ -995,28 +998,12 @@ enum class JumpTarget
 
 typedef EnumeratedArray<JumpTarget, JumpTarget::Limit, Uint32Vector> JumpSiteArray;
 
-// The SignalUsage struct captures global parameters that affect all wasm code
-// generation. It also currently is the single source of truth for whether or
-// not to use signal handlers for different purposes.
-
-struct SignalUsage
-{
-    // NB: these fields are serialized as a POD in Assumptions.
-    bool forOOB;
-    bool forInterrupt;
-
-    SignalUsage();
-    bool operator==(SignalUsage rhs) const;
-    bool operator!=(SignalUsage rhs) const { return !(*this == rhs); }
-};
-
 // Assumptions captures ambient state that must be the same when compiling and
 // deserializing a module for the compiled code to be valid. If it's not, then
 // the module must be recompiled from scratch.
 
 struct Assumptions
 {
-    SignalUsage           usesSignal;
     uint32_t              cpuId;
     JS::BuildIdCharVector buildId;
     bool                  newFormat;
@@ -1073,13 +1060,33 @@ WASM_DECLARE_POD_VECTOR(TableDesc, TableDescVector)
 class CalleeDesc
 {
   public:
-    enum Which { Internal, Import, WasmTable, AsmJSTable, Builtin };
+    enum Which {
+        // Calls a function defined in the same module by its index.
+        Definition,
+
+        // Calls the import identified by the offset of its FuncImportTls in
+        // thread-local data.
+        Import,
+
+        // Calls a WebAssembly table (heterogeneous, index must be bounds
+        // checked, callee instance depends on TableDesc).
+        WasmTable,
+
+        // Calls an asm.js table (homogeneous, masked index, same-instance).
+        AsmJSTable,
+
+        // Call a C++ function identified by SymbolicAddress.
+        Builtin,
+
+        // Like Builtin, but automatically passes Instance* as first argument.
+        BuiltinInstanceMethod
+    };
 
   private:
     Which which_;
     union U {
         U() {}
-        uint32_t internalFuncIndex_;
+        uint32_t funcDefIndex_;
         struct {
             uint32_t globalDataOffset_;
         } import;
@@ -1092,10 +1099,10 @@ class CalleeDesc
 
   public:
     CalleeDesc() {}
-    static CalleeDesc internal(uint32_t callee) {
+    static CalleeDesc definition(uint32_t funcDefIndex) {
         CalleeDesc c;
-        c.which_ = Internal;
-        c.u.internalFuncIndex_ = callee;
+        c.which_ = Definition;
+        c.u.funcDefIndex_ = funcDefIndex;
         return c;
     }
     static CalleeDesc import(uint32_t globalDataOffset) {
@@ -1123,12 +1130,18 @@ class CalleeDesc
         c.u.builtin_ = callee;
         return c;
     }
+    static CalleeDesc builtinInstanceMethod(SymbolicAddress callee) {
+        CalleeDesc c;
+        c.which_ = BuiltinInstanceMethod;
+        c.u.builtin_ = callee;
+        return c;
+    }
     Which which() const {
         return which_;
     }
-    uint32_t internalFuncIndex() const {
-        MOZ_ASSERT(which_ == Internal);
-        return u.internalFuncIndex_;
+    uint32_t funcDefIndex() const {
+        MOZ_ASSERT(which_ == Definition);
+        return u.funcDefIndex_;
     }
     uint32_t importGlobalDataOffset() const {
         MOZ_ASSERT(which_ == Import);
@@ -1154,7 +1167,7 @@ class CalleeDesc
         return u.table.sigId_;
     }
     SymbolicAddress builtin() const {
-        MOZ_ASSERT(which_ == Builtin);
+        MOZ_ASSERT(which_ == Builtin || which_ == BuiltinInstanceMethod);
         return u.builtin_;
     }
 };
@@ -1252,10 +1265,15 @@ struct ExternalTableElem
 // requires linear memory to always be a multiple of 64KiB.
 static const unsigned PageSize = 64 * 1024;
 
-#ifdef ASMJS_MAY_USE_SIGNAL_HANDLERS_FOR_OOB
+#ifdef JS_CODEGEN_X64
+#define WASM_HUGE_MEMORY
 static const uint64_t Uint32Range = uint64_t(UINT32_MAX) + 1;
 static const uint64_t MappedSize = 2 * Uint32Range + PageSize;
 #endif
+
+bool IsValidARMLengthImmediate(uint32_t length);
+uint32_t RoundUpToNextValidARMLengthImmediate(uint32_t length);
+size_t LegalizeMapLength(size_t requestedSize);
 
 static const unsigned NaN64GlobalDataOffset       = 0;
 static const unsigned NaN32GlobalDataOffset       = NaN64GlobalDataOffset + sizeof(double);

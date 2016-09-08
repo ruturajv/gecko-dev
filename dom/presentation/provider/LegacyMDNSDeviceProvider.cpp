@@ -4,6 +4,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "LegacyMDNSDeviceProvider.h"
+
+#include "DeviceProviderHelpers.h"
 #include "MainThreadUtils.h"
 #include "mozilla/Logging.h"
 #include "mozilla/Preferences.h"
@@ -353,7 +355,7 @@ LegacyMDNSDeviceProvider::ClearUnknownDevices()
   while (i > 0) {
     --i;
     if (mDevices[i]->State() == DeviceState::eUnknown) {
-      NS_WARN_IF(NS_FAILED(RemoveDevice(i)));
+      Unused << NS_WARN_IF(NS_FAILED(RemoveDevice(i)));
     }
   }
 }
@@ -366,7 +368,7 @@ LegacyMDNSDeviceProvider::ClearDevices()
   size_t i = mDevices.Length();
   while (i > 0) {
     --i;
-    NS_WARN_IF(NS_FAILED(RemoveDevice(i)));
+    Unused << NS_WARN_IF(NS_FAILED(RemoveDevice(i)));
   }
 }
 
@@ -748,6 +750,21 @@ NS_IMETHODIMP
 LegacyMDNSDeviceProvider::Device::Disconnect()
 {
   // No need to do anything when disconnect.
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+LegacyMDNSDeviceProvider::Device::IsRequestedUrlSupported(
+                                                 const nsAString& aRequestedUrl,
+                                                 bool* aRetVal)
+{
+  if (!aRetVal) {
+    return NS_ERROR_INVALID_POINTER;
+  }
+
+  // Legacy TV 2.5 device only support a fixed set of presentation Apps.
+  *aRetVal = DeviceProviderHelpers::IsFxTVSupportedAppUrl(aRequestedUrl);
+
   return NS_OK;
 }
 

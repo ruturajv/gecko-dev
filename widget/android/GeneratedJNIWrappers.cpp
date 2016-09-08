@@ -318,6 +318,14 @@ auto GeckoAppShell::GetDpi() -> int32_t
     return mozilla::jni::Method<GetDpi_t>::Call(GeckoAppShell::Context(), nullptr);
 }
 
+constexpr char GeckoAppShell::GetExceptionStackTrace_t::name[];
+constexpr char GeckoAppShell::GetExceptionStackTrace_t::signature[];
+
+auto GeckoAppShell::GetExceptionStackTrace(mozilla::jni::Throwable::Param a0) -> mozilla::jni::String::LocalRef
+{
+    return mozilla::jni::Method<GetExceptionStackTrace_t>::Call(GeckoAppShell::Context(), nullptr, a0);
+}
+
 constexpr char GeckoAppShell::GetExtensionFromMimeType_t::name[];
 constexpr char GeckoAppShell::GetExtensionFromMimeType_t::signature[];
 
@@ -489,7 +497,7 @@ auto GeckoAppShell::HandleGeckoMessage(mozilla::jni::Object::Param a0) -> void
 constexpr char GeckoAppShell::HandleUncaughtException_t::name[];
 constexpr char GeckoAppShell::HandleUncaughtException_t::signature[];
 
-auto GeckoAppShell::HandleUncaughtException(mozilla::jni::Throwable::Param a0) -> mozilla::jni::String::LocalRef
+auto GeckoAppShell::HandleUncaughtException(mozilla::jni::Throwable::Param a0) -> void
 {
     return mozilla::jni::Method<HandleUncaughtException_t>::Call(GeckoAppShell::Context(), nullptr, a0);
 }
@@ -587,14 +595,6 @@ constexpr char GeckoAppShell::NotifyObservers_t::signature[];
 
 constexpr char GeckoAppShell::NotifyAlertListener_t::name[];
 constexpr char GeckoAppShell::NotifyAlertListener_t::signature[];
-
-constexpr char GeckoAppShell::NotifyDefaultPrevented_t::name[];
-constexpr char GeckoAppShell::NotifyDefaultPrevented_t::signature[];
-
-auto GeckoAppShell::NotifyDefaultPrevented(bool a0) -> void
-{
-    return mozilla::jni::Method<NotifyDefaultPrevented_t>::Call(GeckoAppShell::Context(), nullptr, a0);
-}
 
 constexpr char GeckoAppShell::NotifyUriVisited_t::name[];
 constexpr char GeckoAppShell::NotifyUriVisited_t::signature[];
@@ -741,6 +741,12 @@ auto GeckoAppShell::Vibrate(mozilla::jni::LongArray::Param a0, int32_t a1) -> vo
 {
     return mozilla::jni::Method<Vibrate2_t>::Call(GeckoAppShell::Context(), nullptr, a0, a1);
 }
+
+const char GeckoAppShell::CameraCallback::name[] =
+        "org/mozilla/gecko/GeckoAppShell$CameraCallback";
+
+constexpr char GeckoAppShell::CameraCallback::OnFrameData_t::name[];
+constexpr char GeckoAppShell::CameraCallback::OnFrameData_t::signature[];
 
 const char GeckoBatteryManager::name[] =
         "org/mozilla/gecko/GeckoBatteryManager";
@@ -1308,14 +1314,6 @@ auto GeckoLayerClient::OnGeckoReady() const -> void
     return mozilla::jni::Method<OnGeckoReady_t>::Call(GeckoLayerClient::mCtx, nullptr);
 }
 
-constexpr char GeckoLayerClient::ProgressiveUpdateCallback_t::name[];
-constexpr char GeckoLayerClient::ProgressiveUpdateCallback_t::signature[];
-
-auto GeckoLayerClient::ProgressiveUpdateCallback(bool a0, float a1, float a2, float a3, float a4, float a5, bool a6) const -> mozilla::jni::Object::LocalRef
-{
-    return mozilla::jni::Method<ProgressiveUpdateCallback_t>::Call(GeckoLayerClient::mCtx, nullptr, a0, a1, a2, a3, a4, a5, a6);
-}
-
 constexpr char GeckoLayerClient::SetFirstPaintViewport_t::name[];
 constexpr char GeckoLayerClient::SetFirstPaintViewport_t::signature[];
 
@@ -1362,6 +1360,19 @@ constexpr char GeckoLayerClient::SynthesizeNativeTouchPoint_t::signature[];
 auto GeckoLayerClient::SynthesizeNativeTouchPoint(int32_t a0, int32_t a1, int32_t a2, int32_t a3, double a4, int32_t a5) const -> void
 {
     return mozilla::jni::Method<SynthesizeNativeTouchPoint_t>::Call(GeckoLayerClient::mCtx, nullptr, a0, a1, a2, a3, a4, a5);
+}
+
+constexpr char GeckoLayerClient::ClearColor_t::name[];
+constexpr char GeckoLayerClient::ClearColor_t::signature[];
+
+auto GeckoLayerClient::ClearColor() const -> int32_t
+{
+    return mozilla::jni::Field<ClearColor_t>::Get(GeckoLayerClient::mCtx, nullptr);
+}
+
+auto GeckoLayerClient::ClearColor(int32_t a0) const -> void
+{
+    return mozilla::jni::Field<ClearColor_t>::Set(GeckoLayerClient::mCtx, nullptr, a0);
 }
 
 const char ImmutableViewportMetrics::name[] =
@@ -1449,14 +1460,6 @@ auto LayerView::Compositor::Destroy() const -> void
 constexpr char LayerView::Compositor::DisposeNative_t::name[];
 constexpr char LayerView::Compositor::DisposeNative_t::signature[];
 
-constexpr char LayerView::Compositor::GetSurface_t::name[];
-constexpr char LayerView::Compositor::GetSurface_t::signature[];
-
-auto LayerView::Compositor::GetSurface() const -> mozilla::jni::Object::LocalRef
-{
-    return mozilla::jni::Method<GetSurface_t>::Call(Compositor::mCtx, nullptr);
-}
-
 constexpr char LayerView::Compositor::OnSizeChanged_t::name[];
 constexpr char LayerView::Compositor::OnSizeChanged_t::signature[];
 
@@ -1505,9 +1508,6 @@ constexpr char NativePanZoomController::HandleMouseEvent_t::signature[];
 
 constexpr char NativePanZoomController::HandleScrollEvent_t::name[];
 constexpr char NativePanZoomController::HandleScrollEvent_t::signature[];
-
-constexpr char NativePanZoomController::AbortAnimation_t::name[];
-constexpr char NativePanZoomController::AbortAnimation_t::signature[];
 
 constexpr char NativePanZoomController::SetIsLongpressEnabled_t::name[];
 constexpr char NativePanZoomController::SetIsLongpressEnabled_t::signature[];

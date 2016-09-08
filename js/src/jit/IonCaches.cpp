@@ -1113,7 +1113,7 @@ GenerateCallGetter(JSContext* cx, IonScript* ion, MacroAssembler& masm,
 
     // Note: this may clobber the object register if it's used as scratch.
     if (obj != holder)
-        GeneratePrototypeGuards(cx, ion, masm, obj, holder, object, scratchReg, failures);
+        GeneratePrototypeGuards(cx, ion, masm, obj, holder, object, scratchReg, maybePopAndFail);
 
     // Guard on the holder's shape.
     Register holderReg = scratchReg;
@@ -3599,6 +3599,10 @@ SetPropertyIC::tryAttachStub(JSContext* cx, HandleScript outerScript, IonScript*
     if (!canAttachStub() || obj->watched())
         return true;
 
+    // Fail cache emission if the object is frozen
+    if (obj->is<NativeObject>() && obj->as<NativeObject>().getElementsHeader()->isFrozen())
+        return true;
+
     bool nameOrSymbol;
     if (!ValueToNameOrSymbolId(cx, idval, id, &nameOrSymbol))
         return false;
@@ -3641,6 +3645,10 @@ SetPropertyIC::tryAttachAddSlot(JSContext* cx, HandleScript outerScript, IonScri
         return true;
 
     if (!JSID_IS_STRING(id) && !JSID_IS_SYMBOL(id))
+        return true;
+
+    // Fail cache emission if the object is frozen
+    if (obj->is<NativeObject>() && obj->as<NativeObject>().getElementsHeader()->isFrozen())
         return true;
 
     // A GC may have caused cache.value() to become stale as it is not traced.

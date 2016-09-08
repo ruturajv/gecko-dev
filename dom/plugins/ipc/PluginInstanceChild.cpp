@@ -1282,7 +1282,7 @@ PluginInstanceChild::AnswerNPP_SetWindow(const NPRemoteWindow& aWindow)
             }
         }
 
-        if (aWindow.visualID != None
+        if (aWindow.visualID != X11None
             && gtk_check_version(2, 12, 10) != nullptr) { // older
             // Workaround for a bug in Gtk+ (prior to 2.12.10) where deleting
             // a foreign GdkColormap will also free the XColormap.
@@ -1677,7 +1677,8 @@ PluginInstanceChild::PluginWindowProcInternal(HWND hWnd,
             // If this gets focus, ensure that there is no pending key events.
             // Even if there were, we should ignore them for performance reason.
             // Although, such case shouldn't occur.
-            NS_WARN_IF(self->mPostingKeyEvents > 0);
+            NS_WARNING_ASSERTION(self->mPostingKeyEvents == 0,
+                                 "pending events");
             self->mPostingKeyEvents = 0;
             self->mLastKeyEventConsumed = false;
             break;
@@ -3355,7 +3356,6 @@ PluginInstanceChild::CreateOptSurface(void)
                "Need a valid surface type here");
     NS_ASSERTION(!mCurrentSurface, "mCurrentSurfaceActor can get out of sync.");
 
-    RefPtr<gfxASurface> retsurf;
     // Use an opaque surface unless we're transparent and *don't* have
     // a background to source from.
     gfxImageFormat format =
@@ -3581,7 +3581,9 @@ PluginInstanceChild::EnsureCurrentBuffer(void)
 void
 PluginInstanceChild::UpdateWindowAttributes(bool aForceSetWindow)
 {
+#if defined(MOZ_X11) || defined(XP_WIN)
     RefPtr<gfxASurface> curSurface = mHelperSurface ? mHelperSurface : mCurrentSurface;
+#endif // Only used within MOZ_X11 or XP_WIN blocks. Unused variable otherwise
     bool needWindowUpdate = aForceSetWindow;
 #ifdef MOZ_X11
     Visual* visual = nullptr;

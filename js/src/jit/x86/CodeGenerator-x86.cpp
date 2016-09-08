@@ -401,9 +401,7 @@ CodeGeneratorX86::emitWasmCall(LWasmCallBase* ins)
 
     emitWasmCallBase(ins);
 
-    if (IsFloatingPointType(mir->type()) &&
-        mir->callee().which() == wasm::CalleeDesc::Builtin)
-    {
+    if (IsFloatingPointType(mir->type()) && mir->callee().which() == wasm::CalleeDesc::Builtin) {
         if (mir->type() == MIRType::Float32) {
             masm.reserveStack(sizeof(float));
             Operand op(esp, 0);
@@ -500,12 +498,7 @@ CodeGeneratorX86::emitWasmLoad(T* ins)
     Scalar::Type accessType = mir->accessType();
     MOZ_ASSERT(!Scalar::isSimdType(accessType), "SIMD NYI");
     MOZ_ASSERT(!mir->barrierBefore() && !mir->barrierAfter(), "atomics NYI");
-
-    if (mir->offset() > INT32_MAX) {
-        // This is unreachable because of the bounds check.
-        masm.breakpoint();
-        return;
-    }
+    MOZ_ASSERT(mir->offset() <= INT32_MAX);
 
     const LAllocation* ptr = ins->ptr();
     Operand srcAddr = ptr->isBogus()
@@ -539,12 +532,7 @@ CodeGeneratorX86::emitWasmStore(T* ins)
     Scalar::Type accessType = mir->accessType();
     MOZ_ASSERT(!Scalar::isSimdType(accessType), "SIMD NYI");
     MOZ_ASSERT(!mir->barrierBefore() && !mir->barrierAfter(), "atomics NYI");
-
-    if (mir->offset() > INT32_MAX) {
-        // This is unreachable because of the bounds check.
-        masm.breakpoint();
-        return;
-    }
+    MOZ_ASSERT(mir->offset() <= INT32_MAX);
 
     const LAllocation* ptr = ins->ptr();
     Operand dstAddr = ptr->isBogus()

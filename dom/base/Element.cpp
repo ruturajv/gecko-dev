@@ -123,7 +123,6 @@
 #include "nsCSSParser.h"
 #include "prprf.h"
 #include "nsDOMMutationObserver.h"
-#include "nsSVGFeatures.h"
 #include "nsWrapperCacheInlines.h"
 #include "xpcpublic.h"
 #include "nsIScriptError.h"
@@ -140,6 +139,7 @@
 #include "nsISupportsImpl.h"
 #include "mozilla/dom/CSSPseudoElement.h"
 #include "mozilla/dom/DocumentFragment.h"
+#include "mozilla/dom/KeyframeEffect.h"
 #include "mozilla/dom/KeyframeEffectBinding.h"
 #include "mozilla/dom/WindowBinding.h"
 #include "mozilla/dom/ElementBinding.h"
@@ -471,8 +471,8 @@ Element::WrapObject(JSContext *aCx, JS::Handle<JSObject*> aGivenProto)
     CustomElementData* data = GetCustomElementData();
     if (data) {
       // If this is a registered custom element then fix the prototype.
-      nsDocument* document = static_cast<nsDocument*>(OwnerDoc());
-      document->GetCustomPrototype(NodeInfo()->NamespaceID(), data->mType, &customProto);
+      nsContentUtils::GetCustomPrototype(OwnerDoc(), NodeInfo()->NamespaceID(),
+                                         data->mType, &customProto);
       if (customProto &&
           NodePrincipal()->SubsumesConsideringDomain(nsContentUtils::ObjectPrincipal(customProto))) {
         // Just go ahead and create with the right proto up front.  Set
@@ -957,7 +957,7 @@ Element::GetClientAreaRect()
   }
 
   if (styledFrame &&
-      (styledFrame->StyleDisplay()->mDisplay != NS_STYLE_DISPLAY_INLINE ||
+      (styledFrame->StyleDisplay()->mDisplay != StyleDisplay::Inline ||
        styledFrame->IsFrameOfType(nsIFrame::eReplaced))) {
     // Special case code to make client area work even when there isn't
     // a scroll view, see bug 180552, bug 227567.
@@ -1609,7 +1609,8 @@ Element::BindToTree(nsIDocument* aDocument, nsIContent* aParent,
     // document and this document has a browsing context.
     if (GetCustomElementData() && composedDoc->GetDocShell()) {
       // Enqueue an attached callback for the custom element.
-      composedDoc->EnqueueLifecycleCallback(nsIDocument::eAttached, this);
+      nsContentUtils::EnqueueLifecycleCallback(
+        composedDoc, nsIDocument::eAttached, this);
     }
   }
 
@@ -1732,6 +1733,18 @@ Element::BindToTree(nsIDocument* aDocument, nsIContent* aParent,
     }
   }
 
+  // It would be cleanest to mark nodes as dirty when (a) they're created and
+  // (b) they're unbound from a tree. However, we can't easily do (a) right now,
+  // because IsStyledByServo() is not always easy to check at node creation time,
+  // and the bits have different meaning in the non-IsStyledByServo case.
+  //
+  // So for now, we just mark nodes as dirty when they're inserted into a
+  // document or shadow tree.
+  if (IsStyledByServo() && IsInComposedDoc()) {
+    MOZ_ASSERT(!ServoData().get());
+    SetIsDirtyForServo();
+  }
+
   // XXXbz script execution during binding can trigger some of these
   // postcondition asserts....  But we do want that, since things will
   // generally be quite broken when that happens.
@@ -1840,11 +1853,15 @@ Element::UnbindFromTree(bool aDeep, bool aNullParent)
 
   ClearInDocument();
 
+  // Computed styled data isn't useful for detached nodes, and we'll need to
+  // recomputed it anyway if we ever insert the nodes back into a document.
+  if (IsStyledByServo()) {
+    ServoData().reset();
+  } else {
 #ifdef MOZ_STYLO
-  // Drop any servo node data, since it will generally need to be recomputed on
-  // re-insertion anyway.
-  ServoData().reset();
+    MOZ_ASSERT(!ServoData());
 #endif
+  }
 
   // Editable descendant count only counts descendants that
   // are in the uncomposed document.
@@ -1874,7 +1891,8 @@ Element::UnbindFromTree(bool aDeep, bool aNullParent)
     // the document and this document has a browsing context.
     if (GetCustomElementData() && document->GetDocShell()) {
       // Enqueue a detached callback for the custom element.
-      document->EnqueueLifecycleCallback(nsIDocument::eDetached, this);
+      nsContentUtils::EnqueueLifecycleCallback(
+        document, nsIDocument::eDetached, this);
     }
   }
 
@@ -2480,7 +2498,8 @@ Element::SetAttrAndNotify(int32_t aNamespaceID,
       nsDependentAtomString(newValueAtom)
     };
 
-    ownerDoc->EnqueueLifecycleCallback(nsIDocument::eAttributeChanged, this, &args);
+    nsContentUtils::EnqueueLifecycleCallback(
+      ownerDoc, nsIDocument::eAttributeChanged, this, &args);
   }
 
   if (aCallAfterSetAttr) {
@@ -2734,7 +2753,8 @@ Element::UnsetAttr(int32_t aNameSpaceID, nsIAtom* aName,
       NullString()
     };
 
-    ownerDoc->EnqueueLifecycleCallback(nsIDocument::eAttributeChanged, this, &args);
+    nsContentUtils::EnqueueLifecycleCallback(
+      ownerDoc, nsIDocument::eAttributeChanged, this, &args);
   }
 
   if (aNotify) {
@@ -3249,7 +3269,7 @@ static const nsAttrValue::EnumTable kCORSAttributeTable[] = {
   // See ParseCORSValue
   { "anonymous",       CORS_ANONYMOUS       },
   { "use-credentials", CORS_USE_CREDENTIALS },
-  { 0 }
+  { nullptr,           0 }
 };
 
 /* static */ void

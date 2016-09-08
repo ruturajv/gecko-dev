@@ -429,6 +429,7 @@ public:
 
   virtual int32_t GetWidth() const override;
   virtual int32_t GetHeight() const override;
+  gfx::IntSize GetSize() const { return gfx::IntSize(mWidth, mHeight); }
 
   // nsICanvasRenderingContextInternal
   /**
@@ -463,7 +464,6 @@ public:
   NS_IMETHOD SetIsOpaque(bool aIsOpaque) override;
   bool GetIsOpaque() override { return mOpaque; }
   NS_IMETHOD Reset() override;
-  mozilla::layers::PersistentBufferProvider* GetBufferProvider(mozilla::layers::LayerManager* aManager);
   already_AddRefed<Layer> GetCanvasLayer(nsDisplayListBuilder* aBuilder,
                                          Layer* aOldLayer,
                                          LayerManager* aManager,
@@ -642,6 +642,23 @@ protected:
    */
   RenderingMode EnsureTarget(const gfx::Rect* aCoveredRect = nullptr,
                              RenderingMode aRenderMode = RenderingMode::DefaultBackendMode);
+
+  void RestoreClipsAndTransformToTarget();
+
+  bool TrySkiaGLTarget(RefPtr<gfx::DrawTarget>& aOutDT,
+                       RefPtr<layers::PersistentBufferProvider>& aOutProvider);
+
+  bool TrySharedTarget(RefPtr<gfx::DrawTarget>& aOutDT,
+                       RefPtr<layers::PersistentBufferProvider>& aOutProvider);
+
+  bool TryBasicTarget(RefPtr<gfx::DrawTarget>& aOutDT,
+                      RefPtr<layers::PersistentBufferProvider>& aOutProvider);
+
+  void RegisterAllocation();
+
+  void SetInitialState();
+
+  void SetErrorState();
 
   /**
    * This method is run at the end of the event-loop spin where

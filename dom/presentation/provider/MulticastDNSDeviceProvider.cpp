@@ -4,6 +4,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "MulticastDNSDeviceProvider.h"
+
+#include "DeviceProviderHelpers.h"
 #include "MainThreadUtils.h"
 #include "mozilla/Logging.h"
 #include "mozilla/Preferences.h"
@@ -564,7 +566,7 @@ MulticastDNSDeviceProvider::ClearUnknownDevices()
   while (i > 0) {
     --i;
     if (mDevices[i]->State() == DeviceState::eUnknown) {
-      NS_WARN_IF(NS_FAILED(RemoveDevice(i)));
+      Unused << NS_WARN_IF(NS_FAILED(RemoveDevice(i)));
     }
   }
 }
@@ -577,7 +579,7 @@ MulticastDNSDeviceProvider::ClearDevices()
   size_t i = mDevices.Length();
   while (i > 0) {
     --i;
-    NS_WARN_IF(NS_FAILED(RemoveDevice(i)));
+    Unused << NS_WARN_IF(NS_FAILED(RemoveDevice(i)));
   }
 }
 
@@ -1219,6 +1221,26 @@ NS_IMETHODIMP
 MulticastDNSDeviceProvider::Device::Disconnect()
 {
   // No need to do anything when disconnect.
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+MulticastDNSDeviceProvider::Device::IsRequestedUrlSupported(
+                                                 const nsAString& aRequestedUrl,
+                                                 bool* aRetVal)
+{
+  MOZ_ASSERT(NS_IsMainThread());
+
+  if (!aRetVal) {
+    return NS_ERROR_INVALID_POINTER;
+  }
+
+  // TV 2.6 also supports presentation Apps and HTTP/HTTPS hosted receiver page.
+  if (DeviceProviderHelpers::IsFxTVSupportedAppUrl(aRequestedUrl) ||
+      DeviceProviderHelpers::IsCommonlySupportedScheme(aRequestedUrl)) {
+    *aRetVal = true;
+  }
+
   return NS_OK;
 }
 

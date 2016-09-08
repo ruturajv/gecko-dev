@@ -118,6 +118,21 @@ const JNINativeMethod GeckoAppShell::Natives<Impl>::methods[] = {
 };
 
 template<class Impl>
+class GeckoAppShell::CameraCallback::Natives : public mozilla::jni::NativeImpl<CameraCallback, Impl>
+{
+public:
+    static const JNINativeMethod methods[1];
+};
+
+template<class Impl>
+const JNINativeMethod GeckoAppShell::CameraCallback::Natives<Impl>::methods[] = {
+
+    mozilla::jni::MakeNativeMethod<GeckoAppShell::CameraCallback::OnFrameData_t>(
+            mozilla::jni::NativeStub<GeckoAppShell::CameraCallback::OnFrameData_t, Impl>
+            ::template Wrap<&Impl::OnFrameData>)
+};
+
+template<class Impl>
 class GeckoBatteryManager::Natives : public mozilla::jni::NativeImpl<GeckoBatteryManager, Impl>
 {
 public:
@@ -541,7 +556,7 @@ template<class Impl>
 class NativePanZoomController::Natives : public mozilla::jni::NativeImpl<NativePanZoomController, Impl>
 {
 public:
-    static const JNINativeMethod methods[8];
+    static const JNINativeMethod methods[7];
 };
 
 template<class Impl>
@@ -570,10 +585,6 @@ const JNINativeMethod NativePanZoomController::Natives<Impl>::methods[] = {
     mozilla::jni::MakeNativeMethod<NativePanZoomController::HandleScrollEvent_t>(
             mozilla::jni::NativeStub<NativePanZoomController::HandleScrollEvent_t, Impl>
             ::template Wrap<&Impl::HandleScrollEvent>),
-
-    mozilla::jni::MakeNativeMethod<NativePanZoomController::AbortAnimation_t>(
-            mozilla::jni::NativeStub<NativePanZoomController::AbortAnimation_t, Impl>
-            ::template Wrap<&Impl::AbortAnimation>),
 
     mozilla::jni::MakeNativeMethod<NativePanZoomController::SetIsLongpressEnabled_t>(
             mozilla::jni::NativeStub<NativePanZoomController::SetIsLongpressEnabled_t, Impl>

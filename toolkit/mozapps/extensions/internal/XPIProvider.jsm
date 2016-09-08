@@ -929,6 +929,11 @@ var loadManifestFromWebManifest = Task.async(function*(aUri) {
     logger.warn("Ignoring applications property in manifest");
   }
 
+  // A * is illegal in strict_min_version
+  if (bss.strict_min_version && bss.strict_min_version.split(".").some(part => part == "*")) {
+    logger.warn("The use of '*' in strict_min_version is deprecated");
+  }
+
   let addon = new AddonInternal();
   addon.id = bss.id;
   addon.version = manifest.version;
@@ -3993,11 +3998,19 @@ this.XPIProvider = {
     }
     let addon = yield loadManifestFromFile(aFile, TemporaryInstallLocation);
 
-    if (!addon.isCompatible) {
+    if (addon.appDisabled) {
+      let message = `Add-on ${addon.id} is not compatible with application version.`;
+
       let app = addon.matchingTargetApplication;
-      throw new Error(`Add-on ${addon.id} is not compatible with application version. ` +
-                      `add-on minVersion: ${app.minVersion}, ` +
-                      `add-on maxVersion: ${app.maxVersion}`);
+      if (app) {
+        if (app.minVersion) {
+          message += ` add-on minVersion: ${app.minVersion}.`;
+        }
+        if (app.maxVersion) {
+          message += ` add-on maxVersion: ${app.maxVersion}.`;
+        }
+      }
+      throw new Error(message);
     }
 
     if (!addon.bootstrap) {
@@ -6492,8 +6505,8 @@ AddonInstall.prototype = {
                     getService(Ci.nsIPromptFactory);
       let prompt = factory.getPrompt(win, Ci.nsIAuthPrompt2);
 
-      if (this.browser && this.browser.isRemoteBrowser && prompt instanceof Ci.nsILoginManagerPrompter)
-        prompt.setE10sData(this.browser, null);
+      if (this.browser && prompt instanceof Ci.nsILoginManagerPrompter)
+        prompt.browser = this.browser;
 
       return prompt;
     }
