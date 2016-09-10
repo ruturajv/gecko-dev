@@ -607,7 +607,12 @@ StorageUI.prototype = {
         let otherProps = itemProps.filter(
           e => !["name", "value", "valueActor"].includes(e));
         for (let prop of otherProps) {
-          rawObject[prop] = item[prop];
+          let cookieProp = L10N.getStr("table.headers.cookies." + prop);
+          if (prop === "isDomain") {
+            rawObject[cookieProp] = !item[prop];
+          } else {
+            rawObject[cookieProp] = item[prop];
+          }
         }
         itemVar.populate(rawObject, {sorted: true});
         itemVar.twisty = true;
