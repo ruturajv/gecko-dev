@@ -50,6 +50,15 @@ const REASON = {
   UPDATE: "update"
 };
 
+const COOKIE_KEY_MAP = {
+  path: "Path",
+  host: "Domain",
+  expires: "Expires",
+  isSecure: "Secure",
+  isHttpOnly: "HttpOnly",
+  isDomain: "HostOnly"
+};
+
 // Maximum length of item name to show in context menu label - will be
 // trimmed with ellipsis if it's longer.
 const ITEM_NAME_MAX_LENGTH = 32;
@@ -607,12 +616,8 @@ StorageUI.prototype = {
         let otherProps = itemProps.filter(
           e => !["name", "value", "valueActor"].includes(e));
         for (let prop of otherProps) {
-          let cookieProp = L10N.getStr("table.headers.cookies." + prop);
-          if (prop === "isDomain") {
-            rawObject[cookieProp] = !item[prop];
-          } else {
-            rawObject[cookieProp] = item[prop];
-          }
+          let cookieProp = COOKIE_KEY_MAP[prop] || prop;
+          rawObject[cookieProp] = (prop === "isDomain") ? !item[prop] : item[prop];
         }
         itemVar.populate(rawObject, {sorted: true});
         itemVar.twisty = true;
