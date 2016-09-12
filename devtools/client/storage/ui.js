@@ -56,7 +56,9 @@ const COOKIE_KEY_MAP = {
   expires: "Expires",
   isSecure: "Secure",
   isHttpOnly: "HttpOnly",
-  isDomain: "HostOnly"
+  isDomain: "HostOnly",
+  creationTime: "CreationTime",
+  lastAccessed: "LastAccessed"
 };
 
 // Maximum length of item name to show in context menu label - will be
@@ -617,6 +619,7 @@ StorageUI.prototype = {
           e => !["name", "value", "valueActor"].includes(e));
         for (let prop of otherProps) {
           let cookieProp = COOKIE_KEY_MAP[prop] || prop;
+          // The pseduo property of HostOnly refers to converse of isDomain property
           rawObject[cookieProp] = (prop === "isDomain") ? !item[prop] : item[prop];
         }
         itemVar.populate(rawObject, {sorted: true});
@@ -776,6 +779,7 @@ StorageUI.prototype = {
     let columns = {};
     let editableFields = [];
     let fields = yield this.getCurrentActor().getFields(subtype);
+    let isCookieListing = fields.length > 3;
 
     fields.forEach(f => {
       if (!uniqueKey) {
@@ -788,7 +792,15 @@ StorageUI.prototype = {
 
       columns[f.name] = f.name;
       try {
-        columns[f.name] = L10N.getStr("table.headers." + type + "." + f.name);
+        if (isCookieListing) {
+          try {
+            columns[f.name] = L10N.getStr("table.headers." + type + "." + f.name);
+          } catch (e) {
+            columns[f.name] = COOKIE_KEY_MAP[f.name];
+          }
+        } else {
+          columns[f.name] = L10N.getStr("table.headers." + type + "." + f.name);
+        }
       } catch (e) {
         console.error("Unable to localize table header type:" + type +
                       " key:" + f.name);
