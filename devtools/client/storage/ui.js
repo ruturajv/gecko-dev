@@ -779,7 +779,6 @@ StorageUI.prototype = {
     let columns = {};
     let editableFields = [];
     let fields = yield this.getCurrentActor().getFields(subtype);
-    let isCookieListing = fields.length > 3;
 
     fields.forEach(f => {
       if (!uniqueKey) {
@@ -791,19 +790,17 @@ StorageUI.prototype = {
       }
 
       columns[f.name] = f.name;
+      let columnName;
       try {
-        if (isCookieListing) {
-          try {
-            columns[f.name] = L10N.getStr("table.headers." + type + "." + f.name);
-          } catch (e) {
-            columns[f.name] = COOKIE_KEY_MAP[f.name];
-          }
-        } else {
-          columns[f.name] = L10N.getStr("table.headers." + type + "." + f.name);
-        }
+        columnName = L10N.getStr("table.headers." + type + "." + f.name);
       } catch (e) {
-        console.error("Unable to localize table header type:" + type +
-                      " key:" + f.name);
+        columnName = COOKIE_KEY_MAP[f.name];
+      }
+
+      if (!columnName) {
+        console.error("Unable to localize table header type:" + type + " key:" + f.name);
+      } else {
+        columns[f.name] = columnName;
       }
     });
 
