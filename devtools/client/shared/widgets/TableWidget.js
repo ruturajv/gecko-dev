@@ -1512,7 +1512,7 @@ Cell.prototype = {
 
     if (!(value instanceof Node) &&
         value.length > MAX_VISIBLE_STRING_SIZE) {
-      value = value .substr(0, MAX_VISIBLE_STRING_SIZE) + "\u2026";
+      // value = value .substr(0, MAX_VISIBLE_STRING_SIZE) + "\u2026";
     }
 
     if (value instanceof Node) {
