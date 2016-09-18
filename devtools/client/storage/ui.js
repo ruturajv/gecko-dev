@@ -647,7 +647,12 @@ StorageUI.prototype = {
    * @param {string} value
    *        The string to be parsed into an object
    */
-  parseItemValue: function (name, value) {
+  parseItemValue: function (name, originalValue) {
+    // Find if value is URLEncoded ie. if it has encoded chars like
+    // "=", "{", "<SPACE>", ",", "[" in it.
+    let value = (originalValue.match(/%7B|%5B|%3D|%3A|%23|%26|%2C/i))
+      ? decodeURIComponent(originalValue) : originalValue;
+
     let json = null;
     try {
       json = JSOL.parse(value);
