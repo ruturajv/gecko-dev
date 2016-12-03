@@ -337,8 +337,10 @@ ul.children + .tag-line::before {
 }
 
 /* Applicable to the DOCTYPE */
-.theme-firebug .comment .tag {
+.doctype {
   font-style: italic;
+}
+.theme-firebug .doctype {
   color: #787878;
 }
 
