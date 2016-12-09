@@ -340,6 +340,7 @@ ul.children + .tag-line::before {
 .doctype {
   font-style: italic;
 }
+
 .theme-firebug .doctype {
   color: #787878;
 }
