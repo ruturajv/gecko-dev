@@ -139,12 +139,13 @@
   --theme-sidebar-background: #fcfcfc;
   --theme-contrast-background: #e6b064;
 
-  --theme-tab-toolbar-background: #d8eaf9;
-  --theme-toolbar-background: #f0f1f2;
+  --theme-tab-toolbar-background: rgb(240, 240, 240);
+  --theme-toolbar-background: rgb(240, 240, 240);
+  --theme-toolbar-tab-selected-background: rgb(253, 253, 253);
   --theme-selection-background: #3399ff;
   --theme-selection-background-semitransparent: rgba(128,128,128,0.2);
   --theme-selection-color: white;
-  --theme-splitter-color: #aabccf;
+  --theme-splitter-color: #bfbfbf;
   --theme-comment: darkgreen;
 
   --theme-body-color: #000000;
@@ -190,6 +191,13 @@
   /* Command line */
   --theme-command-line-image: url(chrome://devtools/skin/images/firebug/commandline-icon.svg);
   --theme-command-line-image-focus: url(chrome://devtools/skin/images/firebug/commandline-icon.svg#focus);
+}
+
+:root.theme-firebug[platform="win"] {
+  --theme-tab-toolbar-background: #d8eaf9 !important;
+  --theme-toolbar-background: #f0f1f2 !important;
+  --theme-toolbar-tab-selected-background: rgb(247, 251, 254) !important;
+  --theme-splitter-color: #aabccf !important;
 }
 
 :root {

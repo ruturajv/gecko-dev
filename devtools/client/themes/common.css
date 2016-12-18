@@ -403,7 +403,7 @@ checkbox:-moz-focusring {
 .theme-firebug .devtools-button.checked,
 .theme-firebug .devtools-toolbarbutton:not([label])[checked=true],
 .theme-firebug .devtools-toolbarbutton:not([label])[open=true] {
-  background-color: #C8D8E7;
+  background: transparent linear-gradient(rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.2)) no-repeat;
 }
 
 /* Icon-and-text buttons */
@@ -513,6 +513,14 @@ checkbox:-moz-focusring {
 .menu-filter-button:not(:active).checked {
   background-color: var(--theme-selection-background);
   color: var(--theme-selection-color);
+}
+
+.theme-firebug .menu-filter-button {
+  background: transparent linear-gradient(rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.2)) no-repeat !important;
+}
+
+.theme-firebug .menu-filter-button:not(:active).checked {
+  box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.6) inset, 0 0 1px rgba(255, 255, 255, 0.6) inset, 0 0 2px rgba(0, 0, 0, 0.05) !important;
 }
 
 /* Text input */

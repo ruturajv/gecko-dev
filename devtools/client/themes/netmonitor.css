@@ -280,7 +280,8 @@
 }
 
 .theme-firebug .requests-menu-header-button[data-sorted] {
-  background-color: #AAC3DC;
+  background-color: #FAC8AF;
+  color: inherit;
 }
 
 .theme-firebug .requests-menu-header:hover:active {
