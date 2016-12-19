@@ -517,10 +517,16 @@ checkbox:-moz-focusring {
 
 .theme-firebug .menu-filter-button {
   background: transparent linear-gradient(rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.2)) no-repeat !important;
+  color: var(--theme-body-color) !important;
+}
+
+.theme-firebug .menu-filter-button:hover {
+  outline: 1px solid silver;
 }
 
 .theme-firebug .menu-filter-button:not(:active).checked {
-  box-shadow: 1px 1px 1px rgba(255, 255, 255, 0.6) inset, 0 0 1px rgba(255, 255, 255, 0.6) inset, 0 0 2px rgba(0, 0, 0, 0.05) !important;
+  box-shadow: 1px 1px 5px silver inset !important;
+  outline: 1px solid silver;
 }
 
 /* Text input */

@@ -67,7 +67,7 @@
   ID in the selector. */
 .theme-firebug .devtools-tabbar,
 .theme-firebug .devtools-sidebar-tabs tabs {
-  background-image: linear-gradient(rgba(253, 253, 253, 0.2), rgba(253, 253, 253, 0));
+  background-image: linear-gradient(rgba(253, 253, 253, 0.8), rgba(253, 253, 253, 0.2));
   border-bottom: 1px solid var(--theme-splitter-color) !important;
 }
 
@@ -169,7 +169,7 @@
 .theme-firebug .devtools-toolbar {
   border-bottom: 1px solid var(--theme-splitter-color) !important;
   background-color: var(--theme-tab-toolbar-background) !important;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.2));
+  background-image: linear-gradient(rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.2));
   padding-inline-end: 4px;
 }
 
