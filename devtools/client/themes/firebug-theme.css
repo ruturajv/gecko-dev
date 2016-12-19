@@ -88,6 +88,7 @@
   color: var(--theme-body-color);
   -moz-box-flex: initial;
   min-width: 0;
+  font-size: 12px;
 }
 
 /* Also add negative bottom margin for side panel tabs*/
