@@ -408,6 +408,7 @@ widgets.css is overwritten. */
 .theme-firebug .breadcrumbs-widget-container .scrollbutton-down {
   padding: 0;
   box-shadow: none;
+  outline: 1px solid silver;
 }
 
 .theme-firebug .breadcrumbs-widget-container .scrollbutton-up:hover,
@@ -419,14 +420,6 @@ widgets.css is overwritten. */
 .theme-firebug .breadcrumbs-widget-container .scrollbutton-up:active,
 .theme-firebug .breadcrumbs-widget-container .scrollbutton-down:active {
   background: none !important;
-}
-
-.theme-firebug .breadcrumbs-widget-container .scrollbutton-up > .toolbarbutton-icon {
-  background-image: url(chrome://global/skin/arrow/arrow-lft-sharp.gif);
-}
-
-.theme-firebug .breadcrumbs-widget-container .scrollbutton-down > .toolbarbutton-icon {
-  background-image: url(chrome://global/skin/arrow/arrow-lft-sharp.gif);
 }
 
 .theme-firebug .breadcrumbs-widget-container .scrollbutton-up:not([disabled]):active:hover > .toolbarbutton-icon,

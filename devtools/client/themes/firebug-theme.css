@@ -39,10 +39,9 @@
 .theme-firebug .cm-link {color: #00c;}
 
 .theme-firebug .theme-fg-color3,
-.theme-firebug .cm-s-mozilla .kind-Object .cm-variable{ /* dark blue */
-  color: #006400;
+.theme-firebug .cm-s-mozilla .kind-Object .cm-variable{
+  color: var(--theme-content-color1);
   font-style: normal;
-  font-weight: bold;
 }
 
 .theme-firebug .console-string {
