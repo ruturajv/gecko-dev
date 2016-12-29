@@ -493,7 +493,7 @@ checkbox:-moz-focusring {
  */
 .menu-filter-button {
   -moz-appearance: none;
-  background: rgba(128,128,128,0.1);
+  background: var(--toolbarbutton-background);
   border: none;
   border-radius: 2px;
   min-width: 0;
@@ -503,7 +503,7 @@ checkbox:-moz-focusring {
 }
 
 .menu-filter-button:hover {
-  background: rgba(128,128,128,0.2);
+  background: var(--toolbarbutton-hover-background);
 }
 
 .menu-filter-button:hover:active {
@@ -516,18 +516,18 @@ checkbox:-moz-focusring {
 }
 
 .theme-firebug .menu-filter-button {
-  background: transparent linear-gradient(rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.2)) no-repeat !important;
+  background: var(--toolbarbutton-background) !important;
   color: var(--theme-body-color) !important;
   border: 1px solid transparent;
 }
 
 .theme-firebug .menu-filter-button:hover {
-  border-color: silver;
+  border-color: var(--toolbarbutton-border-color);
 }
 
 .theme-firebug .menu-filter-button:not(:active).checked {
   background-image: linear-gradient(rgba(0, 0, 0, 0.1), transparent) !important;
-  border-color: silver;
+  border-color: var(--toolbarbutton-border-color);
 }
 
 /* Text input */

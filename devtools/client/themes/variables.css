@@ -139,8 +139,8 @@
   --theme-sidebar-background: #fcfcfc;
   --theme-contrast-background: #e6b064;
 
-  --theme-tab-toolbar-background: rgb(240, 240, 240);
-  --theme-toolbar-background: rgb(240, 240, 240);
+  --theme-tab-toolbar-background: rgb(240, 240, 240) linear-gradient(rgba(255, 255, 255, 0.8), transparent);
+  --theme-toolbar-background: rgb(240, 240, 240) linear-gradient(rgba(255, 255, 255, 0.8), transparent);
   --theme-toolbar-tab-selected-background: rgb(253, 253, 253);
   --theme-selection-background: #3399ff;
   --theme-selection-background-semitransparent: rgba(128,128,128,0.2);
@@ -191,13 +191,18 @@
   /* Command line */
   --theme-command-line-image: url(chrome://devtools/skin/images/firebug/commandline-icon.svg);
   --theme-command-line-image-focus: url(chrome://devtools/skin/images/firebug/commandline-icon.svg#focus);
+
+  /* Toolbar buttons */
+  --toolbarbutton-background: transparent linear-gradient(rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.2)) no-repeat;
+  --toolbarbutton-border-color: silver;
+  --toolbarbutton-hover-background: rgba(128,128,128,0.2);
 }
 
 :root.theme-firebug[platform="win"] {
-  --theme-tab-toolbar-background: #d8eaf9 !important;
-  --theme-toolbar-background: #f0f1f2 !important;
-  --theme-toolbar-tab-selected-background: rgb(247, 251, 254) !important;
-  --theme-splitter-color: #aabccf !important;
+  --theme-tab-toolbar-background: #d8eaf9 linear-gradient(rgba(255, 255, 255, 0.8), transparent);
+  --theme-toolbar-background: #f0f1f2 linear-gradient(rgba(255, 255, 255, 0.8), transparent);
+  --theme-toolbar-tab-selected-background: rgb(247, 251, 254);
+  --theme-splitter-color: #aabccf;
 }
 
 :root {
@@ -208,4 +213,8 @@
    * should improve keyboard navigation usability. */
   --theme-focus-outline: 1px dotted var(--theme-focus-outline-color);
   --theme-focus-box-shadow-textbox: 0 0 0 1px var(--theme-textbox-box-shadow);
+
+  --toolbarbutton-background: rgba(128,128,128,0.1);
+  --toolbarbutton-border-color: transparent;
+  --toolbarbutton-hover-background: rgba(128,128,128,0.2);
 }

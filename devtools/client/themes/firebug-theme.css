@@ -71,8 +71,7 @@
 }
 
 .theme-firebug .devtools-sidebar-tabs tabs {
-  background-color: var(--theme-tab-toolbar-background) !important;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.2));
+  background: var(--theme-tab-toolbar-background) !important;
 }
 
 /* Add a negative bottom margin to overlap bottom border
@@ -87,7 +86,6 @@
   color: var(--theme-body-color);
   -moz-box-flex: initial;
   min-width: 0;
-  font-size: 12px;
 }
 
 /* Also add negative bottom margin for side panel tabs*/
@@ -168,8 +166,7 @@
 .theme-firebug toolbar,
 .theme-firebug .devtools-toolbar {
   border-bottom: 1px solid var(--theme-splitter-color) !important;
-  background-color: var(--theme-tab-toolbar-background) !important;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.2));
+  background: var(--theme-tab-toolbar-background) !important;
   padding-inline-end: 4px;
 }
 

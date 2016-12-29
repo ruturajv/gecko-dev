@@ -1334,6 +1334,10 @@ widgets.css is overwritten. */
 }
 
 .theme-firebug .devtools-toolbar.table-widget-column-header[sorted] {
+  background-color: #AAC3DC !important;
+}
+
+:root[platform="linux"].theme-firebug .devtools-toolbar.table-widget-column-header[sorted] {
   background-color: #FAC8AF !important;
   color: inherit !important;
 }
