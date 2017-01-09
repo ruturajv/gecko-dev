@@ -165,8 +165,7 @@
 .theme-firebug .theme-toolbar,
 .theme-firebug toolbar,
 .theme-firebug .devtools-toolbar {
-  border-bottom: 1px solid var(--theme-splitter-color) !important;
-  background: var(--theme-tab-toolbar-background) !important;
+  background: var(--theme-toolbar-background) !important;
   padding-inline-end: 4px;
 }
 

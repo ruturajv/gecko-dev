@@ -494,7 +494,7 @@ checkbox:-moz-focusring {
 .menu-filter-button {
   -moz-appearance: none;
   background: var(--toolbarbutton-background);
-  border: none;
+  border: var(--toolbarbutton-border);
   border-radius: 2px;
   min-width: 0;
   padding: 0 5px;
@@ -504,6 +504,7 @@ checkbox:-moz-focusring {
 
 .menu-filter-button:hover {
   background: var(--toolbarbutton-hover-background);
+  border: var(--toolbarbutton-hover-border);
 }
 
 .menu-filter-button:hover:active {
@@ -511,23 +512,9 @@ checkbox:-moz-focusring {
 }
 
 .menu-filter-button:not(:active).checked {
-  background-color: var(--theme-selection-background);
-  color: var(--theme-selection-color);
-}
-
-.theme-firebug .menu-filter-button {
-  background: var(--toolbarbutton-background) !important;
-  color: var(--theme-body-color) !important;
-  border: 1px solid transparent;
-}
-
-.theme-firebug .menu-filter-button:hover {
-  border-color: var(--toolbarbutton-border-color);
-}
-
-.theme-firebug .menu-filter-button:not(:active).checked {
-  background-image: linear-gradient(rgba(0, 0, 0, 0.1), transparent) !important;
-  border-color: var(--toolbarbutton-border-color);
+  background: var(--toolbarbutton-checked-background);
+  border: var(--toolbarbutton-checked-border);
+  color: var(--toolbarbutton-checked-color);
 }
 
 /* Text input */

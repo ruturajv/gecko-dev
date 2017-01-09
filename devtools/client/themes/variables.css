@@ -194,8 +194,11 @@
 
   /* Toolbar buttons */
   --toolbarbutton-background: transparent linear-gradient(rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.2)) no-repeat;
-  --toolbarbutton-border-color: silver;
-  --toolbarbutton-hover-background: rgba(128,128,128,0.2);
+  --toolbarbutton-hover-background: transparent;
+  --toolbarbutton-checked-background: linear-gradient(rgba(0, 0, 0, 0.1), transparent);
+  --toolbarbutton-checked-color: var(--theme-body-color);
+  --toolbarbutton-hover-border: 1px solid silver;
+  --toolbarbutton-checked-border: var(--toolbarbutton-hover-border);
 }
 
 :root.theme-firebug[platform="win"] {
@@ -215,6 +218,11 @@
   --theme-focus-box-shadow-textbox: 0 0 0 1px var(--theme-textbox-box-shadow);
 
   --toolbarbutton-background: rgba(128,128,128,0.1);
-  --toolbarbutton-border-color: transparent;
   --toolbarbutton-hover-background: rgba(128,128,128,0.2);
+  --toolbarbutton-checked-background: var(--theme-selection-background);
+  --toolbarbutton-checked-color: var(--theme-selection-color);
+
+  --toolbarbutton-border: 1px solid transparent;
+  --toolbarbutton-hover-border: var(--toolbarbutton-border);
+  --toolbarbutton-checked-border: var(--toolbarbutton-border);
 }
