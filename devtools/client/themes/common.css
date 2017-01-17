@@ -403,7 +403,7 @@ checkbox:-moz-focusring {
 .theme-firebug .devtools-button.checked,
 .theme-firebug .devtools-toolbarbutton:not([label])[checked=true],
 .theme-firebug .devtools-toolbarbutton:not([label])[open=true] {
-  background: transparent linear-gradient(rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.2)) no-repeat;
+  background: var(--toolbarbutton-checked-background);
 }
 
 /* Icon-and-text buttons */
