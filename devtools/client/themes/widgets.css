@@ -1368,11 +1368,16 @@ widgets.css is overwritten. */
 }
 
 .theme-firebug .devtools-toolbar.table-widget-column-header[sorted=descending]:not(:active) {
-  background-image: url(chrome://devtools/skin/images/firebug/arrow-down.svg);
+  background-image: url(chrome://devtools/skin/images/firebug/arrow-down.svg) !important;
 }
 
 .theme-firebug .devtools-toolbar.table-widget-column-header[sorted=ascending]:not(:active) {
-  background-image: url(chrome://devtools/skin/images/firebug/arrow-up.svg);
+  background-image: url(chrome://devtools/skin/images/firebug/arrow-up.svg) !important;
+}
+
+.theme-firebug .devtools-toolbar.table-widget-column-header[sorted]:not(:active) {
+  background-position: right !important;
+  background-repeat: no-repeat !important;
 }
 
 /* Cells */
