@@ -22,7 +22,7 @@ DebuggerServer.addTestGlobal = function (global) {
 // when we're iterated over, so tests have to add their globals before the
 // root actor is created.
 function TestTabList(connection) {
-  this.conn = aConnection;
+  this.conn = connection;
 
   // An array of actors for each global added with
   // DebuggerServer.addTestGlobal.

@@ -35,15 +35,6 @@ Services.prefs.setBoolPref("devtools.debugger.remote-enabled", true);
 const { DebuggerServer } = require("devtools/server/main");
 const { DebuggerClient } = require("devtools/shared/client/main");
 
-// function testExceptionHook(ex) {
-//   try {
-//     do_report_unexpected_exception(ex);
-//   } catch (ex) {
-//     return {throw: ex};
-//   }
-//   return undefined;
-// }
-
 // Convert an nsIScriptError 'flags' value into an appropriate string.
 function scriptErrorFlagsToKind(flags) {
   let kind;
@@ -104,79 +95,6 @@ var consoleService = Cc["@mozilla.org/consoleservice;1"]
                      .getService(Ci.nsIConsoleService);
 consoleService.registerListener(listener);
 
-// function check_except(func) {
-//   try {
-//     func();
-//   } catch (e) {
-//     do_check_true(true);
-//     return;
-//   }
-//   dump("Should have thrown an exception: " + func.toString());
-//   do_check_true(false);
-// }
-
-// function testGlobal(name) {
-//   let systemPrincipal = Cc["@mozilla.org/systemprincipal;1"]
-//     .createInstance(Ci.nsIPrincipal);
-
-//   let sandbox = Cu.Sandbox(systemPrincipal);
-//   sandbox.__name = name;
-//   return sandbox;
-// }
-
-// function addTestGlobal(name) {
-//   let global = testGlobal(name);
-//   DebuggerServer.addTestGlobal(global);
-//   return global;
-// }
-
-// List the DebuggerClient |client|'s tabs, look for one whose title is
-// |title|, and apply |callback| to the packet's entry for that tab.
-function getTestTab(client, title, callback) {
-  client.listTabs(function (response) {
-    for (let tab of response.tabs) {
-      if (tab.title === title) {
-        callback(tab);
-        return;
-      }
-    }
-    callback(null);
-  });
-}
-
-// Attach to |client|'s tab whose title is |title|; pass |callback| the
-// response packet and a TabClient instance referring to that tab.
-function attachTestTab(client, title, callback) {
-  getTestTab(client, title, function (tab) {
-    client.attachTab(tab.actor, callback);
-  });
-}
-
-// Attach to |client|'s tab whose title is |title|, and then attach to
-// that tab's thread. Pass |callback| the thread attach response packet, a
-// TabClient referring to the tab, and a ThreadClient referring to the
-// thread.
-// function attachTestThread(client, title, callback) {
-//   attachTestTab(client, title, function (response, tabClient) {
-//     function onAttach(attachedResponse, threadClient) {
-//       callback(attachedResponse, tabClient, threadClient);
-//     }
-//     tabClient.attachThread({ useSourceMaps: true }, onAttach);
-//   });
-// }
-
-// Attach to |aClient|'s tab whose title is |aTitle|, attach to the tab's
-// thread, and then resume it. Pass |aCallback| the thread's response to
-// the 'resume' packet, a TabClient for the tab, and a ThreadClient for the
-// thread.
-// function attachTestTabAndResume(aClient, aTitle, aCallback) {
-//   attachTestThread(aClient, aTitle, function (aResponse, aTabClient, aThreadClient) {
-//     aThreadClient.resume(function (aResponse) {
-//       aCallback(aResponse, aTabClient, aThreadClient);
-//     });
-//   });
-// }
-
 /**
  * Initialize the testing debugger server.
  */
@@ -190,35 +108,6 @@ function initTestDebuggerServer() {
   // Allow incoming connections.
   DebuggerServer.init();
 }
-
-// function finishClient(aClient) {
-//   aClient.close().then(function () {
-//     do_test_finished();
-//   });
-// }
-
-/**
- * Takes a relative file path and returns the absolute file url for it.
- */
-// function getFileUrl(aName, aAllowMissing = false) {
-//   let file = do_get_file(aName, aAllowMissing);
-//   return Services.io.newFileURI(file).spec;
-// }
-
-/**
- * Returns the full path of the file with the specified name in a
- * platform-independent and URL-like form.
- */
-// function getFilePath(aName, aAllowMissing = false) {
-//   let file = do_get_file(aName, aAllowMissing);
-//   let path = Services.io.newFileURI(file).spec;
-//   let filePrePath = "file://";
-//   if ("nsILocalFileWin" in Ci &&
-//       file instanceof Ci.nsILocalFileWin) {
-//     filePrePath += "/";
-//   }
-//   return path.slice(filePrePath.length);
-// }
 
 /**
  * Wrapper around do_get_file to prefix files with the name of current test to
