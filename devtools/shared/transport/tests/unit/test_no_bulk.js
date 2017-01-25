@@ -20,7 +20,7 @@ function run_test() {
 /** * Tests ***/
 
 var test_bulk_send_error = Task.async(function* (transportFactory) {
-  let deferred = defer();
+  // let deferred = defer();
   let transport = yield transportFactory();
 
   let client = new DebuggerClient(transport);
@@ -33,6 +33,5 @@ var test_bulk_send_error = Task.async(function* (transportFactory) {
     } catch (e) {
       do_check_true(true);
     }
-
   });
 });
