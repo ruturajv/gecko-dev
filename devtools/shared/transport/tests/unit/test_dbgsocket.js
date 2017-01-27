@@ -53,8 +53,8 @@ function* test_socket_conn() {
   let closedDeferred = defer();
   transport.hooks = {
     onPacket: function (packet) {
-      this.onPacket = function (packet2) {
-        do_check_eq(packet2.unicode, unicodeString);
+      this.onPacket = function ({unicode}) {
+        do_check_eq(unicode, unicodeString);
         transport.close();
       };
       // Verify that things work correctly when bigger than the output

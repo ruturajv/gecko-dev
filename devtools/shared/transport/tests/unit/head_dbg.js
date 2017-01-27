@@ -3,8 +3,8 @@
 
 "use strict";
 
-/* exported Cr CC NetUtil defer errorCount initTestDebuggerServer
-            writeTestTempFile socket_transport local_transport really_long
+/* exported Cr, CC, NetUtil, defer, errorCount, initTestDebuggerServer,
+            writeTestTempFile, socket_transport, local_transport, really_long
 */
 
 var Cc = Components.classes;
@@ -21,7 +21,6 @@ const defer = require("devtools/shared/defer");
 const { Task } = require("devtools/shared/task");
 
 const Services = require("Services");
-// const DevToolsUtils = require("devtools/shared/DevToolsUtils");
 
 // We do not want to log packets by default, because in some tests,
 // we can be sending large amounts of data. The test harness has
@@ -64,7 +63,7 @@ var listener = {
     try {
       // If we've been given an nsIScriptError, then we can print out
       // something nicely formatted, for tools like Emacs to pick up.
-      // var scriptError = message.QueryInterface(Ci.nsIScriptError);
+      message.QueryInterface(Ci.nsIScriptError);
       dump(message.sourceName + ":" + message.lineNumber + ": " +
            scriptErrorFlagsToKind(message.flags) + ": " +
            message.errorMessage + "\n");
