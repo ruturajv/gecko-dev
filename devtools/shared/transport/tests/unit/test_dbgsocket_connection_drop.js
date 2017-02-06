@@ -63,7 +63,7 @@ var test_helper = Task.async(function* (payload) {
   let closedDeferred = defer();
   transport.hooks = {
     onPacket: function (packet) {
-      this.onPacket = function (packet2) {
+      this.onPacket = function () {
         do_throw(new Error("This connection should be dropped."));
         transport.close();
       };
