@@ -96,9 +96,8 @@ function* test_socket_shutdown() {
       // machines it may just time out.
       do_check_true(true);
       return;
-    } else {
-      throw e;
     }
+    throw e;
   }
 
   // Shouldn't reach this, should never connect.
