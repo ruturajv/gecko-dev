@@ -85,7 +85,7 @@ function* test_socket_shutdown() {
 
   do_print("Connecting to a server socket at " + new Date().toTimeString());
   try {
-    let transport = yield DebuggerClient.socketConnect({
+    yield DebuggerClient.socketConnect({
       host: "127.0.0.1",
       port: gPort
     });
