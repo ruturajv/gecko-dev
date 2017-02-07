@@ -95,6 +95,6 @@ function synthesizeMouseDown(x, y, win) {
   // We need to make sure the inserted anonymous content can be targeted by the
   // event right after having been inserted, and so we need to force a sync
   // reflow.
-  let forceReflow = win.document.documentElement.offsetWidth;
+  // let forceReflow = win.document.documentElement.offsetWidth;
   EventUtils.synthesizeMouseAtPoint(x, y, {type: "mousedown"}, win);
 }

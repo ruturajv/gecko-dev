@@ -10,7 +10,7 @@
 // This makes sure the 'domnode' protocol actor type is known when importing
 // highlighter.
 require("devtools/server/actors/inspector");
-const events = require("sdk/event/core");
+// const events = require("sdk/event/core");
 
 const {HighlighterEnvironment} = require("devtools/server/actors/highlighters");
 
@@ -18,8 +18,10 @@ const {
   CanvasFrameAnonymousContentHelper
 } = require("devtools/server/actors/highlighters/utils/markup");
 
-const TEST_URL_1 = "data:text/html;charset=utf-8,CanvasFrameAnonymousContentHelper test 1";
-const TEST_URL_2 = "data:text/html;charset=utf-8,CanvasFrameAnonymousContentHelper test 2";
+// const TEST_URL_1
+//   = "data:text/html;charset=utf-8,CanvasFrameAnonymousContentHelper test 1";
+const TEST_URL_2
+  = "data:text/html;charset=utf-8,CanvasFrameAnonymousContentHelper test 2";
 
 add_task(function* () {
   let browser = yield addTab(TEST_URL_2);
@@ -93,6 +95,6 @@ function synthesizeMouseDown(x, y, win) {
   // We need to make sure the inserted anonymous content can be targeted by the
   // event right after having been inserted, and so we need to force a sync
   // reflow.
-  let forceReflow = win.document.documentElement.offsetWidth;
+  // let forceReflow = win.document.documentElement.offsetWidth;
   EventUtils.synthesizeMouseAtPoint(x, y, {type: "mousedown"}, win);
 }
