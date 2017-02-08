@@ -8,8 +8,8 @@ const {DirectorManagerFront} = require("devtools/shared/fronts/director-manager"
 const {DirectorRegistry} = require("devtools/server/actors/director-registry");
 
 add_task(function* () {
-  let browser = yield addTab(MAIN_DOMAIN + "director-script-target.html");
-  let doc = browser.contentDocument;
+  // let browser = yield addTab(MAIN_DOMAIN + "director-script-target.html");
+  // let doc = browser.contentDocument;
 
   initDebuggerServer();
   let client = new DebuggerClient(DebuggerServer.connectPipe());
@@ -69,12 +69,13 @@ function* testDirectorScriptMessagePort(directorManager) {
   // needs to explicit start the port
   port.start();
 
-  var msg = { k1: "v1", k2: [1, 2, 3] };
+  let msg = { k1: "v1", k2: [1, 2, 3] };
   port.postMessage(msg);
 
-  var reply = yield waitForMessagePortEvent;
+  let reply = yield waitForMessagePortEvent;
 
-  is(JSON.stringify(reply.data), JSON.stringify(msg), "echo reply received on the MessagePortClient");
+  is(JSON.stringify(reply.data), JSON.stringify(msg),
+    "echo reply received on the MessagePortClient");
 }
 
 function* testDirectorScriptWindowEval(directorManager) {
@@ -82,8 +83,8 @@ function* testDirectorScriptWindowEval(directorManager) {
     scriptId: "testDirectorScript_WindowEval",
     scriptCode: "(" + (function () {
       exports.attach = function ({window, port}) {
-        var onpageloaded = function () {
-          var globalVarValue = window.eval("globalAccessibleVar;");
+        let onpageloaded = function () {
+          let globalVarValue = window.eval("globalAccessibleVar;");
           port.postMessage(globalVarValue);
         };
 
@@ -106,10 +107,11 @@ function* testDirectorScriptWindowEval(directorManager) {
   // needs to explicit start the port
   port.start();
 
-  var portEvent = yield waitForMessagePortEvent;
+  let portEvent = yield waitForMessagePortEvent;
 
   ok(portEvent.data !== "unsecure-eval", "window.eval should be wrapped and safe");
-  is(portEvent.data, "global-value", "globalAccessibleVar should be accessible through window.eval");
+  is(portEvent.data, "global-value",
+    "globalAccessibleVar should be accessible through window.eval");
 }
 
 function* testDirectorScriptUnloadOnDetach(directorManager) {
@@ -133,7 +135,8 @@ function* testDirectorScriptUnloadOnDetach(directorManager) {
   let waitForDetach = once(directorManager, "director-script-detach");
   let waitForMessage = once(port, "message");
 
-  directorManager.disableByScriptIds(["testDirectorScript_unloadOnDetach"], {reload: false});
+  directorManager.disableByScriptIds(["testDirectorScript_unloadOnDetach"],
+                                    {reload: false});
 
   let { directorScriptId } = yield waitForDetach;
   is(directorScriptId, "testDirectorScript_unloadOnDetach",
