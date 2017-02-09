@@ -4,6 +4,7 @@
 /**
  * Test that we get DOMContentLoaded and Load markers
  */
+"use strict";
 
 const { TimelineFront } = require("devtools/shared/fronts/timeline");
 const MARKER_NAMES = ["document::DOMContentLoaded", "document::Load"];
