@@ -10,7 +10,8 @@ const URL2 = MAIN_DOMAIN + "navigate-second.html";
 var events = require("sdk/event/core");
 var client;
 
-SpecialPowers.pushPrefEnv({"set": [["dom.require_user_interaction_for_beforeunload", false]]});
+SpecialPowers.pushPrefEnv(
+  {"set": [["dom.require_user_interaction_for_beforeunload", false]]});
 
 // State machine to check events order
 var i = 0;
@@ -32,7 +33,8 @@ function assertEvent(event, data) {
       is(data.newURI, URL2, "newURI property is correct");
       break;
     case x++:
-      is(event, "request", "RDP is async with messageManager, the request happens after will-navigate");
+      is(event, "request",
+        "RDP is async with messageManager, the request happens after will-navigate");
       is(data, URL2);
       break;
     case x++:
@@ -51,7 +53,8 @@ function assertEvent(event, data) {
       break;
     case x++:
       is(event, "navigate", "Then once the second doc is loaded, we get the navigate event");
-      is(content.document.readyState, "complete", "navigate is emitted only once the document is fully loaded");
+      is(content.document.readyState, "complete",
+        "navigate is emitted only once the document is fully loaded");
       break;
     case x++:
       is(event, "tabNavigated", "Finally, the receive the client event");
@@ -102,22 +105,22 @@ function getServerTabActor(callback) {
   client = new DebuggerClient(transport);
   connectDebuggerClient(client).then(form => {
     let actorID = form.actor;
-    client.attachTab(actorID, function (aResponse, aTabClient) {
+    client.attachTab(actorID, function (response, tabClient) {
       // !Hack! Retrieve a server side object, the BrowserTabActor instance
       let tabActor = DebuggerServer._searchAllConnectionsForActor(actorID);
       callback(tabActor);
     });
   });
 
-  client.addListener("tabNavigated", function (aEvent, aPacket) {
-    assertEvent("tabNavigated", aPacket);
+  client.addListener("tabNavigated", function (event, packet) {
+    assertEvent("tabNavigated", packet);
   });
 }
 
 function test() {
   // Open a test tab
   addTab(URL1).then(function (browser) {
-    let doc = browser.contentDocument;
+    // let doc = browser.contentDocument;
     getServerTabActor(function (tabActor) {
       // In order to listen to internal will-navigate/navigate events
       events.on(tabActor, "will-navigate", function (data) {
@@ -142,7 +145,6 @@ function test() {
       assertEvent("load-new-document");
       content.location = URL2;
     });
-
   });
 }
 
