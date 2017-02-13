@@ -228,7 +228,7 @@ const IDBValues = {
         },
       ]
     },
-    "http://sectest1.example.org" : {},
+    "http://sectest1.example.org": {},
     "https://sectest1.example.org": {
       "idb-s1 (default)": [
         {
@@ -297,7 +297,7 @@ const IDBValues = {
       ],
       "idb2 (default)#obj3": []
     },
-    "http://sectest1.example.org" : {},
+    "http://sectest1.example.org": {},
     "https://sectest1.example.org": {
       "idb-s1 (default)#obj-s1": [
         {
@@ -331,12 +331,12 @@ const IDBValues = {
   }
 };
 
-function finishTests(client) {
+// function finishTests(client) {
 
-  let closeConnection = () => {
+//   let closeConnection = () => {
 
-  };
-}
+//   };
+// }
 
 function* testStores(data) {
   ok(data.cookies, "Cookies storage actor is present");
@@ -514,8 +514,8 @@ var testIndexedDBs = Task.async(function* (index, hosts, indexedDBActor) {
   yield testIndexedDBs(++index, hosts, indexedDBActor);
 });
 
-var testObjectStores = Task.async(function* (index, hosts, indexedDBActor) {
-  let host = Object.keys(hosts)[index];
+var testObjectStores = Task.async(function* (ix, hosts, indexedDBActor) {
+  let host = Object.keys(hosts)[ix];
   let matchItems = (data, db) => {
     is(data.total, IDBValues.objectStoreDetails[host][db].length,
        "Number of object stores in host " + host + " matches");
@@ -559,10 +559,10 @@ var testObjectStores = Task.async(function* (index, hosts, indexedDBActor) {
       yield indexedDBActor.getStoreObjects(host, [JSON.stringify(objName)])
     ), objName[0]);
   }
-  if (index == Object.keys(hosts).length - 1) {
+  if (ix == Object.keys(hosts).length - 1) {
     return;
   }
-  yield testObjectStores(++index, hosts, indexedDBActor);
+  yield testObjectStores(++ix, hosts, indexedDBActor);
 });
 
 var testIDBEntries = Task.async(function* (index, hosts, indexedDBActor) {

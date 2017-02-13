@@ -5,11 +5,11 @@
 "use strict";
 
 const {StorageFront} = require("devtools/shared/fronts/storage");
-const beforeReload = {
-  cookies: ["http://test1.example.org", "https://sectest1.example.org"],
-  localStorage: ["http://test1.example.org", "http://sectest1.example.org"],
-  sessionStorage: ["http://test1.example.org", "http://sectest1.example.org"],
-};
+// const beforeReload = {
+//   cookies: ["http://test1.example.org", "https://sectest1.example.org"],
+//   localStorage: ["http://test1.example.org", "http://sectest1.example.org"],
+//   sessionStorage: ["http://test1.example.org", "http://sectest1.example.org"],
+// };
 
 const TESTS = [
   // index 0
