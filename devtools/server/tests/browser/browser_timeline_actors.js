@@ -10,8 +10,8 @@
 const {TimelineFront} = require("devtools/shared/fronts/timeline");
 
 add_task(function* () {
-  let browser = yield addTab("data:text/html;charset=utf-8,mop");
-  let doc = browser.contentDocument;
+  yield addTab("data:text/html;charset=utf-8,mop");
+  // let doc = browser.contentDocument;
 
   initDebuggerServer();
   let client = new DebuggerClient(DebuggerServer.connectPipe());

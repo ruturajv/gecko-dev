@@ -27,7 +27,8 @@ add_task(function* () {
   ok(!isActive, "The TimelineFront is not initially recording");
 
   info("Flush any pending reflows");
-  let forceSyncReflow = doc.body.innerHeight;
+  // forceSyncReflow
+  doc.body.innerHeight;
 
   info("Start recording");
   yield front.start({ withMarkers: true });
@@ -44,7 +45,8 @@ add_task(function* () {
   ok(markers.length > 0, "Markers were returned");
 
   info("Flush pending reflows again");
-  forceSyncReflow = doc.body.innerHeight;
+  // forceSyncReflow
+  doc.body.innerHeight;
 
   info("Change some style on the page to cause style/paint");
   onMarkers = once(front, "markers");
