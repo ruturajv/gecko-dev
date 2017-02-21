@@ -50,6 +50,7 @@ function* testDirectorScriptMessagePort(directorManager) {
   let { port } = yield installAndEnableDirectorScript(directorManager, {
     scriptId: "testDirectorScript_MessagePort",
     scriptCode: "(" + (function () {
+      // eslint-disable-next-line no-shadow
       exports.attach = function ({port}) {
         port.onmessage = function (evt) {
           // echo messages
@@ -82,6 +83,7 @@ function* testDirectorScriptWindowEval(directorManager) {
   let { port } = yield installAndEnableDirectorScript(directorManager, {
     scriptId: "testDirectorScript_WindowEval",
     scriptCode: "(" + (function () {
+      // eslint-disable-next-line no-shadow
       exports.attach = function ({window, port}) {
         let onpageloaded = function () {
           let globalVarValue = window.eval("globalAccessibleVar;");
@@ -118,6 +120,7 @@ function* testDirectorScriptUnloadOnDetach(directorManager) {
   let { port } = yield installAndEnableDirectorScript(directorManager, {
     scriptId: "testDirectorScript_unloadOnDetach",
     scriptCode: "(" + (function () {
+      // eslint-disable-next-line no-shadow
       exports.attach = function ({port, onUnload}) {
         onUnload(function () {
           port.postMessage("ONUNLOAD");

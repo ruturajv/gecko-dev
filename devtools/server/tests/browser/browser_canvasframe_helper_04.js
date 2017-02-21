@@ -25,6 +25,7 @@ const TEST_URL_2
 
 add_task(function* () {
   let browser = yield addTab(TEST_URL_2);
+  // eslint-disable-next-line mozilla/no-cpows-in-tests
   let doc = browser.contentDocument;
 
   let nodeBuilder = () => {
