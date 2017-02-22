@@ -29,9 +29,6 @@ function test() {
           ok(!!tab.helloActor, "Hello actor must exist");
 
           // Make sure actor's state is maintained across listTabs requests.
-
-          // Getting max 3 nested err if I use () => cleanupActor(actorFront)
-          // Hence I've retained the existing state
           checkActorState(tab.helloActor, cleanupActor.bind(this, actorFront));
         });
       });
