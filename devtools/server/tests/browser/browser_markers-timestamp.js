@@ -13,7 +13,6 @@ const MARKER_NAME = "TimeStamp";
 
 add_task(function* () {
   yield addTab(MAIN_DOMAIN + "doc_perf.html");
-  // let doc = browser.contentDocument;
 
   initDebuggerServer();
   let client = new DebuggerClient(DebuggerServer.connectPipe());
@@ -26,8 +25,7 @@ add_task(function* () {
   pmmConsoleMethod("timeStamp");
   pmmConsoleMethod("timeStamp", "myLabel");
 
-  let markers = yield waitForMarkerType(front, MARKER_NAME,
-    markers2 => markers2.length >= 2);
+  let markers = yield waitForMarkerType(front, MARKER_NAME, m => m.length >= 2);
 
   yield front.stopRecording(rec);
 

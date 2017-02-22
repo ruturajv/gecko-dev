@@ -14,7 +14,6 @@ const { pmmIsProfilerActive, pmmLoadFrameScripts } = require("devtools/client/pe
 
 add_task(function* () {
   yield addTab(MAIN_DOMAIN + "doc_perf.html");
-  // let doc = browser.contentDocument;
 
   initDebuggerServer();
   let client = new DebuggerClient(DebuggerServer.connectPipe());

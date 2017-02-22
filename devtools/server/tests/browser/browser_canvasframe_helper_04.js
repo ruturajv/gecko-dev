@@ -10,7 +10,6 @@
 // This makes sure the 'domnode' protocol actor type is known when importing
 // highlighter.
 require("devtools/server/actors/inspector");
-// const events = require("sdk/event/core");
 
 const {HighlighterEnvironment} = require("devtools/server/actors/highlighters");
 
@@ -20,11 +19,11 @@ const {
 
 // const TEST_URL_1
 //   = "data:text/html;charset=utf-8,CanvasFrameAnonymousContentHelper test 1";
-const TEST_URL_2
+const TEST_URL
   = "data:text/html;charset=utf-8,CanvasFrameAnonymousContentHelper test 2";
 
 add_task(function* () {
-  let browser = yield addTab(TEST_URL_2);
+  let browser = yield addTab(TEST_URL);
   // eslint-disable-next-line mozilla/no-cpows-in-tests
   let doc = browser.contentDocument;
 
@@ -69,8 +68,10 @@ add_task(function* () {
 
   info("Navigating to a new page");
   let loaded = BrowserTestUtils.browserLoaded(gBrowser.selectedBrowser);
-  content.location = TEST_URL_2;
+  // eslint-disable-next-line mozilla/no-cpows-in-tests
+  content.location = TEST_URL;
   yield loaded;
+  // eslint-disable-next-line mozilla/no-cpows-in-tests
   doc = gBrowser.selectedBrowser.contentWindow.document;
 
   info("Try to access the element again");

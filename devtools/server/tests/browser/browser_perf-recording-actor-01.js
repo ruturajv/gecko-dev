@@ -12,7 +12,6 @@ const { PerformanceFront } = require("devtools/shared/fronts/performance");
 
 add_task(function* () {
   yield addTab(MAIN_DOMAIN + "doc_perf.html");
-  // let doc = browser.contentDocument;
 
   initDebuggerServer();
   let client = new DebuggerClient(DebuggerServer.connectPipe());

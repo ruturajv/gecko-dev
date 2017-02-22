@@ -8,8 +8,7 @@ const {DirectorManagerFront} = require("devtools/shared/fronts/director-manager"
 const {DirectorRegistry} = require("devtools/server/actors/director-registry");
 
 add_task(function* () {
-  // let browser = yield addTab(MAIN_DOMAIN + "director-script-target.html");
-  // let doc = browser.contentDocument;
+  yield addTab(MAIN_DOMAIN + "director-script-target.html");
 
   initDebuggerServer();
   let client = new DebuggerClient(DebuggerServer.connectPipe());

@@ -24,18 +24,21 @@ function test() {
 
       let registry = ActorRegistryFront(gClient, response);
       registry.registerActor(actorURL, options).then(actorFront => {
-        gClient.listTabs(response2 => {
-          let tab = response2.tabs[response2.selected];
+        gClient.listTabs(res => {
+          let tab = res.tabs[res.selected];
           ok(!!tab.helloActor, "Hello actor must exist");
 
           // Make sure actor's state is maintained across listTabs requests.
-          checkActorState(tab.helloActor, checkActorCleanup.bind(this, actorFront));
+
+          // Getting max 3 nested err if I use () => cleanupActor(actorFront)
+          // Hence I've retained the existing state
+          checkActorState(tab.helloActor, cleanupActor.bind(this, actorFront));
         });
       });
     });
 }
 
-function checkActorCleanup(actorFront) {
+function cleanupActor(actorFront) {
   // Clean up
   actorFront.unregister().then(() => {
     gClient.close().then(() => {
@@ -46,36 +49,29 @@ function checkActorCleanup(actorFront) {
   });
 }
 
-function checkActorState(helloActor, callback) {
-  getCount(helloActor, response => {
-    countCheck(1, null, response);
-
-    getCount(helloActor, countResponse => {
-      countCheck(2, null, countResponse);
-
-      gClient.listTabs(listTabsResponse => {
-        let tab = listTabsResponse.tabs[listTabsResponse.selected];
-        is(tab.helloActor, helloActor, "Hello actor must be valid");
-
-        // The countCheck will get called with 3rd argument as the response
-        getCount(helloActor, countCheck.bind(this, 3, callback));
-      });
-    });
-  });
-}
-
 function getCount(actor, callback) {
-  gClient.request({
+  return gClient.request({
     to: actor,
     type: "count"
   }, callback);
 }
 
-function countCheck(count, callback, response) {
+var checkActorState = Task.async(function* (helloActor, callback) {
+  let response = yield getCount(helloActor);
   ok(!response.error, "No error");
-  is(response.count, count, "The counter must be valid");
+  is(response.count, 1, "The counter must be valid");
 
-  if (typeof callback === "function") {
-    callback();
-  }
-}
+  response = yield getCount(helloActor);
+  ok(!response.error, "No error");
+  is(response.count, 2, "The counter must be valid");
+
+  let {tabs, selected} = yield gClient.listTabs();
+  let tab = tabs[selected];
+  is(tab.helloActor, helloActor, "Hello actor must be valid");
+
+  response = yield getCount(helloActor);
+  ok(!response.error, "No error");
+  is(response.count, 3, "The counter must be valid");
+
+  callback();
+});

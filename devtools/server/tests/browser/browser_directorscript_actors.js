@@ -9,7 +9,6 @@ const {DirectorRegistry} = require("devtools/server/actors/director-registry");
 
 add_task(function* () {
   // let browser = yield addTab(MAIN_DOMAIN + "director-script-target.html");
-  // let doc = browser.contentDocument;
 
   initDebuggerServer();
   let client = new DebuggerClient(DebuggerServer.connectPipe());
@@ -51,8 +50,8 @@ function* testDirectorScriptMessagePort(directorManager) {
     scriptId: "testDirectorScript_MessagePort",
     scriptCode: "(" + (function () {
       // eslint-disable-next-line no-shadow
-      exports.attach = function ({port}) {
-        port.onmessage = function (evt) {
+      exports.attach = function ({port: messagePort}) {
+        messagePort.onmessage = function (evt) {
           // echo messages
           evt.target.postMessage(evt.data);
         };
@@ -83,11 +82,10 @@ function* testDirectorScriptWindowEval(directorManager) {
   let { port } = yield installAndEnableDirectorScript(directorManager, {
     scriptId: "testDirectorScript_WindowEval",
     scriptCode: "(" + (function () {
-      // eslint-disable-next-line no-shadow
-      exports.attach = function ({window, port}) {
+      exports.attach = function ({window, port: evalPort}) {
         let onpageloaded = function () {
           let globalVarValue = window.eval("globalAccessibleVar;");
-          port.postMessage(globalVarValue);
+          evalPort.postMessage(globalVarValue);
         };
 
         if (window.document && window.document.readyState === "complete") {
@@ -120,10 +118,9 @@ function* testDirectorScriptUnloadOnDetach(directorManager) {
   let { port } = yield installAndEnableDirectorScript(directorManager, {
     scriptId: "testDirectorScript_unloadOnDetach",
     scriptCode: "(" + (function () {
-      // eslint-disable-next-line no-shadow
-      exports.attach = function ({port, onUnload}) {
+      exports.attach = function ({port: unloadPort, onUnload}) {
         onUnload(function () {
-          port.postMessage("ONUNLOAD");
+          unloadPort.postMessage("ONUNLOAD");
         });
       };
     }).toString() + ")();",

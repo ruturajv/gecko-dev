@@ -14,7 +14,6 @@ add_task(function* () {
   requestLongerTimeout(2);
 
   yield addTab(MAIN_DOMAIN + "doc_force_cc.html");
-  // let doc = browser.contentDocument;
 
   initDebuggerServer();
   let client = new DebuggerClient(DebuggerServer.connectPipe());

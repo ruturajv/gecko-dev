@@ -331,13 +331,6 @@ const IDBValues = {
   }
 };
 
-// function finishTests(client) {
-
-//   let closeConnection = () => {
-
-//   };
-// }
-
 function* testStores(data) {
   ok(data.cookies, "Cookies storage actor is present");
   ok(data.localStorage, "Local Storage storage actor is present");

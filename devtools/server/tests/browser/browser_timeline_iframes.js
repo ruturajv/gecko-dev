@@ -11,7 +11,6 @@ const {TimelineFront} = require("devtools/shared/fronts/timeline");
 
 add_task(function* () {
   yield addTab(MAIN_DOMAIN + "timeline-iframe-parent.html");
-  // let doc = browser.contentDocument;
 
   initDebuggerServer();
   let client = new DebuggerClient(DebuggerServer.connectPipe());

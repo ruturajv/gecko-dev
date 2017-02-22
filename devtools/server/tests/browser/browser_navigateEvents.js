@@ -16,47 +16,50 @@ SpecialPowers.pushPrefEnv(
 // State machine to check events order
 var i = 0;
 function assertEvent(event, data) {
-  let x = 0;
   switch (i++) {
-    case x++:
+    case 0:
       is(event, "request", "Get first page load");
       is(data, URL1);
       break;
-    case x++:
+    case 1:
       is(event, "load-new-document", "Ask to load the second page");
       break;
-    case x++:
+    case 2:
       is(event, "unload-dialog", "We get the dialog on first page unload");
       break;
-    case x++:
+    case 3:
       is(event, "will-navigate", "The very first event is will-navigate on server side");
       is(data.newURI, URL2, "newURI property is correct");
       break;
-    case x++:
+    case 4:
       is(event, "request",
         "RDP is async with messageManager, the request happens after will-navigate");
       is(data, URL2);
       break;
-    case x++:
+    case 5:
       is(event, "tabNavigated", "After the request, the client receive tabNavigated");
       is(data.state, "start", "state is start");
       is(data.url, URL2, "url property is correct");
       is(data.nativeConsoleAPI, true, "nativeConsoleAPI is correct");
       break;
-    case x++:
+    case 6:
       is(event, "DOMContentLoaded");
+      // eslint-disable-next-line mozilla/no-cpows-in-tests
       is(content.document.readyState, "interactive");
       break;
-    case x++:
+    case 7:
       is(event, "load");
+      // eslint-disable-next-line mozilla/no-cpows-in-tests
       is(content.document.readyState, "complete");
       break;
-    case x++:
-      is(event, "navigate", "Then once the second doc is loaded, we get the navigate event");
+    case 8:
+      is(event, "navigate",
+        "Then once the second doc is loaded, we get the navigate event");
+      // eslint-disable-next-line mozilla/no-cpows-in-tests
       is(content.document.readyState, "complete",
         "navigate is emitted only once the document is fully loaded");
       break;
-    case x++:
+    case 9:
       is(event, "tabNavigated", "Finally, the receive the client event");
       is(data.state, "stop", "state is stop");
       is(data.url, URL2, "url property is correct");
@@ -120,7 +123,6 @@ function getServerTabActor(callback) {
 function test() {
   // Open a test tab
   addTab(URL1).then(function (browser) {
-    // let doc = browser.contentDocument;
     getServerTabActor(function (tabActor) {
       // In order to listen to internal will-navigate/navigate events
       events.on(tabActor, "will-navigate", function (data) {
@@ -143,7 +145,9 @@ function test() {
 
       // Load another document in this doc to dispatch these events
       assertEvent("load-new-document");
-      content.location = URL2;
+      ContentTask.spawn(gBrowser.selectedBrowser, {}, () => {
+        contentcontent.location = URL2;
+      });
     });
   });
 }

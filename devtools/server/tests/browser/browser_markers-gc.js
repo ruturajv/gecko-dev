@@ -11,7 +11,6 @@ const MARKER_NAME = "GarbageCollection";
 
 add_task(function* () {
   yield addTab(MAIN_DOMAIN + "doc_force_gc.html");
-  // let doc = browser.contentDocument;
 
   initDebuggerServer();
   let client = new DebuggerClient(DebuggerServer.connectPipe());

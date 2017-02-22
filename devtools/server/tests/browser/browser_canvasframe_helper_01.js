@@ -19,7 +19,6 @@ const TEST_URL = "data:text/html;charset=utf-8,CanvasFrameAnonymousContentHelper
 
 add_task(function* () {
   let browser = yield addTab(TEST_URL);
-  // `doc` is used in a callback, so...
   // eslint-disable-next-line mozilla/no-cpows-in-tests
   let doc = browser.contentDocument;
 
