@@ -145,9 +145,7 @@ function test() {
 
       // Load another document in this doc to dispatch these events
       assertEvent("load-new-document");
-      ContentTask.spawn(gBrowser.selectedBrowser, {}, () => {
-        contentcontent.location = URL2;
-      });
+      BrowserTestUtils.loadURI(gBrowser.selectedBrowser, URL2);
     });
   });
 }

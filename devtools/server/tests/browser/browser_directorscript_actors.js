@@ -49,7 +49,6 @@ function* testDirectorScriptMessagePort(directorManager) {
   let { port } = yield installAndEnableDirectorScript(directorManager, {
     scriptId: "testDirectorScript_MessagePort",
     scriptCode: "(" + (function () {
-      // eslint-disable-next-line no-shadow
       exports.attach = function ({port: messagePort}) {
         messagePort.onmessage = function (evt) {
           // echo messages
