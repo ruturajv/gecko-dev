@@ -376,19 +376,18 @@ exports.diff = diff;
  *
  * @return {Object<number, TreeNode>}
  */
-const createParentMap = exports.createParentMap = function (node,
-                                                            getId = node => node.id,
-                                                            aggregator = Object.create(null)) {
-  if (node.children) {
-    for (let i = 0, length = node.children.length; i < length; i++) {
-      const child = node.children[i];
-      aggregator[getId(child)] = node;
-      createParentMap(child, getId, aggregator);
+const createParentMap = exports.createParentMap
+  = function (node, getId = elNode => elNode.id,
+                                        aggregator = Object.create(null)) {
+    if (node.children) {
+      for (let i = 0, length = node.children.length; i < length; i++) {
+        const child = node.children[i];
+        aggregator[getId(child)] = node;
+        createParentMap(child, getId, aggregator);
+      }
     }
-  }
-
-  return aggregator;
-};
+    return aggregator;
+  };
 
 const BUCKET = Object.freeze({ by: "bucket" });
 
