@@ -7,8 +7,8 @@
 // Ported from js/src/jit-test/tests/debug/Memory-takeCensus-05.js
 
 function run_test() {
-  var g = newGlobal();
-  var dbg = new Debugger(g);
+  let g = newGlobal();
+  let dbg = new Debugger(g);
 
   equal("AllocationMarker" in saveHeapSnapshotAndTakeCensus(dbg).objects, false,
         "No allocation markers should exist in the census.");

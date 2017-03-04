@@ -49,8 +49,9 @@ function testBadParameters() {
   throws(() => ChromeUtils.saveHeapSnapshot({ debugger: Debugger.prototype }),
          "Should throw if debugger is the Debugger.prototype object.");
 
-  throws(() => ChromeUtils.saveHeapSnapshot({ get globals() { return [this]; } }),
-         "Should throw if boundaries property is a getter.");
+  throws(() => ChromeUtils.saveHeapSnapshot({ get globals() {
+    return [this];
+  } }), "Should throw if boundaries property is a getter.");
 }
 
 const makeNewSandbox = () =>
@@ -63,14 +64,14 @@ function testGoodParameters() {
   ChromeUtils.saveHeapSnapshot({ debugger: dbg });
   ok(true, "Should be able to save a snapshot for a debuggee global.");
 
-  dbg = new Debugger;
+  dbg = new Debugger();
   let sandboxes = Array(10).fill(null).map(makeNewSandbox);
   sandboxes.forEach(sb => dbg.addDebuggee(sb));
 
   ChromeUtils.saveHeapSnapshot({ debugger: dbg });
   ok(true, "Should be able to save a snapshot for many debuggee globals.");
 
-  dbg = new Debugger;
+  dbg = new Debugger();
   ChromeUtils.saveHeapSnapshot({ debugger: dbg });
   ok(true, "Should be able to save a snapshot with no debuggee globals.");
 
