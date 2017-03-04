@@ -49,12 +49,12 @@ function run_test() {
     }
     dumpn("---------------------");
 
-    for (let path of paths) {
-      ok(path.length > 0, "Cannot have zero length paths");
-      ok(path[0].predecessor === dominatorTree.root,
+    for (let path2 of paths) {
+      ok(path2.length > 0, "Cannot have zero length paths");
+      ok(path2[0].predecessor === dominatorTree.root,
          "The first predecessor is always our start node");
 
-      for (let part of path) {
+      for (let part of path2) {
         ok(part.predecessor, "Each part of a path has a predecessor");
         ok(!!snapshot.describeNode({ by: "count", count: true, bytes: true},
                                    part.predecessor),
