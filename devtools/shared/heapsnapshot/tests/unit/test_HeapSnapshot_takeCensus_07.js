@@ -14,8 +14,8 @@ function run_test() {
   assertThrowsValue(() => {
     saveHeapSnapshotAndTakeCensus(dbg, {
       breakdown: { get by() {
-        // eslint-disable-next-line no-throw-literal
-        throw "ಠ_ಠ";
+        let error = "ಠ_ಠ";
+        throw error;
       } }
     });
   }, "ಠ_ಠ");
@@ -23,8 +23,8 @@ function run_test() {
   assertThrowsValue(() => {
     saveHeapSnapshotAndTakeCensus(dbg, {
       breakdown: { by: "count", get count() {
-        // eslint-disable-next-line no-throw-literal
-        throw "ಠ_ಠ";
+        let error = "ಠ_ಠ";
+        throw error;
       } }
     });
   }, "ಠ_ಠ");
@@ -32,8 +32,8 @@ function run_test() {
   assertThrowsValue(() => {
     saveHeapSnapshotAndTakeCensus(dbg, {
       breakdown: { by: "count", get bytes() {
-        // eslint-disable-next-line no-throw-literal
-        throw "ಠ_ಠ";
+        let error = "ಠ_ಠ";
+        throw error;
       } }
     });
   }, "ಠ_ಠ");
@@ -41,8 +41,8 @@ function run_test() {
   assertThrowsValue(() => {
     saveHeapSnapshotAndTakeCensus(dbg, {
       breakdown: { by: "objectClass", get then() {
-        // eslint-disable-next-line no-throw-literal
-        throw "ಠ_ಠ";
+        let error = "ಠ_ಠ";
+        throw error;
       } }
     });
   }, "ಠ_ಠ");
@@ -50,8 +50,8 @@ function run_test() {
   assertThrowsValue(() => {
     saveHeapSnapshotAndTakeCensus(dbg, {
       breakdown: { by: "objectClass", get other() {
-        // eslint-disable-next-line no-throw-literal
-        throw "ಠ_ಠ";
+        let error = "ಠ_ಠ";
+        throw error;
       } }
     });
   }, "ಠ_ಠ");
@@ -59,8 +59,8 @@ function run_test() {
   assertThrowsValue(() => {
     saveHeapSnapshotAndTakeCensus(dbg, {
       breakdown: { by: "coarseType", get objects() {
-        // eslint-disable-next-line no-throw-literal
-        throw "ಠ_ಠ";
+        let error = "ಠ_ಠ";
+        throw error;
       } }
     });
   }, "ಠ_ಠ");
@@ -68,8 +68,8 @@ function run_test() {
   assertThrowsValue(() => {
     saveHeapSnapshotAndTakeCensus(dbg, {
       breakdown: { by: "coarseType", get scripts() {
-        // eslint-disable-next-line no-throw-literal
-        throw "ಠ_ಠ";
+        let error = "ಠ_ಠ";
+        throw error;
       } }
     });
   }, "ಠ_ಠ");
@@ -77,8 +77,8 @@ function run_test() {
   assertThrowsValue(() => {
     saveHeapSnapshotAndTakeCensus(dbg, {
       breakdown: { by: "coarseType", get strings() {
-        // eslint-disable-next-line no-throw-literal
-        throw "ಠ_ಠ";
+        let error = "ಠ_ಠ";
+        throw error;
       } }
     });
   }, "ಠ_ಠ");
@@ -86,8 +86,8 @@ function run_test() {
   assertThrowsValue(() => {
     saveHeapSnapshotAndTakeCensus(dbg, {
       breakdown: { by: "coarseType", get other() {
-        // eslint-disable-next-line no-throw-literal
-        throw "ಠ_ಠ";
+        let error = "ಠ_ಠ";
+        throw error;
       } }
     });
   }, "ಠ_ಠ");
@@ -95,8 +95,8 @@ function run_test() {
   assertThrowsValue(() => {
     saveHeapSnapshotAndTakeCensus(dbg, {
       breakdown: { by: "internalType", get then() {
-        // eslint-disable-next-line no-throw-literal
-        throw "ಠ_ಠ";
+        let error = "ಠ_ಠ";
+        throw error;
       } }
     });
   }, "ಠ_ಠ");

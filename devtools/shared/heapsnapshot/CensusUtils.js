@@ -237,8 +237,6 @@ DiffVisitor.prototype._set = function (report, edge, val) {
  * @overrides Visitor.prototype.enter
  */
 DiffVisitor.prototype.enter = function (breakdown, report, edge) {
-  this._results === null;
-
   const newResults = breakdown.by === "allocationStack" ? new Map() : {};
   let newOther;
 
@@ -377,18 +375,18 @@ exports.diff = diff;
  *
  * @return {Object<number, TreeNode>}
  */
-const createParentMap = exports.createParentMap
-  = function (node, getId = elNode => elNode.id,
-                                        aggregator = Object.create(null)) {
-    if (node.children) {
-      for (let i = 0, length = node.children.length; i < length; i++) {
-        const child = node.children[i];
-        aggregator[getId(child)] = node;
-        createParentMap(child, getId, aggregator);
-      }
+const createParentMap = function (node, getId = elNode => elNode.id,
+                                  aggregator = Object.create(null)) {
+  if (node.children) {
+    for (let i = 0, length = node.children.length; i < length; i++) {
+      const child = node.children[i];
+      aggregator[getId(child)] = node;
+      createParentMap(child, getId, aggregator);
     }
-    return aggregator;
-  };
+  }
+  return aggregator;
+};
+exports.createParentMap = createParentMap;
 
 const BUCKET = Object.freeze({ by: "bucket" });
 
