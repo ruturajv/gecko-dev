@@ -13,8 +13,6 @@ Bug 1201597 - Sanity test that we can take a heap snapshot in an e10s child proc
 <body>
     <script type="application/javascript">
     "use strict";
-    /* global window, ok, SimpleTest, ChromeUtils, sendAsyncMessage, info,
-    SpecialPowers, document */
     window.onerror = function (msg, url, line, col, err) {
       ok(false, "@" + url + ":" + line + ":" + col + ": " + msg + "\n" + err.stack);
     };

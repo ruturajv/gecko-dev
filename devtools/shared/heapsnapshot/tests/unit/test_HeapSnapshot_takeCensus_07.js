@@ -11,92 +11,82 @@ function run_test() {
   let g = newGlobal();
   let dbg = new Debugger(g);
 
-  assertThrowsValue(() => {
+  assertThrows(() => {
     saveHeapSnapshotAndTakeCensus(dbg, {
       breakdown: { get by() {
-        let error = "ಠ_ಠ";
-        throw error;
+        throw Error("ಠ_ಠ");
       } }
     });
   }, "ಠ_ಠ");
 
-  assertThrowsValue(() => {
+  assertThrows(() => {
     saveHeapSnapshotAndTakeCensus(dbg, {
       breakdown: { by: "count", get count() {
-        let error = "ಠ_ಠ";
-        throw error;
+        throw Error("ಠ_ಠ");
       } }
     });
   }, "ಠ_ಠ");
 
-  assertThrowsValue(() => {
+  assertThrows(() => {
     saveHeapSnapshotAndTakeCensus(dbg, {
       breakdown: { by: "count", get bytes() {
-        let error = "ಠ_ಠ";
-        throw error;
+        throw Error("ಠ_ಠ");
       } }
     });
   }, "ಠ_ಠ");
 
-  assertThrowsValue(() => {
+  assertThrows(() => {
     saveHeapSnapshotAndTakeCensus(dbg, {
       breakdown: { by: "objectClass", get then() {
-        let error = "ಠ_ಠ";
-        throw error;
+        throw Error("ಠ_ಠ");
       } }
     });
   }, "ಠ_ಠ");
 
-  assertThrowsValue(() => {
+  assertThrows(() => {
     saveHeapSnapshotAndTakeCensus(dbg, {
       breakdown: { by: "objectClass", get other() {
-        let error = "ಠ_ಠ";
-        throw error;
+        throw Error("ಠ_ಠ");
       } }
     });
   }, "ಠ_ಠ");
 
-  assertThrowsValue(() => {
+  assertThrows(() => {
     saveHeapSnapshotAndTakeCensus(dbg, {
       breakdown: { by: "coarseType", get objects() {
-        let error = "ಠ_ಠ";
-        throw error;
+        throw Error("ಠ_ಠ");
       } }
     });
   }, "ಠ_ಠ");
 
-  assertThrowsValue(() => {
+  assertThrows(() => {
     saveHeapSnapshotAndTakeCensus(dbg, {
       breakdown: { by: "coarseType", get scripts() {
-        let error = "ಠ_ಠ";
-        throw error;
+        throw Error("ಠ_ಠ");
       } }
     });
   }, "ಠ_ಠ");
 
-  assertThrowsValue(() => {
+  assertThrows(() => {
     saveHeapSnapshotAndTakeCensus(dbg, {
       breakdown: { by: "coarseType", get strings() {
-        let error = "ಠ_ಠ";
-        throw error;
+        throw Error("ಠ_ಠ");
       } }
     });
   }, "ಠ_ಠ");
 
-  assertThrowsValue(() => {
+  assertThrows(() => {
     saveHeapSnapshotAndTakeCensus(dbg, {
       breakdown: { by: "coarseType", get other() {
-        let error = "ಠ_ಠ";
-        throw error;
+        throw Error("ಠ_ಠ");
       } }
     });
   }, "ಠ_ಠ");
 
-  assertThrowsValue(() => {
+  assertThrows(() => {
     saveHeapSnapshotAndTakeCensus(dbg, {
       breakdown: { by: "internalType", get then() {
-        let error = "ಠ_ಠ";
-        throw error;
+        throw Error("ಠ_ಠ");
       } }
     });
   }, "ಠ_ಠ");

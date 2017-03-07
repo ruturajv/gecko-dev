@@ -3,7 +3,7 @@
 
 "use strict";
 /* exported Cr, CC, Match, Census, Task, DevToolsUtils, HeapAnalysesClient,
-  assertThrowsValue, getFilePath, saveHeapSnapshotAndTakeCensus,
+  assertThrows, getFilePath, saveHeapSnapshotAndTakeCensus,
   saveHeapSnapshotAndComputeDominatorTree, compareCensusViewData, assertDiff,
   assertLabelAndShallowSize, makeTestDominatorTreeNode,
   assertDominatorTreeNodeInsertion, assertDeduplicatedPaths,
@@ -79,12 +79,14 @@ function newGlobal() {
   return global;
 }
 
-function assertThrowsValue(f, val, msg) {
+function assertThrows(f, val, msg) {
   let fullmsg;
   try {
     f();
   } catch (exc) {
     if ((exc === val) && (val !== 0 || 1 / exc === 1 / val)) {
+      return;
+    } else if (exc instanceof Error && exc.message === val) {
       return;
     }
     fullmsg = "Assertion failed: expected exception " + val + ", got " + exc;
