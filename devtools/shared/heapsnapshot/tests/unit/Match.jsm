@@ -18,33 +18,33 @@ this.Match = (function () {
   }
 
   Pattern.prototype = {
-      match: function (act) {
-        return match(act, this.template);
-      },
+    match: function (act) {
+      return match(act, this.template);
+    },
 
-      matches: function (act) {
-        try {
-          return this.match(act);
-        } catch (e) {
-          if (e instanceof MatchError) {
-            return false;
-          }
+    matches: function (act) {
+      try {
+        return this.match(act);
+      } catch (e) {
+        if (e instanceof MatchError) {
+          return false;
         }
-        return false;
-      },
+      }
+      return false;
+    },
 
-      assert: function (act, message) {
-        try {
-          return this.match(act);
-        } catch (e) {
-          if (e instanceof MatchError) {
-            throw new Error((message || "failed match") + ": " + e.message);
-          }
+    assert: function (act, message) {
+      try {
+        return this.match(act);
+      } catch (e) {
+        if (e instanceof MatchError) {
+          throw new Error((message || "failed match") + ": " + e.message);
         }
-        return false;
-      },
+      }
+      return false;
+    },
 
-      toString: () => "[object Pattern]"
+    toString: () => "[object Pattern]"
   };
 
   Pattern.ANY = new Pattern();
@@ -210,8 +210,5 @@ this.Match = (function () {
     return matchObject(act, exp);
   }
 
-  return {
-    Pattern: Pattern,
-    MatchError: MatchError
-  };
+  return { Pattern, MatchError };
 })();

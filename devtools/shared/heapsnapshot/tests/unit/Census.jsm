@@ -112,9 +112,9 @@ this.Census = (function () {
       }
 
       return {
-          enter: expectedLeaf,
-          done: expectedLeaf,
-          check: elt => compare(elt, basis)
+        enter: expectedLeaf,
+        done: expectedLeaf,
+        check: elt => compare(elt, basis)
       };
     };
   }

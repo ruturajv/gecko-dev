@@ -375,8 +375,7 @@ exports.diff = diff;
  *
  * @return {Object<number, TreeNode>}
  */
-const createParentMap = function (node, getId = elNode => elNode.id,
-                                  aggregator = Object.create(null)) {
+const createParentMap = function (node, getId = n => n.id, aggregator = {}) {
   if (node.children) {
     for (let i = 0, length = node.children.length; i < length; i++) {
       const child = node.children[i];
