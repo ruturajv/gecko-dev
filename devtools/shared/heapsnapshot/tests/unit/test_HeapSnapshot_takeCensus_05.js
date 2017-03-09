@@ -6,7 +6,7 @@
 //
 // Ported from js/src/jit-test/tests/debug/Memory-takeCensus-05.js
 
-// eslint-disable-next-line
+/* eslint-disable strict */
 function run_test() {
   let g = newGlobal();
   let dbg = new Debugger(g);
