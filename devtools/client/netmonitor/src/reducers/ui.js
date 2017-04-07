@@ -23,6 +23,7 @@ const Columns = I.Record({
   method: true,
   file: true,
   domain: true,
+  remoteip: true,
   cause: true,
   type: true,
   transferred: true,

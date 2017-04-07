@@ -27,6 +27,7 @@ const HEADERS = [
   { name: "method" },
   { name: "file", boxName: "icon-and-file" },
   { name: "domain", boxName: "security-and-domain" },
+  { name: "remoteip" },
   { name: "cause" },
   { name: "type" },
   { name: "transferred" },

@@ -57,6 +57,13 @@ function domain(first, second) {
   return result || waterfall(first, second);
 }
 
+function remoteIP(first, second) {
+  const firstIP = first.urlDetails.remoteAddress.toLowerCase();
+  const secondIP = second.urlDetails.remoteAddress.toLowerCase();
+  const result = compareValues(firstIP, secondIP);
+  return result || waterfall(first, second);
+}
+
 function cause(first, second) {
   const firstCause = first.cause.type;
   const secondCause = second.cause.type;
