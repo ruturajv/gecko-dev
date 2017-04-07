@@ -57,9 +57,9 @@ function domain(first, second) {
   return result || waterfall(first, second);
 }
 
-function remoteIP(first, second) {
-  const firstIP = first.urlDetails.remoteAddress.toLowerCase();
-  const secondIP = second.urlDetails.remoteAddress.toLowerCase();
+function remoteip(first, second) {
+  const firstIP = first.remoteAddress.toLowerCase();
+  const secondIP = second.remoteAddress.toLowerCase();
   const result = compareValues(firstIP, secondIP);
   return result || waterfall(first, second);
 }
@@ -93,6 +93,7 @@ exports.Sorters = {
   method,
   file,
   domain,
+  remoteip,
   cause,
   type,
   transferred,
