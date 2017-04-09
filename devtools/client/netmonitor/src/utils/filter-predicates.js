@@ -102,9 +102,8 @@ function isOther(item) {
   return tests.every(is => !is(item));
 }
 
-function isFreetextMatch({ url, remoteAddress = "" }, text) {
-  // This ensures search is for URL and RemoteIP
-  let lowerCaseUrl = url.toLowerCase() + remoteAddress.toLowerCase();
+function isFreetextMatch({ url }, text) {
+  let lowerCaseUrl = url.toLowerCase();
   let lowerCaseText = text.toLowerCase();
   let textLength = text.length;
   // Support negative filtering

@@ -316,11 +316,12 @@ const RemoteIPColumn = createFactory(createClass({
   },
 
   render() {
-    const { remoteAddress } = this.props.item;
+    const { remoteAddress, remotePort } = this.props.item;
+    let remoteSummary = remoteAddress ? `${remoteAddress}:${remotePort}` : "";
 
     return (
       div({ className: "requests-list-subitem requests-list-remoteip" },
-        span({ className: "subitem-label", title: remoteAddress }, remoteAddress),
+        span({ className: "subitem-label", title: remoteSummary }, remoteSummary),
       )
     );
   }

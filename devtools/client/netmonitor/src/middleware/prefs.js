@@ -36,7 +36,7 @@ function prefsMiddleware(store) {
         break;
 
       case RESET_COLUMNS:
-        Prefs.hiddenColumns = [];
+        Prefs.hiddenColumns = ["remoteip"];
         break;
     }
     return res;
