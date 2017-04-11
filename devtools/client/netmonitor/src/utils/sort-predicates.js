@@ -28,9 +28,10 @@ function compareValues(first, second) {
   return first > second ? 1 : -1;
 }
 
-function ip2long(ip) {
+function ipToLong(ip) {
   if (!ip) {
-    return 0;
+    // Invalid IP
+    return -1;
   }
   let base;
   let octets = ip.split(".");
@@ -38,12 +39,13 @@ function ip2long(ip) {
     base = 10;
   } else {
     // Probably IPv6
-    octets = ip.split(":");
+    octets = ip.replace(/\:+/g, ":").split(":");
     if (octets.length >= 6) {
       // Some IPv6s might have ::
       base = 16;
     } else {
-      return 0;
+      // Invalid IP
+      return -1;
     }
   }
   return octets.map((val, ix, arr) => {
@@ -83,8 +85,8 @@ function domain(first, second) {
 }
 
 function remoteip(first, second) {
-  const firstIP = ip2long(first.remoteAddress);
-  const secondIP = ip2long(second.rempteAddress);
+  const firstIP = ipToLong(first.remoteAddress);
+  const secondIP = ipToLong(second.remoteAddress);
   const result = compareValues(firstIP, secondIP);
   return result || waterfall(first, second);
 }
