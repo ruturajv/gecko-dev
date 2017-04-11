@@ -28,6 +28,31 @@ function compareValues(first, second) {
   return first > second ? 1 : -1;
 }
 
+function ip2long(ip) {
+  if (!ip) {
+    return 0;
+  }
+  let base;
+  let octets = ip.split(".");
+  if (octets.length === 4) {
+    base = 10;
+  } else {
+    // Probably IPv6
+    octets = ip.split(":");
+    if (octets.length >= 6) {
+      // Some IPv6s might have ::
+      base = 16;
+    } else {
+      return 0;
+    }
+  }
+  return octets.map((val, ix, arr) => {
+    return parseInt(val, base) * Math.pow(256, (arr.length - 1) - ix);
+  }).reduce((sum, val) => {
+    return sum + val;
+  }, 0);
+}
+
 function waterfall(first, second) {
   const result = compareValues(first.startedMillis, second.startedMillis);
   return result || compareValues(first.id, second.id);
@@ -58,8 +83,8 @@ function domain(first, second) {
 }
 
 function remoteip(first, second) {
-  const firstIP = first.remoteAddress.toLowerCase();
-  const secondIP = second.remoteAddress.toLowerCase();
+  const firstIP = ip2long(first.remoteAddress);
+  const secondIP = ip2long(second.rempteAddress);
   const result = compareValues(firstIP, secondIP);
   return result || waterfall(first, second);
 }
