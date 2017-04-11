@@ -11,6 +11,7 @@ const Menu = require("devtools/client/framework/menu");
 const MenuItem = require("devtools/client/framework/menu-item");
 const clipboardHelper = require("devtools/shared/platform/clipboard");
 const { HarExporter } = require("./har/har-exporter");
+const { NetMonitorController } = require("./netmonitor-controller");
 const { getLongString } = require("./utils/client");
 const { L10N } = require("./utils/l10n");
 const {
@@ -50,7 +51,9 @@ RequestListContextMenu.prototype = {
     let selectedRequest = this.selectedRequest;
 
     let menu = new Menu();
-    menu.append(new MenuItem({
+    let copySubmenu = new Menu();
+
+    copySubmenu.append(new MenuItem({
       id: "request-list-context-copy-url",
       label: L10N.getStr("netmonitor.context.copyUrl"),
       accesskey: L10N.getStr("netmonitor.context.copyUrl.accesskey"),
@@ -58,7 +61,7 @@ RequestListContextMenu.prototype = {
       click: () => this.copyUrl(),
     }));
 
-    menu.append(new MenuItem({
+    copySubmenu.append(new MenuItem({
       id: "request-list-context-copy-url-params",
       label: L10N.getStr("netmonitor.context.copyUrlParams"),
       accesskey: L10N.getStr("netmonitor.context.copyUrlParams.accesskey"),
@@ -66,7 +69,7 @@ RequestListContextMenu.prototype = {
       click: () => this.copyUrlParams(),
     }));
 
-    menu.append(new MenuItem({
+    copySubmenu.append(new MenuItem({
       id: "request-list-context-copy-post-data",
       label: L10N.getStr("netmonitor.context.copyPostData"),
       accesskey: L10N.getStr("netmonitor.context.copyPostData.accesskey"),
@@ -74,7 +77,7 @@ RequestListContextMenu.prototype = {
       click: () => this.copyPostData(),
     }));
 
-    menu.append(new MenuItem({
+    copySubmenu.append(new MenuItem({
       id: "request-list-context-copy-as-curl",
       label: L10N.getStr("netmonitor.context.copyAsCurl"),
       accesskey: L10N.getStr("netmonitor.context.copyAsCurl.accesskey"),
@@ -82,12 +85,12 @@ RequestListContextMenu.prototype = {
       click: () => this.copyAsCurl(),
     }));
 
-    menu.append(new MenuItem({
+    copySubmenu.append(new MenuItem({
       type: "separator",
       visible: !!selectedRequest,
     }));
 
-    menu.append(new MenuItem({
+    copySubmenu.append(new MenuItem({
       id: "request-list-context-copy-request-headers",
       label: L10N.getStr("netmonitor.context.copyRequestHeaders"),
       accesskey: L10N.getStr("netmonitor.context.copyRequestHeaders.accesskey"),
@@ -95,7 +98,7 @@ RequestListContextMenu.prototype = {
       click: () => this.copyRequestHeaders(),
     }));
 
-    menu.append(new MenuItem({
+    copySubmenu.append(new MenuItem({
       id: "response-list-context-copy-response-headers",
       label: L10N.getStr("netmonitor.context.copyResponseHeaders"),
       accesskey: L10N.getStr("netmonitor.context.copyResponseHeaders.accesskey"),
@@ -103,7 +106,7 @@ RequestListContextMenu.prototype = {
       click: () => this.copyResponseHeaders(),
     }));
 
-    menu.append(new MenuItem({
+    copySubmenu.append(new MenuItem({
       id: "request-list-context-copy-response",
       label: L10N.getStr("netmonitor.context.copyResponse"),
       accesskey: L10N.getStr("netmonitor.context.copyResponse.accesskey"),
@@ -114,7 +117,7 @@ RequestListContextMenu.prototype = {
       click: () => this.copyResponse(),
     }));
 
-    menu.append(new MenuItem({
+    copySubmenu.append(new MenuItem({
       id: "request-list-context-copy-image-as-data-uri",
       label: L10N.getStr("netmonitor.context.copyImageAsDataUri"),
       accesskey: L10N.getStr("netmonitor.context.copyImageAsDataUri.accesskey"),
@@ -124,17 +127,24 @@ RequestListContextMenu.prototype = {
       click: () => this.copyImageAsDataUri(),
     }));
 
-    menu.append(new MenuItem({
+    copySubmenu.append(new MenuItem({
       type: "separator",
       visible: !!selectedRequest,
     }));
 
-    menu.append(new MenuItem({
+    copySubmenu.append(new MenuItem({
       id: "request-list-context-copy-all-as-har",
       label: L10N.getStr("netmonitor.context.copyAllAsHar"),
       accesskey: L10N.getStr("netmonitor.context.copyAllAsHar.accesskey"),
       visible: this.sortedRequests.size > 0,
       click: () => this.copyAllAsHar(),
+    }));
+
+    menu.append(new MenuItem({
+      label: L10N.getStr("netmonitor.context.copy"),
+      accesskey: L10N.getStr("netmonitor.context.copy.accesskey"),
+      visible: !!selectedRequest,
+      submenu: copySubmenu,
     }));
 
     menu.append(new MenuItem({
@@ -147,7 +157,7 @@ RequestListContextMenu.prototype = {
 
     menu.append(new MenuItem({
       type: "separator",
-      visible: !!(window.NetMonitorController.supportsCustomRequest &&
+      visible: !!(NetMonitorController.supportsCustomRequest &&
                selectedRequest && !selectedRequest.isCustom),
     }));
 
@@ -155,7 +165,7 @@ RequestListContextMenu.prototype = {
       id: "request-list-context-resend",
       label: L10N.getStr("netmonitor.context.editAndResend"),
       accesskey: L10N.getStr("netmonitor.context.editAndResend.accesskey"),
-      visible: !!(window.NetMonitorController.supportsCustomRequest &&
+      visible: !!(NetMonitorController.supportsCustomRequest &&
                selectedRequest && !selectedRequest.isCustom),
       click: this.cloneSelectedRequest,
     }));
@@ -177,7 +187,7 @@ RequestListContextMenu.prototype = {
       id: "request-list-context-perf",
       label: L10N.getStr("netmonitor.context.perfTools"),
       accesskey: L10N.getStr("netmonitor.context.perfTools.accesskey"),
-      visible: !!window.NetMonitorController.supportsPerfStats,
+      visible: !!NetMonitorController.supportsPerfStats,
       click: () => this.openStatistics(true)
     }));
 
@@ -339,7 +349,7 @@ RequestListContextMenu.prototype = {
   },
 
   getDefaultHarOptions() {
-    let form = window.NetMonitorController._target.form;
+    let form = NetMonitorController._target.form;
     let title = form.title || form.url;
 
     return {

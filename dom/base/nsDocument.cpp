@@ -21,6 +21,7 @@
 #include "mozilla/MemoryReporting.h"
 #include "mozilla/Likely.h"
 #include "mozilla/PresShell.h"
+#include "mozilla/URLExtraData.h"
 #include <algorithm>
 
 #include "mozilla/Logging.h"
@@ -1960,7 +1961,7 @@ NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN(nsDocument)
        l != &tmp->mDOMMediaQueryLists; ) {
     PRCList *next = PR_NEXT_LINK(l);
     MediaQueryList *mql = static_cast<MediaQueryList*>(l);
-    mql->RemoveAllListeners();
+    mql->Disconnect();
     l = next;
   }
 
@@ -3161,8 +3162,8 @@ nsDocument::IsElementAnimateEnabled(JSContext* aCx, JSObject* /*unused*/)
   MOZ_ASSERT(NS_IsMainThread());
 
   return nsContentUtils::IsSystemCaller(aCx) ||
-         Preferences::GetBool("dom.animations-api.core.enabled") ||
-         Preferences::GetBool("dom.animations-api.element-animate.enabled");
+         nsContentUtils::AnimationsAPICoreEnabled() ||
+         nsContentUtils::AnimationsAPIElementAnimateEnabled();
 }
 
 bool
@@ -3171,7 +3172,7 @@ nsDocument::IsWebAnimationsEnabled(JSContext* aCx, JSObject* /*unused*/)
   MOZ_ASSERT(NS_IsMainThread());
 
   return nsContentUtils::IsSystemCaller(aCx) ||
-         Preferences::GetBool("dom.animations-api.core.enabled");
+         nsContentUtils::AnimationsAPICoreEnabled();
 }
 
 DocumentTimeline*
@@ -3581,6 +3582,27 @@ nsDocument::SetBaseURI(nsIURI* aURI)
     mDocumentBaseURI = nullptr;
   }
   RefreshLinkHrefs();
+}
+
+URLExtraData*
+nsIDocument::DefaultStyleAttrURLData()
+{
+#ifdef MOZ_STYLO
+  MOZ_ASSERT(NS_IsMainThread());
+  nsIURI* baseURI = GetDocBaseURI();
+  nsIURI* docURI = GetDocumentURI();
+  nsIPrincipal* principal = NodePrincipal();
+  if (!mCachedURLData ||
+      mCachedURLData->BaseURI() != baseURI ||
+      mCachedURLData->GetReferrer() != docURI ||
+      mCachedURLData->GetPrincipal() != principal) {
+    mCachedURLData = new URLExtraData(baseURI, docURI, principal);
+  }
+  return mCachedURLData;
+#else
+  MOZ_CRASH("Should not be called for non-stylo build");
+  return nullptr;
+#endif
 }
 
 void

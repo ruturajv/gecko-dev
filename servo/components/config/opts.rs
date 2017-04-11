@@ -25,8 +25,7 @@ use url::{self, Url};
 
 
 /// Global flags for Servo, currently set on the command line.
-#[derive(Clone)]
-#[cfg_attr(feature = "servo", derive(Deserialize, Serialize))]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Opts {
     pub is_running_problem_test: bool,
 
@@ -230,6 +229,9 @@ pub struct Opts {
 
     /// Print the version and exit.
     pub is_printing_version: bool,
+
+    /// Path to SSL certificates.
+    pub certificate_path: Option<String>,
 }
 
 fn print_usage(app: &str, opts: &Options) {
@@ -443,8 +445,7 @@ fn print_debug_usage(app: &str) -> ! {
     process::exit(0)
 }
 
-#[derive(Clone)]
-#[cfg_attr(feature = "servo", derive(Deserialize, Serialize))]
+#[derive(Clone, Deserialize, Serialize)]
 pub enum OutputOptions {
     FileName(String),
     Stdout(f64)
@@ -566,6 +567,7 @@ pub fn default_opts() -> Opts {
         webrender_record: false,
         precache_shaders: false,
         signpost: false,
+        certificate_path: None,
     }
 }
 
@@ -615,6 +617,7 @@ pub fn from_cmdline_args(args: &[String]) -> ArgumentParsingResult {
                   "A comma-separated string of debug options. Pass help to show available options.", "");
     opts.optflag("h", "help", "Print this message");
     opts.optopt("", "resources-path", "Path to find static resources", "/home/servo/resources");
+    opts.optopt("", "certificate-path", "Path to find SSL certificates", "/home/servo/resources/certs");
     opts.optopt("", "content-process" , "Run as a content process and connect to the given pipe",
                 "servo-ipc-channel.abcdefg");
     opts.optmulti("", "pref",
@@ -868,6 +871,7 @@ pub fn from_cmdline_args(args: &[String]) -> ArgumentParsingResult {
         webrender_record: debug_options.webrender_record,
         precache_shaders: debug_options.precache_shaders,
         signpost: debug_options.signpost,
+        certificate_path: opt_match.opt_str("certificate-path"),
     };
 
     set_defaults(opts);

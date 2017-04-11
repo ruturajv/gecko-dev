@@ -16,6 +16,7 @@ Cu.import("resource://gre/modules/DelayedInit.jsm");
 Cu.import("resource://gre/modules/Messaging.jsm");
 Cu.import("resource://gre/modules/Services.jsm");
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
+Cu.import("resource://gre/modules/TelemetryController.jsm");
 
 if (AppConstants.ACCESSIBILITY) {
   XPCOMUtils.defineLazyModuleGetter(this, "AccessFu",
@@ -413,6 +414,7 @@ var BrowserApp = {
       "Session:Navigate",
       "Session:Reload",
       "Session:Stop",
+      "Telemetry:CustomTabsPing",
     ]);
 
     // Provide compatibility for add-ons like QuitNow that send "Browser:Quit"
@@ -1760,6 +1762,11 @@ var BrowserApp = {
         // these messages come from a change in the viewable area and not user interaction
         // we allow scrolling to the selected input, but not zooming the page
         this.scrollToFocusedInput(browser, false);
+        break;
+      }
+
+      case "Telemetry:CustomTabsPing": {
+        TelemetryController.submitExternalPing("anonymous", { client: data.client }, { addClientId: false });
         break;
       }
 
@@ -4494,6 +4501,9 @@ Tab.prototype = {
       ExternalApps.updatePageActionUri(fixedURI);
     }
 
+    // Strip reader mode URI and also make it exposable if needed
+    fixedURI = this._stripAboutReaderURL(fixedURI);
+
     let message = {
       type: "Content:LocationChange",
       tabID: this.id,
@@ -4522,8 +4532,15 @@ Tab.prototype = {
     }
   },
 
-  _stripAboutReaderURL: function (url) {
-    return ReaderMode.getOriginalUrl(url) || url;
+  _stripAboutReaderURL: function (originalURI) {
+    try {
+      let strippedURL = ReaderMode.getOriginalUrl(originalURI.spec);
+      if(strippedURL){
+        // Continue to create exposable uri if original uri is stripped.
+        originalURI = URIFixup.createExposableURI(Services.io.newURI(strippedURL));
+      }
+    } catch (ex) { }
+    return originalURI;
   },
 
   // Properties used to cache security state used to update the UI

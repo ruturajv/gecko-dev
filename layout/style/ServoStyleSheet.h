@@ -12,6 +12,7 @@
 #include "mozilla/ServoBindingTypes.h"
 #include "mozilla/StyleSheet.h"
 #include "mozilla/StyleSheetInfo.h"
+#include "mozilla/URLExtraData.h"
 #include "nsStringFwd.h"
 
 namespace mozilla {
@@ -32,7 +33,16 @@ struct ServoStyleSheetInner : public StyleSheetInfo
                        ReferrerPolicy aReferrerPolicy,
                        const dom::SRIMetadata& aIntegrity);
 
+  size_t SizeOfIncludingThis(MallocSizeOf aMallocSizeOf) const;
+
   RefPtr<const RawServoStyleSheet> mSheet;
+  // XXX StyleSheetInfo already has mSheetURI, mBaseURI, and mPrincipal.
+  // Can we somehow replace them with URLExtraData directly? The issue
+  // is currently URLExtraData is immutable, but URIs in StyleSheetInfo
+  // seems to be mutable, so we probably cannot set them altogether.
+  // Also, this is mostly a duplicate reference of the same url data
+  // inside RawServoStyleSheet. We may want to just use that instead.
+  RefPtr<URLExtraData> mURLData;
 };
 
 
@@ -74,6 +84,8 @@ public:
     Inner()->mSheet = aSheet;
   }
 
+  URLExtraData* URLData() const { return Inner()->mURLData; }
+
   // WebIDL CSSStyleSheet API
   // Can't be inline because we can't include ImportRule here.  And can't be
   // called GetOwnerRule because that would be ambiguous with the ImportRule
@@ -112,6 +124,8 @@ protected:
                                        uint32_t aIndex);
 
   void EnabledStateChangedInternal() {}
+
+  size_t SizeOfIncludingThis(MallocSizeOf aMallocSizeOf) const override;
 
 private:
   ServoStyleSheet(const ServoStyleSheet& aCopy,

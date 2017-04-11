@@ -115,6 +115,17 @@ pref("app.update.backgroundMaxErrors", 10);
 // Whether or not app updates are enabled
 pref("app.update.enabled", true);
 
+// Whether or not to use the doorhanger application update UI.
+pref("app.update.doorhanger", true);
+
+// How many times we should let downloads fail before prompting the user to
+// download a fresh installer.
+pref("app.update.download.promptMaxAttempts", 2);
+
+// How many times we should let an elevation prompt fail before prompting the user to
+// download a fresh installer.
+pref("app.update.elevation.promptMaxAttempts", 2);
+
 // If set to true, the Update Service will automatically download updates when
 // app updates are enabled per the app.update.enabled preference and if the user
 // can apply updates.
@@ -123,12 +134,6 @@ pref("app.update.auto", true);
 // If set to true, the Update Service will present no UI for any event.
 pref("app.update.silent", false);
 
-// If set to true, the hamburger button will show badges for update events.
-#ifndef RELEASE_OR_BETA
-pref("app.update.badge", true);
-#else
-pref("app.update.badge", false);
-#endif
 // app.update.badgeWaitTime is in branding section
 
 // If set to true, the Update Service will apply updates in the background
@@ -670,6 +675,10 @@ pref("browser.preferences.instantApply", false);
 #else
 pref("browser.preferences.instantApply", true);
 #endif
+
+// Toggling Search bar on and off in about:preferences
+pref("browser.preferences.search", false);
+
 // Once the Storage Management is completed.
 // (The Storage Management-related prefs are browser.storageManager.* )
 // The Offline(Appcache) Group section in about:preferences will be hidden.

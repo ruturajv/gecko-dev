@@ -42,11 +42,13 @@ WORKER_TYPE = {
     'xlarge': 'aws-provisioner-v1/gecko-t-linux-xlarge',
     'legacy': 'aws-provisioner-v1/gecko-t-linux-medium',
     'default': 'aws-provisioner-v1/gecko-t-linux-large',
-    # windows worker types keyed by test-platform
+    # windows / os x worker types keyed by test-platform
     'windows7-32-vm': 'aws-provisioner-v1/gecko-t-win7-32',
     'windows7-32': 'aws-provisioner-v1/gecko-t-win7-32-gpu',
     'windows10-64-vm': 'aws-provisioner-v1/gecko-t-win10-64',
-    'windows10-64': 'aws-provisioner-v1/gecko-t-win10-64-gpu'
+    'windows10-64': 'aws-provisioner-v1/gecko-t-win10-64-gpu',
+    'windows10-64-asan': 'aws-provisioner-v1/gecko-t-win10-64-gpu',
+    'macosx64': 'scl3-puppet/os-x-10-10-gw'
 }
 
 logger = logging.getLogger(__name__)
@@ -340,6 +342,11 @@ def set_target(config, tests):
             target = 'target.dmg'
         elif build_platform.startswith('android'):
             target = 'target.apk'
+        elif build_platform.startswith('win'):
+            target = 'firefox-{}.en-US.{}.zip'.format(
+                get_firefox_version(),
+                build_platform.split('/')[0]
+            )
         else:
             target = 'target.tar.bz2'
         test['mozharness']['build-artifact-name'] = 'public/build/' + target
@@ -356,6 +363,7 @@ def set_treeherder_machine_platform(config, tests):
         'linux64-pgo/opt': 'linux64/pgo',
         'macosx64/debug': 'osx-10-10/debug',
         'macosx64/opt': 'osx-10-10/opt',
+        'win64-asan/opt': 'windows10-64/asan',
         # The build names for Android platforms have partially evolved over the
         # years and need to be translated.
         'android-api-15/debug': 'android-4-3-armv7-api15/debug',
@@ -384,11 +392,16 @@ def set_asan_docker_image(config, tests):
 @transforms.add
 def set_worker_implementation(config, tests):
     """Set the worker implementation based on the test platform."""
-    use_tc_worker = config.config['args'].taskcluster_worker
     for test in tests:
         if test['test-platform'].startswith('macosx'):
-            test['worker-implementation'] = \
-                'native-engine' if use_tc_worker else 'buildbot-bridge'
+            # see if '-g' appears in try syntax
+            if config.config['args'].generic_worker:
+                test['worker-implementation'] = 'generic-worker'
+            # see if '-w' appears in try syntax
+            elif config.config['args'].taskcluster_worker:
+                test['worker-implementation'] = 'native-engine'
+            else:
+                test['worker-implementation'] = 'buildbot-bridge'
         elif test.get('suite', '') == 'talos':
             test['worker-implementation'] = 'buildbot-bridge'
         elif test['test-platform'].startswith('win'):
@@ -448,7 +461,8 @@ def set_download_symbols(config, tests):
     for test in tests:
         if test['test-platform'].split('/')[-1] == 'debug':
             test['mozharness']['download-symbols'] = True
-        elif test['build-platform'] == 'linux64-asan/opt':
+        elif test['build-platform'] == 'linux64-asan/opt' or \
+                test['build-platform'] == 'windows10-64-asan/opt':
             if 'download-symbols' in test['mozharness']:
                 del test['mozharness']['download-symbols']
         else:

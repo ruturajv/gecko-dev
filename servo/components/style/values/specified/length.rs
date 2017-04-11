@@ -9,7 +9,7 @@
 use app_units::Au;
 use cssparser::{Parser, Token};
 use euclid::size::Size2D;
-use font_metrics::FontMetrics;
+use font_metrics::FontMetricsQueryResult;
 use parser::{Parse, ParserContext};
 use std::{cmp, fmt, mem};
 use std::ascii::AsciiExt;
@@ -69,24 +69,17 @@ impl ToCss for FontRelativeLength {
 }
 
 impl FontRelativeLength {
-    /// Gets the first available font metrics from the current context's
-    /// font-family list.
-    pub fn find_first_available_font_metrics(context: &Context) -> Option<FontMetrics> {
-        use font_metrics::FontMetricsQueryResult::*;
-        if let Some(ref metrics_provider) = context.font_metrics_provider {
-            for family in context.style().get_font().font_family_iter() {
-                if let Available(metrics) = metrics_provider.query(family.atom()) {
-                    return metrics;
-                }
-            }
-        }
-
-        None
-    }
-
     /// Computes the font-relative length. We use the use_inherited flag to
     /// special-case the computation of font-size.
     pub fn to_computed_value(&self, context: &Context, use_inherited: bool) -> Au {
+        fn query_font_metrics(context: &Context, reference_font_size: Au) -> FontMetricsQueryResult {
+            context.font_metrics_provider.query(context.style().get_font(),
+                                                reference_font_size,
+                                                context.style().writing_mode,
+                                                context.in_media_query,
+                                                context.device)
+        }
+
         let reference_font_size = if use_inherited {
             context.inherited_style().get_font().clone_font_size()
         } else {
@@ -97,33 +90,20 @@ impl FontRelativeLength {
         match *self {
             FontRelativeLength::Em(length) => reference_font_size.scale_by(length),
             FontRelativeLength::Ex(length) => {
-                match Self::find_first_available_font_metrics(context) {
-                    Some(metrics) => metrics.x_height,
+                match query_font_metrics(context, reference_font_size) {
+                    FontMetricsQueryResult::Available(metrics) => metrics.x_height.scale_by(length),
                     // https://drafts.csswg.org/css-values/#ex
                     //
                     //     In the cases where it is impossible or impractical to
                     //     determine the x-height, a value of 0.5em must be
                     //     assumed.
                     //
-                    None => reference_font_size.scale_by(0.5 * length),
+                    FontMetricsQueryResult::NotAvailable => reference_font_size.scale_by(0.5 * length),
                 }
             },
             FontRelativeLength::Ch(length) => {
-                let wm = context.style().writing_mode;
-
-                // TODO(emilio, #14144): Compute this properly once we support
-                // all the relevant writing-mode related properties, this should
-                // be equivalent to "is the text in the block direction?".
-                let vertical = wm.is_vertical();
-
-                match Self::find_first_available_font_metrics(context) {
-                    Some(metrics) => {
-                        if vertical {
-                            metrics.zero_advance_measure.height
-                        } else {
-                            metrics.zero_advance_measure.width
-                        }
-                    }
+                match query_font_metrics(context, reference_font_size) {
+                    FontMetricsQueryResult::Available(metrics) => metrics.zero_advance_measure.scale_by(length),
                     // https://drafts.csswg.org/css-values/#ch
                     //
                     //     In the cases where it is impossible or impractical to
@@ -134,8 +114,8 @@ impl FontRelativeLength {
                     //     writing-mode is vertical-rl or vertical-lr and
                     //     text-orientation is upright).
                     //
-                    None => {
-                        if vertical {
+                    FontMetricsQueryResult::NotAvailable => {
+                        if context.style().writing_mode.is_vertical() {
                             reference_font_size.scale_by(length)
                         } else {
                             reference_font_size.scale_by(0.5 * length)
@@ -442,7 +422,7 @@ impl Length {
     /// Parse a non-negative length
     #[inline]
     pub fn parse_non_negative(input: &mut Parser) -> Result<Length, ()> {
-        Length::parse_internal(input, AllowedNumericType::NonNegative)
+        Self::parse_internal(input, AllowedNumericType::NonNegative)
     }
 
     /// Get an absolute length from a px value.
@@ -462,7 +442,7 @@ impl Length {
 
 impl Parse for Length {
     fn parse(_context: &ParserContext, input: &mut Parser) -> Result<Self, ()> {
-        Length::parse_internal(input, AllowedNumericType::All)
+        Self::parse_internal(input, AllowedNumericType::All)
     }
 }
 
@@ -1049,7 +1029,7 @@ impl LengthOrPercentage {
     /// Parse a non-negative length.
     #[inline]
     pub fn parse_non_negative(input: &mut Parser) -> Result<LengthOrPercentage, ()> {
-        LengthOrPercentage::parse_internal(input, AllowedNumericType::NonNegative)
+        Self::parse_internal(input, AllowedNumericType::NonNegative)
     }
 
     /// Parse a length, treating dimensionless numbers as pixels
@@ -1057,11 +1037,13 @@ impl LengthOrPercentage {
     /// https://www.w3.org/TR/SVG2/types.html#presentation-attribute-css-value
     pub fn parse_numbers_are_pixels(input: &mut Parser) -> Result<LengthOrPercentage, ()> {
         if let Ok(lop) = input.try(|i| Self::parse_internal(i, AllowedNumericType::All)) {
-            Ok(lop)
-        } else {
-            let num = input.expect_number()?;
-            Ok(LengthOrPercentage::Length(NoCalcLength::Absolute(Au((AU_PER_PX * num) as i32))))
+            return Ok(lop)
         }
+
+        // TODO(emilio): Probably should use Number::parse_non_negative to
+        // handle calc()?
+        let num = input.expect_number()?;
+        Ok(LengthOrPercentage::Length(NoCalcLength::Absolute(Au((AU_PER_PX * num) as i32))))
     }
 
     /// Parse a non-negative length, treating dimensionless numbers as pixels
@@ -1069,14 +1051,16 @@ impl LengthOrPercentage {
     /// This is nonstandard behavior used by Firefox for SVG
     pub fn parse_numbers_are_pixels_non_negative(input: &mut Parser) -> Result<LengthOrPercentage, ()> {
         if let Ok(lop) = input.try(|i| Self::parse_internal(i, AllowedNumericType::NonNegative)) {
-            Ok(lop)
+            return Ok(lop)
+        }
+
+        // TODO(emilio): Probably should use Number::parse_non_negative to
+        // handle calc()?
+        let num = input.expect_number()?;
+        if num >= 0. {
+            Ok(LengthOrPercentage::Length(NoCalcLength::Absolute(Au((AU_PER_PX * num) as i32))))
         } else {
-            let num = input.expect_number()?;
-            if num >= 0. {
-                Ok(LengthOrPercentage::Length(NoCalcLength::Absolute(Au((AU_PER_PX * num) as i32))))
-            } else {
-                Err(())
-            }
+            Err(())
         }
     }
 
@@ -1092,7 +1076,7 @@ impl LengthOrPercentage {
 impl Parse for LengthOrPercentage {
     #[inline]
     fn parse(_context: &ParserContext, input: &mut Parser) -> Result<Self, ()> {
-        LengthOrPercentage::parse_internal(input, AllowedNumericType::All)
+        Self::parse_internal(input, AllowedNumericType::All)
     }
 }
 
@@ -1146,15 +1130,14 @@ impl ToCss for LengthOrPercentageOrAuto {
 
 impl LengthOrPercentageOrAuto {
     fn parse_internal(input: &mut Parser, context: AllowedNumericType)
-                      -> Result<LengthOrPercentageOrAuto, ()>
-    {
+                      -> Result<Self, ()> {
         match try!(input.next()) {
             Token::Dimension(ref value, ref unit) if context.is_ok(value.value) =>
                 NoCalcLength::parse_dimension(value.value, unit).map(LengthOrPercentageOrAuto::Length),
             Token::Percentage(ref value) if context.is_ok(value.unit_value) =>
                 Ok(LengthOrPercentageOrAuto::Percentage(Percentage(value.unit_value))),
             Token::Number(ref value) if value.value == 0. =>
-                Ok(LengthOrPercentageOrAuto::Length(NoCalcLength::zero())),
+                Ok(Self::zero()),
             Token::Ident(ref value) if value.eq_ignore_ascii_case("auto") =>
                 Ok(LengthOrPercentageOrAuto::Auto),
             Token::Function(ref name) if name.eq_ignore_ascii_case("calc") => {
@@ -1168,14 +1151,24 @@ impl LengthOrPercentageOrAuto {
     /// Parse a non-negative length, percentage, or auto.
     #[inline]
     pub fn parse_non_negative(input: &mut Parser) -> Result<LengthOrPercentageOrAuto, ()> {
-        LengthOrPercentageOrAuto::parse_internal(input, AllowedNumericType::NonNegative)
+        Self::parse_internal(input, AllowedNumericType::NonNegative)
+    }
+
+    /// Returns the `auto` value.
+    pub fn auto() -> Self {
+        LengthOrPercentageOrAuto::Auto
+    }
+
+    /// Returns a value representing a `0` length.
+    pub fn zero() -> Self {
+        LengthOrPercentageOrAuto::Length(NoCalcLength::zero())
     }
 }
 
 impl Parse for LengthOrPercentageOrAuto {
     #[inline]
     fn parse(_context: &ParserContext, input: &mut Parser) -> Result<Self, ()> {
-        LengthOrPercentageOrAuto::parse_internal(input, AllowedNumericType::All)
+        Self::parse_internal(input, AllowedNumericType::All)
     }
 }
 
@@ -1233,15 +1226,15 @@ impl LengthOrPercentageOrNone {
     }
     /// Parse a non-negative LengthOrPercentageOrNone.
     #[inline]
-    pub fn parse_non_negative(input: &mut Parser) -> Result<LengthOrPercentageOrNone, ()> {
-        LengthOrPercentageOrNone::parse_internal(input, AllowedNumericType::NonNegative)
+    pub fn parse_non_negative(input: &mut Parser) -> Result<Self, ()> {
+        Self::parse_internal(input, AllowedNumericType::NonNegative)
     }
 }
 
 impl Parse for LengthOrPercentageOrNone {
     #[inline]
     fn parse(_context: &ParserContext, input: &mut Parser) -> Result<Self, ()> {
-        LengthOrPercentageOrNone::parse_internal(input, AllowedNumericType::All)
+        Self::parse_internal(input, AllowedNumericType::All)
     }
 }
 
@@ -1273,6 +1266,40 @@ pub enum LengthOrPercentageOrAutoOrContent {
     Content
 }
 
+impl LengthOrPercentageOrAutoOrContent {
+    /// Parse a non-negative LengthOrPercentageOrAutoOrContent.
+    pub fn parse_non_negative(input: &mut Parser) -> Result<Self, ()> {
+        let context = AllowedNumericType::NonNegative;
+        match try!(input.next()) {
+            Token::Dimension(ref value, ref unit) if context.is_ok(value.value) =>
+                NoCalcLength::parse_dimension(value.value, unit).map(LengthOrPercentageOrAutoOrContent::Length),
+            Token::Percentage(ref value) if context.is_ok(value.unit_value) =>
+                Ok(LengthOrPercentageOrAutoOrContent::Percentage(Percentage(value.unit_value))),
+            Token::Number(ref value) if value.value == 0. =>
+                Ok(Self::zero()),
+            Token::Ident(ref value) if value.eq_ignore_ascii_case("auto") =>
+                Ok(LengthOrPercentageOrAutoOrContent::Auto),
+            Token::Ident(ref value) if value.eq_ignore_ascii_case("content") =>
+                Ok(LengthOrPercentageOrAutoOrContent::Content),
+            Token::Function(ref name) if name.eq_ignore_ascii_case("calc") => {
+                let calc = try!(input.parse_nested_block(CalcLengthOrPercentage::parse_length_or_percentage));
+                Ok(LengthOrPercentageOrAutoOrContent::Calc(Box::new(calc)))
+            },
+            _ => Err(())
+        }
+    }
+
+    /// Returns the `auto` value.
+    pub fn auto() -> Self {
+        LengthOrPercentageOrAutoOrContent::Auto
+    }
+
+    /// Returns a value representing a `0` length.
+    pub fn zero() -> Self {
+        LengthOrPercentageOrAutoOrContent::Length(NoCalcLength::zero())
+    }
+}
+
 impl HasViewportPercentage for LengthOrPercentageOrAutoOrContent {
     fn has_viewport_percentage(&self) -> bool {
         match *self {
@@ -1295,43 +1322,20 @@ impl ToCss for LengthOrPercentageOrAutoOrContent {
     }
 }
 
-impl Parse for LengthOrPercentageOrAutoOrContent {
-    fn parse(_context: &ParserContext, input: &mut Parser) -> Result<Self, ()> {
-        let context = AllowedNumericType::NonNegative;
-        match try!(input.next()) {
-            Token::Dimension(ref value, ref unit) if context.is_ok(value.value) =>
-                NoCalcLength::parse_dimension(value.value, unit).map(LengthOrPercentageOrAutoOrContent::Length),
-            Token::Percentage(ref value) if context.is_ok(value.unit_value) =>
-                Ok(LengthOrPercentageOrAutoOrContent::Percentage(Percentage(value.unit_value))),
-            Token::Number(ref value) if value.value == 0. =>
-                Ok(LengthOrPercentageOrAutoOrContent::Length(NoCalcLength::zero())),
-            Token::Ident(ref value) if value.eq_ignore_ascii_case("auto") =>
-                Ok(LengthOrPercentageOrAutoOrContent::Auto),
-            Token::Ident(ref value) if value.eq_ignore_ascii_case("content") =>
-                Ok(LengthOrPercentageOrAutoOrContent::Content),
-            Token::Function(ref name) if name.eq_ignore_ascii_case("calc") => {
-                let calc = try!(input.parse_nested_block(CalcLengthOrPercentage::parse_length_or_percentage));
-                Ok(LengthOrPercentageOrAutoOrContent::Calc(Box::new(calc)))
-            },
-            _ => Err(())
-        }
-    }
-}
-
 /// Either a `<length>` or a `<number>`.
 pub type LengthOrNumber = Either<Length, Number>;
 
 impl LengthOrNumber {
     /// Parse a non-negative LengthOrNumber.
-    pub fn parse_non_negative(_context: &ParserContext, input: &mut Parser) -> Result<Self, ()> {
-        // We try to parse as a Number first because, for cases like LengthOrNumber,
-        // we want "0" to be parsed as a plain Number rather than a Length (0px); this
-        // matches the behaviour of all major browsers
+    pub fn parse_non_negative(_: &ParserContext, input: &mut Parser) -> Result<Self, ()> {
+        // We try to parse as a Number first because, for cases like
+        // LengthOrNumber, we want "0" to be parsed as a plain Number rather
+        // than a Length (0px); this matches the behaviour of all major browsers
         if let Ok(v) = input.try(Number::parse_non_negative) {
-            Ok(Either::Second(v))
-        } else {
-            Length::parse_non_negative(input).map(Either::First)
+            return Ok(Either::Second(v))
         }
+
+        Length::parse_non_negative(input).map(Either::First)
     }
 }
 

@@ -65,7 +65,7 @@ public class TestCustomTabsActivity {
         final CustomTabsIntent.Builder builder = new CustomTabsIntent.Builder();
         final Intent i = builder.build().intent;
 
-        doReturn(i).when(spyActivity).getIntent();
+        Whitebox.setInternalState(spyActivity, "startIntent", i);
 
         spyActivity.finish();
         verify(spyActivity, times(0)).overridePendingTransition(anyInt(), anyInt());
@@ -80,7 +80,7 @@ public class TestCustomTabsActivity {
         builder.setExitAnimations(spyContext, enterRes, exitRes);
         final Intent i = builder.build().intent;
 
-        doReturn(i).when(spyActivity).getIntent();
+        Whitebox.setInternalState(spyActivity, "startIntent", i);
 
         spyActivity.finish();
         verify(spyActivity, times(1)).overridePendingTransition(eq(enterRes), eq(exitRes));
@@ -95,36 +95,9 @@ public class TestCustomTabsActivity {
         builder.setExitAnimations(spyContext, enterRes, exitRes);
         final Intent i = builder.build().intent;
 
-        doReturn(i).when(spyActivity).getIntent();
         Whitebox.setInternalState(spyActivity, "usingCustomAnimation", true);
+        Whitebox.setInternalState(spyActivity, "startIntent", i);
 
         Assert.assertEquals(THIRD_PARTY_PACKAGE_NAME, spyActivity.getPackageName());
-    }
-
-    @Test
-    public void testInsertActionButton() {
-        // create properties for CustomTabsIntent
-        final String description = "Description";
-        final Intent actionIntent = new Intent(Intent.ACTION_VIEW);
-        final int reqCode = 0x123;
-        final PendingIntent pendingIntent = PendingIntent.getActivities(spyContext,
-                reqCode,
-                new Intent[]{actionIntent},
-                PendingIntent.FLAG_CANCEL_CURRENT);
-        final Bitmap bitmap = BitmapFactory.decodeResource(
-                spyContext.getResources(),
-                R.drawable.ic_action_settings); // arbitrary icon resource
-
-        // To create a CustomTabsIntent which is asking for ActionButton.
-        final CustomTabsIntent.Builder builder = new CustomTabsIntent.Builder();
-        builder.setActionButton(bitmap, description, pendingIntent, true);
-
-        // CustomTabsActivity should return a MenuItem with corresponding attributes.
-        Menu menu = new RoboMenu(spyContext);
-        MenuItem item = spyActivity.insertActionButton(menu, builder.build().intent, 0xFF0000);
-        Assert.assertNotNull(item);
-        Assert.assertEquals(item.getTitle(), description);
-        Assert.assertEquals(0, item.getOrder()); // should be the first one
-        Assert.assertTrue(item.isVisible());
     }
 }

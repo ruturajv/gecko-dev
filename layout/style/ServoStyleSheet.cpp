@@ -30,6 +30,16 @@ ServoStyleSheetInner::ServoStyleSheetInner(CORSMode aCORSMode,
 {
 }
 
+size_t
+ServoStyleSheetInner::SizeOfIncludingThis(MallocSizeOf aMallocSizeOf) const
+{
+  size_t n = aMallocSizeOf(this);
+
+  // XXX: need to measure mSheet
+
+  return n;
+}
+
 ServoStyleSheet::ServoStyleSheet(css::SheetParsingMode aParsingMode,
                                  CORSMode aCORSMode,
                                  net::ReferrerPolicy aReferrerPolicy,
@@ -87,8 +97,8 @@ ServoStyleSheet::ParseSheet(css::Loader* aLoader,
                             nsIPrincipal* aSheetPrincipal,
                             uint32_t aLineNumber)
 {
-  RefPtr<css::URLExtraData> extraData =
-    new css::URLExtraData(aBaseURI, aSheetURI, aSheetPrincipal);
+  RefPtr<URLExtraData> extraData =
+    new URLExtraData(aBaseURI, aSheetURI, aSheetPrincipal);
 
   NS_ConvertUTF16toUTF8 input(aInput);
   if (!Inner()->mSheet) {
@@ -100,6 +110,7 @@ ServoStyleSheet::ParseSheet(css::Loader* aLoader,
                                     this, &input, extraData);
   }
 
+  Inner()->mURLData = extraData.forget();
   return NS_OK;
 }
 
@@ -107,6 +118,7 @@ void
 ServoStyleSheet::LoadFailed()
 {
   Inner()->mSheet = Servo_StyleSheet_Empty(mParsingMode).Consume();
+  Inner()->mURLData = URLExtraData::Dummy();
 }
 
 // nsICSSLoaderObserver implementation
@@ -229,6 +241,27 @@ ServoStyleSheet::InsertRuleIntoGroupInternal(const nsAString& aRule,
   auto rules = static_cast<ServoCSSRuleList*>(aGroup->CssRules());
   MOZ_ASSERT(rules->GetParentRule() == aGroup);
   return rules->InsertRule(aRule, aIndex);
+}
+
+size_t
+ServoStyleSheet::SizeOfIncludingThis(MallocSizeOf aMallocSizeOf) const
+{
+  size_t n = StyleSheet::SizeOfIncludingThis(aMallocSizeOf);
+  const ServoStyleSheet* s = this;
+  while (s) {
+    // See the comment in CSSStyleSheet::SizeOfIncludingThis() for an
+    // explanation of this.
+    if (s->Inner()->mSheets.LastElement() == s) {
+      n += s->Inner()->SizeOfIncludingThis(aMallocSizeOf);
+    }
+
+    // Measurement of the following members may be added later if DMD finds it
+    // is worthwhile:
+    // - s->mRuleList
+
+    s = s->mNext ? s->mNext->AsServo() : nullptr;
+  }
+  return n;
 }
 
 } // namespace mozilla

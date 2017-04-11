@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+@import "chrome://devtools/skin/widgets.css";
+@import "resource://devtools/client/themes/light-theme.css";
 @import "resource://devtools/client/shared/components/splitter/split-box.css";
 @import "resource://devtools/client/shared/components/tree/tree-view.css";
 @import "resource://devtools/client/shared/components/tabs/tabs.css";
@@ -47,10 +49,11 @@
 
 html,
 body,
-.root,
 #mount,
+.launchpad-root,
 .network-monitor,
 .monitor-panel {
+  flex: initial;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -101,6 +104,9 @@ body,
   display: inline-flex;
   align-content: stretch;
   margin-inline-end: 10px;
+
+  /* Status bar has just one line so, don't wrap labels */
+  white-space: nowrap;
 }
 
 .status-bar-label::before {
@@ -511,11 +517,11 @@ body,
   border-inline-start: 1px dashed;
 }
 
-.requests-list-timings-division:-moz-locale-dir(ltr) {
+.requests-list-timings-division:dir(ltr) {
   transform-origin: left center;
 }
 
-.requests-list-timings-division:-moz-locale-dir(rtl) {
+.requests-list-timings-division:dir(rtl) {
   transform-origin: right center;
 }
 
@@ -544,7 +550,7 @@ body,
   background-position: left center;
 }
 
-.requests-list-subitem.requests-list-waterfall:-moz-locale-dir(rtl) {
+.requests-list-subitem.requests-list-waterfall:dir(rtl) {
   background-position: right center;
 }
 
@@ -555,19 +561,19 @@ body,
   transform: scaleX(var(--timings-scale));
 }
 
-.requests-list-timings:-moz-locale-dir(ltr) {
+.requests-list-timings:dir(ltr) {
   transform-origin: left center;
 }
 
-.requests-list-timings:-moz-locale-dir(rtl) {
+.requests-list-timings:dir(rtl) {
   transform-origin: right center;
 }
 
-.requests-list-timings-total:-moz-locale-dir(ltr) {
+.requests-list-timings-total:dir(ltr) {
   transform-origin: left center;
 }
 
-.requests-list-timings-total:-moz-locale-dir(rtl) {
+.requests-list-timings-total:dir(rtl) {
   transform-origin: right center;
 }
 
@@ -680,13 +686,13 @@ body,
   display: none;
 }
 
-.network-details-panel-toggle:-moz-locale-dir(ltr)::before,
-.network-details-panel-toggle.pane-collapsed:-moz-locale-dir(rtl)::before {
+.network-details-panel-toggle:dir(ltr)::before,
+.network-details-panel-toggle.pane-collapsed:dir(rtl)::before {
   background-image: var(--theme-pane-collapse-image);
 }
 
-.network-details-panel-toggle.pane-collapsed:-moz-locale-dir(ltr)::before,
-.network-details-panel-toggle:-moz-locale-dir(rtl)::before {
+.network-details-panel-toggle.pane-collapsed:dir(ltr)::before,
+.network-details-panel-toggle:dir(rtl)::before {
   background-image: var(--theme-pane-expand-image);
 }
 
@@ -858,6 +864,18 @@ body,
   color: var(--theme-selection-color);
 }
 
+.learn-more-link {
+  color: var(--theme-highlight-blue);
+  cursor: pointer;
+  margin: 0 5px;
+  white-space: nowrap;
+  flex-grow: 1;
+}
+
+.learn-more-link:hover {
+  text-decoration: underline;
+}
+
 /* Headers tabpanel */
 
 .headers-overview {
@@ -906,18 +924,6 @@ body,
 
 .headers-summary .status-text {
     width: auto!important;
-}
-
-.headers-summary .learn-more-link {
-  color: var(--theme-highlight-blue);
-  cursor: pointer;
-  margin: 0 5px;
-  white-space: nowrap;
-  flex-grow: 1;
-}
-
-.headers-summary .learn-more-link:hover {
-  text-decoration: underline;
 }
 
 /* Response tabpanel */
@@ -1098,7 +1104,6 @@ body,
   padding-inline-end: 0;
   cursor: pointer;
   margin-inline-end: 1em;
-  min-width: 0;
 }
 
 .requests-list-network-summary-button > .summary-info-icon {
@@ -1291,12 +1296,6 @@ body,
 
 /* Responsive sidebar */
 @media (max-width: 700px) {
-  #toolbar-spacer,
-  .network-details-panel-toggle,
-  .requests-list-network-summary-button > .summary-info-text {
-    display: none;
-  }
-
   .requests-list-toolbar {
     height: 22px;
   }

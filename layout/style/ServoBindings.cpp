@@ -7,7 +7,7 @@
 #include "mozilla/ServoBindings.h"
 
 #include "ChildIterator.h"
-#include "NullPrincipalURI.h"
+#include "GeckoProfiler.h"
 #include "gfxFontFamilyList.h"
 #include "nsAnimationManager.h"
 #include "nsAttrValueInlines.h"
@@ -27,6 +27,7 @@
 #include "nsIPresShell.h"
 #include "nsIPresShellInlines.h"
 #include "nsIPrincipal.h"
+#include "nsFontMetrics.h"
 #include "nsMappedAttributes.h"
 #include "nsMediaFeatures.h"
 #include "nsNameSpaceManager.h"
@@ -41,6 +42,7 @@
 #include "mozilla/EffectSet.h"
 #include "mozilla/EventStates.h"
 #include "mozilla/Keyframe.h"
+#include "mozilla/Mutex.h"
 #include "mozilla/ServoElementSnapshot.h"
 #include "mozilla/ServoRestyleManager.h"
 #include "mozilla/StyleAnimationValue.h"
@@ -51,6 +53,7 @@
 #include "mozilla/dom/HTMLTableCellElement.h"
 #include "mozilla/dom/HTMLBodyElement.h"
 #include "mozilla/LookAndFeel.h"
+#include "mozilla/URLExtraData.h"
 
 using namespace mozilla;
 using namespace mozilla::dom;
@@ -511,6 +514,37 @@ Gecko_ElementHasCSSAnimations(RawGeckoElementBorrowed aElement,
                       ::GetAnimationCollection(aElement, pseudoType);
 
   return collection && !collection->mAnimations.IsEmpty();
+}
+
+double
+Gecko_GetProgressFromComputedTiming(RawGeckoComputedTimingBorrowed aComputedTiming)
+{
+  return aComputedTiming->mProgress.Value();
+}
+
+double
+Gecko_GetPositionInSegment(RawGeckoAnimationPropertySegmentBorrowed aSegment,
+                          double aProgress,
+                          ComputedTimingFunction::BeforeFlag aBeforeFlag)
+{
+  MOZ_ASSERT(aSegment->mFromKey < aSegment->mToKey,
+             "The segment from key should be less than to key");
+
+  double positionInSegment =
+    (aProgress - aSegment->mFromKey) / (aSegment->mToKey - aSegment->mFromKey);
+
+  return ComputedTimingFunction::GetPortion(aSegment->mTimingFunction,
+                                            positionInSegment,
+                                            aBeforeFlag);
+}
+
+RawServoAnimationValueBorrowedOrNull
+Gecko_AnimationGetBaseStyle(void* aBaseStyles, nsCSSPropertyID aProperty)
+{
+  auto base =
+    static_cast<nsRefPtrHashtable<nsUint32HashKey, RawServoAnimationValue>*>
+      (aBaseStyles);
+  return base->GetWeak(aProperty);
 }
 
 void
@@ -1079,6 +1113,13 @@ Gecko_ClearPODTArray(void* aArray, size_t aElementSize, size_t aElementAlign)
 }
 
 void
+Gecko_CopyStyleGridTemplateValues(nsStyleGridTemplate* aGridTemplate,
+                                  const nsStyleGridTemplate* aOther)
+{
+  *aGridTemplate = *aOther;
+}
+
+void
 Gecko_ClearAndResizeStyleContents(nsStyleContent* aContent, uint32_t aHowMany)
 {
   aContent->AllocateContents(aHowMany);
@@ -1151,7 +1192,7 @@ void
 Gecko_EnsureStyleAnimationArrayLength(void* aArray, size_t aLen)
 {
   auto base =
-    reinterpret_cast<nsStyleAutoArray<StyleAnimation>*>(aArray);
+    static_cast<nsStyleAutoArray<StyleAnimation>*>(aArray);
 
   size_t oldLength = base->Length();
 
@@ -1322,7 +1363,7 @@ Gecko_NewURLValue(ServoBundledURI aURI)
 
 NS_IMPL_THREADSAFE_FFI_REFCOUNTING(css::URLValue, CSSURLValue);
 
-NS_IMPL_THREADSAFE_FFI_REFCOUNTING(css::URLExtraData, URLExtraData);
+NS_IMPL_THREADSAFE_FFI_REFCOUNTING(URLExtraData, URLExtraData);
 
 NS_IMPL_THREADSAFE_FFI_REFCOUNTING(nsStyleCoord::Calc, Calc);
 
@@ -1546,10 +1587,70 @@ Gecko_nsStyleFont_CopyLangFrom(nsStyleFont* aFont, const nsStyleFont* aSource)
   aFont->mLanguage = aSource->mLanguage;
 }
 
-nscoord
-Gecko_nsStyleFont_GetBaseSize(const nsStyleFont* aFont, RawGeckoPresContextBorrowed aPresContext)
+void
+FontSizePrefs::CopyFrom(const LangGroupFontPrefs& prefs)
 {
-  return aPresContext->GetDefaultFont(aFont->mGenericID, aFont->mLanguage)->size;
+  mDefaultVariableSize = prefs.mDefaultVariableFont.size;
+  mDefaultFixedSize = prefs.mDefaultFixedFont.size;
+  mDefaultSerifSize = prefs.mDefaultSerifFont.size;
+  mDefaultSansSerifSize = prefs.mDefaultSansSerifFont.size;
+  mDefaultMonospaceSize = prefs.mDefaultMonospaceFont.size;
+  mDefaultCursiveSize = prefs.mDefaultCursiveFont.size;
+  mDefaultFantasySize = prefs.mDefaultFantasyFont.size;
+}
+
+FontSizePrefs
+Gecko_GetBaseSize(nsIAtom* aLanguage)
+{
+  LangGroupFontPrefs prefs;
+  nsCOMPtr<nsIAtom> langGroupAtom = StaticPresData::Get()->GetUncachedLangGroup(aLanguage);
+
+  prefs.Initialize(langGroupAtom);
+  FontSizePrefs sizes;
+  sizes.CopyFrom(prefs);
+
+  return sizes;
+}
+
+static Mutex* sServoFontMetricsLock = nullptr;
+
+void
+InitializeServo()
+{
+  URLExtraData::InitDummy();
+  Servo_Initialize(URLExtraData::Dummy());
+
+  sServoFontMetricsLock = new Mutex("Gecko_GetFontMetrics");
+}
+
+void
+ShutdownServo()
+{
+  delete sServoFontMetricsLock;
+  Servo_Shutdown();
+}
+
+GeckoFontMetrics
+Gecko_GetFontMetrics(RawGeckoPresContextBorrowed aPresContext,
+                     bool aIsVertical,
+                     const nsStyleFont* aFont,
+                     nscoord aFontSize,
+                     bool aUseUserFontSet)
+{
+  MutexAutoLock lock(*sServoFontMetricsLock);
+  GeckoFontMetrics ret;
+  // Safe because we are locked, and this function is only
+  // ever called from Servo parallel traversal or the main thread
+  nsPresContext* presContext = const_cast<nsPresContext*>(aPresContext);
+  presContext->SetUsesExChUnits(true);
+  RefPtr<nsFontMetrics> fm = nsRuleNode::GetMetricsFor(presContext, aIsVertical,
+                                                       aFont, aFontSize,
+                                                       aUseUserFontSet);
+  ret.mXSize = fm->XHeight();
+  gfxFloat zeroWidth = fm->GetThebesFontGroup()->GetFirstValidFont()->
+                           GetMetrics(fm->Orientation()).zeroOrAveCharWidth;
+  ret.mChSize = ceil(aPresContext->AppUnitsPerDevPixel() * zeroWidth);
+  return ret;
 }
 
 void
@@ -1594,15 +1695,6 @@ Gecko_LoadStyleSheet(css::Loader* aLoader,
   }
 
   aLoader->LoadChildSheet(aParent, uri, media, nullptr, aChildSheet, nullptr);
-}
-
-RawGeckoURLExtraData*
-Gecko_URLExtraData_CreateDummy()
-{
-  RefPtr<css::URLExtraData> data =
-    new css::URLExtraData(NullPrincipalURI::Create(), nullptr,
-                          NullPrincipal::Create());
-  return data.forget().take();
 }
 
 const nsMediaFeature*
@@ -1655,6 +1747,19 @@ void
 Gecko_Construct_nsStyleVariables(nsStyleVariables* ptr)
 {
   new (ptr) nsStyleVariables();
+}
+
+void
+Gecko_RegisterProfilerThread(const char* name)
+{
+  char stackTop;
+  profiler_register_thread(name, &stackTop);
+}
+
+void
+Gecko_UnregisterProfilerThread()
+{
+  profiler_unregister_thread();
 }
 
 #include "nsStyleStructList.h"

@@ -81,6 +81,7 @@ impl TransitionProperty {
 
     /// Get a transition property from a property declaration.
     pub fn from_declaration(declaration: &PropertyDeclaration) -> Option<Self> {
+        use properties::LonghandId;
         match *declaration {
             % for prop in data.longhands:
                 % if prop.animatable:
@@ -88,6 +89,18 @@ impl TransitionProperty {
                         => Some(TransitionProperty::${prop.camel_case}),
                 % endif
             % endfor
+            PropertyDeclaration::CSSWideKeyword(id, _) |
+            PropertyDeclaration::WithVariables(id, _) => {
+                match id {
+                    % for prop in data.longhands:
+                        % if prop.animatable:
+                            LonghandId::${prop.camel_case} =>
+                                Some(TransitionProperty::${prop.camel_case}),
+                        % endif
+                    % endfor
+                    _ => None,
+                }
+            },
             _ => None,
         }
     }
@@ -220,9 +233,16 @@ impl AnimatedProperty {
             % for prop in data.longhands:
                 % if prop.animatable:
                     AnimatedProperty::${prop.camel_case}(ref from, ref to) => {
-                        if let Ok(value) = from.interpolate(to, progress) {
-                            style.mutate_${prop.style_struct.ident.strip("_")}().set_${prop.ident}(value);
-                        }
+                        // https://w3c.github.io/web-animations/#discrete-animation-type
+                        % if prop.animation_type == "discrete":
+                            let value = if progress < 0.5 { *from } else { *to };
+                        % else:
+                            let value = match from.interpolate(to, progress) {
+                                Ok(value) => value,
+                                Err(()) => return,
+                            };
+                        % endif
+                        style.mutate_${prop.style_struct.ident.strip("_")}().set_${prop.ident}(value);
                     }
                 % endif
             % endfor
@@ -386,6 +406,23 @@ impl AnimationValue {
             _ => None // non animatable properties will get included because of shorthands. ignore.
         }
     }
+
+    /// Get an AnimationValue for a TransitionProperty from a given computed values.
+    pub fn from_computed_values(transition_property: &TransitionProperty,
+                                computed_values: &ComputedValues)
+                                -> Self {
+        match *transition_property {
+            TransitionProperty::All => panic!("Can't use TransitionProperty::All here."),
+            % for prop in data.longhands:
+                % if prop.animatable:
+                    TransitionProperty::${prop.camel_case} => {
+                        AnimationValue::${prop.camel_case}(
+                            computed_values.get_${prop.style_struct.ident.strip("_")}().clone_${prop.ident}())
+                    }
+                % endif
+            % endfor
+        }
+    }
 }
 
 impl Interpolate for AnimationValue {
@@ -395,7 +432,16 @@ impl Interpolate for AnimationValue {
                 % if prop.animatable:
                     (&AnimationValue::${prop.camel_case}(ref from),
                      &AnimationValue::${prop.camel_case}(ref to)) => {
-                        from.interpolate(to, progress).map(AnimationValue::${prop.camel_case})
+                        // https://w3c.github.io/web-animations/#discrete-animation-type
+                        % if prop.animation_type == "discrete":
+                            if progress < 0.5 {
+                                Ok(AnimationValue::${prop.camel_case}(*from))
+                            } else {
+                                Ok(AnimationValue::${prop.camel_case}(*to))
+                            }
+                        % else:
+                            from.interpolate(to, progress).map(AnimationValue::${prop.camel_case})
+                        % endif
                     }
                 % endif
             % endfor

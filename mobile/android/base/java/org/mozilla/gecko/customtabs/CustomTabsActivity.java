@@ -15,14 +15,11 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
-import android.support.annotation.ColorInt;
+import android.provider.Browser;
 import android.support.annotation.NonNull;
 import android.support.annotation.StyleRes;
-import android.support.annotation.VisibleForTesting;
 import android.support.design.widget.Snackbar;
-import android.support.v4.graphics.drawable.DrawableCompat;
 import android.support.v4.util.SparseArrayCompat;
-import android.support.v4.view.MenuItemCompat;
 import android.support.v7.app.ActionBar;
 import android.support.v7.widget.Toolbar;
 import android.text.TextUtils;
@@ -31,10 +28,9 @@ import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
-import android.view.ViewGroup.LayoutParams;
-import android.widget.ImageButton;
 import android.widget.ProgressBar;
 
+import org.mozilla.gecko.EventDispatcher;
 import org.mozilla.gecko.GeckoApp;
 import org.mozilla.gecko.R;
 import org.mozilla.gecko.SnackbarBuilder;
@@ -46,18 +42,15 @@ import org.mozilla.gecko.menu.GeckoMenu;
 import org.mozilla.gecko.menu.GeckoMenuInflater;
 import org.mozilla.gecko.util.Clipboard;
 import org.mozilla.gecko.util.ColorUtil;
+import org.mozilla.gecko.util.GeckoBundle;
+import org.mozilla.gecko.util.IntentUtils;
 import org.mozilla.gecko.widget.GeckoPopupMenu;
 
 import java.util.List;
 
-import static android.support.customtabs.CustomTabsIntent.EXTRA_TOOLBAR_COLOR;
-
 public class CustomTabsActivity extends GeckoApp implements Tabs.OnTabsChangedListener {
     private static final String LOGTAG = "CustomTabsActivity";
-    private static final String SAVED_TOOLBAR_COLOR = "SavedToolbarColor";
-
-    @ColorInt
-    private static final int DEFAULT_ACTION_BAR_COLOR = 0xFF363b40; // default color to match design
+    private static final String SAVED_START_INTENT = "saved_intent_which_started_this_activity";
 
     private final SparseArrayCompat<PendingIntent> menuItemsIntent = new SparseArrayCompat<>();
     private GeckoPopupMenu popupMenu;
@@ -66,22 +59,22 @@ public class CustomTabsActivity extends GeckoApp implements Tabs.OnTabsChangedLi
     // A state to indicate whether this activity is finishing with customize animation
     private boolean usingCustomAnimation = false;
 
-    @ColorInt
-    private int toolbarColor = DEFAULT_ACTION_BAR_COLOR;
+    // Bug 1351605 - getIntent() not always returns the intent which started this activity.
+    // Therefore we make a copy in case of this Activity is re-created.
+    private Intent startIntent;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         if (savedInstanceState != null) {
-            toolbarColor = savedInstanceState.getInt(SAVED_TOOLBAR_COLOR, DEFAULT_ACTION_BAR_COLOR);
+            startIntent = savedInstanceState.getParcelable(SAVED_START_INTENT);
         } else {
             Telemetry.sendUIEvent(TelemetryContract.Event.LOAD_URL, TelemetryContract.Method.INTENT, "customtab");
-            toolbarColor = getIntent().getIntExtra(EXTRA_TOOLBAR_COLOR, DEFAULT_ACTION_BAR_COLOR);
+            startIntent = getIntent();
+            final String host = getReferrerHost();
+            recordCustomTabUsage(host);
         }
-
-        // Translucent color does not make sense for toolbar color. Ensure it is 0xFF.
-        toolbarColor = 0xFF000000 | toolbarColor;
 
         setThemeFromToolbarColor();
 
@@ -92,17 +85,27 @@ public class CustomTabsActivity extends GeckoApp implements Tabs.OnTabsChangedLi
         bindNavigationCallback(toolbar);
 
         actionBarPresenter = new ActionBarPresenter(actionBar);
-        actionBarPresenter.displayUrlOnly(getIntent().getDataString());
-        actionBarPresenter.setBackgroundColor(toolbarColor, getWindow());
+        actionBarPresenter.displayUrlOnly(startIntent.getDataString());
+        actionBarPresenter.setBackgroundColor(IntentUtil.getToolbarColor(startIntent), getWindow());
         actionBarPresenter.setTextLongClickListener(new UrlCopyListener());
-        actionBar.setDisplayHomeAsUpEnabled(true);
 
         Tabs.registerOnTabsChangedListener(this);
     }
 
+    private void recordCustomTabUsage(final String host) {
+        final GeckoBundle data = new GeckoBundle(1);
+        if (host != null) {
+            data.putString("client", host);
+        } else {
+            data.putString("client", "unknown");
+        }
+        // Pass a message to Gecko to send Telemetry data
+        EventDispatcher.getInstance().dispatch("Telemetry:CustomTabsPing", data);
+    }
+
     private void setThemeFromToolbarColor() {
-        @StyleRes
-        int styleRes = (ColorUtil.getReadableTextColor(toolbarColor) == Color.BLACK)
+        final int color = ColorUtil.getReadableTextColor(IntentUtil.getToolbarColor(startIntent));
+        @StyleRes final int styleRes = (color == Color.BLACK)
                 ? R.style.GeckoCustomTabs_Light
                 : R.style.GeckoCustomTabs;
 
@@ -116,7 +119,7 @@ public class CustomTabsActivity extends GeckoApp implements Tabs.OnTabsChangedLi
     public String getPackageName() {
         if (usingCustomAnimation) {
             // Use its package name to retrieve animation resource
-            return IntentUtil.getAnimationPackageName(getIntent());
+            return IntentUtil.getAnimationPackageName(startIntent);
         } else {
             return super.getPackageName();
         }
@@ -127,10 +130,10 @@ public class CustomTabsActivity extends GeckoApp implements Tabs.OnTabsChangedLi
         super.finish();
 
         // When 3rd party app launch this Activity, it could also specify custom exit-animation.
-        if (IntentUtil.hasExitAnimation(getIntent())) {
+        if (IntentUtil.hasExitAnimation(startIntent)) {
             usingCustomAnimation = true;
-            overridePendingTransition(IntentUtil.getEnterAnimationRes(getIntent()),
-                    IntentUtil.getExitAnimationRes(getIntent()));
+            overridePendingTransition(IntentUtil.getEnterAnimationRes(startIntent),
+                    IntentUtil.getExitAnimationRes(startIntent));
             usingCustomAnimation = false;
         }
     }
@@ -185,8 +188,7 @@ public class CustomTabsActivity extends GeckoApp implements Tabs.OnTabsChangedLi
     @Override
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
-
-        outState.putInt(SAVED_TOOLBAR_COLOR, toolbarColor);
+        outState.putParcelable(SAVED_START_INTENT, startIntent);
     }
 
     @Override
@@ -196,6 +198,9 @@ public class CustomTabsActivity extends GeckoApp implements Tabs.OnTabsChangedLi
             final Tab tab = tabs.getTab(lastSelectedTabId);
             if (tab == null) {
                 finish();
+            } else {
+                // we are restoring
+                actionBarPresenter.update(tab);
             }
         }
         super.onResume();
@@ -207,26 +212,31 @@ public class CustomTabsActivity extends GeckoApp implements Tabs.OnTabsChangedLi
     // CustomTabsActivity only use standard menu in ActionBar, so initialize menu here.
     @Override
     public boolean onCreatePanelMenu(final int id, final Menu menu) {
-        insertActionButton(menu, getIntent(), actionBarPresenter.getTextPrimaryColor());
 
+        // if 3rd-party app asks to add an action button
+        if (IntentUtil.hasActionButton(startIntent)) {
+            final Bitmap bitmap = IntentUtil.getActionButtonIcon(startIntent);
+            final Drawable icon = new BitmapDrawable(getResources(), bitmap);
+            final boolean shouldTint = IntentUtil.isActionButtonTinted(startIntent);
+            actionBarPresenter.addActionButton(menu, icon, shouldTint)
+                    .setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            onActionButtonClicked();
+                        }
+                    });
+        }
+
+        // insert an action button for menu. click it to show popup menu
         popupMenu = createCustomPopupMenu();
-
-        // Create a ImageButton manually, and use it as an anchor for PopupMenu.
-        final ImageButton btn = new ImageButton(getContext(),
-                null, 0, R.style.Widget_MenuButtonCustomTabs);
-        btn.setLayoutParams(new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
-        btn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View anchor) {
-                popupMenu.setAnchor(anchor);
-                popupMenu.show();
-            }
-        });
-
-        // Insert the anchor-button to Menu
-        final MenuItem item = menu.add(Menu.NONE, R.id.menu, Menu.NONE, "Menu Button");
-        item.setActionView(btn);
-        MenuItemCompat.setShowAsAction(item, MenuItemCompat.SHOW_AS_ACTION_ALWAYS);
+        actionBarPresenter.addActionButton(menu, getDrawable(R.drawable.ab_menu), true)
+                .setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View anchor) {
+                        popupMenu.setAnchor(anchor);
+                        popupMenu.show();
+                    }
+                });
 
         updateMenuItemForward();
         return true;
@@ -237,9 +247,6 @@ public class CustomTabsActivity extends GeckoApp implements Tabs.OnTabsChangedLi
         switch (item.getItemId()) {
             case android.R.id.home:
                 finish();
-                return true;
-            case R.id.action_button:
-                onActionButtonClicked();
                 return true;
             case R.id.share:
                 onShareClicked();
@@ -262,37 +269,6 @@ public class CustomTabsActivity extends GeckoApp implements Tabs.OnTabsChangedLi
         }
 
         return super.onOptionsItemSelected(item);
-    }
-
-    /**
-     * To insert a MenuItem (as an ActionButton) into Menu.
-     *
-     * @param menu   The options menu in which to place items.
-     * @param intent which to launch this activity
-     * @param tintColor color to tint action-button
-     * @return the MenuItem which be created and inserted into menu. Otherwise, null.
-     */
-    @VisibleForTesting
-    MenuItem insertActionButton(final Menu menu,
-                                final Intent intent,
-                                @ColorInt final int tintColor) {
-        if (!IntentUtil.hasActionButton(intent)) {
-            return null;
-        }
-
-        MenuItem item = menu.add(Menu.NONE,
-                R.id.action_button,
-                Menu.NONE,
-                IntentUtil.getActionButtonDescription(intent));
-        Bitmap bitmap = IntentUtil.getActionButtonIcon(intent);
-        final Drawable icon = new BitmapDrawable(getResources(), bitmap);
-        if (IntentUtil.isActionButtonTinted(intent)) {
-            DrawableCompat.setTint(icon, tintColor);
-        }
-        item.setIcon(icon);
-        MenuItemCompat.setShowAsAction(item, MenuItemCompat.SHOW_AS_ACTION_ALWAYS);
-
-        return item;
     }
 
     private void bindNavigationCallback(@NonNull final Toolbar toolbar) {
@@ -337,12 +313,9 @@ public class CustomTabsActivity extends GeckoApp implements Tabs.OnTabsChangedLi
             }
         });
 
-        // to add Fennec default menu
-        final Intent intent = getIntent();
-
         // to add custom menu items
-        final List<String> titles = IntentUtil.getMenuItemsTitle(intent);
-        final List<PendingIntent> intents = IntentUtil.getMenuItemsPendingIntent(intent);
+        final List<String> titles = IntentUtil.getMenuItemsTitle(startIntent);
+        final List<PendingIntent> intents = IntentUtil.getMenuItemsPendingIntent(startIntent);
         menuItemsIntent.clear();
         for (int i = 0; i < titles.size(); i++) {
             final int menuId = Menu.FIRST + i;
@@ -351,7 +324,7 @@ public class CustomTabsActivity extends GeckoApp implements Tabs.OnTabsChangedLi
         }
 
         // to add share menu item, if necessary
-        if (IntentUtil.hasShareItem(intent) && !TextUtils.isEmpty(intent.getDataString())) {
+        if (IntentUtil.hasShareItem(startIntent) && !TextUtils.isEmpty(startIntent.getDataString())) {
             geckoMenu.add(Menu.NONE, R.id.share, Menu.NONE, getString(R.string.share));
         }
 
@@ -436,9 +409,10 @@ public class CustomTabsActivity extends GeckoApp implements Tabs.OnTabsChangedLi
     }
 
     private void onActionButtonClicked() {
-        PendingIntent pendingIntent = IntentUtil.getActionButtonPendingIntent(getIntent());
+        PendingIntent pendingIntent = IntentUtil.getActionButtonPendingIntent(startIntent);
         performPendingIntent(pendingIntent);
     }
+
 
     /**
      * Callback for Share menu item.
@@ -473,5 +447,22 @@ public class CustomTabsActivity extends GeckoApp implements Tabs.OnTabsChangedLi
             }
             return true;
         }
+    }
+
+    private String getReferrerHost() {
+        final Intent intent = this.getIntent();
+        String applicationId = IntentUtils.getStringExtraSafe(intent, Browser.EXTRA_APPLICATION_ID);
+        if (applicationId != null) {
+            return applicationId;
+        }
+        Uri referrer = intent.getParcelableExtra("android.intent.extra.REFERRER");
+        if (referrer != null) {
+            return referrer.getHost();
+        }
+        String referrerName = intent.getStringExtra("android.intent.extra.REFERRER_NAME");
+        if (referrerName != null) {
+            return Uri.parse(referrerName).getHost();
+        }
+        return null;
     }
 }

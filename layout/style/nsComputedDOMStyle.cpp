@@ -427,10 +427,10 @@ nsComputedDOMStyle::GetAuthoredPropertyValue(const nsAString& aPropertyName,
 
 /* static */
 already_AddRefed<nsStyleContext>
-nsComputedDOMStyle::GetStyleContextForElement(Element* aElement,
-                                              nsIAtom* aPseudo,
-                                              nsIPresShell* aPresShell,
-                                              StyleType aStyleType)
+nsComputedDOMStyle::GetStyleContext(Element* aElement,
+                                    nsIAtom* aPseudo,
+                                    nsIPresShell* aPresShell,
+                                    StyleType aStyleType)
 {
   // If the content has a pres shell, we must use it.  Otherwise we'd
   // potentially mix rule trees by using the wrong pres shell's style
@@ -446,8 +446,7 @@ nsComputedDOMStyle::GetStyleContextForElement(Element* aElement,
 
   presShell->FlushPendingNotifications(FlushType::Style);
 
-  return GetStyleContextForElementNoFlush(aElement, aPseudo, presShell,
-                                          aStyleType);
+  return GetStyleContextNoFlush(aElement, aPseudo, presShell, aStyleType);
 }
 
 namespace {
@@ -536,7 +535,7 @@ public:
                           bool aInDocWithShell)
   {
     MOZ_ASSERT(!aStyleSet->IsServo(),
-      "Bug 1311257: Servo backend does not support the base value yet");
+      "Servo backend should not use this function");
     MOZ_ASSERT(mAnimationFlag == nsComputedDOMStyle::eWithoutAnimation,
       "AnimationFlag should be eWithoutAnimation");
 
@@ -574,12 +573,11 @@ private:
 }
 
 already_AddRefed<nsStyleContext>
-nsComputedDOMStyle::DoGetStyleContextForElementNoFlush(
-  Element* aElement,
-  nsIAtom* aPseudo,
-  nsIPresShell* aPresShell,
-  StyleType aStyleType,
-  AnimationFlag aAnimationFlag)
+nsComputedDOMStyle::DoGetStyleContextNoFlush(Element* aElement,
+                                             nsIAtom* aPseudo,
+                                             nsIPresShell* aPresShell,
+                                             StyleType aStyleType,
+                                             AnimationFlag aAnimationFlag)
 {
   MOZ_ASSERT(aElement, "NULL element");
   // If the content has a pres shell, we must use it.  Otherwise we'd
@@ -599,7 +597,9 @@ nsComputedDOMStyle::DoGetStyleContextForElementNoFlush(
   // XXX the !aElement->IsHTMLElement(nsGkAtoms::area)
   // check is needed due to bug 135040 (to avoid using
   // mPrimaryFrame). Remove it once that's fixed.
-  if (!aPseudo && aStyleType == eAll && inDocWithShell &&
+  if (!aPseudo &&
+      aStyleType == eAll &&
+      inDocWithShell &&
       !aElement->IsHTMLElement(nsGkAtoms::area)) {
     nsIFrame* frame = nsLayoutUtils::GetStyleFrame(aElement);
     if (frame) {
@@ -608,6 +608,22 @@ nsComputedDOMStyle::DoGetStyleContextForElementNoFlush(
       // pseudo-elements, since then it's not the primary style
       // for this element.
       if (!result->HasPseudoElementData()) {
+        // The existing style context may have animation styles so check if we
+        // need to remove them.
+        if (aAnimationFlag == eWithoutAnimation) {
+          nsPresContext* presContext = presShell->GetPresContext();
+          MOZ_ASSERT(presContext, "Should have a prescontext if we have a frame");
+          MOZ_ASSERT(presContext->StyleSet()->IsGecko(),
+                     "stylo: Need ResolveStyleByRemovingAnimation for stylo");
+          if (presContext && presContext->StyleSet()->IsGecko()) {
+            nsStyleSet* styleSet = presContext->StyleSet()->AsGecko();
+            return styleSet->ResolveStyleByRemovingAnimation(
+                     aElement, result, eRestyle_AllHintsWithAnimations);
+          } else {
+            return nullptr;
+          }
+        }
+
         // this function returns an addrefed style context
         RefPtr<nsStyleContext> ret = result;
         return ret.forget();
@@ -647,9 +663,8 @@ nsComputedDOMStyle::DoGetStyleContextForElementNoFlush(
   nsIContent* parent = aPseudo ? aElement : aElement->GetParent();
   // Don't resolve parent context for document fragments.
   if (parent && parent->IsElement()) {
-    parentContext = GetStyleContextForElementNoFlush(parent->AsElement(),
-                                                     nullptr, aPresShell,
-                                                     aStyleType);
+    parentContext = GetStyleContextNoFlush(parent->AsElement(), nullptr,
+                                           aPresShell, aStyleType);
   }
 
   StyleResolver styleResolver(presContext, aAnimationFlag);
@@ -666,49 +681,6 @@ nsComputedDOMStyle::DoGetStyleContextForElementNoFlush(
                                                aElement, type,
                                                parentContext,
                                                inDocWithShell);
-}
-
-
-/* static */
-already_AddRefed<nsStyleContext>
-nsComputedDOMStyle::GetStyleContextForElementNoFlush(Element* aElement,
-                                                     nsIAtom* aPseudo,
-                                                     nsIPresShell* aPresShell,
-                                                     StyleType aStyleType)
-{
-  return DoGetStyleContextForElementNoFlush(aElement,
-                                            aPseudo,
-                                            aPresShell,
-                                            aStyleType,
-                                            eWithAnimation);
-}
-
-/* static */
-already_AddRefed<nsStyleContext>
-nsComputedDOMStyle::GetStyleContextForElementWithoutAnimation(
-  Element* aElement,
-  nsIAtom* aPseudo,
-  nsIPresShell* aPresShell)
-{
-  // If the content has a pres shell, we must use it.  Otherwise we'd
-  // potentially mix rule trees by using the wrong pres shell's style
-  // set.  Using the pres shell from the content also means that any
-  // content that's actually *in* a document will get the style from the
-  // correct document.
-  nsCOMPtr<nsIPresShell> presShell = GetPresShellForContent(aElement);
-  if (!presShell) {
-    presShell = aPresShell;
-    if (!presShell)
-      return nullptr;
-  }
-
-  presShell->FlushPendingNotifications(FlushType::Style);
-
-  return DoGetStyleContextForElementNoFlush(aElement,
-                                            aPseudo,
-                                            presShell,
-                                            eAll,
-                                            eWithoutAnimation);
 }
 
 nsMargin
@@ -767,6 +739,13 @@ nsComputedDOMStyle::GetCSSParsingEnvironment(CSSParsingEnvironment& aCSSParseEnv
   NS_RUNTIMEABORT("called nsComputedDOMStyle::GetCSSParsingEnvironment");
   // Just in case NS_RUNTIMEABORT ever stops killing us for some reason
   aCSSParseEnv.mPrincipal = nullptr;
+}
+
+URLExtraData*
+nsComputedDOMStyle::GetURLData() const
+{
+  NS_RUNTIMEABORT("called nsComputedDOMStyle::GetURLData");
+  return nullptr;
 }
 
 void
@@ -862,7 +841,7 @@ nsComputedDOMStyle::UpdateCurrentStyleSources(bool aNeedsLayoutFlush)
 
   if (!mStyleContext || mStyleContext->HasPseudoElementData()) {
 #ifdef DEBUG
-    if (mStyleContext) {
+    if (mStyleContext && mStyleContext->StyleSource().IsGeckoRuleNodeOrNull()) {
       // We want to check that going through this path because of
       // HasPseudoElementData is rare, because it slows us down a good
       // bit.  So check that we're really inside something associated
@@ -886,16 +865,16 @@ nsComputedDOMStyle::UpdateCurrentStyleSources(bool aNeedsLayoutFlush)
 #endif
     // Need to resolve a style context
     RefPtr<nsStyleContext> resolvedStyleContext =
-      nsComputedDOMStyle::GetStyleContextForElement(mContent->AsElement(),
-                                                    mPseudo,
-                                                    mPresShell,
-                                                    mStyleType);
+      nsComputedDOMStyle::GetStyleContext(mContent->AsElement(),
+                                          mPseudo,
+                                          mPresShell,
+                                          mStyleType);
     if (!resolvedStyleContext) {
       ClearStyleContext();
       return;
     }
 
-    // No need to re-get the generation, even though GetStyleContextForElement
+    // No need to re-get the generation, even though GetStyleContext
     // will flush, since we flushed style at the top of this function.
     NS_ASSERTION(mPresShell &&
                  currentGeneration ==
@@ -2324,6 +2303,9 @@ nsComputedDOMStyle::SetValueToStyleImage(const nsStyleImage& aStyleImage,
     case eStyleImageType_Null:
       aValue->SetIdent(eCSSKeyword_none);
       break;
+    case eStyleImageType_URL:
+      SetValueToURLValue(aStyleImage.GetURLValue(), aValue);
+      break;
     default:
       NS_NOTREACHED("unexpected image type");
       break;
@@ -2338,26 +2320,7 @@ nsComputedDOMStyle::DoGetImageLayerImage(const nsStyleImageLayers& aLayers)
   for (uint32_t i = 0, i_end = aLayers.mImageCount; i < i_end; ++i) {
     RefPtr<nsROCSSPrimitiveValue> val = new nsROCSSPrimitiveValue;
 
-    const nsStyleImage& image = aLayers.mLayers[i].mImage;
-    // Layer::mImage::GetType() returns eStyleImageType_Null in two conditions:
-    // 1. The value of mask-image/bg-image is 'none'.
-    //    Since this layer does not refer to any source, Layer::mSourceURI must
-    //    be nullptr too.
-    // 2. This layer refers to a local resource, e.g. mask-image:url(#mymask).
-    //    For local references, there is no need to download any external
-    //    resource, so Layer::mImage is not used.
-    //    Instead, we store the local URI in one place -- on Layer::mSourceURI.
-    //    Hence, we must serialize using mSourceURI (instead of
-    //    SetValueToStyleImage()/mImage) in this case.
-    if (aLayers.mLayers[i].mSourceURI &&
-        aLayers.mLayers[i].mSourceURI->IsLocalRef()) {
-      // This is how we represent a 'mask-image' reference for a local URI,
-      // such as 'mask-image:url(#mymask)' or 'mask:url(#mymask)'
-      SetValueToURLValue(aLayers.mLayers[i].mSourceURI, val);
-    } else {
-      SetValueToStyleImage(image, val);
-    }
-
+    SetValueToStyleImage(aLayers.mLayers[i].mImage, val);
     valueList->AppendCSSValue(val.forget());
   }
 
@@ -6378,13 +6341,14 @@ nsComputedDOMStyle::DoGetMask()
       !firstLayer.mRepeat.IsInitialValue() ||
       !firstLayer.mSize.IsInitialValue() ||
       !(firstLayer.mImage.GetType() == eStyleImageType_Null ||
-        firstLayer.mImage.GetType() == eStyleImageType_Image)) {
+        firstLayer.mImage.GetType() == eStyleImageType_Image ||
+        firstLayer.mImage.GetType() == eStyleImageType_URL)) {
     return nullptr;
   }
 
   RefPtr<nsROCSSPrimitiveValue> val = new nsROCSSPrimitiveValue;
 
-  SetValueToURLValue(firstLayer.mSourceURI, val);
+  SetValueToURLValue(firstLayer.mImage.GetURLValue(), val);
 
   return val.forget();
 }

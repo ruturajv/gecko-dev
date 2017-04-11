@@ -95,6 +95,7 @@ SERVO_BINDING_FUNC(Servo_CssRules_DeleteRule, nsresult,
 BASIC_RULE_FUNCS(Style)
 BASIC_RULE_FUNCS(Media)
 BASIC_RULE_FUNCS(Namespace)
+BASIC_RULE_FUNCS(Page)
 #undef BASIC_RULE_FUNCS
 SERVO_BINDING_FUNC(Servo_CssRules_GetFontFaceRuleAt, nsCSSFontFaceRule*,
                    ServoCssRulesBorrowed rules, uint32_t index)
@@ -113,6 +114,11 @@ SERVO_BINDING_FUNC(Servo_NamespaceRule_GetPrefix, nsIAtom*,
                    RawServoNamespaceRuleBorrowed rule)
 SERVO_BINDING_FUNC(Servo_NamespaceRule_GetURI, nsIAtom*,
                    RawServoNamespaceRuleBorrowed rule)
+SERVO_BINDING_FUNC(Servo_PageRule_GetStyle, RawServoDeclarationBlockStrong,
+                   RawServoPageRuleBorrowed rule)
+SERVO_BINDING_FUNC(Servo_PageRule_SetStyle, void,
+                   RawServoPageRuleBorrowed rule,
+                   RawServoDeclarationBlockBorrowed declarations)
 
 // Animations API
 SERVO_BINDING_FUNC(Servo_ParseProperty,
@@ -133,6 +139,10 @@ SERVO_BINDING_FUNC(Servo_AnimationValueMap_Push, void,
                    RawServoAnimationValueMapBorrowed,
                    nsCSSPropertyID property,
                    RawServoAnimationValueBorrowed value)
+SERVO_BINDING_FUNC(Servo_ComputedValues_ExtractAnimationValue,
+                   RawServoAnimationValueStrong,
+                   ServoComputedValuesBorrowed computed_values,
+                   nsCSSPropertyID property)
 
 // AnimationValues handling
 SERVO_BINDING_FUNC(Servo_AnimationValues_Interpolate,
@@ -200,6 +210,15 @@ SERVO_BINDING_FUNC(Servo_DeclarationBlock_RemoveProperty, void,
 SERVO_BINDING_FUNC(Servo_DeclarationBlock_RemovePropertyById, void,
                    RawServoDeclarationBlockBorrowed declarations,
                    nsCSSPropertyID property)
+// Compose animation value for a given property.
+// |base_values| is nsRefPtrHashtable<nsUint32HashKey, RawServoAnimationValue>.
+// We use void* to avoid exposing nsRefPtrHashtable in FFI.
+SERVO_BINDING_FUNC(Servo_AnimationCompose, void,
+                   RawServoAnimationValueMapBorrowed animation_values,
+                   void* base_values,
+                   nsCSSPropertyID property,
+                   RawGeckoAnimationPropertySegmentBorrowed animation_segment,
+                   RawGeckoComputedTimingBorrowed computed_timing)
 
 // presentation attributes
 SERVO_BINDING_FUNC(Servo_DeclarationBlock_PropertyIsSet, bool,
@@ -273,7 +292,8 @@ SERVO_BINDING_FUNC(Servo_ComputedValues_Inherit, ServoComputedValuesStrong,
                    ServoComputedValuesBorrowedOrNull parent_style)
 
 // Initialize Servo components. Should be called exactly once at startup.
-SERVO_BINDING_FUNC(Servo_Initialize, void)
+SERVO_BINDING_FUNC(Servo_Initialize, void,
+                   RawGeckoURLExtraData* dummy_url_data)
 // Shut down Servo components. Should be called exactly once at shutdown.
 SERVO_BINDING_FUNC(Servo_Shutdown, void)
 
@@ -281,6 +301,12 @@ SERVO_BINDING_FUNC(Servo_Shutdown, void)
 // has never been styled, since snapshotting in that case is wasted work.
 SERVO_BINDING_FUNC(Servo_Element_GetSnapshot, ServoElementSnapshot*,
                    RawGeckoElementBorrowed element)
+
+// Gets the source style rules for the element. This returns the result via
+// rules, which would include a list of unowned pointers to RawServoStyleRule.
+SERVO_BINDING_FUNC(Servo_Element_GetStyleRuleList, void,
+                   RawGeckoElementBorrowed element,
+                   RawGeckoServoStyleRuleListBorrowedMut rules)
 
 // Restyle and change hints.
 SERVO_BINDING_FUNC(Servo_NoteExplicitHints, void, RawGeckoElementBorrowed element,
@@ -310,10 +336,18 @@ SERVO_BINDING_FUNC(Servo_ResolveStyleLazily, ServoComputedValuesStrong,
 // directly
 SERVO_BINDING_FUNC(Servo_TraverseSubtree, bool,
                    RawGeckoElementBorrowed root, RawServoStyleSetBorrowed set,
-                   mozilla::TraversalRootBehavior root_behavior)
+                   mozilla::TraversalRootBehavior root_behavior,
+                   mozilla::TraversalRestyleBehavior restyle_behavior)
 
 // Assert that the tree has no pending or unconsumed restyles.
 SERVO_BINDING_FUNC(Servo_AssertTreeIsClean, void, RawGeckoElementBorrowed root)
+
+// Returns computed values for the given element without any animations rules.
+SERVO_BINDING_FUNC(Servo_StyleSet_GetBaseComputedValuesForElement,
+                   ServoComputedValuesStrong,
+                   RawServoStyleSetBorrowed set,
+                   RawGeckoElementBorrowed element,
+                   nsIAtom* pseudo_tag)
 
 // Style-struct management.
 #define STYLE_STRUCT(name, checkdata_cb)                            \

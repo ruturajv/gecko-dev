@@ -1,3 +1,4 @@
+
 /* -*- indent-tabs-mode: nil; js-indent-level: 2 -*- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -364,7 +365,8 @@ pref("media.opus.enabled", true);
 pref("media.wave.enabled", true);
 pref("media.webm.enabled", true);
 
-pref("media.eme.chromium-api.enabled", false);
+pref("media.eme.chromium-api.enabled", true);
+pref("media.eme.chromium-api.video-shmems", 3);
 
 #ifdef MOZ_APPLEMEDIA
 #ifdef MOZ_WIDGET_UIKIT
@@ -1236,6 +1238,13 @@ pref("dom.webapps.useCurrentProfile", false);
 
 pref("dom.cycle_collector.incremental", true);
 
+// Whether Xrays expose properties from the named properties object (aka global
+// scope polluter).  Values are:
+//   0 = properties exposed on Xrays
+//   1 = properties exposed on Xrays, except in web extension content scripts.
+//   2 = properties not exposed on xrays
+pref("dom.allow_named_properties_object_for_xrays", 1);
+
 // Parsing perf prefs. For now just mimic what the old code did.
 #ifndef XP_WIN
 pref("content.sink.pending_event_mode", 0);
@@ -1631,6 +1640,14 @@ pref("network.http.keep_empty_response_headers_as_empty_string", true);
 // Max size, in bytes, for received HTTP response header.
 pref("network.http.max_response_header_size", 393216);
 
+// If we should attempt to race the cache and network
+pref("network.http.rcwn.enabled", false);
+pref("network.http.rcwn.cache_queue_normal_threshold", 50);
+pref("network.http.rcwn.cache_queue_priority_threshold", 10);
+// We might attempt to race the cache with the network only if a resource
+// is smaller than this size.
+pref("network.http.rcwn.small_resource_size_kb", 256);
+
 // The ratio of the transaction count for the focused window and the count of
 // all available active connections.
 pref("network.http.focused_window_transaction_ratio", "0.9");
@@ -1700,12 +1717,7 @@ pref("dom.server-events.default-reconnection-time", 5000); // in milliseconds
 // by the jar channel.
 pref("network.jar.open-unsafe-types", false);
 // If true, loading remote JAR files using the jar: protocol will be prevented.
-#ifdef RELEASE_OR_BETA
-// Keep allowing remote JAR files for IBM iNotes (see bug 1255139) for now.
-pref("network.jar.block-remote-files", false);
-#else
 pref("network.jar.block-remote-files", true);
-#endif
 
 // This preference, if true, causes all UTF-8 domain names to be normalized to
 // punycode.  The intention is to allow UTF-8 domain names as input, but never
@@ -2781,9 +2793,6 @@ pref("layout.css.unset-value.enabled", true);
 
 // Is support for the "all" shorthand enabled?
 pref("layout.css.all-shorthand.enabled", true);
-
-// Is support for CSS variables enabled?
-pref("layout.css.variables.enabled", true);
 
 // Is support for CSS overflow-clip-box enabled for non-UA sheets?
 pref("layout.css.overflow-clip-box.enabled", false);
@@ -4478,7 +4487,7 @@ pref("image.mem.discardable", true);
 
 // Discards inactive image frames of _animated_ images and re-decodes them on
 // demand from compressed data. Has no effect if image.mem.discardable is false.
-pref("image.mem.animated.discardable", false);
+pref("image.mem.animated.discardable", true);
 
 // Decodes images into shared memory to allow direct use in separate
 // rendering processes.
@@ -5035,6 +5044,21 @@ pref("dom.vr.enabled", false);
 #else
 pref("dom.vr.enabled", true);
 #endif
+// It is often desirable to automatically start vr presentation when
+// a user puts on the VR headset.  This is done by emitting the
+// Window.vrdisplayactivate event when the headset's sensors detect it
+// being worn.  This can result in WebVR content taking over the headset
+// when the user is using it outside the browser or inadvertent start of
+// presentation due to the high sensitivity of the proximity sensor in some
+// headsets, so it is off by default.
+pref("dom.vr.autoactivate.enabled", false);
+// Maximum number of milliseconds the browser will wait for content to call
+// VRDisplay.requestPresent after emitting vrdisplayactivate during VR
+// link traversal.  This prevents a long running event handler for
+// vrdisplayactivate from later calling VRDisplay.requestPresent, which would
+// result in a non-responsive browser in the VR headset.
+pref("dom.vr.navigation.timeout", 5000);
+// Oculus device
 pref("dom.vr.oculus.enabled", true);
 // OSVR device
 pref("dom.vr.osvr.enabled", false);

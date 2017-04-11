@@ -80,7 +80,7 @@ pub struct EagerPseudoStyles(Option<Box<[Option<ComputedStyle>]>>);
 impl EagerPseudoStyles {
     /// Returns whether there are any pseudo styles.
     pub fn is_empty(&self) -> bool {
-        self.0.is_some()
+        self.0.is_none()
     }
 
     /// Returns a reference to the style for a given eager pseudo, if it exists.
@@ -221,6 +221,13 @@ impl StoredRestyleHint {
     /// including the element.
     pub fn subtree() -> Self {
         StoredRestyleHint(RESTYLE_SELF | RESTYLE_DESCENDANTS)
+    }
+
+    /// Creates a restyle hint that forces the element and all its later
+    /// siblings to have their whole subtrees restyled, including the elements
+    /// themselves.
+    pub fn subtree_and_later_siblings() -> Self {
+        StoredRestyleHint(RESTYLE_SELF | RESTYLE_DESCENDANTS | RESTYLE_LATER_SIBLINGS)
     }
 
     /// Returns true if the hint indicates that our style may be invalidated.

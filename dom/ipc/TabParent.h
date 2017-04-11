@@ -90,7 +90,6 @@ class TabParent final : public PBrowserParent
                       , public nsIKeyEventInPluginCallback
                       , public nsSupportsWeakReference
                       , public TabContext
-                      , public nsAPostRefreshObserver
                       , public nsIWebBrowserPersistable
                       , public LiveResizeListener
 {
@@ -158,8 +157,6 @@ public:
 
   void AddWindowListeners();
 
-  void DidRefresh() override;
-
   virtual mozilla::ipc::IPCResult RecvMoveFocus(const bool& aForward,
                                                 const bool& aForDocumentNavigation) override;
 
@@ -185,7 +182,8 @@ public:
                                                              const nsString& aFeatures,
                                                              bool* aOutWindowOpened,
                                                              TextureFactoryIdentifier* aTextureFactoryIdentifier,
-                                                             uint64_t* aLayersId) override;
+                                                             uint64_t* aLayersId,
+                                                             CompositorOptions* aCompositorOptions) override;
 
   virtual mozilla::ipc::IPCResult
   RecvSyncMessage(const nsString& aMessage,
@@ -589,7 +587,7 @@ public:
   bool GetRenderFrameInfo(TextureFactoryIdentifier* aTextureFactoryIdentifier,
                           uint64_t* aLayersId);
 
-  mozilla::ipc::IPCResult RecvEnsureLayersConnected() override;
+  mozilla::ipc::IPCResult RecvEnsureLayersConnected(CompositorOptions* aCompositorOptions) override;
 
   // LiveResizeListener implementation
   void LiveResizeStarted() override;
@@ -749,8 +747,6 @@ private:
   // True if the cursor changes from the TabChild should change the widget
   // cursor.  This happens whenever the cursor is in the tab's region.
   bool mTabSetsCursor;
-
-  RefPtr<nsIPresShell> mPresShellWithRefreshListener;
 
   bool mHasContentOpener;
 

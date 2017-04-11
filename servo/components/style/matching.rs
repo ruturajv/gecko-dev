@@ -7,7 +7,7 @@
 #![allow(unsafe_code)]
 #![deny(missing_docs)]
 
-use {Atom, LocalName};
+use Atom;
 use animation::{self, Animation, PropertyAnimation};
 use atomic_refcell::AtomicRefMut;
 use cache::{LRUCache, LRUCacheMutIterator};
@@ -15,7 +15,8 @@ use cascade_info::CascadeInfo;
 use context::{SequentialTask, SharedStyleContext, StyleContext};
 use data::{ComputedStyle, ElementData, ElementStyles, RestyleData};
 use dom::{AnimationRules, SendElement, TElement, TNode};
-use properties::{CascadeFlags, ComputedValues, SHAREABLE, SKIP_ROOT_AND_ITEM_BASED_DISPLAY_FIXUP, cascade};
+use font_metrics::FontMetricsProvider;
+use properties::{CascadeFlags, ComputedValues, SKIP_ROOT_AND_ITEM_BASED_DISPLAY_FIXUP, cascade};
 use properties::longhands::display::computed_value as display;
 use restyle_hints::{RESTYLE_STYLE_ATTRIBUTE, RESTYLE_CSS_ANIMATIONS, RestyleHint};
 use rule_tree::{CascadeLevel, RuleTree, StrongRuleNode};
@@ -23,7 +24,7 @@ use selector_parser::{PseudoElement, RestyleDamage, SelectorImpl};
 use selectors::bloom::BloomFilter;
 use selectors::matching::{ElementSelectorFlags, StyleRelations};
 use selectors::matching::AFFECTED_BY_PSEUDO_ELEMENTS;
-use servo_config::opts;
+#[cfg(feature = "servo")] use servo_config::opts;
 use sink::ForgetfulSink;
 use std::sync::Arc;
 use stylist::ApplicableDeclarationBlock;
@@ -38,44 +39,6 @@ fn relations_are_shareable(relations: &StyleRelations) -> bool {
                           AFFECTED_BY_PRESENTATIONAL_HINTS)
 }
 
-fn create_common_style_affecting_attributes_from_element<E: TElement>(element: &E)
-                                                         -> CommonStyleAffectingAttributes {
-    let mut flags = CommonStyleAffectingAttributes::empty();
-    for attribute_info in &common_style_affecting_attributes() {
-        match attribute_info.mode {
-            CommonStyleAffectingAttributeMode::IsPresent(flag) => {
-                if element.has_attr(&ns!(), &attribute_info.attr_name) {
-                    flags.insert(flag)
-                }
-            }
-            CommonStyleAffectingAttributeMode::IsEqual(ref target_value, flag) => {
-                if element.attr_equals(&ns!(), &attribute_info.attr_name, target_value) {
-                    flags.insert(flag)
-                }
-            }
-        }
-    }
-    flags
-}
-
-/// The results returned from running selector matching on an element.
-pub struct MatchResults {
-    /// A set of style relations (different hints about what rules matched or
-    /// could have matched). This is necessary if the style will be shared.
-    /// If None, the style will not be shared.
-    pub primary_relations: Option<StyleRelations>,
-    /// Whether the rule nodes changed during selector matching.
-    pub rule_nodes_changed: bool,
-}
-
-impl MatchResults {
-    /// Returns true if the primary rule node is shareable with other nodes.
-    pub fn primary_is_shareable(&self) -> bool {
-        self.primary_relations.as_ref()
-            .map_or(false, relations_are_shareable)
-    }
-}
-
 /// Information regarding a style sharing candidate.
 ///
 /// Note that this information is stored in TLS and cleared after the traversal,
@@ -88,16 +51,13 @@ struct StyleSharingCandidate<E: TElement> {
     /// The element. We use SendElement here so that the cache may live in
     /// ScopedTLS.
     element: SendElement<E>,
-    /// The cached common style affecting attribute info.
-    common_style_affecting_attributes: Option<CommonStyleAffectingAttributes>,
     /// The cached class names.
     class_attributes: Option<Vec<Atom>>,
 }
 
 impl<E: TElement> PartialEq<StyleSharingCandidate<E>> for StyleSharingCandidate<E> {
     fn eq(&self, other: &Self) -> bool {
-        self.element == other.element &&
-            self.common_style_affecting_attributes == other.common_style_affecting_attributes
+        self.element == other.element
     }
 }
 
@@ -133,17 +93,14 @@ pub enum CacheMiss {
     StyleAttr,
     /// The element and the candidate class names didn't match.
     Class,
-    /// The element and the candidate common style affecting attributes didn't
-    /// match.
-    CommonStyleAffectingAttributes,
     /// The presentation hints didn't match.
     PresHints,
     /// The element and the candidate didn't match the same set of
     /// sibling-affecting rules.
     SiblingRules,
-    /// The element and the candidate didn't match the same set of non-common
-    /// style affecting attribute selectors.
-    NonCommonAttrRules,
+    /// The element and the candidate didn't match the same set of style
+    /// affecting attribute selectors.
+    AttrRules,
 }
 
 fn element_matches_candidate<E: TElement>(element: &E,
@@ -193,12 +150,6 @@ fn element_matches_candidate<E: TElement>(element: &E,
         miss!(Class)
     }
 
-    if !have_same_common_style_affecting_attributes(element,
-                                                    candidate,
-                                                    candidate_element) {
-        miss!(CommonStyleAffectingAttributes)
-    }
-
     if !have_same_presentational_hints(element, candidate_element) {
         miss!(PresHints)
     }
@@ -209,10 +160,10 @@ fn element_matches_candidate<E: TElement>(element: &E,
         miss!(SiblingRules)
     }
 
-    if !match_same_not_common_style_affecting_attributes_rules(element,
-                                                               candidate_element,
-                                                               shared_context) {
-        miss!(NonCommonAttrRules)
+    if !match_same_style_affecting_attributes_rules(element,
+                                                    candidate_element,
+                                                    shared_context) {
+        miss!(AttrRules)
     }
 
     let data = candidate_element.borrow_data().unwrap();
@@ -222,20 +173,10 @@ fn element_matches_candidate<E: TElement>(element: &E,
     Ok(current_styles.primary.clone())
 }
 
-fn have_same_common_style_affecting_attributes<E: TElement>(element: &E,
-                                                            candidate: &mut StyleSharingCandidate<E>,
-                                                            candidate_element: &E) -> bool {
-    if candidate.common_style_affecting_attributes.is_none() {
-        candidate.common_style_affecting_attributes =
-            Some(create_common_style_affecting_attributes_from_element(candidate_element))
-    }
-    create_common_style_affecting_attributes_from_element(element) ==
-        candidate.common_style_affecting_attributes.unwrap()
-}
-
 fn have_same_presentational_hints<E: TElement>(element: &E, candidate: &E) -> bool {
     let mut first = ForgetfulSink::new();
     element.synthesize_presentational_hints_for_legacy_attributes(&mut first);
+
     if cfg!(debug_assertions) {
         let mut second = vec![];
         candidate.synthesize_presentational_hints_for_legacy_attributes(&mut second);
@@ -244,82 +185,6 @@ fn have_same_presentational_hints<E: TElement>(element: &E, candidate: &E) -> bo
     }
 
     first.is_empty()
-}
-
-bitflags! {
-    /// A set of common style-affecting attributes we check separately to
-    /// optimize the style sharing cache.
-    pub flags CommonStyleAffectingAttributes: u8 {
-        /// The `hidden` attribute.
-        const HIDDEN_ATTRIBUTE = 0x01,
-        /// The `nowrap` attribute.
-        const NO_WRAP_ATTRIBUTE = 0x02,
-        /// The `align="left"` attribute.
-        const ALIGN_LEFT_ATTRIBUTE = 0x04,
-        /// The `align="center"` attribute.
-        const ALIGN_CENTER_ATTRIBUTE = 0x08,
-        /// The `align="right"` attribute.
-        const ALIGN_RIGHT_ATTRIBUTE = 0x10,
-    }
-}
-
-/// The information of how to match a given common-style affecting attribute.
-pub struct CommonStyleAffectingAttributeInfo {
-    /// The attribute name.
-    pub attr_name: LocalName,
-    /// The matching mode for the attribute.
-    pub mode: CommonStyleAffectingAttributeMode,
-}
-
-/// How should we match a given common style-affecting attribute?
-#[derive(Clone)]
-pub enum CommonStyleAffectingAttributeMode {
-    /// Just for presence?
-    IsPresent(CommonStyleAffectingAttributes),
-    /// For presence and equality with a given value.
-    IsEqual(Atom, CommonStyleAffectingAttributes),
-}
-
-/// The common style affecting attribute array.
-///
-/// TODO: This should be a `const static` or similar, but couldn't be because
-/// `Atom`s have destructors.
-#[inline]
-pub fn common_style_affecting_attributes() -> [CommonStyleAffectingAttributeInfo; 5] {
-    [
-        CommonStyleAffectingAttributeInfo {
-            attr_name: local_name!("hidden"),
-            mode: CommonStyleAffectingAttributeMode::IsPresent(HIDDEN_ATTRIBUTE),
-        },
-        CommonStyleAffectingAttributeInfo {
-            attr_name: local_name!("nowrap"),
-            mode: CommonStyleAffectingAttributeMode::IsPresent(NO_WRAP_ATTRIBUTE),
-        },
-        CommonStyleAffectingAttributeInfo {
-            attr_name: local_name!("align"),
-            mode: CommonStyleAffectingAttributeMode::IsEqual(atom!("left"), ALIGN_LEFT_ATTRIBUTE),
-        },
-        CommonStyleAffectingAttributeInfo {
-            attr_name: local_name!("align"),
-            mode: CommonStyleAffectingAttributeMode::IsEqual(atom!("center"), ALIGN_CENTER_ATTRIBUTE),
-        },
-        CommonStyleAffectingAttributeInfo {
-            attr_name: local_name!("align"),
-            mode: CommonStyleAffectingAttributeMode::IsEqual(atom!("right"), ALIGN_RIGHT_ATTRIBUTE),
-        }
-    ]
-}
-
-/// Attributes that, if present, disable style sharing. All legacy HTML
-/// attributes must be in either this list or
-/// `common_style_affecting_attributes`. See the comment in
-/// `synthesize_presentational_hints_for_legacy_attributes`.
-///
-/// TODO(emilio): This is not accurate now, we don't disable style sharing for
-/// this now since we check for attribute selectors in the stylesheet. Consider
-/// removing this.
-pub fn rare_style_affecting_attributes() -> [LocalName; 4] {
-    [local_name!("bgcolor"), local_name!("border"), local_name!("colspan"), local_name!("rowspan")]
 }
 
 fn have_same_class<E: TElement>(element: &E,
@@ -340,10 +205,10 @@ fn have_same_class<E: TElement>(element: &E,
 
 // TODO: These re-match the candidate every time, which is suboptimal.
 #[inline]
-fn match_same_not_common_style_affecting_attributes_rules<E: TElement>(element: &E,
-                                                                       candidate: &E,
-                                                                       ctx: &SharedStyleContext) -> bool {
-    ctx.stylist.match_same_not_common_style_affecting_attributes_rules(element, candidate)
+fn match_same_style_affecting_attributes_rules<E: TElement>(element: &E,
+                                                            candidate: &E,
+                                                            ctx: &SharedStyleContext) -> bool {
+    ctx.stylist.match_same_style_affecting_attributes_rules(element, candidate)
 }
 
 #[inline]
@@ -405,7 +270,6 @@ impl<E: TElement> StyleSharingCandidateCache<E> {
 
         self.cache.insert(StyleSharingCandidate {
             element: unsafe { SendElement::new(*element) },
-            common_style_affecting_attributes: None,
             class_attributes: None,
         });
     }
@@ -428,15 +292,6 @@ pub enum StyleSharingResult {
     /// The node's style can be shared. The integer specifies the index in the
     /// LRU cache that was hit and the damage that was done.
     StyleWasShared(usize),
-}
-
-/// Callers need to pass several boolean flags to cascade_primary_or_pseudo.
-/// We encapsulate them in this struct to avoid mixing them up.
-///
-/// FIXME(pcwalton): Unify with `CascadeFlags`, perhaps?
-struct CascadeBooleans {
-    shareable: bool,
-    animate: bool,
 }
 
 trait PrivateMatchMethods: TElement {
@@ -468,19 +323,19 @@ trait PrivateMatchMethods: TElement {
     }
 
     fn cascade_with_rules(&self,
-                          context: &StyleContext<Self>,
+                          shared_context: &SharedStyleContext,
+                          font_metrics_provider: &FontMetricsProvider,
                           rule_node: &StrongRuleNode,
                           primary_style: &ComputedStyle,
-                          pseudo_style: &Option<(&PseudoElement, &mut ComputedStyle)>,
-                          cascade_flags: CascadeFlags)
+                          cascade_flags: CascadeFlags,
+                          is_pseudo: bool)
                           -> Arc<ComputedValues> {
-        let shared_context = context.shared;
         let mut cascade_info = CascadeInfo::new();
 
         // Grab the inherited values.
         let parent_el;
         let parent_data;
-        let inherited_values_ = if pseudo_style.is_none() {
+        let inherited_values_ = if !is_pseudo {
             parent_el = self.parent_element();
             parent_data = parent_el.as_ref().and_then(|e| e.borrow_data());
             let parent_values = parent_data.as_ref().map(|d| {
@@ -517,7 +372,7 @@ trait PrivateMatchMethods: TElement {
         //
         // Note that this is not needed for pseudos since we already do that
         // when we resolve the non-pseudo style.
-        if pseudo_style.is_none() {
+        if !is_pseudo {
             if let Some(ref p) = layout_parent_style {
                 let can_be_fragmented =
                     p.is_multicol() ||
@@ -535,6 +390,7 @@ trait PrivateMatchMethods: TElement {
                              layout_parent_style,
                              Some(&mut cascade_info),
                              &*shared_context.error_reporter,
+                             font_metrics_provider,
                              cascade_flags));
 
         cascade_info.finish(&self.as_node());
@@ -544,20 +400,17 @@ trait PrivateMatchMethods: TElement {
     fn cascade_internal(&self,
                         context: &StyleContext<Self>,
                         primary_style: &ComputedStyle,
-                        pseudo_style: &Option<(&PseudoElement, &mut ComputedStyle)>,
-                        booleans: &CascadeBooleans)
+                        pseudo_style: &Option<(&PseudoElement, &mut ComputedStyle)>)
                         -> Arc<ComputedValues> {
         let mut cascade_flags = CascadeFlags::empty();
-        if booleans.shareable {
-            cascade_flags.insert(SHAREABLE)
-        }
         if self.skip_root_and_item_based_display_fixup() {
             cascade_flags.insert(SKIP_ROOT_AND_ITEM_BASED_DISPLAY_FIXUP)
         }
 
         // Grab the rule node.
         let rule_node = &pseudo_style.as_ref().map_or(primary_style, |p| &*p.1).rules;
-        self.cascade_with_rules(context, rule_node, primary_style, pseudo_style, cascade_flags)
+        self.cascade_with_rules(context.shared, &context.thread_local.font_metrics_provider,
+                                rule_node, primary_style, cascade_flags, pseudo_style.is_some())
     }
 
     /// Computes values and damage for the primary or pseudo style of an element,
@@ -566,8 +419,7 @@ trait PrivateMatchMethods: TElement {
                                      context: &mut StyleContext<Self>,
                                      data: &mut ElementData,
                                      pseudo: Option<&PseudoElement>,
-                                     possibly_expired_animations: &mut Vec<PropertyAnimation>,
-                                     booleans: CascadeBooleans) {
+                                     animate: bool) {
         // Collect some values.
         let (mut styles, restyle) = data.styles_and_restyle_mut();
         let mut primary_style = &mut styles.primary;
@@ -578,20 +430,19 @@ trait PrivateMatchMethods: TElement {
 
         // Compute the new values.
         let mut new_values = self.cascade_internal(context, primary_style,
-                                                   &pseudo_style, &booleans);
+                                                   &pseudo_style);
 
         // Handle animations.
-        if booleans.animate {
+        if animate {
             self.process_animations(context,
                                     &mut old_values,
                                     &mut new_values,
-                                    pseudo,
-                                    possibly_expired_animations);
+                                    pseudo);
         }
 
         // Accumulate restyle damage.
         if let Some(old) = old_values {
-            self.accumulate_damage(restyle.unwrap(), &old, &new_values, pseudo);
+            self.accumulate_damage(&context.shared, restyle.unwrap(), &old, &new_values, pseudo);
         }
 
         // Set the new computed values.
@@ -606,7 +457,7 @@ trait PrivateMatchMethods: TElement {
     fn get_after_change_style(&self,
                               context: &mut StyleContext<Self>,
                               primary_style: &ComputedStyle,
-                              pseudo_style: &Option<(&PseudoElement, &mut ComputedStyle)>)
+                              pseudo_style: &Option<(&PseudoElement, &ComputedStyle)>)
                               -> Arc<ComputedValues> {
         let style = &pseudo_style.as_ref().map_or(primary_style, |p| &*p.1);
         let rule_node = &style.rules;
@@ -622,11 +473,12 @@ trait PrivateMatchMethods: TElement {
         if self.skip_root_and_item_based_display_fixup() {
             cascade_flags.insert(SKIP_ROOT_AND_ITEM_BASED_DISPLAY_FIXUP)
         }
-        self.cascade_with_rules(context,
+        self.cascade_with_rules(context.shared,
+                                &context.thread_local.font_metrics_provider,
                                 &without_transition_rules,
                                 primary_style,
-                                &pseudo_style,
-                                cascade_flags)
+                                cascade_flags,
+                                pseudo_style.is_some())
     }
 
     #[cfg(feature = "gecko")]
@@ -634,8 +486,7 @@ trait PrivateMatchMethods: TElement {
                           context: &mut StyleContext<Self>,
                           old_values: &mut Option<Arc<ComputedValues>>,
                           new_values: &mut Arc<ComputedValues>,
-                          pseudo: Option<&PseudoElement>,
-                          _possibly_expired_animations: &mut Vec<PropertyAnimation>) {
+                          pseudo: Option<&PseudoElement>) {
         use context::{CSS_ANIMATIONS, EFFECT_PROPERTIES};
         use context::UpdateAnimationsTasks;
 
@@ -678,12 +529,15 @@ trait PrivateMatchMethods: TElement {
                           context: &mut StyleContext<Self>,
                           old_values: &mut Option<Arc<ComputedValues>>,
                           new_values: &mut Arc<ComputedValues>,
-                          _pseudo: Option<&PseudoElement>,
-                          possibly_expired_animations: &mut Vec<PropertyAnimation>) {
+                          _pseudo: Option<&PseudoElement>) {
+        let possibly_expired_animations =
+            &mut context.thread_local.current_element_info.as_mut().unwrap()
+                        .possibly_expired_animations;
         let shared_context = context.shared;
         if let Some(ref mut old) = *old_values {
             self.update_animations_for_cascade(shared_context, old,
-                                               possibly_expired_animations);
+                                               possibly_expired_animations,
+                                               &context.thread_local.font_metrics_provider);
         }
 
         let new_animations_sender = &context.thread_local.new_animations_sender;
@@ -710,10 +564,16 @@ trait PrivateMatchMethods: TElement {
     /// Computes and applies non-redundant damage.
     #[cfg(feature = "gecko")]
     fn accumulate_damage(&self,
+                         shared_context: &SharedStyleContext,
                          restyle: &mut RestyleData,
                          old_values: &Arc<ComputedValues>,
                          new_values: &Arc<ComputedValues>,
                          pseudo: Option<&PseudoElement>) {
+        // Don't accumulate damage if we're in a restyle for reconstruction.
+        if shared_context.traversal_flags.for_reconstruct() {
+            return;
+        }
+
         // If an ancestor is already getting reconstructed by Gecko's top-down
         // frame constructor, no need to apply damage.
         if restyle.damage_handled.contains(RestyleDamage::reconstruct()) {
@@ -738,6 +598,7 @@ trait PrivateMatchMethods: TElement {
     /// Computes and applies restyle damage unless we've already maxed it out.
     #[cfg(feature = "servo")]
     fn accumulate_damage(&self,
+                         _shared_context: &SharedStyleContext,
                          restyle: &mut RestyleData,
                          old_values: &Arc<ComputedValues>,
                          new_values: &Arc<ComputedValues>,
@@ -751,7 +612,8 @@ trait PrivateMatchMethods: TElement {
     fn update_animations_for_cascade(&self,
                                      context: &SharedStyleContext,
                                      style: &mut Arc<ComputedValues>,
-                                     possibly_expired_animations: &mut Vec<PropertyAnimation>) {
+                                     possibly_expired_animations: &mut Vec<PropertyAnimation>,
+                                     font_metrics: &FontMetricsProvider) {
         // Finish any expired transitions.
         let this_opaque = self.as_node().opaque();
         animation::complete_expired_transitions(this_opaque, style, context);
@@ -778,7 +640,8 @@ trait PrivateMatchMethods: TElement {
                 if !running_animation.is_expired() {
                     animation::update_style_for_animation(context,
                                                           running_animation,
-                                                          style);
+                                                          style,
+                                                          font_metrics);
                     if let Animation::Transition(_, _, _, ref frame, _) = *running_animation {
                         possibly_expired_animations.push(frame.property_animation.clone())
                     }
@@ -807,13 +670,79 @@ fn compute_rule_node<E: TElement>(rule_tree: &RuleTree,
 
 impl<E: TElement> PrivateMatchMethods for E {}
 
+/// Controls whether the style sharing cache is used.
+#[derive(Clone, Copy, PartialEq)]
+pub enum StyleSharingBehavior {
+    /// Style sharing allowed.
+    Allow,
+    /// Style sharing disallowed.
+    Disallow,
+}
+
+#[cfg(feature = "servo")]
+fn is_share_style_cache_disabled() -> bool {
+    opts::get().disable_share_style_cache
+}
+
+#[cfg(not(feature = "servo"))]
+fn is_share_style_cache_disabled() -> bool {
+    false
+}
+
 /// The public API that elements expose for selector matching.
 pub trait MatchMethods : TElement {
-    /// Runs selector matching to (re)compute rule nodes for this element.
-    fn match_element(&self,
+    /// Performs selector matching and property cascading on an element and its eager pseudos.
+    fn match_and_cascade(&self,
+                         context: &mut StyleContext<Self>,
+                         data: &mut ElementData,
+                         sharing: StyleSharingBehavior)
+    {
+        // Perform selector matching for the primary style.
+        let mut primary_relations = StyleRelations::empty();
+        let _rule_node_changed = self.match_primary(context, data, &mut primary_relations);
+
+        // Cascade properties and compute primary values.
+        self.cascade_primary(context, data);
+
+        // Match and cascade eager pseudo-elements.
+        if !data.styles().is_display_none() {
+            let _pseudo_rule_nodes_changed =
+                self.match_pseudos(context, data);
+            self.cascade_pseudos(context, data);
+        }
+
+        // If we have any pseudo elements, indicate so in the primary StyleRelations.
+        if !data.styles().pseudos.is_empty() {
+            primary_relations |= AFFECTED_BY_PSEUDO_ELEMENTS;
+        }
+
+        // If the style is shareable, add it to the LRU cache.
+        if sharing == StyleSharingBehavior::Allow && relations_are_shareable(&primary_relations) {
+            context.thread_local
+                   .style_sharing_candidate_cache
+                   .insert_if_possible(self,
+                                       data.styles().primary.values(),
+                                       primary_relations);
+        }
+    }
+
+    /// Performs the cascade, without matching.
+    fn cascade_primary_and_pseudos(&self,
+                                   context: &mut StyleContext<Self>,
+                                   mut data: &mut ElementData)
+    {
+        self.cascade_primary(context, &mut data);
+        self.cascade_pseudos(context, &mut data);
+    }
+
+    /// Runs selector matching to (re)compute the primary rule node for this element.
+    ///
+    /// Returns whether the primary rule node changed.
+    fn match_primary(&self,
                      context: &mut StyleContext<Self>,
-                     data: &mut ElementData)
-                     -> MatchResults
+                     data: &mut ElementData,
+                     relations: &mut StyleRelations)
+                     -> bool
     {
         let mut applicable_declarations =
             Vec::<ApplicableDeclarationBlock>::with_capacity(16);
@@ -822,74 +751,25 @@ pub trait MatchMethods : TElement {
         let style_attribute = self.style_attribute();
         let animation_rules = self.get_animation_rules(None);
         let mut rule_nodes_changed = false;
+        let bloom = context.thread_local.bloom_filter.filter();
 
-        // TODO(emilio): This is somewhat inefficient, because of a variety of
-        // reasons:
-        //
-        //  * It doesn't coalesce flags.
-        //  * It doesn't look at flags already sent in a task for the main
-        //    thread to process.
-        //  * It doesn't take advantage of us knowing that the traversal is
-        //    sequential.
-        //
-        // I suspect (need to measure!) that we don't use to set flags on
-        // a lot of different elements, but we could end up posting the same
-        // flag over and over with this approach.
-        //
-        // If the number of elements is low, perhaps a small cache with the
-        // flags already sent would be appropriate.
-        //
-        // The sequential task business for this is kind of sad :(.
-        //
-        // Anyway, let's do the obvious thing for now.
         let tasks = &mut context.thread_local.tasks;
         let mut set_selector_flags = |element: &Self, flags: ElementSelectorFlags| {
-            // Apply the selector flags.
-            let self_flags = flags.for_self();
-            if !self_flags.is_empty() {
-                if element == self {
-                    unsafe { element.set_selector_flags(self_flags); }
-                } else {
-                    if !element.has_selector_flags(self_flags) {
-                        let task =
-                            SequentialTask::set_selector_flags(element.clone(),
-                                                               self_flags);
-                        tasks.push(task);
-                    }
-                }
-            }
-            let parent_flags = flags.for_parent();
-            if !parent_flags.is_empty() {
-                if let Some(p) = element.parent_element() {
-                    // Avoid the overhead of the SequentialTask if the flags are
-                    // already set.
-                    if !p.has_selector_flags(parent_flags) {
-                        let task = SequentialTask::set_selector_flags(p, parent_flags);
-                        tasks.push(task);
-                    }
-                }
-            }
+            self.apply_selector_flags(tasks, element, flags);
         };
 
-        // Borrow the stuff we need here so the borrow checker doesn't get mad
-        // at us later in the closure.
-        let guards = &context.shared.guards;
-        let rule_tree = &context.shared.stylist.rule_tree;
-        let bloom_filter = context.thread_local.bloom_filter.filter();
-
         // Compute the primary rule node.
-        let mut primary_relations =
-            stylist.push_applicable_declarations(self,
-                                                 Some(bloom_filter),
-                                                 style_attribute,
-                                                 animation_rules,
-                                                 None,
-                                                 guards,
-                                                 &mut applicable_declarations,
-                                                 &mut set_selector_flags);
+        *relations = stylist.push_applicable_declarations(self,
+                                                          Some(bloom),
+                                                          style_attribute,
+                                                          animation_rules,
+                                                          None,
+                                                          &context.shared.guards,
+                                                          &mut applicable_declarations,
+                                                          &mut set_selector_flags);
 
         let primary_rule_node =
-            compute_rule_node::<Self>(rule_tree, &mut applicable_declarations);
+            compute_rule_node::<Self>(&stylist.rule_tree, &mut applicable_declarations);
         if !data.has_styles() {
             data.set_styles(ElementStyles::new(ComputedStyle::new_partial(primary_rule_node)));
             rule_nodes_changed = true;
@@ -897,6 +777,35 @@ pub trait MatchMethods : TElement {
             data.styles_mut().primary.rules = primary_rule_node;
             rule_nodes_changed = true;
         }
+
+        rule_nodes_changed
+    }
+
+    /// Runs selector matching to (re)compute eager pseudo-element rule nodes for this
+    /// element.
+    ///
+    /// Returns whether any of the pseudo rule nodes changed (including, but not
+    /// limited to, cases where we match different pseudos altogether).
+    fn match_pseudos(&self,
+                     context: &mut StyleContext<Self>,
+                     data: &mut ElementData)
+                     -> bool
+    {
+        let mut applicable_declarations =
+            Vec::<ApplicableDeclarationBlock>::with_capacity(16);
+        let mut rule_nodes_changed = false;
+
+        let tasks = &mut context.thread_local.tasks;
+        let mut set_selector_flags = |element: &Self, flags: ElementSelectorFlags| {
+            self.apply_selector_flags(tasks, element, flags);
+        };
+
+        // Borrow the stuff we need here so the borrow checker doesn't get mad
+        // at us later in the closure.
+        let stylist = &context.shared.stylist;
+        let guards = &context.shared.guards;
+        let rule_tree = &stylist.rule_tree;
+        let bloom_filter = context.thread_local.bloom_filter.filter();
 
         // Compute rule nodes for eagerly-cascaded pseudo-elements.
         let mut matches_different_pseudos = false;
@@ -939,14 +848,59 @@ pub trait MatchMethods : TElement {
             }
         }
 
-        // If we have any pseudo elements, indicate so in the primary StyleRelations.
-        if data.styles().pseudos.is_empty() {
-            primary_relations |= AFFECTED_BY_PSEUDO_ELEMENTS;
-        }
+        rule_nodes_changed
+    }
 
-        MatchResults {
-            primary_relations: Some(primary_relations),
-            rule_nodes_changed: rule_nodes_changed,
+    /// Applies selector flags to an element, deferring mutations of the parent
+    /// until after the traversal.
+    ///
+    /// TODO(emilio): This is somewhat inefficient, because of a variety of
+    /// reasons:
+    ///
+    ///  * It doesn't coalesce flags.
+    ///  * It doesn't look at flags already sent in a task for the main
+    ///    thread to process.
+    ///  * It doesn't take advantage of us knowing that the traversal is
+    ///    sequential.
+    ///
+    /// I suspect (need to measure!) that we don't use to set flags on
+    /// a lot of different elements, but we could end up posting the same
+    /// flag over and over with this approach.
+    ///
+    /// If the number of elements is low, perhaps a small cache with the
+    /// flags already sent would be appropriate.
+    ///
+    /// The sequential task business for this is kind of sad :(.
+    ///
+    /// Anyway, let's do the obvious thing for now.
+    fn apply_selector_flags(&self,
+                            tasks: &mut Vec<SequentialTask<Self>>,
+                            element: &Self,
+                            flags: ElementSelectorFlags) {
+        // Apply the selector flags.
+        let self_flags = flags.for_self();
+        if !self_flags.is_empty() {
+            if element == self {
+                unsafe { element.set_selector_flags(self_flags); }
+            } else {
+                if !element.has_selector_flags(self_flags) {
+                    let task =
+                        SequentialTask::set_selector_flags(element.clone(),
+                                                           self_flags);
+                    tasks.push(task);
+                }
+            }
+        }
+        let parent_flags = flags.for_parent();
+        if !parent_flags.is_empty() {
+            if let Some(p) = element.parent_element() {
+                // Avoid the overhead of the SequentialTask if the flags are
+                // already set.
+                if !p.has_selector_flags(parent_flags) {
+                    let task = SequentialTask::set_selector_flags(p, parent_flags);
+                    tasks.push(task);
+                }
+            }
         }
     }
 
@@ -980,7 +934,7 @@ pub trait MatchMethods : TElement {
             // in the name of animation-only traversal. Rest of restyle hints
             // will be processed in a subsequent normal traversal.
             if hint.contains(RESTYLE_CSS_ANIMATIONS) {
-                debug_assert!(context.shared.animation_only_restyle);
+                debug_assert!(context.shared.traversal_flags.for_animation_only());
 
                 let animation_rule = self.get_animation_rule(None);
                 replace_rule_node(CascadeLevel::Animations,
@@ -1021,7 +975,7 @@ pub trait MatchMethods : TElement {
                                       shared_context: &SharedStyleContext,
                                       data: &mut AtomicRefMut<ElementData>)
                                       -> StyleSharingResult {
-        if opts::get().disable_share_style_cache {
+        if is_share_style_cache_disabled() {
             return StyleSharingResult::CannotShare
         }
 
@@ -1051,7 +1005,7 @@ pub trait MatchMethods : TElement {
                     let old_values = data.get_styles_mut()
                                          .and_then(|s| s.primary.values.take());
                     if let Some(old) = old_values {
-                        self.accumulate_damage(data.restyle_mut(), &old,
+                        self.accumulate_damage(shared_context, data.restyle_mut(), &old,
                                                shared_style.values(), None);
                     }
 
@@ -1078,10 +1032,9 @@ pub trait MatchMethods : TElement {
                         },
                         // Too expensive failure, give up, we don't want another
                         // one of these.
-                        CacheMiss::CommonStyleAffectingAttributes |
                         CacheMiss::PresHints |
                         CacheMiss::SiblingRules |
-                        CacheMiss::NonCommonAttrRules => break,
+                        CacheMiss::AttrRules => break,
                         _ => {}
                     }
                 }
@@ -1117,23 +1070,30 @@ pub trait MatchMethods : TElement {
     /// Therefore, each node must have its matching selectors inserted _after_
     /// its own selector matching and _before_ its children start.
     fn insert_into_bloom_filter(&self, bf: &mut BloomFilter) {
-        bf.insert(&*self.get_local_name());
-        bf.insert(&*self.get_namespace());
-        self.get_id().map(|id| bf.insert(&id));
-
+        bf.insert_hash(self.get_local_name().get_hash());
+        bf.insert_hash(self.get_namespace().get_hash());
+        if let Some(id) = self.get_id() {
+            bf.insert_hash(id.get_hash());
+        }
         // TODO: case-sensitivity depends on the document type and quirks mode
-        self.each_class(|class| bf.insert(class));
+        self.each_class(|class| {
+            bf.insert_hash(class.get_hash())
+        });
     }
 
     /// After all the children are done css selector matching, this must be
     /// called to reset the bloom filter after an `insert`.
     fn remove_from_bloom_filter(&self, bf: &mut BloomFilter) {
-        bf.remove(&*self.get_local_name());
-        bf.remove(&*self.get_namespace());
-        self.get_id().map(|id| bf.remove(&id));
+        bf.remove_hash(self.get_local_name().get_hash());
+        bf.remove_hash(self.get_namespace().get_hash());
+        if let Some(id) = self.get_id() {
+            bf.remove_hash(id.get_hash());
+        }
 
         // TODO: case-sensitivity depends on the document type and quirks mode
-        self.each_class(|class| bf.remove(class));
+        self.each_class(|class| {
+            bf.remove_hash(class.get_hash())
+        });
     }
 
     /// Given the old and new style of this element, and whether it's a
@@ -1164,53 +1124,61 @@ pub trait MatchMethods : TElement {
         }
     }
 
-    /// Run the CSS cascade and compute values for the element, potentially
-    /// starting any new transitions or animations.
-    fn cascade_element(&self,
+    /// Performs the cascade for the element's primary style.
+    fn cascade_primary(&self,
                        context: &mut StyleContext<Self>,
-                       mut data: &mut AtomicRefMut<ElementData>,
-                       primary_is_shareable: bool)
+                       mut data: &mut ElementData)
     {
-        let mut possibly_expired_animations = vec![];
+        self.cascade_primary_or_pseudo(context, &mut data, None, /* animate = */ true);
+    }
 
-        // Cascade the primary style.
-        self.cascade_primary_or_pseudo(context, data, None,
-                                       &mut possibly_expired_animations,
-                                       CascadeBooleans {
-                                           shareable: primary_is_shareable,
-                                           animate: true,
-                                       });
-
-        // Check whether the primary style is display:none.
-        let display_none = data.styles().primary.values().get_box().clone_display() ==
-                           display::T::none;
-
-        // Cascade each pseudo-element.
-        //
+    /// Performs the cascade for the element's eager pseudos.
+    fn cascade_pseudos(&self,
+                       context: &mut StyleContext<Self>,
+                       mut data: &mut ElementData)
+    {
         // Note that we've already set up the map of matching pseudo-elements
-        // in match_element (and handled the damage implications of changing
+        // in match_pseudos (and handled the damage implications of changing
         // which pseudos match), so now we can just iterate what we have. This
         // does mean collecting owned pseudos, so that the borrow checker will
-        // let us pass the mutable |data| to the inner cascade function.
+        // let us pass the mutable |data| to the cascade function.
         let matched_pseudos = data.styles().pseudos.keys();
         for pseudo in matched_pseudos {
-            // If the new primary style is display:none, we don't need pseudo
-            // styles, but we still need to clear any stale values.
-            if display_none {
-                data.styles_mut().pseudos.get_mut(&pseudo).unwrap().values = None;
-                continue;
-            }
-
             // Only ::before and ::after are animatable.
             let animate = pseudo.is_before_or_after();
-            self.cascade_primary_or_pseudo(context, data, Some(&pseudo),
-                                           &mut possibly_expired_animations,
-                                           CascadeBooleans {
-                                               shareable: false,
-                                               animate: animate,
-                                           });
+            self.cascade_primary_or_pseudo(context, data, Some(&pseudo), animate);
         }
     }
+
+    /// Returns computed values without animation and transition rules.
+    fn get_base_style(&self,
+                      shared_context: &SharedStyleContext,
+                      font_metrics_provider: &FontMetricsProvider,
+                      primary_style: &ComputedStyle,
+                      pseudo_style: &Option<(&PseudoElement, &ComputedStyle)>)
+                      -> Arc<ComputedValues> {
+        let style = &pseudo_style.as_ref().map_or(primary_style, |p| &*p.1);
+        let rule_node = &style.rules;
+        let without_animation_rules =
+            shared_context.stylist.rule_tree.remove_animation_and_transition_rules(rule_node);
+        if without_animation_rules == *rule_node {
+            // Note that unwrapping here is fine, because the style is
+            // only incomplete during the styling process.
+            return style.values.as_ref().unwrap().clone();
+        }
+
+        let mut cascade_flags = CascadeFlags::empty();
+        if self.skip_root_and_item_based_display_fixup() {
+            cascade_flags.insert(SKIP_ROOT_AND_ITEM_BASED_DISPLAY_FIXUP)
+        }
+        self.cascade_with_rules(shared_context,
+                                font_metrics_provider,
+                                &without_animation_rules,
+                                primary_style,
+                                cascade_flags,
+                                pseudo_style.is_some())
+    }
+
 }
 
 impl<E: TElement> MatchMethods for E {}

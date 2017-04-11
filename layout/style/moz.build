@@ -106,6 +106,7 @@ EXPORTS.mozilla += [
     'ServoMediaList.h',
     'ServoMediaRule.h',
     'ServoNamespaceRule.h',
+    'ServoPageRule.h',
     'ServoPropPrefList.h',
     'ServoSpecifiedValues.h',
     'ServoStyleRule.h',
@@ -123,6 +124,7 @@ EXPORTS.mozilla += [
     'StyleSheet.h',
     'StyleSheetInfo.h',
     'StyleSheetInlines.h',
+    'URLExtraData.h',
 ]
 
 EXPORTS.mozilla.dom += [
@@ -130,6 +132,7 @@ EXPORTS.mozilla.dom += [
     'CSSLexer.h',
     'CSSMediaRule.h',
     'CSSNamespaceRule.h',
+    'CSSPageRule.h',
     'CSSRuleList.h',
     'CSSValue.h',
     'FontFace.h',
@@ -159,6 +162,7 @@ UNIFIED_SOURCES += [
     'CSS.cpp',
     'CSSLexer.cpp',
     'CSSMediaRule.cpp',
+    'CSSPageRule.cpp',
     'CSSRuleList.cpp',
     'CSSStyleSheet.cpp',
     'CSSVariableDeclarations.cpp',
@@ -222,6 +226,7 @@ UNIFIED_SOURCES += [
     'ServoMediaList.cpp',
     'ServoMediaRule.cpp',
     'ServoNamespaceRule.cpp',
+    'ServoPageRule.cpp',
     'ServoSpecifiedValues.cpp',
     'ServoStyleRule.cpp',
     'ServoStyleSet.cpp',
@@ -229,6 +234,7 @@ UNIFIED_SOURCES += [
     'StyleAnimationValue.cpp',
     'StyleRule.cpp',
     'StyleSheet.cpp',
+    'URLExtraData.cpp',
 ]
 
 # - nsLayoutStylesheetCache.cpp needs to be built separately because it uses

@@ -9,6 +9,10 @@ Across the different Firefox initiatives, there is a common need for a mechanism
 
 For events recorded into Firefox Telemetry we also provide an API that opaquely handles storage and submission to our servers.
 
+.. important::
+
+    Every new data collection in Firefox needs a `data collection review <https://wiki.mozilla.org/Firefox/Data_Collection#Requesting_Approval>`_ from a data collection peer. Just set the feedback? flag for :bsmedberg or one of the other data peers. We try to reply within a business day.
+
 Serialization format
 ====================
 
@@ -133,6 +137,10 @@ Record a registered event.
 
 Throws if the combination of ``category``, ``method`` and ``object`` is unknown.
 Recording an expired event will not throw, but print a warning into the browser console.
+
+.. warning::
+
+  Event Telemetry recording is designed to be cheap, not free. If you wish to record events in a performance-sensitive piece of code, store the events locally and record them only after the performance-sensitive piece ("hot path") has completed.
 
 Example:
 

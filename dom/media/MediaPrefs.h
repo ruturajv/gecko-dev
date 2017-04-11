@@ -144,6 +144,10 @@ private:
   DECL_MEDIA_PREF("media.eme.audio.blank",                    EMEBlankAudio, bool, false);
   DECL_MEDIA_PREF("media.eme.video.blank",                    EMEBlankVideo, bool, false);
   DECL_MEDIA_PREF("media.eme.chromium-api.enabled",           EMEChromiumAPIEnabled, bool, false);
+  DECL_MEDIA_PREF("media.eme.chromium-api.video-shmems",
+                  EMEChromiumAPIVideoShmemCount,
+                  uint32_t,
+                  3);
 
   // MediaDecoderStateMachine
   DECL_MEDIA_PREF("media.suspend-bkgnd-video.enabled",        MDSMSuspendBackgroundVideoEnabled, bool, false);
@@ -171,7 +175,7 @@ private:
   DECL_MEDIA_PREF("media.rust.test_mode",                     RustTestMode, bool, false);
 #endif
 
-#if defined(OS_LINUX) && defined(DEBUG)
+#if defined(OS_LINUX)
   DECL_MEDIA_PREF("media.rust.mp4parser",                     EnableRustMP4Parser, bool, true);
 #else
   DECL_MEDIA_PREF("media.rust.mp4parser",                     EnableRustMP4Parser, bool, false);

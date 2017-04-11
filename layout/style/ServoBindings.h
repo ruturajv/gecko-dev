@@ -14,6 +14,7 @@
 #include "mozilla/ServoElementSnapshot.h"
 #include "mozilla/css/SheetParsingMode.h"
 #include "mozilla/EffectCompositor.h"
+#include "mozilla/ComputedTimingFunction.h"
 #include "nsChangeHint.h"
 #include "nsCSSPseudoClasses.h"
 #include "nsStyleStruct.h"
@@ -39,6 +40,7 @@ namespace mozilla {
     struct URLValue;
   };
   enum class UpdateAnimationsTasks : uint8_t;
+  struct LangGroupFontPrefs;
 }
 using mozilla::FontFamilyList;
 using mozilla::FontFamilyType;
@@ -68,8 +70,10 @@ struct nsStyleDisplay;
   void Gecko_##name_##_AddRef(class_* aPtr);    \
   void Gecko_##name_##_Release(class_* aPtr);
 #define NS_IMPL_FFI_REFCOUNTING(class_, name_)                    \
-  void Gecko_##name_##_AddRef(class_* aPtr) { NS_ADDREF(aPtr); }  \
-  void Gecko_##name_##_Release(class_* aPtr) { NS_RELEASE(aPtr); }
+  void Gecko_##name_##_AddRef(class_* aPtr)                       \
+    { MOZ_ASSERT(NS_IsMainThread()); NS_ADDREF(aPtr); }           \
+  void Gecko_##name_##_Release(class_* aPtr)                      \
+    { MOZ_ASSERT(NS_IsMainThread()); NS_RELEASE(aPtr); }
 
 #define DEFINE_ARRAY_TYPE_FOR(type_)                                \
   struct nsTArrayBorrowed_##type_ {                                 \
@@ -88,7 +92,19 @@ public:
   already_AddRefed<mozilla::css::URLValue> IntoCssUrl();
   const uint8_t* mURLString;
   uint32_t mURLStringLength;
-  mozilla::css::URLExtraData* mExtraData;
+  mozilla::URLExtraData* mExtraData;
+};
+
+struct FontSizePrefs
+{
+  void CopyFrom(const mozilla::LangGroupFontPrefs&);
+  nscoord mDefaultVariableSize;
+  nscoord mDefaultFixedSize;
+  nscoord mDefaultSerifSize;
+  nscoord mDefaultSansSerifSize;
+  nscoord mDefaultMonospaceSize;
+  nscoord mDefaultCursiveSize;
+  nscoord mDefaultFantasySize;
 };
 
 // DOM Traversal.
@@ -117,10 +133,6 @@ void Gecko_LoadStyleSheet(mozilla::css::Loader* loader,
                           uint32_t url_length,
                           const uint8_t* media_bytes,
                           uint32_t media_length);
-
-// URLExtraData
-// Create a new addrefed URLExtraData.
-RawGeckoURLExtraData* Gecko_URLExtraData_CreateDummy();
 
 // By default, Servo walks the DOM by traversing the siblings of the DOM-view
 // first child. This generally works, but misses anonymous children, which we
@@ -193,6 +205,18 @@ bool Gecko_ElementHasAnimations(RawGeckoElementBorrowed aElement,
                                 nsIAtom* aPseudoTagOrNull);
 bool Gecko_ElementHasCSSAnimations(RawGeckoElementBorrowed aElement,
                                    nsIAtom* aPseudoTagOrNull);
+double Gecko_GetProgressFromComputedTiming(RawGeckoComputedTimingBorrowed aComputedTiming);
+double Gecko_GetPositionInSegment(
+  RawGeckoAnimationPropertySegmentBorrowed aSegment,
+  double aProgress,
+  mozilla::ComputedTimingFunction::BeforeFlag aBeforeFlag);
+// Get servo's AnimationValue for |aProperty| from the cached base style
+// |aBaseStyles|.
+// |aBaseStyles| is nsRefPtrHashtable<nsUint32HashKey, RawServoAnimationValue>.
+// We use void* to avoid exposing nsRefPtrHashtable in FFI.
+RawServoAnimationValueBorrowedOrNull Gecko_AnimationGetBaseStyle(
+  void* aBaseStyles,
+  nsCSSPropertyID aProperty);
 
 // Atoms.
 nsIAtom* Gecko_Atomize(const char* aString, uint32_t aLength);
@@ -272,6 +296,9 @@ void Gecko_EnsureTArrayCapacity(void* array, size_t capacity, size_t elem_size);
 // Important note: Only valid for POD types, since destructors won't be run
 // otherwise. This is ensured with rust traits for the relevant structs.
 void Gecko_ClearPODTArray(void* array, size_t elem_size, size_t elem_align);
+
+void Gecko_CopyStyleGridTemplateValues(nsStyleGridTemplate* grid_template,
+                                       const nsStyleGridTemplate* other);
 
 // Clear the mContents, mCounterIncrements, or mCounterResets field in nsStyleContent. This is
 // needed to run the destructors, otherwise we'd leak the images, strings, and whatnot.
@@ -370,7 +397,21 @@ bool Gecko_PropertyId_IsPrefEnabled(nsCSSPropertyID id);
 
 void Gecko_nsStyleFont_SetLang(nsStyleFont* font, nsIAtom* atom);
 void Gecko_nsStyleFont_CopyLangFrom(nsStyleFont* aFont, const nsStyleFont* aSource);
-nscoord Gecko_nsStyleFont_GetBaseSize(const nsStyleFont* font, RawGeckoPresContextBorrowed pres_context);
+FontSizePrefs Gecko_GetBaseSize(nsIAtom* lang);
+
+struct GeckoFontMetrics
+{
+  nscoord mChSize;
+  nscoord mXSize;
+};
+
+GeckoFontMetrics Gecko_GetFontMetrics(RawGeckoPresContextBorrowed pres_context,
+                                      bool is_vertical,
+                                      const nsStyleFont* font,
+                                      nscoord font_size,
+                                      bool use_user_font_set);
+void InitializeServo();
+void ShutdownServo();
 
 const nsMediaFeature* Gecko_GetMediaFeatures();
 
@@ -404,6 +445,9 @@ bool Gecko_MatchStringArgPseudo(RawGeckoElementBorrowed element,
 #undef STYLE_STRUCT
 
 void Gecko_Construct_nsStyleVariables(nsStyleVariables* ptr);
+
+void Gecko_RegisterProfilerThread(const char* name);
+void Gecko_UnregisterProfilerThread();
 
 #define SERVO_BINDING_FUNC(name_, return_, ...) return_ name_(__VA_ARGS__);
 #include "mozilla/ServoBindingList.h"

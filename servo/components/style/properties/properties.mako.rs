@@ -32,7 +32,7 @@ use properties::animated_properties::TransitionProperty;
 #[cfg(feature = "servo")] use servo_config::prefs::PREFS;
 use shared_lock::StylesheetGuards;
 use style_traits::ToCss;
-use stylesheets::{Origin, UrlExtraData};
+use stylesheets::{CssRuleType, Origin, UrlExtraData};
 #[cfg(feature = "servo")] use values::Either;
 use values::{HasViewportPercentage, computed};
 use cascade_info::CascadeInfo;
@@ -977,8 +977,12 @@ impl ParsedDeclaration {
     /// to Importance::Normal. Parsing Importance values is the job of PropertyDeclarationParser,
     /// we only set them here so that we don't have to reallocate
     pub fn parse(id: PropertyId, context: &ParserContext, input: &mut Parser,
-                 in_keyframe_block: bool)
+                 in_keyframe_block: bool, rule_type: CssRuleType)
                  -> Result<ParsedDeclaration, PropertyDeclarationParseError> {
+        debug_assert!(rule_type == CssRuleType::Keyframe ||
+                      rule_type == CssRuleType::Page ||
+                      rule_type == CssRuleType::Style,
+                      "Declarations are only expected inside a keyframe, page, or style rule.");
         match id {
             PropertyId::Custom(name) => {
                 let value = match input.try(|i| CSSWideKeyword::parse(context, i)) {
@@ -1002,6 +1006,11 @@ impl ParsedDeclaration {
                         % if property.internal:
                             if context.stylesheet_origin != Origin::UserAgent {
                                 return Err(PropertyDeclarationParseError::UnknownProperty)
+                            }
+                        % endif
+                        % if not property.allowed_in_page_rule:
+                            if rule_type == CssRuleType::Page {
+                                return Err(PropertyDeclarationParseError::NotAllowedInPageRule)
                             }
                         % endif
 
@@ -1030,6 +1039,11 @@ impl ParsedDeclaration {
                     % if shorthand.internal:
                         if context.stylesheet_origin != Origin::UserAgent {
                             return Err(PropertyDeclarationParseError::UnknownProperty)
+                        }
+                    % endif
+                    % if not shorthand.allowed_in_page_rule:
+                        if rule_type == CssRuleType::Page {
+                            return Err(PropertyDeclarationParseError::NotAllowedInPageRule)
                         }
                     % endif
 
@@ -1105,6 +1119,8 @@ pub enum PropertyDeclarationParseError {
     ///
     /// See: https://drafts.csswg.org/css-animations/#keyframes
     AnimationPropertyInKeyframeBlock,
+    /// The property is not allowed within a page rule.
+    NotAllowedInPageRule,
 }
 
 impl fmt::Debug for PropertyDeclaration {
@@ -1542,7 +1558,6 @@ pub struct ComputedValues {
         ${style_struct.ident}: Arc<style_structs::${style_struct.name}>,
     % endfor
     custom_properties: Option<Arc<::custom_properties::ComputedValuesMap>>,
-    shareable: bool,
     /// The writing mode of this computed values struct.
     pub writing_mode: WritingMode,
     /// The root element's computed font size.
@@ -1555,7 +1570,6 @@ pub struct ComputedValues {
 impl ComputedValues {
     /// Construct a `ComputedValues` instance.
     pub fn new(custom_properties: Option<Arc<::custom_properties::ComputedValuesMap>>,
-               shareable: bool,
                writing_mode: WritingMode,
                root_font_size: Au,
                font_size_keyword: Option<longhands::font_size::KeywordSize>,
@@ -1565,7 +1579,6 @@ impl ComputedValues {
     ) -> Self {
         ComputedValues {
             custom_properties: custom_properties,
-            shareable: shareable,
             writing_mode: writing_mode,
             root_font_size: root_font_size,
             font_size_keyword: font_size_keyword,
@@ -1889,7 +1902,6 @@ mod lazy_static_module {
                 }),
             % endfor
             custom_properties: None,
-            shareable: true,
             writing_mode: WritingMode::empty(),
             root_font_size: longhands::font_size::get_initial_value(),
             font_size_keyword: Some(Default::default()),
@@ -1918,15 +1930,12 @@ static CASCADE_PROPERTY: [CascadePropertyFn; ${len(data.longhands)}] = [
 bitflags! {
     /// A set of flags to tweak the behavior of the `cascade` function.
     pub flags CascadeFlags: u8 {
-        /// Whether the `ComputedValues` structure to be constructed should be
-        /// considered shareable.
-        const SHAREABLE = 0x01,
         /// Whether to inherit all styles from the parent. If this flag is not
         /// present, non-inherited styles are reset to their initial values.
-        const INHERIT_ALL = 0x02,
+        const INHERIT_ALL = 0x01,
         /// Whether to skip any root element and flex/grid item display style
         /// fixup.
-        const SKIP_ROOT_AND_ITEM_BASED_DISPLAY_FIXUP = 0x04,
+        const SKIP_ROOT_AND_ITEM_BASED_DISPLAY_FIXUP = 0x02,
     }
 }
 
@@ -1951,6 +1960,7 @@ pub fn cascade(device: &Device,
                layout_parent_style: Option<<&ComputedValues>,
                cascade_info: Option<<&mut CascadeInfo>,
                error_reporter: &ParseErrorReporter,
+               font_metrics_provider: &FontMetricsProvider,
                flags: CascadeFlags)
                -> ComputedValues {
     debug_assert_eq!(parent_style.is_some(), layout_parent_style.is_some());
@@ -1995,7 +2005,7 @@ pub fn cascade(device: &Device,
                        layout_parent_style,
                        cascade_info,
                        error_reporter,
-                       None,
+                       font_metrics_provider,
                        flags)
 }
 
@@ -2009,7 +2019,7 @@ pub fn apply_declarations<'a, F, I>(device: &Device,
                                     layout_parent_style: &ComputedValues,
                                     mut cascade_info: Option<<&mut CascadeInfo>,
                                     error_reporter: &ParseErrorReporter,
-                                    font_metrics_provider: Option<<&FontMetricsProvider>,
+                                    font_metrics_provider: &FontMetricsProvider,
                                     flags: CascadeFlags)
                                     -> ComputedValues
     where F: Fn() -> I,
@@ -2033,7 +2043,6 @@ pub fn apply_declarations<'a, F, I>(device: &Device,
 
     let starting_style = if !flags.contains(INHERIT_ALL) {
         ComputedValues::new(custom_properties,
-                            flags.contains(SHAREABLE),
                             WritingMode::empty(),
                             inherited_style.root_font_size,
                             inherited_style.font_size_keyword,
@@ -2047,7 +2056,6 @@ pub fn apply_declarations<'a, F, I>(device: &Device,
                             )
     } else {
         ComputedValues::new(custom_properties,
-                            flags.contains(SHAREABLE),
                             WritingMode::empty(),
                             inherited_style.root_font_size,
                             inherited_style.font_size_keyword,
@@ -2064,6 +2072,7 @@ pub fn apply_declarations<'a, F, I>(device: &Device,
         layout_parent_style: layout_parent_style,
         style: starting_style,
         font_metrics_provider: font_metrics_provider,
+        in_media_query: false,
     };
 
     // Set computed values, overwriting earlier declarations for the same
@@ -2118,6 +2127,7 @@ pub fn apply_declarations<'a, F, I>(device: &Device,
                     | LonghandId::TextOrientation
                     | LonghandId::AnimationName
                     | LonghandId::TransitionProperty
+                    | LonghandId::XLang
                 % endif
             );
             if
