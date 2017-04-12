@@ -6,6 +6,7 @@
 
 const {
   getAbbreviatedMimeType,
+  ipToLong,
 } = require("./request-utils");
 
 /**
@@ -26,33 +27,6 @@ function compareValues(first, second) {
     return 0;
   }
   return first > second ? 1 : -1;
-}
-
-function ipToLong(ip) {
-  if (!ip) {
-    // Invalid IP
-    return -1;
-  }
-  let base;
-  let octets = ip.split(".");
-  if (octets.length === 4) {
-    base = 10;
-  } else {
-    // Probably IPv6
-    octets = ip.replace(/\:+/g, ":").split(":");
-    if (octets.length >= 6) {
-      // Some IPv6s might have ::
-      base = 16;
-    } else {
-      // Invalid IP
-      return -1;
-    }
-  }
-  return octets.map((val, ix, arr) => {
-    return parseInt(val, base) * Math.pow(256, (arr.length - 1) - ix);
-  }).reduce((sum, val) => {
-    return sum + val;
-  }, 0);
 }
 
 function waterfall(first, second) {
