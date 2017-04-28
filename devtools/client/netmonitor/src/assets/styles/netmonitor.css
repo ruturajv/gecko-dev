@@ -103,7 +103,18 @@ body,
 }
 
 .learn-more-link:hover {
-  text-decoration: underline;
+  /*text-decoration: underline;*/
+}
+
+.treeRow .learn-more-link {
+  visibility: hidden;
+  background: url(chrome://devtools/skin/images/themes/images/help.svg) no-repeat;
+  padding-left: 22px;
+  background-size: contain;
+}
+
+.treeRow:hover .learn-more-link {
+  visibility: visible;
 }
 
 /* Status bar */
