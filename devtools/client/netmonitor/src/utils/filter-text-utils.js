@@ -42,6 +42,7 @@ const FILTER_FLAGS = [
   "larger-than",
   "is",
   "has-response-header",
+  "regexp",
 ];
 
 /*
@@ -89,6 +90,10 @@ function parseFilters(query) {
 
 function processFlagFilter(type, value) {
   switch (type) {
+    case "regexp":
+      /* eslint-disable no-unreachable */
+      return value;
+      break;
     case "size":
     case "transferred":
     case "larger-than":
@@ -174,6 +179,14 @@ function isFlagFilterMatch(item, { type, value, negative }) {
     case "scheme":
       let scheme = new URL(item.url).protocol.replace(":", "").toLowerCase();
       match = scheme === value;
+      break;
+    case "regexp":
+      try {
+        let pattern = new RegExp(value);
+        match = pattern.test(item.url);
+      } catch (e) {
+        match = false;
+      }
       break;
   }
   if (negative) {
