@@ -91,9 +91,7 @@ function parseFilters(query) {
 function processFlagFilter(type, value) {
   switch (type) {
     case "regexp":
-      /* eslint-disable no-unreachable */
       return value;
-      break;
     case "size":
     case "transferred":
     case "larger-than":
