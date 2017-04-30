@@ -20,7 +20,14 @@ module.exports = createClass({
     keyShortcut: PropTypes.string,
     onChange: PropTypes.func,
     placeholder: PropTypes.string,
-    type: PropTypes.string
+    type: PropTypes.string,
+    autoCompleteList: PropTypes.array,
+  },
+
+  getDefaultProps() {
+    return {
+      autoCompleteList: [],
+    };
   },
 
   getInitialState() {
@@ -82,8 +89,18 @@ module.exports = createClass({
     this.onChange();
   },
 
+  renderAutoCompleteList(autoCompleteList) {
+    return autoCompleteList.map(item => {
+      return dom.option({}, `${item}`);
+    });
+  },
+
   render() {
-    let { type = "search", placeholder } = this.props;
+    let {
+      type = "search",
+      placeholder,
+      autoCompleteList
+    } = this.props;
     let { value } = this.state;
     let divClassList = ["devtools-searchbox", "has-clear-btn"];
     let inputClassList = [`devtools-${type}input`];
@@ -98,13 +115,17 @@ module.exports = createClass({
         onChange: this.onChange,
         placeholder,
         ref: "input",
-        value
+        value,
+        list: "search-box-autocomplete-datalist"
       }),
       dom.button({
         className: "devtools-searchinput-clear",
         hidden: value == "",
         onClick: this.onClearButtonClick
-      })
+      }),
+      dom.datalist({
+        id: "search-box-autocomplete-datalist"
+      }, this.renderAutoCompleteList(autoCompleteList))
     );
   }
 });
