@@ -6,8 +6,40 @@
 
 "use strict";
 
-const { DOM: dom, createClass, PropTypes } = require("devtools/client/shared/vendor/react");
+const { DOM: dom, createClass, PropTypes, createFactory } = require("devtools/client/shared/vendor/react");
 const KeyShortcuts = require("devtools/client/shared/key-shortcuts");
+
+let SearchBoxAutocomplete = createFactory(createClass({
+  displayName: "SearchBoxAutocomplete",
+
+  propTypes: {
+    autoCompleteList: PropTypes.array,
+    onFocus: PropTypes.func,
+    onBlur: PropTypes.func,
+    onChange: PropTypes.func,
+  },
+
+  // getInitialState() {
+  //   return {
+  //     autoCompleteList: this.props.autoCompleteList
+  //   };
+  // },
+
+  componentDidMount() {
+
+  },
+
+  render() {
+    let {autoCompleteList} = this.props;
+
+    return dom.ul(
+      {id: "search-box-autocomplete-list"},
+      autoCompleteList.map(item => {
+        return dom.li({key: item}, item);
+      })
+    );
+  }
+}));
 
 /**
  * A generic search box component for use across devtools
@@ -32,7 +64,10 @@ module.exports = createClass({
 
   getInitialState() {
     return {
-      value: ""
+      value: "",
+      autoCompleteList: this.props.autoCompleteList,
+      isAutoCompleteListOpen: false,
+      autoCompleteSelectionIndex: -1
     };
   },
 
@@ -63,7 +98,12 @@ module.exports = createClass({
 
   onChange() {
     if (this.state.value !== this.refs.input.value) {
-      this.setState({ value: this.refs.input.value });
+      this.setState({
+        value: this.refs.input.value,
+        autoCompleteList: this.props.autoCompleteList.filter((item) => {
+          return item.toLowerCase().includes(this.refs.input.value.toLowerCase());
+        })
+      });
     }
 
     if (!this.props.delay) {
@@ -89,43 +129,86 @@ module.exports = createClass({
     this.onChange();
   },
 
-  renderAutoCompleteList(autoCompleteList) {
-    return autoCompleteList.map(item => {
-      return dom.option({}, `${item}`);
-    });
+  onFocus() {
+    this.setState({isAutoCompleteListOpen: true});
+  },
+
+  onBlur() {
+    this.setState({isAutoCompleteListOpen: false});
+  },
+
+  onKeyDown(e) {
+    switch (e.keyCode) {
+      case "ArrowDown":
+        if (this.props.autoCompleteList[this.state.autoCompleteSelectionIndex + 1]) {
+          this.setState({
+            autoCompleteSelectionIndex: this.state.autoCompleteSelectionIndex + 1
+          });
+        } else {
+          this.setState({autoCompleteSelectionIndex: 0});
+        }
+        break;
+      case "ArrowUp":
+        if (this.props.autoCompleteList[this.state.autoCompleteSelectionIndex - 1]) {
+          this.setState({
+            autoCompleteSelectionIndex: this.state.autoCompleteSelectionIndex - 1
+          });
+        } else {
+          this.setState({
+            autoCompleteSelectionIndex: this.props.autoCompleteList.length - 1
+          });
+        }
+        break;
+    }
+  },
+
+  onAutoCompleteClick(e) {
+    console.log(e.target);
+    console.log("This works randomly like 1/20 times");
   },
 
   render() {
     let {
       type = "search",
-      placeholder,
-      autoCompleteList
+      placeholder
     } = this.props;
-    let { value } = this.state;
+    let { value, autoCompleteList, isAutoCompleteListOpen } = this.state;
     let divClassList = ["devtools-searchbox", "has-clear-btn"];
     let inputClassList = [`devtools-${type}input`];
+    let autoCompleteListClass = "";
 
     if (value !== "") {
       inputClassList.push("filled");
+    }
+    if (autoCompleteList.length > 0 && isAutoCompleteListOpen) {
+      autoCompleteListClass = "open";
     }
     return dom.div(
       { className: divClassList.join(" ") },
       dom.input({
         className: inputClassList.join(" "),
         onChange: this.onChange,
+        onFocus: this.onFocus,
+        onBlur: this.onBlur,
+        onKeyDown: this.onKeyDown,
         placeholder,
         ref: "input",
         value,
-        list: "search-box-autocomplete-datalist"
       }),
       dom.button({
         className: "devtools-searchinput-clear",
         hidden: value == "",
         onClick: this.onClearButtonClick
       }),
-      dom.datalist({
-        id: "search-box-autocomplete-datalist"
-      }, this.renderAutoCompleteList(autoCompleteList))
+      dom.ul(
+        { id: "search-box-autocomplete-list",
+          className: autoCompleteListClass,
+          onClick: this.onAutoCompleteClick,
+        },
+        autoCompleteList.map(item => {
+          return dom.li({key: item}, item);
+        })
+      )
     );
   }
 });

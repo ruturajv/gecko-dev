@@ -423,6 +423,35 @@ checkbox:-moz-focusring {
   font-size: inherit;
 }
 
+/* Auto complete */
+#search-box-autocomplete-list {
+  list-style: none;
+  position: absolute;
+  margin-top: 22px;
+  padding: 0;
+  background: var(--theme-body-background);
+  width: 100%;
+  border: 1px solid var(--theme-splitter-color);
+  max-height: 100px;
+  overflow-y: auto;
+  z-index: 10;
+  display: none;
+}
+
+#search-box-autocomplete-list.open {
+  display: block;
+}
+
+#search-box-autocomplete-list li {
+  padding-left: 3px;
+  cursor: pointer;
+}
+
+#search-box-autocomplete-list li:hover {
+  background-color: var(--theme-selection-background);
+  color: var(--theme-selection-color);
+}
+
 /*
  * @TODO : has-clear-btn class was added for bug 1296187 and we should remove it
  *  once we have a standardized search and filter input across the toolboxes.
