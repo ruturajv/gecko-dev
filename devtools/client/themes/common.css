@@ -421,6 +421,26 @@ checkbox:-moz-focusring {
   background-size: 11px 11px;
   background-repeat: no-repeat;
   font-size: inherit;
+  z-index: 100;
+  background: transparent;
+  display: block;
+  right: 0;
+  position: absolute;
+  width: 300px;
+}
+
+.devtools-auto-shadow {
+  z-index: 90;
+  color: gray;
+  background: var(--theme-body-background);
+  display: block;
+  right: 0;
+  position: absolute;
+  background-repeat: no-repeat;
+  width: 300px;
+  padding: 0;
+  padding-inline-start: 20px;
+  padding-inline-end: 4px;
 }
 
 /*
@@ -434,10 +454,12 @@ checkbox:-moz-focusring {
 
 .devtools-searchinput {
   background-image: var(--magnifying-glass-image);
+  background-repeat: no-repeat;
 }
 
 .devtools-filterinput {
   background-image: url(chrome://devtools/skin/images/filter.svg#filterinput);
+  background-repeat: no-repeat;
 }
 
 .devtools-searchinput:-moz-locale-dir(rtl),
@@ -518,7 +540,7 @@ checkbox:-moz-focusring {
 }
 
 .devtools-filterinput:-moz-any([filled],.filled) {
-  background-color: var(--searchbox-background-color);
+  /*background-color: var(--searchbox-background-color);*/
   border-color: var(--searchbox-border-color);
 }
 

@@ -110,22 +110,29 @@ module.exports = createClass({
     }
     return dom.div(
       { className: divClassList.join(" ") },
-      dom.input({
-        className: inputClassList.join(" "),
-        onChange: this.onChange,
-        placeholder,
-        ref: "input",
-        value,
-        list: "search-box-autocomplete-datalist"
-      }),
-      dom.button({
-        className: "devtools-searchinput-clear",
-        hidden: value == "",
-        onClick: this.onClearButtonClick
-      }),
-      dom.datalist({
-        id: "search-box-autocomplete-datalist"
-      }, this.renderAutoCompleteList(autoCompleteList))
+      dom.div(
+        {className: "rutu-here"},
+        dom.input({
+          className: inputClassList.join(" "),
+          onChange: this.onChange,
+          placeholder,
+          ref: "input",
+          value,
+          list: "search-box-autocomplete-datalist"
+        }),
+        dom.button({
+          className: "devtools-searchinput-clear",
+          hidden: value == "",
+          onClick: this.onClearButtonClick
+        }),
+        dom.datalist({
+          id: "search-box-autocomplete-datalist"
+        }, this.renderAutoCompleteList(autoCompleteList)),
+
+        dom.div({
+          className: "devtools-auto-shadow",
+        }, "Rutu")
+      )
     );
   }
 });
