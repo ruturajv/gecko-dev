@@ -447,6 +447,7 @@ checkbox:-moz-focusring {
   cursor: pointer;
 }
 
+#search-box-autocomplete-list li.autocomplete-selected,
 #search-box-autocomplete-list li:hover {
   background-color: var(--theme-selection-background);
   color: var(--theme-selection-color);

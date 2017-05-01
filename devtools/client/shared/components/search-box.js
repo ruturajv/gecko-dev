@@ -85,6 +85,15 @@ module.exports = createClass({
     });
   },
 
+  componentDidUpdate() {
+    if (this.state.isAutoCompleteListOpen
+      && this.state.autoCompleteSelectionIndex !== -1) {
+      // Haven't figured out why I had to put this.refs["autocomplete-selected"]
+      // Sometimes comes this.refs["autocomplete-selected"] as undefined
+      this.refs["autocomplete-selected"].scrollIntoView(false);
+    }
+  },
+
   componentWillUnmount() {
     if (this.shortcuts) {
       this.shortcuts.destroy();
@@ -100,10 +109,8 @@ module.exports = createClass({
     if (this.state.value !== this.refs.input.value) {
       this.setState({
         value: this.refs.input.value,
-        autoCompleteList: this.props.autoCompleteList.filter((item) => {
-          return item.toLowerCase().includes(this.refs.input.value.toLowerCase());
-        })
       });
+      this.setupAutoComplete();
     }
 
     if (!this.props.delay) {
@@ -130,7 +137,8 @@ module.exports = createClass({
   },
 
   onFocus() {
-    this.setState({isAutoCompleteListOpen: true});
+    this.setState({isAutoCompleteListOpen: true, autoCompleteSelectionIndex: -1});
+    this.setupAutoComplete();
   },
 
   onBlur() {
@@ -138,9 +146,9 @@ module.exports = createClass({
   },
 
   onKeyDown(e) {
-    switch (e.keyCode) {
+    switch (e.key) {
       case "ArrowDown":
-        if (this.props.autoCompleteList[this.state.autoCompleteSelectionIndex + 1]) {
+        if (this.state.autoCompleteList[this.state.autoCompleteSelectionIndex + 1]) {
           this.setState({
             autoCompleteSelectionIndex: this.state.autoCompleteSelectionIndex + 1
           });
@@ -149,17 +157,46 @@ module.exports = createClass({
         }
         break;
       case "ArrowUp":
-        if (this.props.autoCompleteList[this.state.autoCompleteSelectionIndex - 1]) {
+        if (this.state.autoCompleteList[this.state.autoCompleteSelectionIndex - 1]) {
           this.setState({
             autoCompleteSelectionIndex: this.state.autoCompleteSelectionIndex - 1
           });
         } else {
           this.setState({
-            autoCompleteSelectionIndex: this.props.autoCompleteList.length - 1
+            autoCompleteSelectionIndex: this.state.autoCompleteList.length - 1
           });
         }
         break;
+      case "Enter":
+      case "Tab":
+        e.preventDefault();
+        if (this.state.isAutoCompleteListOpen
+          && this.state.autoCompleteSelectionIndex !== -1) {
+          this.setState({
+            value: this.refs["autocomplete-selected"].textContent,
+            isAutoCompleteListOpen: false,
+          });
+          this.refs.input.focus();
+        }
+        break;
     }
+  },
+
+  setupAutoComplete() {
+    this.setState({
+      autoCompleteList: this.props.autoCompleteList.filter((item) => {
+        return item.toLowerCase().includes(this.refs.input.value.toLowerCase());
+      }),
+      isAutoCompleteListOpen: true,
+      autoCompleteSelectionIndex: -1
+    });
+  },
+
+  cleanUpAutoComplete() {
+    this.setState({
+      isAutoCompleteListOpen: false,
+      autoCompleteSelectionIndex: -1
+    });
   },
 
   onAutoCompleteClick(e) {
@@ -205,8 +242,14 @@ module.exports = createClass({
           className: autoCompleteListClass,
           onClick: this.onAutoCompleteClick,
         },
-        autoCompleteList.map(item => {
-          return dom.li({key: item}, item);
+        autoCompleteList.map((item, ix) => {
+          let autoCompleteItemClass =
+            (this.state.autoCompleteSelectionIndex == ix) ? "autocomplete-selected" : "";
+          return dom.li({
+            key: item,
+            className: autoCompleteItemClass,
+            ref: autoCompleteItemClass,
+          }, item);
         })
       )
     );
