@@ -9,33 +9,94 @@
 const { DOM: dom, createClass, PropTypes, createFactory } = require("devtools/client/shared/vendor/react");
 const KeyShortcuts = require("devtools/client/shared/key-shortcuts");
 
-let SearchBoxAutocomplete = createFactory(createClass({
-  displayName: "SearchBoxAutocomplete",
+let AutoCompletePopup = createFactory(createClass({
+  displayName: "AutoCompletePopup",
 
   propTypes: {
     autoCompleteList: PropTypes.array,
-    onFocus: PropTypes.func,
-    onBlur: PropTypes.func,
-    onChange: PropTypes.func,
+    filter: PropTypes.string,
+    onItemSelected: PropTypes.func,
   },
 
-  // getInitialState() {
-  //   return {
-  //     autoCompleteList: this.props.autoCompleteList
-  //   };
-  // },
+  getInitialState() {
+    return this.setupAutoComplete();
+  },
 
-  componentDidMount() {
+  componentWillReceiveProps() {
+    this.setState(this.setupAutoComplete());
+  },
 
+  componentDidUpdate() {
+    if (this.state.autoCompleteSelectionIndex !== -1) {
+      this.refs["autocomplete-selected"].scrollIntoView(false);
+    }
+  },
+
+  setupAutoComplete() {
+    let autoCompleteList = this.props.autoCompleteList.filter((item) => {
+      return item.toLowerCase().includes(this.props.filter.toLowerCase());
+    });
+
+    return {autoCompleteList, autoCompleteSelectionIndex: -1};
+  },
+
+  cycleDown() {
+    if (this.state.autoCompleteList[this.state.autoCompleteSelectionIndex + 1]) {
+      this.setState({
+        autoCompleteSelectionIndex: this.state.autoCompleteSelectionIndex + 1
+      });
+    } else {
+      this.setState({autoCompleteSelectionIndex: 0});
+    }
+  },
+
+  cycleUp() {
+    if (this.state.autoCompleteList[this.state.autoCompleteSelectionIndex - 1]) {
+      this.setState({
+        autoCompleteSelectionIndex: this.state.autoCompleteSelectionIndex - 1
+      });
+    } else {
+      this.setState({
+        autoCompleteSelectionIndex: this.state.autoCompleteList.length - 1
+      });
+    }
+  },
+
+  isItemSelected() {
+    return this.state.autoCompleteSelectionIndex !== -1;
+  },
+
+  getSelectedItem() {
+    return this.refs["autocomplete-selected"].textContent;
+  },
+
+  onMouseDown(e) {
+    // To prevent Blur event happening on SearchBox component
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (e.target.nodeName === "LI") {
+      let value = e.target.textContent;
+      this.props.onItemSelected(value);
+    }
   },
 
   render() {
-    let {autoCompleteList} = this.props;
+    let {autoCompleteList} = this.state;
 
     return dom.ul(
-      {id: "search-box-autocomplete-list"},
-      autoCompleteList.map(item => {
-        return dom.li({key: item}, item);
+      { id: "search-box-autocomplete-list",
+        className: "open",
+        onMouseDown: this.onMouseDown
+      },
+      autoCompleteList.map((item, ix) => {
+        let autoCompleteItemClass =
+          (this.state.autoCompleteSelectionIndex == ix) ? "autocomplete-selected" : "";
+        return dom.li({
+          key: item,
+          className: autoCompleteItemClass,
+          ref: autoCompleteItemClass
+        }, item);
       })
     );
   }
@@ -65,9 +126,7 @@ module.exports = createClass({
   getInitialState() {
     return {
       value: "",
-      autoCompleteList: this.props.autoCompleteList,
-      isAutoCompleteListOpen: false,
-      autoCompleteSelectionIndex: -1
+      isFocused: false,
     };
   },
 
@@ -85,15 +144,6 @@ module.exports = createClass({
     });
   },
 
-  componentDidUpdate() {
-    if (this.state.isAutoCompleteListOpen
-      && this.state.autoCompleteSelectionIndex !== -1) {
-      // Haven't figured out why I had to put this.refs["autocomplete-selected"]
-      // Sometimes comes this.refs["autocomplete-selected"] as undefined
-      this.refs["autocomplete-selected"].scrollIntoView(false);
-    }
-  },
-
   componentWillUnmount() {
     if (this.shortcuts) {
       this.shortcuts.destroy();
@@ -106,11 +156,13 @@ module.exports = createClass({
   },
 
   onChange() {
+    // This is to handle Tab, Enter keyCode which sets isFocused to false
+    this.setState({isFocused: true});
+
     if (this.state.value !== this.refs.input.value) {
       this.setState({
         value: this.refs.input.value,
       });
-      this.setupAutoComplete();
     }
 
     if (!this.props.delay) {
@@ -137,44 +189,29 @@ module.exports = createClass({
   },
 
   onFocus() {
-    this.setState({isAutoCompleteListOpen: true, autoCompleteSelectionIndex: -1});
-    this.setupAutoComplete();
+    this.setState({isFocused: true, autoCompleteSelectionIndex: -1});
   },
 
   onBlur() {
-    this.setState({isAutoCompleteListOpen: false});
+    this.setState({isFocused: false});
   },
 
   onKeyDown(e) {
     switch (e.key) {
       case "ArrowDown":
-        if (this.state.autoCompleteList[this.state.autoCompleteSelectionIndex + 1]) {
-          this.setState({
-            autoCompleteSelectionIndex: this.state.autoCompleteSelectionIndex + 1
-          });
-        } else {
-          this.setState({autoCompleteSelectionIndex: 0});
-        }
+        this.refs.autoCompletePopup.cycleDown();
         break;
       case "ArrowUp":
-        if (this.state.autoCompleteList[this.state.autoCompleteSelectionIndex - 1]) {
-          this.setState({
-            autoCompleteSelectionIndex: this.state.autoCompleteSelectionIndex - 1
-          });
-        } else {
-          this.setState({
-            autoCompleteSelectionIndex: this.state.autoCompleteList.length - 1
-          });
-        }
+        this.refs.autoCompletePopup.cycleUp();
         break;
       case "Enter":
       case "Tab":
         e.preventDefault();
-        if (this.state.isAutoCompleteListOpen
-          && this.state.autoCompleteSelectionIndex !== -1) {
+        if (this.state.isFocused
+          && this.refs.autoCompletePopup.isItemSelected()) {
           this.setState({
-            value: this.refs["autocomplete-selected"].textContent,
-            isAutoCompleteListOpen: false,
+            value: this.refs.autoCompletePopup.getSelectedItem(),
+            isFocused: false,
           });
           this.refs.input.focus();
         }
@@ -182,43 +219,18 @@ module.exports = createClass({
     }
   },
 
-  setupAutoComplete() {
-    this.setState({
-      autoCompleteList: this.props.autoCompleteList.filter((item) => {
-        return item.toLowerCase().includes(this.refs.input.value.toLowerCase());
-      }),
-      isAutoCompleteListOpen: true,
-      autoCompleteSelectionIndex: -1
-    });
-  },
-
-  cleanUpAutoComplete() {
-    this.setState({
-      isAutoCompleteListOpen: false,
-      autoCompleteSelectionIndex: -1
-    });
-  },
-
-  onAutoCompleteClick(e) {
-    console.log(e.target);
-    console.log("This works randomly like 1/20 times");
-  },
-
   render() {
     let {
       type = "search",
-      placeholder
+      placeholder,
+      autoCompleteList
     } = this.props;
-    let { value, autoCompleteList, isAutoCompleteListOpen } = this.state;
+    let { value } = this.state;
     let divClassList = ["devtools-searchbox", "has-clear-btn"];
     let inputClassList = [`devtools-${type}input`];
-    let autoCompleteListClass = "";
 
     if (value !== "") {
       inputClassList.push("filled");
-    }
-    if (autoCompleteList.length > 0 && isAutoCompleteListOpen) {
-      autoCompleteListClass = "open";
     }
     return dom.div(
       { className: divClassList.join(" ") },
@@ -237,21 +249,15 @@ module.exports = createClass({
         hidden: value == "",
         onClick: this.onClearButtonClick
       }),
-      dom.ul(
-        { id: "search-box-autocomplete-list",
-          className: autoCompleteListClass,
-          onClick: this.onAutoCompleteClick,
-        },
-        autoCompleteList.map((item, ix) => {
-          let autoCompleteItemClass =
-            (this.state.autoCompleteSelectionIndex == ix) ? "autocomplete-selected" : "";
-          return dom.li({
-            key: item,
-            className: autoCompleteItemClass,
-            ref: autoCompleteItemClass,
-          }, item);
-        })
-      )
+      autoCompleteList.length > 0 && this.state.isFocused && AutoCompletePopup({
+        autoCompleteList: this.props.autoCompleteList,
+        filter: value,
+        ref: "autoCompletePopup",
+        onItemSelected: (clickedItemValue) => {
+          this.setState({value: clickedItemValue, isFocused: false});
+          this.refs.input.focus();
+        }
+      })
     );
   }
 });
