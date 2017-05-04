@@ -424,7 +424,7 @@ checkbox:-moz-focusring {
 }
 
 /* Auto complete */
-#search-box-autocomplete-list {
+.search-box-autocomplete-list {
   list-style: none;
   position: absolute;
   margin-top: 22px;
@@ -438,17 +438,17 @@ checkbox:-moz-focusring {
   display: none;
 }
 
-#search-box-autocomplete-list.open {
+.search-box-autocomplete-list.open {
   display: block;
 }
 
-#search-box-autocomplete-list li {
+.search-box-autocomplete-list li {
   padding-left: 3px;
   cursor: pointer;
 }
 
-#search-box-autocomplete-list li.autocomplete-selected,
-#search-box-autocomplete-list li:hover {
+.search-box-autocomplete-list li.selected,
+.search-box-autocomplete-list li:hover {
   background-color: var(--theme-selection-background);
   color: var(--theme-selection-color);
 }

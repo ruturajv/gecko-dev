@@ -8,12 +8,11 @@
 
 const { DOM: dom, createClass, PropTypes, createFactory } = require("devtools/client/shared/vendor/react");
 const KeyShortcuts = require("devtools/client/shared/key-shortcuts");
-
-let AutoCompletePopup = createFactory(createClass({
-  displayName: "AutoCompletePopup",
+const AutocompletePopup = createFactory(createClass({
+  displayName: "AutocompletePopup",
 
   propTypes: {
-    autoCompleteList: PropTypes.array,
+    list: PropTypes.array,
     filter: PropTypes.string,
     onItemSelected: PropTypes.func,
   },
@@ -27,47 +26,35 @@ let AutoCompletePopup = createFactory(createClass({
   },
 
   componentDidUpdate() {
-    if (this.state.autoCompleteSelectionIndex !== -1) {
-      this.refs["autocomplete-selected"].scrollIntoView(false);
+    if (this.state.selectedIndex !== -1) {
+      this.refs.selected.scrollIntoView(false);
     }
   },
 
   setupAutoComplete() {
-    let autoCompleteList = this.props.autoCompleteList.filter((item) => {
+    let filteredList = this.props.list.filter((item) => {
       return item.toLowerCase().includes(this.props.filter.toLowerCase());
     });
 
-    return {autoCompleteList, autoCompleteSelectionIndex: -1};
+    return {filteredList, selectedIndex: -1};
   },
 
   cycleDown() {
-    if (this.state.autoCompleteList[this.state.autoCompleteSelectionIndex + 1]) {
-      this.setState({
-        autoCompleteSelectionIndex: this.state.autoCompleteSelectionIndex + 1
-      });
-    } else {
-      this.setState({autoCompleteSelectionIndex: 0});
-    }
+    let { filteredList, selectedIndex } = this.state;
+    let nextIndex = selectedIndex + 1 === filteredList.length ? 0 : selectedIndex + 1;
+    this.setState({selectedIndex: nextIndex});
   },
 
   cycleUp() {
-    if (this.state.autoCompleteList[this.state.autoCompleteSelectionIndex - 1]) {
-      this.setState({
-        autoCompleteSelectionIndex: this.state.autoCompleteSelectionIndex - 1
-      });
-    } else {
-      this.setState({
-        autoCompleteSelectionIndex: this.state.autoCompleteList.length - 1
-      });
+    let { filteredList, selectedIndex } = this.state;
+    let nextIndex = selectedIndex - 1 < 0 ? filteredList.length - 1 : selectedIndex - 1;
+    this.setState({selectedIndex: nextIndex});
+  },
+
+  select() {
+    if (this.state.selectedIndex !== -1) {
+      this.props.onItemSelected(this.refs.selected.textContent);
     }
-  },
-
-  isItemSelected() {
-    return this.state.autoCompleteSelectionIndex !== -1;
-  },
-
-  getSelectedItem() {
-    return this.refs["autocomplete-selected"].textContent;
   },
 
   onMouseDown(e) {
@@ -82,16 +69,15 @@ let AutoCompletePopup = createFactory(createClass({
   },
 
   render() {
-    let {autoCompleteList} = this.state;
+    let {filteredList} = this.state;
 
     return dom.ul(
-      { id: "search-box-autocomplete-list",
-        className: "open",
+      { className: "search-box-autocomplete-list open",
         onMouseDown: this.onMouseDown
       },
-      autoCompleteList.map((item, ix) => {
+      filteredList.map((item, i) => {
         let autoCompleteItemClass =
-          (this.state.autoCompleteSelectionIndex == ix) ? "autocomplete-selected" : "";
+          (this.state.selectedIndex == i) ? "selected" : "";
         return dom.li({
           key: item,
           className: autoCompleteItemClass,
@@ -126,7 +112,7 @@ module.exports = createClass({
   getInitialState() {
     return {
       value: "",
-      isFocused: false,
+      focused: false,
     };
   },
 
@@ -156,9 +142,6 @@ module.exports = createClass({
   },
 
   onChange() {
-    // This is to handle Tab, Enter keyCode which sets isFocused to false
-    this.setState({isFocused: true});
-
     if (this.state.value !== this.refs.input.value) {
       this.setState({
         value: this.refs.input.value,
@@ -189,32 +172,32 @@ module.exports = createClass({
   },
 
   onFocus() {
-    this.setState({isFocused: true, autoCompleteSelectionIndex: -1});
+    this.setState({focused: true});
   },
 
   onBlur() {
-    this.setState({isFocused: false});
+    this.setState({focused: false});
   },
 
   onKeyDown(e) {
+    let {autoCompleteList} = this.props;
+    let {autocomplete} = this.refs;
+
+    if (autoCompleteList.length == 0) {
+      return;
+    }
+
     switch (e.key) {
       case "ArrowDown":
-        this.refs.autoCompletePopup.cycleDown();
+        autocomplete.cycleDown();
         break;
       case "ArrowUp":
-        this.refs.autoCompletePopup.cycleUp();
+        autocomplete.cycleUp();
         break;
       case "Enter":
       case "Tab":
         e.preventDefault();
-        if (this.state.isFocused
-          && this.refs.autoCompletePopup.isItemSelected()) {
-          this.setState({
-            value: this.refs.autoCompletePopup.getSelectedItem(),
-            isFocused: false,
-          });
-          this.refs.input.focus();
-        }
+        autocomplete.select();
         break;
     }
   },
@@ -249,13 +232,14 @@ module.exports = createClass({
         hidden: value == "",
         onClick: this.onClearButtonClick
       }),
-      autoCompleteList.length > 0 && this.state.isFocused && AutoCompletePopup({
-        autoCompleteList: this.props.autoCompleteList,
+      autoCompleteList.length > 0 && this.state.focused && AutocompletePopup({
+        list: this.props.autoCompleteList,
         filter: value,
-        ref: "autoCompletePopup",
+        ref: "autocomplete",
         onItemSelected: (clickedItemValue) => {
-          this.setState({value: clickedItemValue, isFocused: false});
+          this.setState({value: clickedItemValue});
           this.refs.input.focus();
+          this.onChange();
         }
       })
     );
