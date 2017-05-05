@@ -83,6 +83,7 @@ html|button, html|select {
   background-color: transparent;
   border-radius: 4px;
   padding: 1px 0;
+  cursor: default;
 }
 
 .devtools-autocomplete-listbox .autocomplete-item > .initial-value,

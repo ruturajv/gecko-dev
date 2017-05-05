@@ -16,8 +16,10 @@ module.exports = createClass({
   },
 
   getInitialState() {
-    let filteredList = this.props.list.filter((item) => {
-      return item.toLowerCase().includes(this.props.filter.toLowerCase());
+    let { list, filter } = this.props;
+    let filteredList = list.filter((item) => {
+      return item.toLowerCase().startsWith(filter.toLowerCase())
+        && item.toLowerCase() !== filter.toLowerCase();
     });
 
     return { filteredList, selectedIndex: -1 };
@@ -59,7 +61,7 @@ module.exports = createClass({
   render() {
     let { filteredList } = this.state;
 
-    return dom.div(
+    return filteredList.length > 0 && dom.div(
       { className: "devtools-autocomplete-popup devtools-monospace" },
       dom.ul(
         { className: "devtools-autocomplete-listbox" },
