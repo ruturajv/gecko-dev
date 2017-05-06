@@ -20,8 +20,9 @@ const {
 const {
   decodeUnicodeUrl,
   getUrlBaseName,
-  getUrlQuery,
   getUrlHost,
+  getUrlQuery,
+  getUrlScheme,
 } = require("devtools/client/netmonitor/src/utils/request-utils");
 
 /* eslint-disable no-unused-vars, max-len */
@@ -166,22 +167,22 @@ function waitForTimelineMarkers(monitor) {
 function waitForAllRequestsFinished(monitor) {
   let window = monitor.panelWin;
   let { windowRequire } = window;
-  let { NetMonitorController } =
-    windowRequire("devtools/client/netmonitor/src/netmonitor-controller");
+  let { getNetworkRequest } =
+    windowRequire("devtools/client/netmonitor/src/connector/index");
 
   return new Promise(resolve => {
     // Key is the request id, value is a boolean - is request finished or not?
     let requests = new Map();
 
     function onRequest(_, id) {
-      let networkInfo = NetMonitorController.webConsoleClient.getNetworkRequest(id);
+      let networkInfo = getNetworkRequest(id);
       let { url } = networkInfo.request;
       info(`Request ${id} for ${url} not yet done, keep waiting...`);
       requests.set(id, false);
     }
 
     function onTimings(_, id) {
-      let networkInfo = NetMonitorController.webConsoleClient.getNetworkRequest(id);
+      let networkInfo = getNetworkRequest(id);
       let { url } = networkInfo.request;
       info(`Request ${id} for ${url} done`);
       requests.set(id, true);
@@ -225,7 +226,9 @@ function initNetMonitor(url, enableCache) {
 
     if (!enableCache) {
       let panel = monitor.panelWin;
-      let { gStore, windowRequire } = panel;
+      let { store, windowRequire } = panel;
+      let Actions = windowRequire("devtools/client/netmonitor/src/actions/index");
+
       info("Disabling cache and reloading page.");
       let requestsDone = waitForAllRequestsFinished(monitor);
       let markersDone = waitForTimelineMarkers(monitor);
@@ -239,8 +242,8 @@ function initNetMonitor(url, enableCache) {
       info("Clearing requests in the console client.");
       target.activeConsole.clearNetworkRequests();
       info("Clearing requests in the UI.");
-      let Actions = windowRequire("devtools/client/netmonitor/src/actions/index");
-      gStore.dispatch(Actions.clearRequests());
+
+      store.dispatch(Actions.clearRequests());
     }
 
     return {tab, monitor};
@@ -278,8 +281,8 @@ function waitForNetworkEvents(monitor, getRequests, postRequests = 0) {
   return new Promise((resolve) => {
     let panel = monitor.panelWin;
     let { windowRequire } = panel;
-    let { NetMonitorController } =
-      windowRequire("devtools/client/netmonitor/src/netmonitor-controller");
+    let { getNetworkRequest } =
+      windowRequire("devtools/client/netmonitor/src/connector/index");
     let progress = {};
     let genericEvents = 0;
     let postEvents = 0;
@@ -317,7 +320,7 @@ function waitForNetworkEvents(monitor, getRequests, postRequests = 0) {
     }
 
     function onGenericEvent(event, actor) {
-      let networkInfo = NetMonitorController.webConsoleClient.getNetworkRequest(actor);
+      let networkInfo = getNetworkRequest(actor);
       if (!networkInfo) {
         // Must have been related to reloading document to disable cache.
         // Ignore the event.
@@ -328,7 +331,7 @@ function waitForNetworkEvents(monitor, getRequests, postRequests = 0) {
     }
 
     function onPostEvent(event, actor) {
-      let networkInfo = NetMonitorController.webConsoleClient.getNetworkRequest(actor);
+      let networkInfo = getNetworkRequest(actor);
       if (!networkInfo) {
         // Must have been related to reloading document to disable cache.
         // Ignore the event.
@@ -380,6 +383,7 @@ function verifyRequestItemTarget(document, requestList, requestItem, method,
   let name = getUrlBaseName(url);
   let query = getUrlQuery(url);
   let host = getUrlHost(url);
+  let scheme = getUrlScheme(url);
   let { httpVersion = "", remoteAddress, remotePort } = requestItem;
   let formattedIPPort = getFormattedIPAndPort(remoteAddress, remotePort);
   let remoteIP = remoteAddress ? `${formattedIPPort}` : "unknown";
@@ -426,6 +430,12 @@ function verifyRequestItemTarget(document, requestList, requestItem, method,
 
   is(target.querySelector(".requests-list-remoteip").getAttribute("title"),
     remoteIP, "The tooltip remote IP is correct.");
+
+  is(target.querySelector(".requests-list-scheme").textContent,
+    scheme, "The displayed scheme is correct.");
+
+  is(target.querySelector(".requests-list-scheme").getAttribute("title"),
+    scheme, "The tooltip scheme is correct.");
 
   if (status !== undefined) {
     let value = target.querySelector(".requests-list-status-icon")

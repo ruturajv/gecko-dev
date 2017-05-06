@@ -794,10 +794,10 @@ class FindEventManager {
   }
 
   bind() {
-    var unload = function(e) {
+    var unload = (evt) => {
       this.unbind();
-      this.contentWindow.removeEventListener(e.type, unload);
-    }.bind(this);
+      this.contentWindow.removeEventListener(evt.type, unload);
+    };
     this.contentWindow.addEventListener("unload", unload);
 
     // We cannot directly attach listeners to for the find events
@@ -1003,6 +1003,7 @@ PdfStreamConverter.prototype = {
 
     // Keep the URL the same so the browser sees it as the same.
     channel.originalURI = aRequest.URI;
+    channel.loadInfo.resultPrincipalURI = aRequest.loadInfo.resultPrincipalURI;
     channel.loadGroup = aRequest.loadGroup;
     channel.loadInfo.originAttributes = aRequest.loadInfo.originAttributes;
 

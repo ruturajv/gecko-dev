@@ -189,12 +189,20 @@ NS_NewChannelInternal(nsIChannel           **outChannel,
   }
 
   if (aLoadFlags != nsIRequest::LOAD_NORMAL) {
-    // Retain the LOAD_REPLACE load flag if set.
-    nsLoadFlags normalLoadFlags = 0;
-    channel->GetLoadFlags(&normalLoadFlags);
-    rv = channel->SetLoadFlags(aLoadFlags | (normalLoadFlags & nsIChannel::LOAD_REPLACE));
+    rv = channel->SetLoadFlags(aLoadFlags);
     NS_ENSURE_SUCCESS(rv, rv);
   }
+
+#ifdef DEBUG
+  nsLoadFlags channelLoadFlags = 0;
+  channel->GetLoadFlags(&channelLoadFlags);
+  // Will be removed when we remove LOAD_REPLACE altogether
+  // This check is trying to catch protocol handlers that still
+  // try to set the LOAD_REPLACE flag.  Only exception is when
+  // this flag is carried in the aLoadFlags argument (e.g. when
+  // cloning redirected channels for CORS preflight.)
+  MOZ_ASSERT(!((channelLoadFlags & ~aLoadFlags) & nsIChannel::LOAD_REPLACE));
+#endif
 
   channel.forget(outChannel);
   return NS_OK;
@@ -268,12 +276,20 @@ NS_NewChannelInternal(nsIChannel           **outChannel,
   }
 
   if (aLoadFlags != nsIRequest::LOAD_NORMAL) {
-    // Retain the LOAD_REPLACE load flag if set.
-    nsLoadFlags normalLoadFlags = 0;
-    channel->GetLoadFlags(&normalLoadFlags);
-    rv = channel->SetLoadFlags(aLoadFlags | (normalLoadFlags & nsIChannel::LOAD_REPLACE));
+    rv = channel->SetLoadFlags(aLoadFlags);
     NS_ENSURE_SUCCESS(rv, rv);
   }
+
+#ifdef DEBUG
+  nsLoadFlags channelLoadFlags = 0;
+  channel->GetLoadFlags(&channelLoadFlags);
+  // Will be removed when we remove LOAD_REPLACE altogether
+  // This check is trying to catch protocol handlers that still
+  // try to set the LOAD_REPLACE flag.  Only exception is when
+  // this flag is carried in the aLoadFlags argument (e.g. when
+  // cloning redirected channels for CORS preflight.)
+  MOZ_ASSERT(!((channelLoadFlags & ~aLoadFlags) & nsIChannel::LOAD_REPLACE));
+#endif
 
   channel.forget(outChannel);
   return NS_OK;
@@ -1565,16 +1581,10 @@ NS_LoadPersistentPropertiesFromURISpec(nsIPersistentProperties **outResult,
 bool
 NS_UsePrivateBrowsing(nsIChannel *channel)
 {
-    bool isPrivate = false;
-    nsCOMPtr<nsIPrivateBrowsingChannel> pbChannel = do_QueryInterface(channel);
-    if (pbChannel && NS_SUCCEEDED(pbChannel->GetIsChannelPrivate(&isPrivate))) {
-        return isPrivate;
-    }
-
-    // Some channels may not implement nsIPrivateBrowsingChannel
-    nsCOMPtr<nsILoadContext> loadContext;
-    NS_QueryNotificationCallbacks(channel, loadContext);
-    return loadContext && loadContext->UsePrivateBrowsing();
+    OriginAttributes attrs;
+    bool result = NS_GetOriginAttributes(channel, attrs);
+    NS_ENSURE_TRUE(result, result);
+    return attrs.mPrivateBrowsingId > 0;
 }
 
 bool
@@ -1587,7 +1597,19 @@ NS_GetOriginAttributes(nsIChannel *aChannel,
     }
 
     loadInfo->GetOriginAttributes(&aAttributes);
-    aAttributes.SyncAttributesWithPrivateBrowsing(NS_UsePrivateBrowsing(aChannel));
+
+    bool isPrivate = false;
+    nsCOMPtr<nsIPrivateBrowsingChannel> pbChannel = do_QueryInterface(aChannel);
+    if (pbChannel) {
+        nsresult rv = pbChannel->GetIsChannelPrivate(&isPrivate);
+        NS_ENSURE_SUCCESS(rv, false);
+    } else {
+        // Some channels may not implement nsIPrivateBrowsingChannel
+        nsCOMPtr<nsILoadContext> loadContext;
+        NS_QueryNotificationCallbacks(aChannel, loadContext);
+        isPrivate = loadContext && loadContext->UsePrivateBrowsing();
+    }
+    aAttributes.SyncAttributesWithPrivateBrowsing(isPrivate);
     return true;
 }
 
@@ -1650,9 +1672,11 @@ NS_HasBeenCrossOrigin(nsIChannel* aChannel, bool aReport)
 }
 
 bool
-NS_ShouldCheckAppCache(nsIURI *aURI, bool usePrivateBrowsing)
+NS_ShouldCheckAppCache(nsIPrincipal *aPrincipal)
 {
-    if (usePrivateBrowsing) {
+    uint32_t privateBrowsingId = 0;
+    nsresult rv = aPrincipal->GetPrivateBrowsingId(&privateBrowsingId);
+    if (NS_SUCCEEDED(rv) && (privateBrowsingId > 0)) {
         return false;
     }
 
@@ -1663,29 +1687,7 @@ NS_ShouldCheckAppCache(nsIURI *aURI, bool usePrivateBrowsing)
     }
 
     bool allowed;
-    nsresult rv = offlineService->OfflineAppAllowedForURI(aURI,
-                                                          nullptr,
-                                                          &allowed);
-    return NS_SUCCEEDED(rv) && allowed;
-}
-
-bool
-NS_ShouldCheckAppCache(nsIPrincipal *aPrincipal, bool usePrivateBrowsing)
-{
-    if (usePrivateBrowsing) {
-        return false;
-    }
-
-    nsCOMPtr<nsIOfflineCacheUpdateService> offlineService =
-        do_GetService("@mozilla.org/offlinecacheupdate-service;1");
-    if (!offlineService) {
-        return false;
-    }
-
-    bool allowed;
-    nsresult rv = offlineService->OfflineAppAllowed(aPrincipal,
-                                                    nullptr,
-                                                    &allowed);
+    rv = offlineService->OfflineAppAllowed(aPrincipal, nullptr, &allowed);
     return NS_SUCCEEDED(rv) && allowed;
 }
 
@@ -1886,15 +1888,18 @@ nsresult
 NS_GetFinalChannelURI(nsIChannel *channel, nsIURI **uri)
 {
     *uri = nullptr;
-    nsLoadFlags loadFlags = 0;
-    nsresult rv = channel->GetLoadFlags(&loadFlags);
-    NS_ENSURE_SUCCESS(rv, rv);
 
-    if (loadFlags & nsIChannel::LOAD_REPLACE) {
-        return channel->GetURI(uri);
+    nsCOMPtr<nsILoadInfo> loadInfo = channel->GetLoadInfo();
+    if (loadInfo) {
+        nsCOMPtr<nsIURI> resultPrincipalURI;
+        loadInfo->GetResultPrincipalURI(getter_AddRefs(resultPrincipalURI));
+        if (resultPrincipalURI) {
+            resultPrincipalURI.forget(uri);
+            return NS_OK;
+        }
     }
 
-    return channel->GetOriginalURI(uri);
+    return channel->GetURI(uri);
 }
 
 nsresult

@@ -23,6 +23,7 @@
 #include "jsstr.h"
 
 #include "builtin/Eval.h"
+#include "builtin/RegExp.h"
 #include "builtin/TypedObject.h"
 #include "gc/Nursery.h"
 #include "irregexp/NativeRegExpMacroAssembler.h"
@@ -158,6 +159,10 @@ typedef JSObject* (*IonBindNameICFn)(JSContext*, HandleScript, IonBindNameIC*, H
 static const VMFunction IonBindNameICInfo =
     FunctionInfo<IonBindNameICFn>(IonBindNameIC::update, "IonBindNameIC::update");
 
+typedef bool (*IonInICFn)(JSContext*, HandleScript, IonInIC*, HandleValue, HandleObject, bool*);
+static const VMFunction IonInICInfo =
+    FunctionInfo<IonInICFn>(IonInIC::update, "IonInIC::update");
+
 void
 CodeGenerator::visitOutOfLineICFallback(OutOfLineICFallback* ool)
 {
@@ -243,7 +248,25 @@ CodeGenerator::visitOutOfLineICFallback(OutOfLineICFallback* ool)
         masm.jump(ool->rejoin());
         return;
       }
-      case CacheKind::In:
+      case CacheKind::In: {
+        IonInIC* inIC = ic->asInIC();
+
+        saveLive(lir);
+
+        pushArg(inIC->object());
+        pushArg(inIC->key());
+        icInfo_[cacheInfoIndex].icOffsetForPush = pushArgWithPatch(ImmWord(-1));
+        pushArg(ImmGCPtr(gen->info().script()));
+
+        callVM(IonInICInfo, lir);
+
+        StoreRegisterTo(inIC->output()).generate(this);
+        restoreLiveIgnore(lir, StoreRegisterTo(inIC->output()).clobbered());
+
+        masm.jump(ool->rejoin());
+        return;
+      }
+      case CacheKind::TypeOf:
         MOZ_CRASH("Baseline-specific for now");
       case CacheKind::HasOwn: {
         IonHasOwnIC* hasOwnIC = ic->asHasOwnIC();
@@ -591,7 +614,7 @@ CodeGenerator::testObjectEmulatesUndefinedKernel(Register objreg,
     // Perform a fast-path check of the object's class flags if the object's
     // not a proxy.  Let out-of-line code handle the slow cases that require
     // saving registers, making a function call, and restoring registers.
-    masm.branchTestObjectTruthy(false, objreg, scratch, ool->entry(), ifEmulatesUndefined);
+    masm.branchIfObjectEmulatesUndefined(objreg, scratch, ool->entry(), ifEmulatesUndefined);
 }
 
 void
@@ -1331,9 +1354,9 @@ PrepareAndExecuteRegExp(JSContext* cx, MacroAssembler& masm, Register regexp, Re
     Address lazySourceAddress(temp1, RegExpStatics::offsetOfLazySource());
     Address lazyIndexAddress(temp1, RegExpStatics::offsetOfLazyIndex());
 
-    masm.patchableCallPreBarrier(pendingInputAddress, MIRType::String);
-    masm.patchableCallPreBarrier(matchesInputAddress, MIRType::String);
-    masm.patchableCallPreBarrier(lazySourceAddress, MIRType::String);
+    masm.guardedCallPreBarrier(pendingInputAddress, MIRType::String);
+    masm.guardedCallPreBarrier(matchesInputAddress, MIRType::String);
+    masm.guardedCallPreBarrier(lazySourceAddress, MIRType::String);
 
     masm.storePtr(input, pendingInputAddress);
     masm.storePtr(input, matchesInputAddress);
@@ -1817,9 +1840,6 @@ JitCompartment::generateRegExpMatcherStub(JSContext* cx)
     vtune::MarkStub(code, "RegExpMatcherStub");
 #endif
 
-    if (cx->zone()->needsIncrementalBarrier())
-        code->togglePreBarriers(true, DontReprotect);
-
     return code;
 }
 
@@ -1977,9 +1997,6 @@ JitCompartment::generateRegExpSearcherStub(JSContext* cx)
     vtune::MarkStub(code, "RegExpSearcherStub");
 #endif
 
-    if (cx->zone()->needsIncrementalBarrier())
-        code->togglePreBarriers(true, DontReprotect);
-
     return code;
 }
 
@@ -2127,9 +2144,6 @@ JitCompartment::generateRegExpTesterStub(JSContext* cx)
 #ifdef MOZ_VTUNE
     vtune::MarkStub(code, "RegExpTesterStub");
 #endif
-
-    if (cx->zone()->needsIncrementalBarrier())
-        code->togglePreBarriers(true, DontReprotect);
 
     return code;
 }
@@ -3260,9 +3274,9 @@ static void
 EmitUnboxedPreBarrier(MacroAssembler &masm, T address, JSValueType type)
 {
     if (type == JSVAL_TYPE_OBJECT)
-        masm.patchableCallPreBarrier(address, MIRType::Object);
+        masm.guardedCallPreBarrier(address, MIRType::Object);
     else if (type == JSVAL_TYPE_STRING)
-        masm.patchableCallPreBarrier(address, MIRType::String);
+        masm.guardedCallPreBarrier(address, MIRType::String);
     else
         MOZ_ASSERT(!UnboxedTypeNeedsPreBarrier(type));
 }
@@ -6561,8 +6575,8 @@ CodeGenerator::emitLoadIteratorValues<ValueMap>(Register result, Register temp, 
     Address valueAddress(front, ValueMap::Entry::offsetOfValue());
     Address keyElemAddress(result, elementsOffset);
     Address valueElemAddress(result, elementsOffset + sizeof(Value));
-    masm.patchableCallPreBarrier(keyElemAddress, MIRType::Value);
-    masm.patchableCallPreBarrier(valueElemAddress, MIRType::Value);
+    masm.guardedCallPreBarrier(keyElemAddress, MIRType::Value);
+    masm.guardedCallPreBarrier(valueElemAddress, MIRType::Value);
     masm.storeValue(keyAddress, keyElemAddress, temp);
     masm.storeValue(valueAddress, valueElemAddress, temp);
 
@@ -6590,7 +6604,7 @@ CodeGenerator::emitLoadIteratorValues<ValueSet>(Register result, Register temp, 
 
     Address keyAddress(front, ValueSet::offsetOfEntryKey());
     Address keyElemAddress(result, elementsOffset);
-    masm.patchableCallPreBarrier(keyElemAddress, MIRType::Value);
+    masm.guardedCallPreBarrier(keyElemAddress, MIRType::Value);
     masm.storeValue(keyAddress, keyElemAddress, temp);
 
     Label keyIsNotObject;
@@ -8780,7 +8794,7 @@ StoreUnboxedPointer(MacroAssembler& masm, T address, MIRType type, const LAlloca
                     bool preBarrier)
 {
     if (preBarrier)
-        masm.patchableCallPreBarrier(address, type);
+        masm.guardedCallPreBarrier(address, type);
     if (value->isConstant()) {
         Value v = value->toConstant()->toJSValue();
         if (v.isGCThing()) {
@@ -9237,7 +9251,7 @@ CodeGenerator::visitIteratorStartO(LIteratorStartO* lir)
     masm.branchTestPtr(Assembler::NonZero, temp1, temp1, ool->entry());
 
     // Pre-write barrier for store to 'obj'.
-    masm.patchableCallPreBarrier(Address(niTemp, offsetof(NativeIterator, obj)), MIRType::Object);
+    masm.guardedCallPreBarrier(Address(niTemp, offsetof(NativeIterator, obj)), MIRType::Object);
 
     // Mark iterator as active.
     masm.storePtr(obj, Address(niTemp, offsetof(NativeIterator, obj)));
@@ -10037,12 +10051,6 @@ CodeGenerator::link(JSContext* cx, CompilerConstraintList* constraints)
     if (patchableBackedges_.length() > 0)
         ionScript->copyPatchableBackedges(cx, code, patchableBackedges_.begin(), masm);
 
-    // The correct state for prebarriers is unknown until the end of compilation,
-    // since a GC can occur during code generation. All barriers are emitted
-    // off-by-default, and are toggled on here if necessary.
-    if (cx->zone()->needsIncrementalBarrier())
-        ionScript->toggleBarriers(true, DontReprotect);
-
     // Attach any generated script counts to the script.
     if (IonScriptCounts* counts = extractScriptCounts())
         script->addIonCounts(counts);
@@ -10671,6 +10679,7 @@ void
 CodeGenerator::visitOutOfLineTypeOfV(OutOfLineTypeOfV* ool)
 {
     LTypeOfV* ins = ool->ins();
+    const JSAtomState& names = GetJitContext()->runtime->names();
 
     ValueOperand input = ToValue(ins, LTypeOfV::Input);
     Register temp = ToTempUnboxRegister(ins->tempToUnbox());
@@ -10678,12 +10687,29 @@ CodeGenerator::visitOutOfLineTypeOfV(OutOfLineTypeOfV* ool)
 
     Register obj = masm.extractObject(input, temp);
 
+    Label slowCheck, isObject, isCallable, isUndefined, done;
+    masm.typeOfObject(obj, output, &slowCheck, &isObject, &isCallable, &isUndefined);
+
+    masm.bind(&isCallable);
+    masm.movePtr(ImmGCPtr(names.function), output);
+    masm.jump(ool->rejoin());
+
+    masm.bind(&isUndefined);
+    masm.movePtr(ImmGCPtr(names.undefined), output);
+    masm.jump(ool->rejoin());
+
+    masm.bind(&isObject);
+    masm.movePtr(ImmGCPtr(names.object), output);
+    masm.jump(ool->rejoin());
+
+    masm.bind(&slowCheck);
+
     saveVolatile(output);
     masm.setupUnalignedABICall(output);
     masm.passABIArg(obj);
     masm.movePtr(ImmPtr(GetJitContext()->runtime), output);
     masm.passABIArg(output);
-    masm.callWithABI(JS_FUNC_TO_DATA_PTR(void*, js::TypeOfObjectOperation));
+    masm.callWithABI(JS_FUNC_TO_DATA_PTR(void*, TypeOfObject));
     masm.storeCallWordResult(output);
     restoreVolatile(output);
 
@@ -11181,16 +11207,18 @@ CodeGenerator::visitClampVToUint8(LClampVToUint8* lir)
     bailoutFrom(&fails, lir->snapshot());
 }
 
-typedef bool (*OperatorInFn)(JSContext*, HandleValue, HandleObject, bool*);
-static const VMFunction OperatorInInfo = FunctionInfo<OperatorInFn>(OperatorIn, "OperatorIn");
-
 void
-CodeGenerator::visitIn(LIn* ins)
+CodeGenerator::visitInCache(LInCache* ins)
 {
-    pushArg(ToRegister(ins->rhs()));
-    pushArg(ToValue(ins, LIn::LHS));
+    LiveRegisterSet liveRegs = ins->safepoint()->liveRegs();
 
-    callVM(OperatorInInfo, ins);
+    ConstantOrRegister key = toConstantOrRegister(ins, LInCache::LHS, ins->mir()->key()->type());
+    Register object = ToRegister(ins->rhs());
+    Register output = ToRegister(ins->output());
+    Register temp = ToRegister(ins->temp());
+
+    IonInIC cache(liveRegs, key, object, output, temp);
+    addIC(ins, allocateIC(cache));
 }
 
 typedef bool (*OperatorInIFn)(JSContext*, uint32_t, HandleObject, bool*);

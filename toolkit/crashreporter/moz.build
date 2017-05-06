@@ -83,6 +83,8 @@ include('/ipc/chromium/chromium-config.mozbuild')
 FINAL_LIBRARY = 'xul'
 
 if CONFIG['OS_TARGET'] == 'Android':
+    DEFINES['ANDROID_NDK_MAJOR_VERSION'] = CONFIG['ANDROID_NDK_MAJOR_VERSION']
+    DEFINES['ANDROID_NDK_MINOR_VERSION'] = CONFIG['ANDROID_NDK_MINOR_VERSION']
     DEFINES['ANDROID_PACKAGE_NAME'] = '"%s"' % CONFIG['ANDROID_PACKAGE_NAME']
     # NDK5 workarounds
     DEFINES['_STLP_CONST_CONSTRUCTOR_BUG'] = True
@@ -107,7 +109,7 @@ PYTHON_UNITTEST_MANIFESTS += [
 include('/toolkit/crashreporter/crashreporter.mozbuild')
 
 with Files('**'):
-    BUG_COMPONENT = ('Toolkit', 'Breakpad Integration')
+    BUG_COMPONENT = ('Toolkit', 'Crash Reporting')
 
 if CONFIG['GNU_CXX']:
     CXXFLAGS += ['-Wno-shadow']

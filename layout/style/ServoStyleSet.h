@@ -9,8 +9,10 @@
 
 #include "mozilla/EnumeratedArray.h"
 #include "mozilla/EventStates.h"
+#include "mozilla/PostTraversalTask.h"
 #include "mozilla/ServoBindingTypes.h"
 #include "mozilla/ServoElementSnapshot.h"
+#include "mozilla/ServoUtils.h"
 #include "mozilla/StyleSheetInlines.h"
 #include "mozilla/SheetType.h"
 #include "mozilla/UniquePtr.h"
@@ -82,6 +84,11 @@ public:
     // callers, and are likely to take the main-thread codepath if this function
     // returns false. So we assert against other non-main-thread callers here.
     MOZ_ASSERT(sInServoTraversal || NS_IsMainThread());
+    return sInServoTraversal;
+  }
+
+  static ServoStyleSet* Current()
+  {
     return sInServoTraversal;
   }
 
@@ -304,7 +311,48 @@ public:
   ResolveForDeclarations(ServoComputedValuesBorrowedOrNull aParentOrNull,
                          RawServoDeclarationBlockBorrowed aDeclarations);
 
+  already_AddRefed<RawServoAnimationValue>
+  ComputeAnimationValue(RawServoDeclarationBlock* aDeclaration,
+                        const ServoComputedValuesWithParent& aComputedValues);
+
+  void AppendTask(PostTraversalTask aTask)
+  {
+    MOZ_ASSERT(IsInServoTraversal());
+
+    // We currently only use PostTraversalTasks while the Servo font metrics
+    // mutex is locked.  If we need to use them in other situations during
+    // a traversal, we should assert that we've taken appropriate
+    // synchronization measures.
+    AssertIsMainThreadOrServoFontMetricsLocked();
+
+    mPostTraversalTasks.AppendElement(aTask);
+  }
+
 private:
+  // On construction, sets sInServoTraversal to the given ServoStyleSet.
+  // On destruction, clears sInServoTraversal and calls RunPostTraversalTasks.
+  class MOZ_STACK_CLASS AutoSetInServoTraversal
+  {
+  public:
+    explicit AutoSetInServoTraversal(ServoStyleSet* aSet)
+      : mSet(aSet)
+    {
+      MOZ_ASSERT(!sInServoTraversal);
+      MOZ_ASSERT(aSet);
+      sInServoTraversal = aSet;
+    }
+
+    ~AutoSetInServoTraversal()
+    {
+      MOZ_ASSERT(sInServoTraversal);
+      sInServoTraversal = nullptr;
+      mSet->RunPostTraversalTasks();
+    }
+
+  private:
+    ServoStyleSet* mSet;
+  };
+
   already_AddRefed<nsStyleContext> GetContext(already_AddRefed<ServoComputedValues>,
                                               nsStyleContext* aParentContext,
                                               nsIAtom* aPseudoTag,
@@ -352,11 +400,42 @@ private:
   already_AddRefed<ServoComputedValues> ResolveStyleLazily(dom::Element* aElement,
                                                            nsIAtom* aPseudoTag);
 
+  void RunPostTraversalTasks();
+
+  uint32_t FindSheetOfType(SheetType aType,
+                           ServoStyleSheet* aSheet);
+
+  uint32_t PrependSheetOfType(SheetType aType,
+                              ServoStyleSheet* aSheet,
+                              uint32_t aReuseUniqueID = 0);
+
+  uint32_t AppendSheetOfType(SheetType aType,
+                             ServoStyleSheet* aSheet,
+                             uint32_t aReuseUniqueID = 0);
+
+  uint32_t InsertSheetOfType(SheetType aType,
+                             ServoStyleSheet* aSheet,
+                             uint32_t aBeforeUniqueID,
+                             uint32_t aReuseUniqueID = 0);
+
+  uint32_t RemoveSheetOfType(SheetType aType,
+                             ServoStyleSheet* aSheet);
+
+  struct Entry {
+    uint32_t uniqueID;
+    RefPtr<ServoStyleSheet> sheet;
+
+    // Provide a cast operator to simplify calling
+    // nsIDocument::FindDocStyleSheetInsertionPoint.
+    operator ServoStyleSheet*() const { return sheet; }
+  };
+
   nsPresContext* mPresContext;
   UniquePtr<RawServoStyleSet> mRawSet;
   EnumeratedArray<SheetType, SheetType::Count,
-                  nsTArray<RefPtr<ServoStyleSheet>>> mSheets;
+                  nsTArray<Entry>> mEntries;
   int32_t mBatching;
+  uint32_t mUniqueIDCounter;
   bool mAllowResolveStaleStyles;
   bool mAuthorStyleDisabled;
 
@@ -366,7 +445,13 @@ private:
                   nsCSSAnonBoxes::NonInheriting::_Count,
                   RefPtr<nsStyleContext>> mNonInheritingStyleContexts;
 
-  static bool sInServoTraversal;
+  // Tasks to perform after a traversal, back on the main thread.
+  //
+  // These are similar to Servo's SequentialTasks, except that they are
+  // posted by C++ code running on style worker threads.
+  nsTArray<PostTraversalTask> mPostTraversalTasks;
+
+  static ServoStyleSet* sInServoTraversal;
 };
 
 } // namespace mozilla

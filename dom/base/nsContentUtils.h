@@ -366,11 +366,18 @@ public:
                                     nsIDOMNode** aCommonAncestor);
 
   /**
-   * Returns the common ancestor, if any, for two nodes. Returns null if the
-   * nodes are disconnected.
+   * Returns the common ancestor, if any, for two nodes.
+   *
+   * Returns null if the nodes are disconnected.
    */
-  static nsINode* GetCommonAncestor(nsINode* aNode1,
-                                    nsINode* aNode2);
+  static nsINode* GetCommonAncestor(nsINode* aNode1, nsINode* aNode2);
+
+  /**
+   * Returns the common flattened tree ancestor, if any, for two given content
+   * nodes.
+   */
+  static nsIContent* GetCommonFlattenedTreeAncestor(nsIContent* aContent1,
+                                                    nsIContent* aContent2);
 
   /**
    * Returns true if aNode1 is before aNode2 in the same connected
@@ -2026,8 +2033,19 @@ public:
    * Returns the widget for this document if there is one. Looks at all ancestor
    * documents to try to find a widget, so for example this can still find a
    * widget for documents in display:none frames that have no presentation.
+   *
+   * You should probably use WidgetForContent() instead of this, unless you have
+   * a good reason to do otherwise.
    */
   static nsIWidget* WidgetForDocument(const nsIDocument* aDoc);
+
+  /**
+   * Returns the appropriate widget for this element, if there is one. Unlike
+   * WidgetForDocument(), this returns the correct widget for content in popups.
+   *
+   * You should probably use this instead of WidgetForDocument().
+   */
+  static nsIWidget* WidgetForContent(const nsIContent* aContent);
 
   /**
    * Returns a layer manager to use for the given document. Basically we
@@ -2035,12 +2053,25 @@ public:
    * a presentation with an associated widget, and use that widget's
    * layer manager.
    *
+   * You should probably use LayerManagerForContent() instead of this, unless
+   * you have a good reason to do otherwise.
+   *
    * @param aDoc the document for which to return a layer manager.
    * @param aAllowRetaining an outparam that states whether the returned
    * layer manager should be used for retained layers
    */
   static already_AddRefed<mozilla::layers::LayerManager>
   LayerManagerForDocument(const nsIDocument *aDoc);
+
+  /**
+   * Returns a layer manager to use for the given content. Unlike
+   * LayerManagerForDocument(), this returns the correct layer manager for
+   * content in popups.
+   *
+   * You should probably use this instead of LayerManagerForDocument().
+   */
+  static already_AddRefed<mozilla::layers::LayerManager>
+  LayerManagerForContent(const nsIContent *aContent);
 
   /**
    * Returns a layer manager to use for the given document. Basically we
@@ -2180,6 +2211,14 @@ public:
   static bool GetBoxQuadsEnabled()
   {
     return sGetBoxQuadsEnabled;
+  }
+
+  /**
+   * Returns true if the requestIdleCallback API should be enabled.
+   */
+  static bool RequestIdleCallbackEnabled()
+  {
+    return sRequestIdleCallbackEnabled;
   }
 
   /**
@@ -2888,6 +2927,13 @@ public:
    */
   static uint64_t GenerateTabId();
 
+  /**
+   * Check whether we should skip moving the cursor for a same-value .value set
+   * on a text input or textarea.
+   */
+  static bool
+  SkipCursorMoveForSameValueSet() { return sSkipCursorMoveForSameValueSet; }
+
 private:
   static bool InitializeEventTable();
 
@@ -3012,6 +3058,8 @@ private:
   static bool sAnimationsAPICoreEnabled;
   static bool sAnimationsAPIElementAnimateEnabled;
   static bool sGetBoxQuadsEnabled;
+  static bool sSkipCursorMoveForSameValueSet;
+  static bool sRequestIdleCallbackEnabled;
   static uint32_t sCookiesLifetimePolicy;
   static uint32_t sCookiesBehavior;
 

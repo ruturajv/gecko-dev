@@ -1937,9 +1937,9 @@ WebConsoleFrame.prototype = {
       return;
     }
     return toolbox.selectTool("netmonitor").then(panel => {
-      let { NetMonitorController } = panel.panelWin
-        .windowRequire("devtools/client/netmonitor/src/netmonitor-controller");
-      return NetMonitorController.inspectRequest(requestId);
+      let { inspectRequest } = panel.panelWin.windowRequire(
+        "devtools/client/netmonitor/src/connector/index");
+      return inspectRequest(requestId);
     });
   },
 
@@ -2626,7 +2626,7 @@ WebConsoleFrame.prototype = {
       frame: { source, line, column },
       showEmptyPathAsHost: true,
       onClick,
-      sourceMapService: toolbox ? toolbox._deprecatedServerSourceMapService : null,
+      sourceMapService: toolbox ? toolbox.sourceMapURLService : null,
     }), locationNode);
 
     return locationNode;

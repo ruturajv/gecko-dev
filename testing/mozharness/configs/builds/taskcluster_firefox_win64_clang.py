@@ -23,12 +23,6 @@ config = {
     ],
     'exes': {
         'python2.7': sys.executable,
-        'make': [
-            sys.executable,
-            os.path.join(
-                os.getcwd(), 'build', 'src', 'build', 'pymake', 'make.py'
-            )
-        ],
         'virtualenv': [
             sys.executable,
             os.path.join(
@@ -65,7 +59,6 @@ config = {
     'publish_nightly_en_US_routes': True,
     'env': {
         'HG_SHARE_BASE_DIR': os.path.join('y:', os.sep, 'hg-shared'),
-        'MOZ_AUTOMATION': '1',
         'MOZ_CRASHREPORTER_NO_REPORT': '1',
         'MOZ_OBJDIR': 'obj-firefox',
         'PDBSTR_PATH': 'C:/Program Files (x86)/Windows Kits/10/Debuggers/x64/srcsrv/pdbstr.exe',
@@ -82,7 +75,6 @@ config = {
         'MINIDUMP_STACKWALK': '%(abs_tools_dir)s\\breakpad\\win64\\minidump_stackwalk.exe',
         'MINIDUMP_SAVE_PATH': '%(base_work_dir)s\\minidumps',
     },
-    'enable_pymake': True,
     'src_mozconfig': 'browser\\config\\mozconfigs\\win64\\clang',
     'tooltool_manifest_src': 'browser\\config\\tooltool-manifests\\win64\\clang.manifest',
     'artifact_flag_build_variant_in_try': None,

@@ -440,7 +440,22 @@ IonCacheIRCompiler::init()
         allocator.initInputLocation(0, ic->environment(), JSVAL_TYPE_OBJECT);
         break;
       }
-      case CacheKind::In:
+      case CacheKind::In: {
+        IonInIC* ic = ic_->asInIC();
+        Register output = ic->output();
+
+        available.add(output);
+
+        liveRegs_.emplace(ic->liveRegs());
+        outputUnchecked_.emplace(TypedOrValueRegister(MIRType::Boolean, AnyRegister(output)));
+
+        MOZ_ASSERT(numInputs == 2);
+        allocator.initInputLocation(0, ic->key());
+        allocator.initInputLocation(1, TypedOrValueRegister(MIRType::Object,
+                                                            AnyRegister(ic->object())));
+        break;
+      }
+      case CacheKind::TypeOf:
         MOZ_CRASH("Invalid cache");
       case CacheKind::HasOwn: {
         IonHasOwnIC* ic = ic_->asHasOwnIC();
@@ -529,10 +544,6 @@ IonCacheIRCompiler::compile()
                                            ImmPtr(newStubCode.get()),
                                            ImmPtr((void*)-1));
     }
-
-    // All barriers are emitted off-by-default, enable them if needed.
-    if (cx_->zone()->needsIncrementalBarrier())
-        newStubCode->togglePreBarriers(true, DontReprotect);
 
     return newStubCode;
 }
@@ -1144,6 +1155,13 @@ IonCacheIRCompiler::emitLoadEnvironmentDynamicSlotResult()
     // Load the value.
     masm.loadTypedOrValue(slot, output);
     return true;
+}
+
+
+bool
+IonCacheIRCompiler::emitLoadStringResult()
+{
+    MOZ_CRASH("not used in ion");
 }
 
 static bool

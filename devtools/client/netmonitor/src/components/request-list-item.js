@@ -22,6 +22,7 @@ const RequestListColumnFile = createFactory(require("./request-list-column-file"
 const RequestListColumnMethod = createFactory(require("./request-list-column-method"));
 const RequestListColumnProtocol = createFactory(require("./request-list-column-protocol"));
 const RequestListColumnRemoteIP = createFactory(require("./request-list-column-remote-ip"));
+const RequestListColumnScheme = createFactory(require("./request-list-column-scheme"));
 const RequestListColumnSetCookies = createFactory(require("./request-list-column-set-cookies"));
 const RequestListColumnStatus = createFactory(require("./request-list-column-status"));
 const RequestListColumnTransferredSize = createFactory(require("./request-list-column-transferred-size"));
@@ -75,11 +76,12 @@ const RequestListItem = createClass({
     isSelected: PropTypes.bool.isRequired,
     firstRequestStartedMillis: PropTypes.number.isRequired,
     fromCache: PropTypes.bool,
-    onCauseBadgeClick: PropTypes.func.isRequired,
+    onCauseBadgeMouseDown: PropTypes.func.isRequired,
     onContextMenu: PropTypes.func.isRequired,
     onFocusedNodeChange: PropTypes.func,
     onMouseDown: PropTypes.func.isRequired,
-    onSecurityIconClick: PropTypes.func.isRequired,
+    onSecurityIconMouseDown: PropTypes.func.isRequired,
+    onThumbnailMouseDown: PropTypes.func.isRequired,
     waterfallWidth: PropTypes.number,
   },
 
@@ -114,8 +116,9 @@ const RequestListItem = createClass({
       fromCache,
       onContextMenu,
       onMouseDown,
-      onCauseBadgeClick,
-      onSecurityIconClick,
+      onCauseBadgeMouseDown,
+      onSecurityIconMouseDown,
+      onThumbnailMouseDown,
     } = this.props;
 
     let classList = ["request-list-item", index % 2 ? "odd" : "even"];
@@ -133,11 +136,13 @@ const RequestListItem = createClass({
       },
         columns.get("status") && RequestListColumnStatus({ item }),
         columns.get("method") && RequestListColumnMethod({ item }),
-        columns.get("file") && RequestListColumnFile({ item }),
+        columns.get("file") && RequestListColumnFile({ item, onThumbnailMouseDown }),
         columns.get("protocol") && RequestListColumnProtocol({ item }),
-        columns.get("domain") && RequestListColumnDomain({ item, onSecurityIconClick }),
+        columns.get("scheme") && RequestListColumnScheme({ item }),
+        columns.get("domain") && RequestListColumnDomain({ item,
+                                                           onSecurityIconMouseDown }),
         columns.get("remoteip") && RequestListColumnRemoteIP({ item }),
-        columns.get("cause") && RequestListColumnCause({ item, onCauseBadgeClick }),
+        columns.get("cause") && RequestListColumnCause({ item, onCauseBadgeMouseDown }),
         columns.get("type") && RequestListColumnType({ item }),
         columns.get("cookies") && RequestListColumnCookies({ item }),
         columns.get("setCookies") && RequestListColumnSetCookies({ item }),

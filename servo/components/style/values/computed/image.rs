@@ -14,10 +14,11 @@ use std::fmt;
 use style_traits::ToCss;
 use values::computed::{Angle, Context, Length, LengthOrPercentage, NumberOrPercentage, ToComputedValue};
 use values::computed::position::Position;
-use values::specified::{self, HorizontalDirection, SizeKeyword, VerticalDirection};
+use values::specified::{self, HorizontalDirection, VerticalDirection};
 use values::specified::image::CompatMode;
 use values::specified::url::SpecifiedUrl;
 
+pub use values::specified::SizeKeyword;
 
 impl ToComputedValue for specified::Image {
     type ComputedValue = Image;
@@ -673,6 +674,20 @@ impl AngleOrCorner {
                 try!(vertical.to_css(dest));
                 Ok(())
             }
+        }
+    }
+}
+
+/// Computed values for none | <image> | <mask-source>.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "servo", derive(HeapSizeOf))]
+pub struct LayerImage(pub Option<Image>);
+
+impl ToCss for LayerImage {
+    fn to_css<W>(&self, dest: &mut W) -> fmt::Result where W: fmt::Write {
+        match self.0 {
+            None => dest.write_str("none"),
+            Some(ref image) => image.to_css(dest),
         }
     }
 }

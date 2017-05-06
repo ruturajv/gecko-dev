@@ -98,7 +98,6 @@ public:
   nscoord GetMinISize(nsRenderingContext* aRenderingContext) override;
   nscoord GetPrefISize(nsRenderingContext* aRenderingContext) override;
   void MarkIntrinsicISizesDirty() override;
-  nsIAtom* GetType() const override;
   bool IsFrameOfType(uint32_t aFlags) const override
   {
     return nsContainerFrame::IsFrameOfType(aFlags &
@@ -259,7 +258,7 @@ protected:
   friend nsContainerFrame* NS_NewGridContainerFrame(nsIPresShell* aPresShell,
                                                     nsStyleContext* aContext);
   explicit nsGridContainerFrame(nsStyleContext* aContext)
-    : nsContainerFrame(aContext)
+    : nsContainerFrame(aContext, mozilla::LayoutFrameType::GridContainer)
     , mCachedMinISize(NS_INTRINSIC_WIDTH_UNKNOWN)
     , mCachedPrefISize(NS_INTRINSIC_WIDTH_UNKNOWN)
   {
@@ -457,7 +456,7 @@ private:
   // If true, NS_STATE_GRID_DID_PUSH_ITEMS may be set even though all pushed
   // frames may have been removed.  This is used to suppress an assertion
   // in case RemoveFrame removed all associated child frames.
-  bool mDidPushItemsBitMayLie;
+  bool mDidPushItemsBitMayLie { false };
 #endif
 };
 

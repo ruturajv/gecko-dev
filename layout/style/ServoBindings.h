@@ -193,7 +193,7 @@ Gecko_GetExtraContentStyleDeclarations(RawGeckoElementBorrowed element);
 bool
 Gecko_GetAnimationRule(RawGeckoElementBorrowed aElementOrPseudo,
                        mozilla::EffectCompositor::CascadeLevel aCascadeLevel,
-                       RawServoAnimationValueMapBorrowed aAnimationValues);
+                       RawServoAnimationValueMapBorrowedMut aAnimationValues);
 RawServoDeclarationBlockStrongBorrowedOrNull
 Gecko_GetSMILOverrideDeclarationBlock(RawGeckoElementBorrowed element);
 bool Gecko_StyleAnimationsEquals(RawGeckoStyleAnimationListBorrowed,
@@ -334,6 +334,11 @@ void Gecko_ClearPODTArray(void* array, size_t elem_size, size_t elem_align);
 void Gecko_CopyStyleGridTemplateValues(nsStyleGridTemplate* grid_template,
                                        const nsStyleGridTemplate* other);
 
+mozilla::css::GridTemplateAreasValue* Gecko_NewGridTemplateAreasValue(uint32_t areas,
+                                                                      uint32_t templates,
+                                                                      uint32_t columns);
+NS_DECL_THREADSAFE_FFI_REFCOUNTING(mozilla::css::GridTemplateAreasValue, GridTemplateAreasValue);
+
 // Clear the mContents, mCounterIncrements, or mCounterResets field in nsStyleContent. This is
 // needed to run the destructors, otherwise we'd leak the images, strings, and whatnot.
 void Gecko_ClearAndResizeStyleContents(nsStyleContent* content,
@@ -404,7 +409,6 @@ nsCSSValueBorrowedMut Gecko_CSSValue_GetArrayItem(nsCSSValueBorrowedMut css_valu
 // const version of the above function.
 nsCSSValueBorrowed Gecko_CSSValue_GetArrayItemConst(nsCSSValueBorrowed css_value, int32_t index);
 nscoord Gecko_CSSValue_GetAbsoluteLength(nsCSSValueBorrowed css_value);
-float Gecko_CSSValue_GetAngle(nsCSSValueBorrowed css_value);
 nsCSSKeyword Gecko_CSSValue_GetKeyword(nsCSSValueBorrowed aCSSValue);
 float Gecko_CSSValue_GetNumber(nsCSSValueBorrowed css_value);
 float Gecko_CSSValue_GetPercentage(nsCSSValueBorrowed css_value);
@@ -415,7 +419,6 @@ void Gecko_CSSValue_SetNormal(nsCSSValueBorrowedMut css_value);
 void Gecko_CSSValue_SetNumber(nsCSSValueBorrowedMut css_value, float number);
 void Gecko_CSSValue_SetKeyword(nsCSSValueBorrowedMut css_value, nsCSSKeyword keyword);
 void Gecko_CSSValue_SetPercentage(nsCSSValueBorrowedMut css_value, float percent);
-void Gecko_CSSValue_SetAngle(nsCSSValueBorrowedMut css_value, float radians);
 void Gecko_CSSValue_SetCalc(nsCSSValueBorrowedMut css_value, nsStyleCoord::CalcValue calc);
 void Gecko_CSSValue_SetFunction(nsCSSValueBorrowedMut css_value, int32_t len);
 void Gecko_CSSValue_SetString(nsCSSValueBorrowedMut css_value,
@@ -444,6 +447,7 @@ GeckoFontMetrics Gecko_GetFontMetrics(RawGeckoPresContextBorrowed pres_context,
                                       const nsStyleFont* font,
                                       nscoord font_size,
                                       bool use_user_font_set);
+int32_t Gecko_GetAppUnitsPerPhysicalInch(RawGeckoPresContextBorrowed pres_context);
 void InitializeServo();
 void ShutdownServo();
 

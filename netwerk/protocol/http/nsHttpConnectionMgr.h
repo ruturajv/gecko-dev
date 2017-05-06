@@ -19,6 +19,7 @@
 #include "AlternateServices.h"
 #include "ARefBase.h"
 #include "nsWeakReference.h"
+#include "TCPFastOpen.h"
 
 #include "nsIObserver.h"
 #include "nsITimer.h"
@@ -233,6 +234,8 @@ private:
 
         // This table provides a mapping from top level outer content window id
         // to a queue of pending transaction information.
+        // The transaction's order in pending queue is decided by whether it's a
+        // blocking transaction and its priority.
         // Note that the window id could be 0 if the http request
         // is initialized without a window.
         nsClassHashtable<nsUint64HashKey,
@@ -273,6 +276,9 @@ private:
 
         // True if this connection entry has initiated a socket
         bool mUsedForConnection : 1;
+
+        // Try using TCP Fast Open.
+        bool mUseFastOpen : 1;
 
         // Set the IP family preference flags according the connected family
         void RecordIPFamilyPreference(uint16_t family);
@@ -320,7 +326,8 @@ private:
                                    public nsITransportEventSink,
                                    public nsIInterfaceRequestor,
                                    public nsITimerCallback,
-                                   public nsSupportsWeakReference
+                                   public nsSupportsWeakReference,
+                                   public TCPFastOpen
     {
         ~nsHalfOpenSocket();
 
@@ -366,7 +373,16 @@ private:
 
         bool Claim();
         void Unclaim();
+
+        bool FastOpenEnabled() override;
+        nsresult StartFastOpen() override;
+        void SetFastOpenConnected(nsresult) override;
+        void FastOpenNotSupported() override;
+        void SetFastOpenStatus(uint8_t tfoStatus) override;
     private:
+        nsresult SetupConn(nsIAsyncOutputStream *out,
+                           bool aFastOpen);
+
         // To find out whether |mTransaction| is still in the connection entry's
         // pending queue. If the transaction is found and |removeWhenFound| is
         // true, the transaction will be removed from the pending queue.
@@ -419,6 +435,9 @@ private:
         // transactions.
         bool                           mFreeToUse;
         nsresult                       mPrimaryStreamStatus;
+
+        bool                           mUsingFastOpen;
+        RefPtr<nsHttpConnection>       mConnectionNegotiatingFastOpen;
     };
     friend class nsHalfOpenSocket;
 

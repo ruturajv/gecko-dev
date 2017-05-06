@@ -44,6 +44,7 @@ let webpackConfig = {
       "devtools/client/locales": path.join(__dirname, "../../client/locales/en-US"),
       "devtools/client/shared/components/reps/reps": path.join(__dirname, "../../client/shared/components/reps/reps"),
       "devtools/client/shared/components/search-box": path.join(__dirname, "../../client/shared/components/search-box"),
+      "devtools/client/shared/components/autocomplete-popup": path.join(__dirname, "../../client/shared/components/autocomplete-popup"),
       "devtools/client/shared/components/splitter/draggable": path.join(__dirname, "../../client/shared/components/splitter/draggable"),
       "devtools/client/shared/components/splitter/split-box": path.join(__dirname, "../../client/shared/components/splitter/split-box"),
       "devtools/client/shared/components/stack-trace": path.join(__dirname, "../../client/shared/components/stack-trace"),

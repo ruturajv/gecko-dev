@@ -11,10 +11,10 @@ config = {
         'checkout-sources',
         'setup-mock',
         'build',
+        'generate-build-stats',
         'upload-files',
         'sendchange',
         'multi-l10n',
-        'generate-build-stats',
         'update',  # decided by query_is_nightly()
     ],
     "buildbot_json_path": "buildprops.json",
@@ -72,7 +72,6 @@ config = {
     'use_package_as_marfile': True,
     'env': {
         'MOZBUILD_STATE_PATH': os.path.join(os.getcwd(), '.mozbuild'),
-        'MOZ_AUTOMATION': '1',
         'DISPLAY': ':2',
         'HG_SHARE_BASE_DIR': '/builds/hg-shared',
         'MOZ_OBJDIR': 'obj-firefox',

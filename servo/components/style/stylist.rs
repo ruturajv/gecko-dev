@@ -27,7 +27,8 @@ use selectors::Element;
 use selectors::bloom::BloomFilter;
 use selectors::matching::{AFFECTED_BY_STYLE_ATTRIBUTE, AFFECTED_BY_PRESENTATIONAL_HINTS};
 use selectors::matching::{ElementSelectorFlags, StyleRelations, matches_selector};
-use selectors::parser::{Component, Selector, SelectorInner, SelectorMethods, LocalName as LocalNameSelector};
+use selectors::parser::{Combinator, Component, Selector, SelectorInner, SelectorIter};
+use selectors::parser::{SelectorMethods, LocalName as LocalNameSelector};
 use selectors::visitor::SelectorVisitor;
 use shared_lock::{Locked, SharedRwLockReadGuard, StylesheetGuards};
 use sink::Push;
@@ -38,8 +39,8 @@ use std::fmt;
 use std::hash::Hash;
 #[cfg(feature = "servo")]
 use std::marker::PhantomData;
-use std::sync::Arc;
 use style_traits::viewport::ViewportConstraints;
+use stylearc::Arc;
 use stylesheets::{CssRule, FontFaceRule, Origin, StyleRule, Stylesheet, UserAgentStylesheets};
 use thread_state;
 use viewport::{self, MaybeNew, ViewportRule};
@@ -313,38 +314,13 @@ impl Stylist {
                 CssRule::Style(ref locked) => {
                     let style_rule = locked.read_with(&guard);
                     self.num_declarations += style_rule.block.read_with(&guard).len();
-
                     for selector in &style_rule.selectors.0 {
                         self.num_selectors += 1;
-                        let map = if let Some(ref pseudo) = selector.pseudo_element {
-                            self.pseudos_map
-                                .entry(pseudo.clone())
-                                .or_insert_with(PerPseudoElementSelectorMap::new)
-                                .borrow_for_origin(&stylesheet.origin)
-                        } else {
-                            self.element_map.borrow_for_origin(&stylesheet.origin)
-                        };
-
-                        map.insert(Rule::new(guard,
-                                             selector.inner.clone(),
-                                             locked.clone(),
-                                             self.rules_source_order,
-                                             selector.specificity));
+                        self.add_rule_to_map(guard, selector, locked, stylesheet);
+                        self.dependencies.note_selector(selector);
+                        self.note_for_revalidation(selector);
                     }
                     self.rules_source_order += 1;
-
-                    for selector in &style_rule.selectors.0 {
-                        self.dependencies.note_selector(selector);
-
-                        if needs_revalidation(selector) {
-                            // For revalidation, we can skip everything left of
-                            // the first ancestor combinator.
-                            let revalidation_sel =
-                                selector.inner.slice_to_first_ancestor_combinator();
-
-                            self.selectors_for_cache_revalidation.push(revalidation_sel);
-                        }
-                    }
                 }
                 CssRule::Import(ref import) => {
                     let import = import.read_with(guard);
@@ -374,6 +350,35 @@ impl Stylist {
         });
     }
 
+    #[inline]
+    fn add_rule_to_map(&mut self,
+                       guard: &SharedRwLockReadGuard,
+                       selector: &Selector<SelectorImpl>,
+                       rule: &Arc<Locked<StyleRule>>,
+                       stylesheet: &Stylesheet)
+    {
+        let map = if let Some(ref pseudo) = selector.pseudo_element {
+            self.pseudos_map
+                .entry(pseudo.clone())
+                .or_insert_with(PerPseudoElementSelectorMap::new)
+                .borrow_for_origin(&stylesheet.origin)
+        } else {
+            self.element_map.borrow_for_origin(&stylesheet.origin)
+        };
+
+        map.insert(Rule::new(guard,
+                             selector.inner.clone(),
+                             rule.clone(),
+                             self.rules_source_order,
+                             selector.specificity));
+    }
+
+    #[inline]
+    fn note_for_revalidation(&mut self, selector: &Selector<SelectorImpl>) {
+        if needs_revalidation(selector) {
+            self.selectors_for_cache_revalidation.push(selector.inner.clone());
+        }
+    }
 
     /// Computes the style for a given "precomputed" pseudo-element, taking the
     /// universal rules and applying them.
@@ -745,7 +750,7 @@ impl Stylist {
             if let Some(anim) = animation_rules.0 {
                 Push::push(
                     applicable_declarations,
-                    ApplicableDeclarationBlock::from_declarations(anim.clone(),
+                    ApplicableDeclarationBlock::from_declarations(anim,
                                                                   CascadeLevel::Animations));
             }
             debug!("animation: {:?}", relations);
@@ -801,7 +806,7 @@ impl Stylist {
         if let Some(anim) = animation_rules.1 {
             Push::push(
                 applicable_declarations,
-                ApplicableDeclarationBlock::from_declarations(anim.clone(), CascadeLevel::Transitions));
+                ApplicableDeclarationBlock::from_declarations(anim, CascadeLevel::Transitions));
         }
         debug!("transition: {:?}", relations);
 
@@ -916,18 +921,47 @@ impl Drop for Stylist {
 /// Visitor determine whether a selector requires cache revalidation.
 ///
 /// Note that we just check simple selectors and eagerly return when the first
-/// need for revalidation is found, so we don't need to store state on the visitor.
+/// need for revalidation is found, so we don't need to store state on the
+/// visitor.
+///
+/// Also, note that it's important to check the whole selector, due to cousins
+/// sharing arbitrarily deep in the DOM, not just the rightmost part of it
+/// (unfortunately, though).
+///
+/// With cousin sharing, we not only need to care about selectors in stuff like
+/// foo:first-child, but also about selectors like p:first-child foo, since the
+/// two parents may have shared style, and in that case we can test cousins
+/// whose matching depends on the selector up in the chain.
+///
+/// TODO(emilio): We can optimize when matching only siblings to only match the
+/// rightmost selector until a descendant combinator is found, I guess, and in
+/// general when we're sharing at depth `n`, to the `n + 1` sequences of
+/// descendant combinators.
+///
+/// I don't think that in presence of the bloom filter it's worth it, though.
 struct RevalidationVisitor;
 
 impl SelectorVisitor for RevalidationVisitor {
     type Impl = SelectorImpl;
 
-    /// Check whether a rightmost sequence of simple selectors containing this
-    /// simple selector to be explicitly matched against both the style sharing
-    /// cache entry and the candidate.
+
+    fn visit_complex_selector(&mut self,
+                              _: SelectorIter<SelectorImpl>,
+                              combinator: Option<Combinator>) -> bool {
+        let is_sibling_combinator =
+            combinator.map_or(false, |c| c.is_sibling());
+
+        !is_sibling_combinator
+    }
+
+
+    /// Check whether sequence of simple selectors containing this simple
+    /// selector to be explicitly matched against both the style sharing cache
+    /// entry and the candidate.
     ///
-    /// We use this for selectors that can have different matching behavior between
-    /// siblings that are otherwise identical as far as the cache is concerned.
+    /// We use this for selectors that can have different matching behavior
+    /// between siblings that are otherwise identical as far as the cache is
+    /// concerned.
     fn visit_simple_selector(&mut self, s: &Component<SelectorImpl>) -> bool {
         match *s {
             Component::AttrExists(_) |
@@ -963,23 +997,7 @@ impl SelectorVisitor for RevalidationVisitor {
 /// Returns true if the given selector needs cache revalidation.
 pub fn needs_revalidation(selector: &Selector<SelectorImpl>) -> bool {
     let mut visitor = RevalidationVisitor;
-
-    // We only need to consider the rightmost sequence of simple selectors, so
-    // we can stop at the first combinator. This is because:
-    // * If it's an ancestor combinator, we can ignore everything to the left
-    //   because matching won't differ between siblings.
-    // * If it's a sibling combinator, then we know we need revalidation.
-    let mut iter = selector.inner.complex.iter();
-    for ss in &mut iter {
-        if !ss.visit(&mut visitor) {
-            return true;
-        }
-    }
-
-    // If none of the simple selectors in the rightmost sequence required
-    // revalidation, we need revalidation if and only if the combinator is a
-    // sibling combinator.
-    iter.next_sequence().map_or(false, |c| c.is_sibling())
+    !selector.visit(&mut visitor)
 }
 
 /// Map that contains the CSS rules for a specific PseudoElement
@@ -1043,9 +1061,6 @@ pub struct SelectorMap {
     pub class_hash: FnvHashMap<Atom, Vec<Rule>>,
     /// A hash from local name to rules which contain that local name selector.
     pub local_name_hash: FnvHashMap<LocalName, Vec<Rule>>,
-    /// Same as local_name_hash, but keys are lower-cased.
-    /// For HTML elements in HTML documents.
-    pub lower_local_name_hash: FnvHashMap<LocalName, Vec<Rule>>,
     /// Rules that don't have ID, class, or element selectors.
     pub other_rules: Vec<Rule>,
     /// Whether this hash is empty.
@@ -1064,7 +1079,6 @@ impl SelectorMap {
             id_hash: HashMap::default(),
             class_hash: HashMap::default(),
             local_name_hash: HashMap::default(),
-            lower_local_name_hash: HashMap::default(),
             other_rules: Vec::new(),
             empty: true,
         }
@@ -1113,14 +1127,9 @@ impl SelectorMap {
                                                       cascade_level);
         });
 
-        let local_name_hash = if element.is_html_element_in_html_document() {
-            &self.lower_local_name_hash
-        } else {
-            &self.local_name_hash
-        };
         SelectorMap::get_matching_rules_from_hash(element,
                                                   parent_bf,
-                                                  local_name_hash,
+                                                  &self.local_name_hash,
                                                   element.get_local_name(),
                                                   matching_rules_list,
                                                   relations,
@@ -1253,8 +1262,22 @@ impl SelectorMap {
         }
 
         if let Some(LocalNameSelector { name, lower_name }) = SelectorMap::get_local_name(&rule) {
-            find_push(&mut self.local_name_hash, name, rule.clone());
-            find_push(&mut self.lower_local_name_hash, lower_name, rule);
+            // If the local name in the selector isn't lowercase, insert it into
+            // the rule hash twice. This means that, during lookup, we can always
+            // find the rules based on the local name of the element, regardless
+            // of whether it's an html element in an html document (in which case
+            // we match against lower_name) or not (in which case we match against
+            // name).
+            //
+            // In the case of a non-html-element-in-html-document with a
+            // lowercase localname and a non-lowercase selector, the rulehash
+            // lookup may produce superfluous selectors, but the subsequent
+            // selector matching work will filter them out.
+            if name != lower_name {
+                find_push(&mut self.local_name_hash, lower_name, rule.clone());
+            }
+            find_push(&mut self.local_name_hash, name, rule);
+
             return;
         }
 

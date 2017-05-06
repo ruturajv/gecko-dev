@@ -33,9 +33,11 @@ struct TableReflowInput;
 
 struct BCPropertyData;
 
-static inline bool IS_TABLE_CELL(nsIAtom* frameType) {
-  return nsGkAtoms::tableCellFrame == frameType ||
-    nsGkAtoms::bcTableCellFrame == frameType;
+static inline bool
+IS_TABLE_CELL(mozilla::LayoutFrameType frameType)
+{
+  return frameType == mozilla::LayoutFrameType::TableCell ||
+         frameType == mozilla::LayoutFrameType::BCTableCell;
 }
 
 class nsDisplayTableItem : public nsDisplayItem
@@ -243,14 +245,13 @@ public:
                                       nsFrame* aFrame,
                                       const nsRect& aDirtyRect,
                                       const nsDisplayListSet& aLists,
-                                      nsDisplayTableItem* aDisplayItem,
                                       DisplayGenericTablePartTraversal aTraversal = GenericTraversal);
 
   // Return the closest sibling of aPriorChildFrame (including aPriroChildFrame)
   // of type aChildType.
-  static nsIFrame* GetFrameAtOrBefore(nsIFrame*       aParentFrame,
-                                      nsIFrame*       aPriorChildFrame,
-                                      nsIAtom*        aChildType);
+  static nsIFrame* GetFrameAtOrBefore(nsIFrame* aParentFrame,
+                                      nsIFrame* aPriorChildFrame,
+                                      mozilla::LayoutFrameType aChildType);
   bool IsAutoBSize(mozilla::WritingMode aWM);
 
   /** @return true if aDisplayType represents a rowgroup of any sort
@@ -264,16 +265,6 @@ public:
   virtual void BuildDisplayList(nsDisplayListBuilder*   aBuilder,
                                 const nsRect&           aDirtyRect,
                                 const nsDisplayListSet& aLists) override;
-
-  /**
-   * Paint the background of the table and its parts (column groups,
-   * columns, row groups, rows, and cells), and the table border, and all
-   * internal borders if border-collapse is on.
-   */
-  DrawResult PaintTableBorderBackground(nsDisplayListBuilder* aBuilder,
-                                        nsRenderingContext& aRenderingContext,
-                                        const nsRect& aDirtyRect,
-                                        nsPoint aPt);
 
   /** Get the outer half (i.e., the part outside the height and width of
    *  the table) of the largest segment (?) of border-collapsed border on
@@ -376,13 +367,6 @@ public:
 
   virtual nsStyleContext*
   GetParentStyleContext(nsIFrame** aProviderFrame) const override;
-
-  /**
-   * Get the "type" of the frame
-   *
-   * @see nsGkAtoms::tableFrame
-   */
-  virtual nsIAtom* GetType() const override;
 
   virtual bool IsFrameOfType(uint32_t aFlags) const override
   {

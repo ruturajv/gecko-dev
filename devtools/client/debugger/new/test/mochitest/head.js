@@ -175,7 +175,8 @@ function waitForSources(dbg, ...sources) {
     sources.map(url => {
       function sourceExists(state) {
         return getSources(state).some(s => {
-          return s.get("url").includes(url);
+          let u = s.get("url");
+          return u && u.includes(url);
         });
       }
 
@@ -212,8 +213,9 @@ function assertPausedLocation(dbg, source, line) {
   is(location.get("line"), line);
 
   // Check the debug line
+  let cm = dbg.win.document.querySelector(".CodeMirror").CodeMirror;
   ok(
-    dbg.win.cm.lineInfo(line - 1).wrapClass.includes("debug-line"),
+    cm.lineInfo(line - 1).wrapClass.includes("debug-line"),
     "Line is highlighted as paused"
   );
 }
@@ -356,7 +358,10 @@ function findSource(dbg, url) {
   }
 
   const sources = dbg.selectors.getSources(dbg.getState());
-  const source = sources.find(s => s.get("url").includes(url));
+  const source = sources.find(s => {
+    let u = s.get("url");
+    return u && u.includes(url);
+  });
 
   if (!source) {
     throw new Error("Unable to find source: " + url);
@@ -553,13 +558,27 @@ function invokeInTab(fnc) {
 }
 
 const isLinux = Services.appinfo.OS === "Linux";
+const isMac = Services.appinfo.OS === "Darwin";
 const cmdOrCtrl = isLinux ? { ctrlKey: true } : { metaKey: true };
+// On Mac, going to beginning/end only works with meta+left/right.  On
+// Windows, it only works with home/end.  On Linux, apparently, either
+// ctrl+left/right or home/end work.
+const endKey = isMac ?
+      { code: "VK_RIGHT", modifiers: cmdOrCtrl } :
+      { code: "VK_END" };
+const startKey = isMac ? 
+      { code: "VK_LEFT", modifiers: cmdOrCtrl } :
+      { code: "VK_HOME" };
 const keyMappings = {
   sourceSearch: { code: "p", modifiers: cmdOrCtrl },
   fileSearch: { code: "f", modifiers: cmdOrCtrl },
   Enter: { code: "VK_RETURN" },
   Up: { code: "VK_UP" },
   Down: { code: "VK_DOWN" },
+  Right: { code: "VK_RIGHT" },
+  Left: { code: "VK_LEFT" },
+  End: endKey,
+  Start: startKey,
   Tab: { code: "VK_TAB" },
   Escape: { code: "VK_ESCAPE" },
   pauseKey: { code: "VK_F8" },

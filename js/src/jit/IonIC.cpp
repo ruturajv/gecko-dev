@@ -49,6 +49,8 @@ IonIC::scratchRegisterForEntryJump()
       case CacheKind::BindName:
         return asBindNameIC()->temp();
       case CacheKind::In:
+        return asInIC()->temp();
+      case CacheKind::TypeOf:
         MOZ_CRASH("Baseline-specific for now");
       case CacheKind::HasOwn:
         return asHasOwnIC()->output();
@@ -100,19 +102,6 @@ IonIC::trace(JSTracer* trc)
 
         TraceCacheIRStub(trc, stub, stub->stubInfo());
 
-        nextCodeRaw = stub->nextCodeRaw();
-    }
-
-    MOZ_ASSERT(nextCodeRaw == fallbackLabel_.raw());
-}
-
-void
-IonIC::togglePreBarriers(bool enabled, ReprotectCode reprotect)
-{
-    uint8_t* nextCodeRaw = codeRaw_;
-    for (IonICStub* stub = firstStub_; stub; stub = stub->next()) {
-        JitCode* code = JitCode::FromExecutable(nextCodeRaw);
-        code->togglePreBarriers(enabled, reprotect);
         nextCodeRaw = stub->nextCodeRaw();
     }
 
@@ -367,7 +356,7 @@ IonHasOwnIC::update(JSContext* cx, HandleScript outerScript, IonHasOwnIC* ic,
     if (ic->state().canAttachStub()) {
         bool attached = false;
         RootedScript script(cx, ic->script());
-        HasOwnIRGenerator gen(cx, script, pc, ic->state().mode(), idVal, val);
+        HasPropIRGenerator gen(cx, script, pc, CacheKind::HasOwn, ic->state().mode(), idVal, val);
         if (gen.tryAttachStub())
             ic->attachCacheIRStub(cx, gen.writerRef(), gen.cacheKind(), ionScript, &attached);
 
@@ -381,6 +370,31 @@ IonHasOwnIC::update(JSContext* cx, HandleScript outerScript, IonHasOwnIC* ic,
 
     *res = found;
     return true;
+}
+
+/* static */ bool
+IonInIC::update(JSContext* cx, HandleScript outerScript, IonInIC* ic,
+                HandleValue key, HandleObject obj, bool* res)
+{
+    IonScript* ionScript = outerScript->ionScript();
+
+    if (ic->state().maybeTransition())
+        ic->discardStubs(cx->zone());
+
+    if (ic->state().canAttachStub()) {
+        bool attached = false;
+        RootedScript script(cx, ic->script());
+        RootedValue objV(cx, ObjectValue(*obj));
+        jsbytecode* pc = ic->pc();
+        HasPropIRGenerator gen(cx, script, pc, CacheKind::In, ic->state().mode(), key, objV);
+        if (gen.tryAttachStub())
+            ic->attachCacheIRStub(cx, gen.writerRef(), gen.cacheKind(), ionScript, &attached);
+
+        if (!attached)
+            ic->state().trackNotAttached();
+    }
+
+    return OperatorIn(cx, key, obj, res);
 }
 
 uint8_t*

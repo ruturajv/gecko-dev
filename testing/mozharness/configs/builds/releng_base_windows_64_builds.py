@@ -15,10 +15,10 @@ config = {
         'checkout-sources',
         # 'setup-mock', windows do not use mock
         'build',
+        'generate-build-stats',
         'upload-files',
         'sendchange',
         'check-test',
-        'generate-build-stats',
         'update',  # decided by query_is_nightly()
     ],
     "buildbot_json_path": "buildprops.json",
@@ -27,12 +27,6 @@ config = {
         "buildbot": [
             sys.executable,
             'c:\\mozilla-build\\buildbotve\\scripts\\buildbot'
-        ],
-        "make": [
-            sys.executable,
-            os.path.join(
-                os.getcwd(), 'build', 'src', 'build', 'pymake', 'make.py'
-            )
         ],
         'virtualenv': [
             sys.executable,
@@ -62,7 +56,6 @@ config = {
     'stage_platform': 'win64',
     'publish_nightly_en_US_routes': True,
     'env': {
-        'MOZ_AUTOMATION': '1',
         'HG_SHARE_BASE_DIR': 'C:/builds/hg-shared',
         'MOZ_CRASHREPORTER_NO_REPORT': '1',
         'MOZ_OBJDIR': 'obj-firefox',
@@ -86,7 +79,6 @@ config = {
         'MINIDUMP_STACKWALK': '%(abs_tools_dir)s/breakpad/win64/minidump_stackwalk.exe',
         'MINIDUMP_SAVE_PATH': '%(base_work_dir)s/minidumps',
     },
-    'enable_pymake': True,
     'src_mozconfig': 'browser/config/mozconfigs/win64/nightly',
     'tooltool_manifest_src': "browser/config/tooltool-manifests/win64/releng.manifest",
     #########################################################################

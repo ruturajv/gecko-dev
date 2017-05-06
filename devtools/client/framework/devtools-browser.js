@@ -24,7 +24,7 @@ loader.lazyRequireGetter(this, "Toolbox", "devtools/client/framework/toolbox", t
 loader.lazyRequireGetter(this, "DebuggerServer", "devtools/server/main", true);
 loader.lazyRequireGetter(this, "DebuggerClient", "devtools/shared/client/main", true);
 loader.lazyRequireGetter(this, "BrowserMenus", "devtools/client/framework/browser-menus");
-loader.lazyRequireGetter(this, "findCssSelector", "devtools/shared/inspector/css-logic", true);
+loader.lazyRequireGetter(this, "appendStyleSheet", "devtools/client/shared/stylesheet-utils", true);
 
 loader.lazyImporter(this, "CustomizableUI", "resource:///modules/CustomizableUI.jsm");
 loader.lazyImporter(this, "AppConstants", "resource://gre/modules/AppConstants.jsm");
@@ -41,6 +41,8 @@ const TABS_PINNED_AVG_HISTOGRAM = "DEVTOOLS_TABS_PINNED_AVERAGE_LINEAR";
 const COMPACT_LIGHT_ID = "firefox-compact-light@mozilla.org";
 const COMPACT_DARK_ID = "firefox-compact-dark@mozilla.org";
 
+const BROWSER_STYLESHEET_URL = "chrome://devtools/skin/devtools-browser.css";
+
 /**
  * gDevToolsBrowser exposes functions to connect the gDevTools instance with a
  * Firefox instance.
@@ -51,6 +53,12 @@ var gDevToolsBrowser = exports.gDevToolsBrowser = {
    * as the window is closed
    */
   _trackedBrowserWindows: new Set(),
+
+  /**
+   * WeakMap keeping track of the devtools-browser stylesheets loaded in the various
+   * tracked windows.
+   */
+  _browserStyleSheets: new WeakMap(),
 
   _telemetry: new Telemetry(),
 
@@ -114,8 +122,7 @@ var gDevToolsBrowser = exports.gDevToolsBrowser = {
     let webIDEEnabled = Services.prefs.getBoolPref("devtools.webide.enabled");
     toggleMenuItem("menu_webide", webIDEEnabled);
 
-    let showWebIDEWidget = Services.prefs.getBoolPref("devtools.webide.widget.enabled");
-    if (webIDEEnabled && showWebIDEWidget) {
+    if (webIDEEnabled) {
       gDevToolsBrowser.installWebIDEWidget();
     } else {
       gDevToolsBrowser.uninstallWebIDEWidget();
@@ -299,15 +306,8 @@ var gDevToolsBrowser = exports.gDevToolsBrowser = {
     }
   },
 
-  async inspectNode(tab, node) {
+  async inspectNode(tab, nodeSelectors) {
     let target = TargetFactory.forTab(tab);
-
-    // Generate a cross iframes query selector
-    let selectors = [];
-    while (node) {
-      selectors.push(findCssSelector(node));
-      node = node.ownerDocument.defaultView.frameElement;
-    }
 
     let toolbox = await gDevTools.showToolbox(target, "inspector");
     let inspector = toolbox.getCurrentPanel();
@@ -318,12 +318,12 @@ var gDevToolsBrowser = exports.gDevToolsBrowser = {
 
     // Evaluate the cross iframes query selectors
     async function querySelectors(nodeFront) {
-      let selector = selectors.pop();
+      let selector = nodeSelectors.pop();
       if (!selector) {
         return nodeFront;
       }
       nodeFront = await inspector.walker.querySelector(nodeFront, selector);
-      if (selectors.length > 0) {
+      if (nodeSelectors.length > 0) {
         let { nodes } = await inspector.walker.children(nodeFront);
         // This is the NodeFront for the document node inside the iframe
         nodeFront = nodes[0];
@@ -466,19 +466,11 @@ var gDevToolsBrowser = exports.gDevToolsBrowser = {
       return;
     }
 
-    let defaultArea;
-    if (Services.prefs.getBoolPref("devtools.webide.widget.inNavbarByDefault")) {
-      defaultArea = CustomizableUI.AREA_NAVBAR;
-    } else {
-      defaultArea = CustomizableUI.AREA_PANEL;
-    }
-
     CustomizableUI.createWidget({
       id: "webide-button",
       shortcutId: "key_webide",
       label: "devtools-webide-button2.label",
       tooltiptext: "devtools-webide-button2.tooltiptext",
-      defaultArea: defaultArea,
       onCommand(event) {
         gDevToolsBrowser.openWebIDE();
       }
@@ -488,6 +480,25 @@ var gDevToolsBrowser = exports.gDevToolsBrowser = {
   isWebIDEWidgetInstalled() {
     let widgetWrapper = CustomizableUI.getWidget("webide-button");
     return !!(widgetWrapper && widgetWrapper.provider == CustomizableUI.PROVIDER_API);
+  },
+
+  /**
+   * Add the devtools-browser stylesheet to browser window's document. Returns a promise.
+   *
+   * @param  {Window} win
+   *         The window on which the stylesheet should be added.
+   * @return {Promise} promise that resolves when the stylesheet is loaded (or rejects
+   *         if it fails to load).
+   */
+  loadBrowserStyleSheet: function (win) {
+    if (this._browserStyleSheets.has(win)) {
+      return Promise.resolve();
+    }
+
+    let doc = win.document;
+    let {styleSheet, loadPromise} = appendStyleSheet(doc, BROWSER_STYLESHEET_URL);
+    this._browserStyleSheets.set(win, styleSheet);
+    return loadPromise;
   },
 
   /**
@@ -503,14 +514,6 @@ var gDevToolsBrowser = exports.gDevToolsBrowser = {
       CustomizableUI.removeWidgetFromArea("webide-button");
     }
     CustomizableUI.destroyWidget("webide-button");
-  },
-
-  /**
-   * Move WebIDE widget to the navbar
-   */
-   // Used by webide.js
-  moveWebIDEWidgetInNavbar() {
-    CustomizableUI.addWidgetToArea("webide-button", CustomizableUI.AREA_NAVBAR);
   },
 
   /**
@@ -751,6 +754,12 @@ var gDevToolsBrowser = exports.gDevToolsBrowser = {
       if (target.tab && target.tab.ownerDocument.defaultView == win) {
         toolbox.destroy();
       }
+    }
+
+    let styleSheet = this._browserStyleSheets.get(win);
+    if (styleSheet) {
+      styleSheet.remove();
+      this._browserStyleSheets.delete(win);
     }
 
     // Destroy the Developer toolbar if it has been accessed

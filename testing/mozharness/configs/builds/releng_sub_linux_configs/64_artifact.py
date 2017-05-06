@@ -8,8 +8,8 @@ config = {
         'checkout-sources',
         'setup-mock',
         'build',
-        'sendchange',
         # 'generate-build-stats',
+        'sendchange',
     ],
     "buildbot_json_path": "buildprops.json",
     'exes': {
@@ -47,7 +47,6 @@ config = {
     'publish_nightly_en_US_routes': False,
     'env': {
         'MOZBUILD_STATE_PATH': os.path.join(os.getcwd(), '.mozbuild'),
-        'MOZ_AUTOMATION': '1',
         'DISPLAY': ':2',
         'HG_SHARE_BASE_DIR': '/builds/hg-shared',
         'MOZ_OBJDIR': 'obj-firefox',

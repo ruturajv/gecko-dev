@@ -31,6 +31,7 @@
 "use strict";
 
 const { FILTER_FLAGS } = require("../constants");
+const { getFormattedIPAndPort } = require("./format-utils");
 
 /*
   The function `parseFilters` is from:
@@ -100,10 +101,6 @@ function processFlagFilter(type, value) {
   }
 }
 
-function getSizeOrder(size) {
-  return Math.round(Math.log10(size));
-}
-
 function isFlagFilterMatch(item, { type, value, negative }) {
   let match = true;
   let { responseCookies = { cookies: [] } } = item;
@@ -144,11 +141,11 @@ function isFlagFilterMatch(item, { type, value, negative }) {
       if (item.fromCache) {
         match = false;
       } else {
-        match = getSizeOrder(value) === getSizeOrder(item.transferredSize);
+        match = isSizeMatch(value, item.transferredSize);
       }
       break;
     case "size":
-      match = getSizeOrder(value) === getSizeOrder(item.contentSize);
+      match = isSizeMatch(value, item.contentSize);
       break;
     case "larger-than":
       match = item.contentSize > value;
@@ -165,8 +162,7 @@ function isFlagFilterMatch(item, { type, value, negative }) {
       }
       break;
     case "scheme":
-      let scheme = new URL(item.url).protocol.replace(":", "").toLowerCase();
-      match = scheme === value;
+      match = item.urlDetails.scheme === value;
       break;
     case "regexp":
       try {
@@ -199,6 +195,10 @@ function isFlagFilterMatch(item, { type, value, negative }) {
     return !match;
   }
   return match;
+}
+
+function isSizeMatch(value, size) {
+  return value >= (size - size / 10) && value < (size + size / 10);
 }
 
 function isTextFilterMatch({ url }, text) {

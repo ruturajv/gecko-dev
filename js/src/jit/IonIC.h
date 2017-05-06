@@ -61,6 +61,7 @@ class IonSetPropertyIC;
 class IonGetNameIC;
 class IonBindNameIC;
 class IonHasOwnIC;
+class IonInIC;
 
 class IonIC
 {
@@ -123,8 +124,6 @@ class IonIC
         return state_;
     }
 
-    void togglePreBarriers(bool enabled, ReprotectCode reprotect);
-
     CacheKind kind() const { return kind_; }
     uint8_t** codeRawPtr() { return &codeRaw_; }
 
@@ -153,6 +152,10 @@ class IonIC
     IonHasOwnIC* asHasOwnIC() {
         MOZ_ASSERT(kind_ == CacheKind::HasOwn);
         return (IonHasOwnIC*)this;
+    }
+    IonInIC* asInIC() {
+        MOZ_ASSERT(kind_ == CacheKind::In);
+        return (IonInIC*)this;
     }
 
     void updateBaseAddress(JitCode* code, MacroAssembler& masm);
@@ -336,6 +339,36 @@ class IonHasOwnIC : public IonIC
 
     static MOZ_MUST_USE bool update(JSContext* cx, HandleScript outerScript, IonHasOwnIC* ic,
                                     HandleValue val, HandleValue idVal, int32_t* res);
+};
+
+class IonInIC : public IonIC
+{
+    LiveRegisterSet liveRegs_;
+
+    ConstantOrRegister key_;
+    Register object_;
+    Register output_;
+    Register temp_;
+
+  public:
+    IonInIC(LiveRegisterSet liveRegs, const ConstantOrRegister& key,
+            Register object, Register output, Register temp)
+      : IonIC(CacheKind::In),
+        liveRegs_(liveRegs),
+        key_(key),
+        object_(object),
+        output_(output),
+        temp_(temp)
+    { }
+
+    ConstantOrRegister key() const { return key_; }
+    Register object() const { return object_; }
+    Register output() const { return output_; }
+    Register temp() const { return temp_; }
+    LiveRegisterSet liveRegs() const { return liveRegs_; }
+
+    static MOZ_MUST_USE bool update(JSContext* cx, HandleScript outerScript, IonInIC* ic,
+                                    HandleValue key, HandleObject obj, bool* res);
 };
 
 } // namespace jit

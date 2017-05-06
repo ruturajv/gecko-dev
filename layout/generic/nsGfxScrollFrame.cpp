@@ -109,9 +109,11 @@ NS_NewHTMLScrollFrame(nsIPresShell* aPresShell, nsStyleContext* aContext, bool a
 
 NS_IMPL_FRAMEARENA_HELPERS(nsHTMLScrollFrame)
 
-nsHTMLScrollFrame::nsHTMLScrollFrame(nsStyleContext* aContext, bool aIsRoot)
-  : nsContainerFrame(aContext),
-    mHelper(ALLOW_THIS_IN_INITIALIZER_LIST(this), aIsRoot)
+nsHTMLScrollFrame::nsHTMLScrollFrame(nsStyleContext* aContext,
+                                     LayoutFrameType aType,
+                                     bool aIsRoot)
+  : nsContainerFrame(aContext, aType)
+  , mHelper(ALLOW_THIS_IN_INITIALIZER_LIST(this), aIsRoot)
 {
 }
 
@@ -195,12 +197,6 @@ nsSplittableType
 nsHTMLScrollFrame::GetSplittableType() const
 {
   return NS_FRAME_NOT_SPLITTABLE;
-}
-
-nsIAtom*
-nsHTMLScrollFrame::GetType() const
-{
-  return nsGkAtoms::scrollFrame;
 }
 
 /**
@@ -626,7 +622,7 @@ nsHTMLScrollFrame::GuessVScrollbarNeeded(const ScrollReflowInput& aState)
 
   if (mHelper.mIsRoot) {
     nsIFrame *f = mHelper.mScrolledFrame->PrincipalChildList().FirstChild();
-    if (f && f->GetType() == nsGkAtoms::svgOuterSVGFrame &&
+    if (f && f->IsSVGOuterSVGFrame() &&
         static_cast<nsSVGOuterSVGFrame*>(f)->VerticalScrollbarNotNeeded()) {
       // Common SVG case - avoid a bad guess.
       return false;
@@ -1163,9 +1159,10 @@ NS_NewXULScrollFrame(nsIPresShell* aPresShell, nsStyleContext* aContext,
 NS_IMPL_FRAMEARENA_HELPERS(nsXULScrollFrame)
 
 nsXULScrollFrame::nsXULScrollFrame(nsStyleContext* aContext,
-                                   bool aIsRoot, bool aClipAllDescendants)
-  : nsBoxFrame(aContext, aIsRoot),
-    mHelper(ALLOW_THIS_IN_INITIALIZER_LIST(this), aIsRoot)
+                                   bool aIsRoot,
+                                   bool aClipAllDescendants)
+  : nsBoxFrame(aContext, LayoutFrameType::Scroll, aIsRoot)
+  , mHelper(ALLOW_THIS_IN_INITIALIZER_LIST(this), aIsRoot)
 {
   SetXULLayoutManager(nullptr);
   mHelper.mClipAllDescendants = aClipAllDescendants;
@@ -1531,12 +1528,6 @@ nsXULScrollFrame::GetXULPadding(nsMargin& aMargin)
 {
   aMargin.SizeTo(0,0,0,0);
   return NS_OK;
-}
-
-nsIAtom*
-nsXULScrollFrame::GetType() const
-{
-  return nsGkAtoms::scrollFrame;
 }
 
 nscoord
@@ -3102,13 +3093,33 @@ ScrollFrameHelper::AppendScrollPartsTo(nsDisplayListBuilder*   aBuilder,
       appendToTopFlags |= APPEND_SCROLLBAR_CONTAINER;
     }
 
-    // The display port doesn't necessarily include the scrollbars, so just
-    // include all of the scrollbars if we are in a RCD-RSF. We only do
-    // this for the root scrollframe of the root content document, which is
-    // zoomable, and where the scrollbar sizes are bounded by the widget.
-    nsRect dirty = mIsRoot && mOuter->PresContext()->IsRootContentDocument()
-                   ? scrollParts[i]->GetVisualOverflowRectRelativeToParent()
-                   : aDirtyRect;
+    // The display port doesn't necessarily include the scrollbars.
+    bool thumbGetsLayer = (scrollTargetId != FrameMetrics::NULL_SCROLL_ID);
+    bool isRcdRsf = mIsRoot && mOuter->PresContext()->IsRootContentDocument();
+    nsRect dirty = aDirtyRect;
+    if (isRcdRsf || thumbGetsLayer) {
+      nsRect overflow = scrollParts[i]->GetVisualOverflowRectRelativeToParent();
+      if (isRcdRsf) {
+        // For the root content document's root scroll frame (RCD-RSF), include
+        // all of the scrollbars. We only do this for the RCD-RSF, which is
+        // zoomable, and where the scrollbar sizes are bounded by the widget.
+        dirty = overflow;
+      } else {
+        // For subframes, we still try to prerender parts of the scrollbar that
+        // are not currently visible, because they might be brought into view
+        // by async scrolling, but we bound the area to render by the size of
+        // the root reference frame (because subframe scrollbars can be
+        // arbitrary large).
+        nsSize refSize = aBuilder->RootReferenceFrame()->GetSize();
+        gfxSize scale = nsLayoutUtils::GetTransformToAncestorScale(mOuter);
+        if (scale.width != 0 && scale.height != 0) {
+          refSize.width /= scale.width;
+          refSize.height /= scale.height;
+        }
+        dirty = nsLayoutUtils::ComputePartialPrerenderArea(dirty, overflow, refSize);
+      }
+    }
+
     nsDisplayListBuilder::AutoBuildingDisplayList
       buildingForChild(aBuilder, scrollParts[i],
                        dirty + mOuter->GetOffsetTo(scrollParts[i]), true);

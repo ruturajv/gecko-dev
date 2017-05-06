@@ -9,7 +9,7 @@ use gecko_bindings::sugar::ownership::HasArcFFI;
 use std::{mem, ptr};
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
+use stylearc::Arc;
 
 /// Trait for all objects that have Addref() and Release
 /// methods and can be placed inside RefPtr<T>
@@ -277,3 +277,6 @@ impl_threadsafe_refcount!(::gecko_bindings::structs::nsCSSValueSharedList,
 impl_threadsafe_refcount!(::gecko_bindings::structs::mozilla::css::URLValue,
                           Gecko_AddRefCSSURLValueArbitraryThread,
                           Gecko_ReleaseCSSURLValueArbitraryThread);
+impl_threadsafe_refcount!(::gecko_bindings::structs::mozilla::css::GridTemplateAreasValue,
+                          Gecko_AddRefGridTemplateAreasValueArbitraryThread,
+                          Gecko_ReleaseGridTemplateAreasValueArbitraryThread);

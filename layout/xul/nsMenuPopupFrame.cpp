@@ -95,30 +95,32 @@ NS_QUERYFRAME_TAIL_INHERITING(nsBoxFrame)
 // nsMenuPopupFrame ctor
 //
 nsMenuPopupFrame::nsMenuPopupFrame(nsStyleContext* aContext)
-  :nsBoxFrame(aContext),
-  mCurrentMenu(nullptr),
-  mView(nullptr),
-  mPrefSize(-1, -1),
-  mLastClientOffset(0, 0),
-  mPopupType(ePopupTypePanel),
-  mPopupState(ePopupClosed),
-  mPopupAlignment(POPUPALIGNMENT_NONE),
-  mPopupAnchor(POPUPALIGNMENT_NONE),
-  mPosition(POPUPPOSITION_UNKNOWN),
-  mConsumeRollupEvent(PopupBoxObject::ROLLUP_DEFAULT),
-  mFlip(FlipType_Default),
-  mIsOpenChanged(false),
-  mIsContextMenu(false),
-  mAdjustOffsetForContextMenu(false),
-  mGeneratedChildren(false),
-  mMenuCanOverlapOSBar(false),
-  mShouldAutoPosition(true),
-  mInContentShell(true),
-  mIsMenuLocked(false),
-  mMouseTransparent(false),
-  mHFlip(false),
-  mVFlip(false),
-  mAnchorType(MenuPopupAnchorType_Node)
+  : nsBoxFrame(aContext, LayoutFrameType::MenuPopup)
+  , mCurrentMenu(nullptr)
+  , mView(nullptr)
+  , mPrefSize(-1, -1)
+  , mXPos(0)
+  , mYPos(0)
+  , mLastClientOffset(0, 0)
+  , mPopupType(ePopupTypePanel)
+  , mPopupState(ePopupClosed)
+  , mPopupAlignment(POPUPALIGNMENT_NONE)
+  , mPopupAnchor(POPUPALIGNMENT_NONE)
+  , mPosition(POPUPPOSITION_UNKNOWN)
+  , mConsumeRollupEvent(PopupBoxObject::ROLLUP_DEFAULT)
+  , mFlip(FlipType_Default)
+  , mIsOpenChanged(false)
+  , mIsContextMenu(false)
+  , mAdjustOffsetForContextMenu(false)
+  , mGeneratedChildren(false)
+  , mMenuCanOverlapOSBar(false)
+  , mShouldAutoPosition(true)
+  , mInContentShell(true)
+  , mIsMenuLocked(false)
+  , mMouseTransparent(false)
+  , mHFlip(false)
+  , mVFlip(false)
+  , mAnchorType(MenuPopupAnchorType_Node)
 {
   // the preference name is backwards here. True means that the 'top' level is
   // the default, and false means that the 'parent' level is the default.
@@ -2508,11 +2510,13 @@ nsMenuPopupFrame::ShouldFollowAnchor(nsRect& aRect)
   }
 
   nsIFrame* anchorFrame = mAnchorContent->GetPrimaryFrame();
-  if (anchorFrame) {
-    nsPresContext* rootPresContext = PresContext()->GetRootPresContext();
-    if (rootPresContext) {
-      aRect = ComputeAnchorRect(rootPresContext, anchorFrame);
-    }
+  if (!anchorFrame) {
+    return false;
+  }
+
+  nsPresContext* rootPresContext = PresContext()->GetRootPresContext();
+  if (rootPresContext) {
+    aRect = ComputeAnchorRect(rootPresContext, anchorFrame);
   }
 
   return true;

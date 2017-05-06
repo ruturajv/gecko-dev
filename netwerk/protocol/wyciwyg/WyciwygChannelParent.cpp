@@ -217,6 +217,11 @@ WyciwygChannelParent::RecvAsyncOpen(const URIParams& aOriginal,
     return IPC_OK();
   }
 
+  nsCOMPtr<nsILoadInfo> loadInfo = mChannel->GetLoadInfo();
+  if (loadInfo) {
+    loadInfo->SetResultPrincipalURI(original);
+  }
+
   rv = mChannel->SetLoadFlags(aLoadFlags);
   if (NS_FAILED(rv)) {
     if (!SendCancelEarly(rv)) {
@@ -237,7 +242,6 @@ WyciwygChannelParent::RecvAsyncOpen(const URIParams& aOriginal,
     return IPC_OK();
   }
 
-  nsCOMPtr<nsILoadInfo> loadInfo = mChannel->GetLoadInfo();
   if (loadInfo && loadInfo->GetEnforceSecurity()) {
     rv = mChannel->AsyncOpen2(this);
   }
@@ -326,7 +330,7 @@ WyciwygChannelParent::OnStartRequest(nsIRequest *aRequest, nsISupports *aContext
   // Send down any permissions which are relevant to this URL if we are
   // performing a document load.
   PContentParent* pcp = Manager()->Manager();
-  rv = static_cast<ContentParent*>(pcp)->AboutToLoadDocumentForChild(chan);
+  rv = static_cast<ContentParent*>(pcp)->AboutToLoadHttpFtpWyciwygDocumentForChild(chan);
   MOZ_ASSERT(NS_SUCCEEDED(rv));
 
   nsresult status;

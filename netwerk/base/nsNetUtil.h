@@ -659,11 +659,9 @@ bool NS_HasBeenCrossOrigin(nsIChannel* aChannel, bool aReport = false);
   "about.ef2a7dd5-93bc-417f-a698-142c3116864f.mozilla"
 
 /**
- * Determines whether appcache should be checked for a given URI.
+ * Determines whether appcache should be checked for a given principal.
  */
-bool NS_ShouldCheckAppCache(nsIURI *aURI, bool usePrivateBrowsing);
-
-bool NS_ShouldCheckAppCache(nsIPrincipal *aPrincipal, bool usePrivateBrowsing);
+bool NS_ShouldCheckAppCache(nsIPrincipal *aPrincipal);
 
 /**
  * Wraps an nsIAuthPrompt so that it can be used as an nsIAuthPrompt2. This
@@ -782,11 +780,9 @@ nsresult NS_URIChainHasFlags(nsIURI   *uri,
 already_AddRefed<nsIURI> NS_GetInnermostURI(nsIURI *aURI);
 
 /**
- * Get the "final" URI for a channel.  This is either the same as GetURI or
- * GetOriginalURI, depending on whether this channel has
- * nsIChanel::LOAD_REPLACE set.  For channels without that flag set, the final
- * URI is the original URI, while for ones with the flag the final URI is the
- * channel URI.
+ * Get the "final" URI for a channel.  This is either channel's load info
+ * resultPrincipalURI, if set, or GetURI.  In most cases (but not all) load
+ * info resultPrincipalURI, if set, corresponds to originalURI of the channel.
  */
 nsresult NS_GetFinalChannelURI(nsIChannel *channel, nsIURI **uri);
 

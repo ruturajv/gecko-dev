@@ -85,9 +85,7 @@ const lengthType = {
       var animation = target.animate({ [idlName]: ['10px', '50px'] },
                                      { duration: 1000, fill: 'both' });
       testAnimationSamples(animation, idlName,
-                           [{ time: 0,    expected: '10px' },
-                            { time: 500,  expected: '30px' },
-                            { time: 1000, expected: '50px' }]);
+                           [{ time: 500,  expected: '30px' }]);
     }, property + ' supports animating as a length');
 
     test(function(t) {
@@ -96,9 +94,7 @@ const lengthType = {
       var animation = target.animate({ [idlName]: ['1rem', '5rem'] },
                                      { duration: 1000, fill: 'both' });
       testAnimationSamples(animation, idlName,
-                           [{ time: 0,    expected: '10px' },
-                            { time: 500,  expected: '30px' },
-                            { time: 1000, expected: '50px' }]);
+                           [{ time: 500,  expected: '30px' }]);
     }, property + ' supports animating as a length of rem');
   },
 
@@ -175,9 +171,7 @@ const percentageType = {
       var animation = target.animate({ [idlName]: ['10%', '50%'] },
                                      { duration: 1000, fill: 'both' });
       testAnimationSamples(animation, idlName,
-                           [{ time: 0,    expected: '10%' },
-                            { time: 500,  expected: '30%' },
-                            { time: 1000, expected: '50%' }]);
+                           [{ time: 500,  expected: '30%' }]);
     }, property + ' supports animating as a percentage');
   },
 
@@ -202,9 +196,7 @@ const integerType = {
       var animation = target.animate({ [idlName]: [-2, 2] },
                                      { duration: 1000, fill: 'both' });
       testAnimationSamples(animation, idlName,
-                           [{ time: 0,    expected: '-2' },
-                            { time: 500,  expected: '0' },
-                            { time: 1000, expected: '2' }]);
+                           [{ time: 500,  expected: '0' }]);
     }, property + ' supports animating as an integer');
   },
 
@@ -222,6 +214,32 @@ const integerType = {
 
 };
 
+const positiveIntegerType = {
+  testInterpolation: function(property, setup) {
+    test(function(t) {
+      var idlName = propertyToIDL(property);
+      var target = createTestElement(t, setup);
+      var animation = target.animate({ [idlName]: [1, 3] },
+                                     { duration: 1000, fill: 'both' });
+      testAnimationSamples(animation, idlName,
+                           [ { time: 500,  expected: '2' } ]);
+    }, property + ' supports animating as a positive integer');
+  },
+
+  testAddition: function(property, setup) {
+    test(function(t) {
+      var idlName = propertyToIDL(property);
+      var target = createTestElement(t, setup);
+      target.style[idlName] = 1;
+      var animation = target.animate({ [idlName]: [2, 5] },
+                                     { duration: 1000, composite: 'add' });
+      testAnimationSamples(animation, idlName,
+                           [{ time: 0,    expected: '3' }]);
+    }, property + ': positive integer');
+  },
+
+};
+
 const lengthPercentageOrCalcType = {
   testInterpolation: function(property, setup) {
     lengthType.testInterpolation(property, setup);
@@ -233,9 +251,7 @@ const lengthPercentageOrCalcType = {
       var animation = target.animate({ [idlName]: ['10px', '20%'] },
                                      { duration: 1000, fill: 'both' });
       testAnimationSamples(animation, idlName,
-                           [{ time: 0,    expected: '10px' },
-                            { time: 500,  expected: 'calc(5px + 10%)' },
-                            { time: 1000, expected: '20%' }]);
+                           [{ time: 500,  expected: 'calc(5px + 10%)' }]);
     }, property + ' supports animating as combination units "px" and "%"');
 
     test(function(t) {
@@ -244,9 +260,7 @@ const lengthPercentageOrCalcType = {
       var animation = target.animate({ [idlName]: ['10%', '2em'] },
                                      { duration: 1000, fill: 'both' });
       testAnimationSamples(animation, idlName,
-                           [{ time: 0,    expected: '10%' },
-                            { time: 500,  expected: 'calc(10px + 5%)' },
-                            { time: 1000, expected: '20px' }]);
+                           [{ time: 500,  expected: 'calc(10px + 5%)' }]);
     }, property + ' supports animating as combination units "%" and "em"');
 
     test(function(t) {
@@ -255,9 +269,7 @@ const lengthPercentageOrCalcType = {
       var animation = target.animate({ [idlName]: ['1em', '2rem'] },
                                      { duration: 1000, fill: 'both' });
       testAnimationSamples(animation, idlName,
-                           [{ time: 0,    expected: '10px' },
-                            { time: 500,  expected: '15px' },
-                            { time: 1000, expected: '20px' }]);
+                           [{ time: 500,  expected: '15px' }]);
     }, property + ' supports animating as combination units "em" and "rem"');
 
     test(function(t) {
@@ -266,9 +278,7 @@ const lengthPercentageOrCalcType = {
       var animation = target.animate({ [idlName]: ['10px', 'calc(1em + 20%)'] },
                                      { duration: 1000, fill: 'both' });
       testAnimationSamples(animation, idlName,
-                           [{ time: 0,    expected: '10px' },
-                            { time: 500,  expected: 'calc(10px + 10%)' },
-                            { time: 1000, expected: 'calc(10px + 20%)' }]);
+                           [{ time: 500,  expected: 'calc(10px + 10%)' }]);
     }, property + ' supports animating as combination units "px" and "calc"');
 
     test(function(t) {
@@ -278,12 +288,8 @@ const lengthPercentageOrCalcType = {
         { [idlName]: ['calc(10px + 10%)', 'calc(1em + 1rem + 20%)'] },
         { duration: 1000, fill: 'both' });
       testAnimationSamples(animation, idlName,
-                           [{ time: 0,
-                              expected: 'calc(10px + 10%)' },
-                            { time: 500,
-                              expected: 'calc(15px + 15%)' },
-                            { time: 1000,
-                              expected: 'calc(20px + 20%)' }]);
+                           [{ time: 500,
+                              expected: 'calc(15px + 15%)' }]);
     }, property + ' supports animating as a calc');
   },
 
@@ -382,9 +388,7 @@ const positiveNumberType = {
       var animation = target.animate({ [idlName]: [1.1, 1.5] },
                                      { duration: 1000, fill: 'both' });
       testAnimationSamples(animation, idlName,
-                           [{ time: 0,    expected: '1.1' },
-                            { time: 500,  expected: '1.3' },
-                            { time: 1000, expected: '1.5' }]);
+                           [{ time: 500,  expected: '1.3' }]);
     }, property + ' supports animating as a positive number');
   },
 
@@ -397,6 +401,41 @@ const positiveNumberType = {
                                      { duration: 1000, composite: 'add' });
       testAnimationSamples(animation, idlName, [{ time: 0, expected: '2.2' }]);
     }, property + ': positive number');
+  },
+
+};
+
+// Test using float values in the range [0, 1]
+const opacityType = {
+  testInterpolation: function(property, setup) {
+    test(function(t) {
+      var idlName = propertyToIDL(property);
+      var target = createTestElement(t, setup);
+      var animation = target.animate({ [idlName]: [0.3, 0.8] },
+                                     { duration: 1000, fill: 'both' });
+      testAnimationSamples(animation, idlName,
+                           [{ time: 500,  expected: '0.55' }]);
+    }, property + ' supports animating as a [0, 1] number');
+  },
+
+  testAddition: function(property, setup) {
+    test(function(t) {
+      var idlName = propertyToIDL(property);
+      var target = createTestElement(t, setup);
+      target.style[idlName] = 0.3;
+      var animation = target.animate({ [idlName]: [0.3, 0.8] },
+                                     { duration: 1000, composite: 'add' });
+      testAnimationSamples(animation, idlName, [{ time: 0, expected: '0.6' }]);
+    }, property + ': [0, 1] number');
+
+    test(function(t) {
+      var idlName = propertyToIDL(property);
+      var target = createTestElement(t, setup);
+      target.style[idlName] = 0.8;
+      var animation = target.animate({ [idlName]: [0.3, 0.8] },
+                                     { duration: 1000, composite: 'add' });
+      testAnimationSamples(animation, idlName, [{ time: 0, expected: '1' }]);
+    }, property + ': [0, 1] number (clamped)');
   },
 
 };
@@ -1154,27 +1193,7 @@ const boxShadowListType = {
 
 const positionType = {
   testInterpolation: function(property, setup) {
-    test(function(t) {
-      var idlName = propertyToIDL(property);
-      var target = createTestElement(t, setup);
-      var animation = target.animate({ [idlName]: ['10px 10px', '50px 50px'] },
-                                     { duration: 1000, fill: 'both' });
-      testAnimationSamples(animation, idlName,
-                           [{ time: 0,    expected: '10px 10px' },
-                            { time: 500,  expected: '30px 30px' },
-                            { time: 1000, expected: '50px 50px' }]);
-    }, property + ' supports animating as a position');
-
-    test(function(t) {
-      var idlName = propertyToIDL(property);
-      var target = createTestElement(t, setup);
-      var animation = target.animate({ [idlName]: ['1rem 1rem', '5rem 5rem'] },
-                                     { duration: 1000, fill: 'both' });
-      testAnimationSamples(animation, idlName,
-                           [{ time: 0,    expected: '10px 10px' },
-                            { time: 500,  expected: '30px 30px' },
-                            { time: 1000, expected: '50px 50px' }]);
-    }, property + ' supports animating as a position of rem');
+    lengthPairType.testInterpolation(property, setup);
 
     test(function(t) {
       var idlName = propertyToIDL(property);
@@ -1183,30 +1202,12 @@ const positionType = {
                                      { duration: 1000, fill: 'both' });
       testAnimationSamples(
         animation, idlName,
-        [{ time: 0,    expected: calcFromPercentage(idlName, '10% 10%') },
-         { time: 500,  expected: calcFromPercentage(idlName, '30% 30%') },
-         { time: 1000, expected: calcFromPercentage(idlName, '50% 50%') }]);
+        [{ time: 500,  expected: calcFromPercentage(idlName, '30% 30%') }]);
     }, property + ' supports animating as a position of percent');
   },
 
   testAddition: function(property, setup) {
-    test(function(t) {
-      var idlName = propertyToIDL(property);
-      var target = createTestElement(t, setup);
-      target.style[idlName] = '10px 10px';
-      var animation = target.animate({ [idlName]: ['10px 10px', '50px 50px'] },
-                                     { duration: 1000, composite: 'add' });
-      testAnimationSamples(animation, idlName, [{ time: 0, expected: '20px 20px' }]);
-    }, property + ': position');
-
-    test(function(t) {
-      var idlName = propertyToIDL(property);
-      var target = createTestElement(t, setup);
-      target.style[idlName] = '1rem 1rem';
-      var animation = target.animate({ [idlName]: ['1rem 1rem', '5rem 5rem'] },
-                                     { duration: 1000, composite: 'add' });
-      testAnimationSamples(animation, idlName, [{ time: 0, expected: '20px 20px' }]);
-    }, property + ': position of rem');
+    lengthPairType.testAddition(property, setup);
 
     test(function(t) {
       var idlName = propertyToIDL(property);
@@ -1252,21 +1253,75 @@ const rectType = {
   },
 }
 
+// stroke-dasharray: none | [ <length> | <percentage> | <number> ]*
+const dasharrayType = {
+  testInterpolation: function(property, setup) {
+    percentageType.testInterpolation(property, setup);
+    positiveNumberType.testInterpolation(property, setup);
+
+    test(function(t) {
+      var idlName = propertyToIDL(property);
+      var target = createTestElement(t, setup);
+      var animation = target.animate({ [idlName]:
+                                         ['8, 16, 4',
+                                          '4, 8, 12, 16'] },
+                                     { duration: 1000, fill: 'both' });
+      testAnimationSamples(
+          animation, idlName,
+          [{ time: 500,  expected: '6, 12, 8, 12, 10, 6, 10, 16, 4, 8, 14, 10' }]);
+    }, property + ' supports animating as a dasharray (mismatched length)');
+
+    test(function(t) {
+      var idlName = propertyToIDL(property);
+      var target = createTestElement(t, setup);
+      var animation = target.animate({ [idlName]:
+                                         ['2, 50%, 6, 10',
+                                          '6, 30%, 2, 2'] },
+                                     { duration: 1000, fill: 'both' });
+      testAnimationSamples(
+          animation, idlName,
+          [{ time: 500,  expected: '4, 40%, 4, 6' }]);
+    }, property + ' supports animating as a dasharray (mixed number and percentage)');
+
+  },
+
+  // Note that stroke-dasharray is non-additive property, so we should write this
+  // additive test case that animating value replaces underlying values.
+  // See https://www.w3.org/TR/SVG2/painting.html#StrokeDashing.
+  testAddition: function(property, setup) {
+    test(function(t) {
+      var idlName = propertyToIDL(property);
+      var target = createTestElement(t, setup);
+      target.style[idlName] = '6, 30%, 2px';
+      var animation = target.animate({ [idlName]:
+                                         ['1, 2, 3, 4, 5',
+                                          '6, 7, 8, 9, 10'] },
+                                     { duration: 1000, fill: 'add' });
+      testAnimationSamples(
+          animation, idlName,
+          [{ time: 0, expected: '1, 2, 3, 4, 5' }]);
+    }, property + ': dasharray');
+  },
+}
+
 const types = {
   color: colorType,
   discrete: discreteType,
   filterList: filterListType,
   integer: integerType,
+  positiveInteger: positiveIntegerType,
   length: lengthType,
   percentage: percentageType,
   lengthPercentageOrCalc: lengthPercentageOrCalcType,
   lengthPair: lengthPairType,
   positiveNumber: positiveNumberType,
+  opacity: opacityType,
   transformList: transformListType,
   visibility: visibilityType,
   boxShadowList: boxShadowListType,
   textShadowList: textShadowListType,
   rect: rectType,
   position: positionType,
+  dasharray: dasharrayType,
 };
 

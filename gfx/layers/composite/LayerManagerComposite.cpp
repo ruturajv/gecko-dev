@@ -836,7 +836,7 @@ LayerManagerComposite::Render(const nsIntRegion& aInvalidRegion, const nsIntRegi
   // Dump to console
   if (gfxPrefs::LayersDump()) {
     this->Dump(/* aSorted= */true);
-  } else if (profiler_feature_active("layersdump")) {
+  } else if (profiler_feature_active(ProfilerFeature::LayersDump)) {
     std::stringstream ss;
     Dump(ss);
     profiler_log(ss.str().c_str());
@@ -1499,35 +1499,6 @@ bool
 LayerComposite::HasStaleCompositor() const
 {
   return mCompositeManager->GetCompositor() != mCompositor;
-}
-
-static bool
-LayerHasCheckerboardingAPZC(Layer* aLayer, Color* aOutColor)
-{
-  bool answer = false;
-  for (LayerMetricsWrapper i(aLayer, LayerMetricsWrapper::StartAt::BOTTOM); i; i = i.GetParent()) {
-    if (!i.Metrics().IsScrollable()) {
-      continue;
-    }
-    if (i.GetApzc() && i.GetApzc()->IsCurrentlyCheckerboarding()) {
-      if (aOutColor) {
-        *aOutColor = i.Metadata().GetBackgroundColor();
-      }
-      answer = true;
-      break;
-    }
-    break;
-  }
-  return answer;
-}
-
-bool
-LayerComposite::NeedToDrawCheckerboarding(gfx::Color* aOutCheckerboardingColor)
-{
-  return GetLayer()->Manager()->AsyncPanZoomEnabled() &&
-         (GetLayer()->GetContentFlags() & Layer::CONTENT_OPAQUE) &&
-         GetLayer()->IsOpaqueForVisibility() &&
-         LayerHasCheckerboardingAPZC(GetLayer(), aOutCheckerboardingColor);
 }
 
 #ifndef MOZ_HAVE_PLATFORM_SPECIFIC_LAYER_BUFFERS

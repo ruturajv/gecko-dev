@@ -8,15 +8,19 @@ use parsing::parse;
 use style::context::QuirksMode;
 use style::parser::{LengthParsingMode, Parse, ParserContext};
 use style::stylesheets::{CssRuleType, Origin};
+use style::values::Either;
+use style::values::specified::{LengthOrPercentageOrNumber, Number};
 use style::values::specified::length::{AbsoluteLength, Length, NoCalcLength};
 use style_traits::ToCss;
 
 #[test]
 fn test_calc() {
     assert!(parse(Length::parse, "calc(1px+ 2px)").is_err());
+    assert!(parse(Length::parse, "calc(calc(1px) + calc(1px + 4px))").is_ok());
     assert!(parse(Length::parse, "calc( 1px + 2px )").is_ok());
     assert!(parse(Length::parse, "calc(1px + 2px )").is_ok());
     assert!(parse(Length::parse, "calc( 1px + 2px)").is_ok());
+    assert!(parse(Length::parse, "calc( 1px + 2px / ( 1 + 2 - 1))").is_ok());
 }
 
 #[test]
@@ -45,4 +49,9 @@ fn test_length_parsing_modes() {
     let result = Length::parse(&context, &mut parser);
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), Length::NoCalc(NoCalcLength::Absolute(AbsoluteLength::Px(1.))));
+}
+
+#[test]
+fn test_zero_percentage_length_or_number() {
+    assert_eq!(parse(LengthOrPercentageOrNumber::parse, "0"), Ok(Either::First(Number::new(0.))));
 }

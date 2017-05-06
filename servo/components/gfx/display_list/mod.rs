@@ -86,7 +86,7 @@ impl DisplayList {
                                              scroll_offsets,
                                              result);
                 }
-                &DisplayItem::PushScrollRoot(ref item) => {
+                &DisplayItem::DefineClip(ref item) => {
                     let mut point = *translated_point;
                     DisplayList::scroll_root(&item.scroll_root,
                                              &mut point,
@@ -149,7 +149,7 @@ impl DisplayList {
                                            scroll_offsets,
                                            result);
                 }
-                &DisplayItem::PushScrollRoot(ref item) => {
+                &DisplayItem::DefineClip(ref item) => {
                     let mut point = *translated_point;
                     DisplayList::scroll_root(&item.scroll_root,
                                              &mut point,
@@ -160,7 +160,7 @@ impl DisplayList {
                                            scroll_offsets,
                                            result);
                 }
-                &DisplayItem::PopStackingContext(_) | &DisplayItem::PopScrollRoot(_) => return,
+                &DisplayItem::PopStackingContext(_) => return,
                 _ => {
                     if let Some(meta) = item.hit_test(*translated_point) {
                         result.push(meta);
@@ -510,8 +510,8 @@ pub struct ScrollRoot {
 }
 
 impl ScrollRoot {
-    pub fn to_push(&self, pipeline_id: PipelineId) -> DisplayItem {
-        DisplayItem::PushScrollRoot(box PushScrollRootItem {
+    pub fn to_define_item(&self, pipeline_id: PipelineId) -> DisplayItem {
+        DisplayItem::DefineClip(box DefineClipItem {
             base: BaseDisplayItem::empty(pipeline_id),
             scroll_root: self.clone(),
         })
@@ -528,13 +528,13 @@ pub enum DisplayItem {
     WebGL(Box<WebGLDisplayItem>),
     Border(Box<BorderDisplayItem>),
     Gradient(Box<GradientDisplayItem>),
+    RadialGradient(Box<RadialGradientDisplayItem>),
     Line(Box<LineDisplayItem>),
     BoxShadow(Box<BoxShadowDisplayItem>),
     Iframe(Box<IframeDisplayItem>),
     PushStackingContext(Box<PushStackingContextItem>),
     PopStackingContext(Box<PopStackingContextItem>),
-    PushScrollRoot(Box<PushScrollRootItem>),
-    PopScrollRoot(Box<BaseDisplayItem>),
+    DefineClip(Box<DefineClipItem>),
 }
 
 /// Information common to all display items.
@@ -889,6 +889,9 @@ pub struct Gradient {
 
     /// A list of color stops.
     pub stops: Vec<GradientStop>,
+
+    /// True if gradient repeats infinitly.
+    pub repeating: bool,
 }
 
 #[derive(Clone, Deserialize, HeapSizeOf, Serialize)]
@@ -898,6 +901,31 @@ pub struct GradientDisplayItem {
 
     /// Contains all gradient data. Included start, end point and color stops.
     pub gradient: Gradient,
+}
+
+/// Paints a radial gradient.
+#[derive(Clone, Deserialize, HeapSizeOf, Serialize)]
+pub struct RadialGradient {
+    /// The center point of the gradient.
+    pub center: Point2D<Au>,
+
+    /// The radius of the gradient with an x and an y component.
+    pub radius: Size2D<Au>,
+
+    /// A list of color stops.
+    pub stops: Vec<GradientStop>,
+
+    /// True if gradient repeats infinitly.
+    pub repeating: bool,
+}
+
+#[derive(Clone, Deserialize, HeapSizeOf, Serialize)]
+pub struct RadialGradientDisplayItem {
+    /// Fields common to all display item.
+    pub base: BaseDisplayItem,
+
+    /// Contains all gradient data.
+    pub gradient: RadialGradient,
 }
 
 /// A normal border, supporting CSS border styles.
@@ -1094,7 +1122,7 @@ pub struct PopStackingContextItem {
 
 /// Starts a group of items inside a particular scroll root.
 #[derive(Clone, HeapSizeOf, Deserialize, Serialize)]
-pub struct PushScrollRootItem {
+pub struct DefineClipItem {
     /// Fields common to all display items.
     pub base: BaseDisplayItem,
 
@@ -1124,13 +1152,13 @@ impl DisplayItem {
             DisplayItem::WebGL(ref webgl_item) => &webgl_item.base,
             DisplayItem::Border(ref border) => &border.base,
             DisplayItem::Gradient(ref gradient) => &gradient.base,
+            DisplayItem::RadialGradient(ref gradient) => &gradient.base,
             DisplayItem::Line(ref line) => &line.base,
             DisplayItem::BoxShadow(ref box_shadow) => &box_shadow.base,
             DisplayItem::Iframe(ref iframe) => &iframe.base,
             DisplayItem::PushStackingContext(ref stacking_context) => &stacking_context.base,
             DisplayItem::PopStackingContext(ref item) => &item.base,
-            DisplayItem::PushScrollRoot(ref item) => &item.base,
-            DisplayItem::PopScrollRoot(ref base) => &base,
+            DisplayItem::DefineClip(ref item) => &item.base,
         }
     }
 
@@ -1216,12 +1244,8 @@ impl fmt::Debug for DisplayItem {
             return write!(f, "PopStackingContext({:?}", item.stacking_context_id);
         }
 
-        if let DisplayItem::PushScrollRoot(ref item) = *self {
-            return write!(f, "PushScrollRoot({:?}", item.scroll_root);
-        }
-
-        if let DisplayItem::PopScrollRoot(_) = *self {
-            return write!(f, "PopScrollRoot");
+        if let DisplayItem::DefineClip(ref item) = *self {
+            return write!(f, "DefineClip({:?}", item.scroll_root);
         }
 
         write!(f, "{} @ {:?} {:?}",
@@ -1241,13 +1265,13 @@ impl fmt::Debug for DisplayItem {
                 DisplayItem::WebGL(_) => "WebGL".to_owned(),
                 DisplayItem::Border(_) => "Border".to_owned(),
                 DisplayItem::Gradient(_) => "Gradient".to_owned(),
+                DisplayItem::RadialGradient(_) => "RadialGradient".to_owned(),
                 DisplayItem::Line(_) => "Line".to_owned(),
                 DisplayItem::BoxShadow(_) => "BoxShadow".to_owned(),
                 DisplayItem::Iframe(_) => "Iframe".to_owned(),
                 DisplayItem::PushStackingContext(_) |
                 DisplayItem::PopStackingContext(_) |
-                DisplayItem::PushScrollRoot(_) |
-                DisplayItem::PopScrollRoot(_) => "".to_owned(),
+                DisplayItem::DefineClip(_) => "".to_owned(),
             },
             self.bounds(),
             self.base().clip

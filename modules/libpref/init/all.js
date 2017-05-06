@@ -296,11 +296,11 @@ pref("media.dormant-on-pause-timeout-ms", 5000);
 pref("media.cache_size", 512000);
 // When a network connection is suspended, don't resume it until the
 // amount of buffered data falls below this threshold (in seconds).
-pref("media.cache_resume_threshold", 999999);
+pref("media.cache_resume_threshold", 30);
 // Stop reading ahead when our buffered data is this many seconds ahead
 // of the current playback position. This limit can stop us from using arbitrary
 // amounts of network bandwidth prefetching huge videos.
-pref("media.cache_readahead_limit", 999999);
+pref("media.cache_readahead_limit", 60);
 
 // Master HTML5 media volume scale.
 pref("media.volume_scale", "1.0");
@@ -1251,6 +1251,10 @@ pref("dom.select_popup_in_parent.enabled", false);
 // Enable Directory API. By default, disabled.
 pref("dom.input.dirpicker", false);
 
+// Enable not moving the cursor to end when a text input or textarea has .value
+// set to the value it already has.  By default, enabled.
+pref("dom.input.skip_cursor_move_for_same_value_set", true);
+
 // Enables system messages and activities
 pref("dom.sysmsg.enabled", false);
 
@@ -1544,9 +1548,6 @@ pref("network.http.referer.XOriginTrimmingPolicy", 0);
 // 0=always send, 1=send iff base domains match, 2=send iff hosts match
 pref("network.http.referer.XOriginPolicy", 0);
 
-// Controls whether referrer attributes in <a>, <img>, <area>, <iframe>, and <link> are honoured
-pref("network.http.enablePerElementReferrer", true);
-
 // Maximum number of consecutive redirects before aborting.
 pref("network.http.redirection-limit", 20);
 
@@ -1598,14 +1599,6 @@ pref("network.http.rendering-critical-requests-prioritization", true);
 // Disable IPv6 for backup connections to workaround problems about broken
 // IPv6 connectivity.
 pref("network.http.fast-fallback-to-IPv4", true);
-
-// The maximum amount of time the cache session lock can be held
-// before a new transaction bypasses the cache. In milliseconds.
-#ifdef RELEASE_OR_BETA
-pref("network.http.bypass-cachelock-threshold", 200000);
-#else
-pref("network.http.bypass-cachelock-threshold", 250);
-#endif
 
 // Try and use SPDY when using SSL
 pref("network.http.spdy.enabled", true);
@@ -1913,6 +1906,11 @@ pref("network.dns.blockDotOnion", true);
 
 // These domains are treated as localhost equivalent
 pref("network.dns.localDomains", "");
+
+// When non empty all non-localhost DNS queries (including IP addresses)
+// resolve to this value. The value can be a name or an IP address.
+// domains mapped to localhost with localDomains stay localhost.
+pref("network.dns.forceResolve", "");
 
 // Contols whether or not "localhost" should resolve when offline
 pref("network.dns.offline-localhost", true);
@@ -4618,6 +4616,9 @@ pref("network.tcp.keepalive.retry_interval", 1); // seconds
 pref("network.tcp.keepalive.probe_count", 4);
 #endif
 
+pref("network.tcp.tcp_fastopen_enable", true);
+pref("network.tcp.tcp_fastopen_consecutive_failure_limit", 5);
+
 // Whether to disable acceleration for all widgets.
 pref("layers.acceleration.disabled", false);
 // Preference that when switched at runtime will run a series of benchmarks
@@ -5201,6 +5202,10 @@ pref("urlclassifier.gethashnoise", 4);
 
 // Gethash timeout for Safebrowsing.
 pref("urlclassifier.gethash.timeout_ms", 5000);
+// Update server response timeout for Safebrowsing.
+pref("urlclassifier.update.response_timeout_ms", 5000);
+// Download update timeout for Safebrowsing.
+pref("urlclassifier.update.timeout_ms", 60000);
 
 // If an urlclassifier table has not been updated in this number of seconds,
 // a gethash request will be forced to check that the result is still in
