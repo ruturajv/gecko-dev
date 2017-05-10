@@ -16,7 +16,23 @@ module.exports = createClass({
   },
 
   getInitialState() {
-    let { list, filter } = this.props;
+    return this.computeState(this.props);
+  },
+
+  componentWillReceiveProps(nextProps) {
+    if (this.props.filter === nextProps.filter) {
+      return;
+    }
+    this.setState(this.computeState(nextProps));
+  },
+
+  componentDidUpdate() {
+    if (this.refs.selected) {
+      this.refs.selected.scrollIntoView(false);
+    }
+  },
+
+  computeState({ filter, list }) {
     let filteredList = list.filter((item) => {
       return item.toLowerCase().startsWith(filter.toLowerCase())
         && item.toLowerCase() !== filter.toLowerCase();
@@ -24,16 +40,6 @@ module.exports = createClass({
     let selectedIndex = filteredList.length == 1 ? 0 : -1;
 
     return { filteredList, selectedIndex };
-  },
-
-  componentWillReceiveProps() {
-    this.setState(this.getInitialState());
-  },
-
-  componentDidUpdate() {
-    if (this.refs.selected) {
-      this.refs.selected.scrollIntoView(false);
-    }
   },
 
   // Use this method to getSelection of the topmost item
@@ -61,6 +67,7 @@ module.exports = createClass({
     this.setState({selectedIndex: nextIndex});
   },
 
+  // Selects the hovered / clicked item
   select() {
     if (this.refs.selected) {
       this.props.onItemSelected(this.refs.selected.textContent);
