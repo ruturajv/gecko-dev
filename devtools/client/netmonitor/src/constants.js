@@ -164,7 +164,6 @@ const HEADER_FILTERS = HEADERS
 
 const FILTER_FLAGS = [
   ...HEADER_FILTERS,
-  "scheme",
   "mime-type",
   "larger-than",
   "is",

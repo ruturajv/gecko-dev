@@ -10,9 +10,9 @@ module.exports = createClass({
   displayName: "AutocompletePopup",
 
   propTypes: {
-    list: PropTypes.array,
-    filter: PropTypes.string,
-    onItemSelected: PropTypes.func,
+    list: PropTypes.array.isRequired,
+    filter: PropTypes.string.isRequired,
+    onItemSelected: PropTypes.func.isRequired,
   },
 
   getInitialState() {
@@ -20,9 +20,10 @@ module.exports = createClass({
     let filteredList = list.filter((item) => {
       return item.toLowerCase().startsWith(filter.toLowerCase())
         && item.toLowerCase() !== filter.toLowerCase();
-    });
+    }).sort();
+    let selectedIndex = filteredList.length == 1 ? 0 : -1;
 
-    return { filteredList, selectedIndex: -1 };
+    return { filteredList, selectedIndex };
   },
 
   componentWillReceiveProps() {
@@ -35,16 +36,29 @@ module.exports = createClass({
     }
   },
 
-  cycleDown() {
-    let { filteredList, selectedIndex } = this.state;
-    let nextIndex = selectedIndex + 1 === filteredList.length ? 0 : selectedIndex + 1;
-    this.setState({selectedIndex: nextIndex});
+  // Use this method to getSelection of the topmost item
+  jumpToTop() {
+    this.setState({ selectedIndex: 0 });
   },
 
-  cycleUp() {
+  // Use this method to getSelection of the bottommost item
+  jumpToBottom() {
+    let selectedIndex = this.state.filteredList.length - 1;
+    this.setState({ selectedIndex });
+  },
+
+  // Takes incremental jumps, if it exceeds it hops to bottom or top based on direction
+  jumpBy(increment = 1) {
     let { filteredList, selectedIndex } = this.state;
-    let nextIndex = selectedIndex - 1 < 0 ? filteredList.length - 1 : selectedIndex - 1;
-    this.setState({ selectedIndex: nextIndex });
+    let nextIndex = selectedIndex + increment;
+    if (increment > 0) {
+      // Positive cycling
+      nextIndex = nextIndex > filteredList.length - 1 ? 0 : nextIndex;
+    } else if (increment < 0) {
+      // Inverse cycling
+      nextIndex = nextIndex < 0 ? filteredList.length - 1 : nextIndex;
+    }
+    this.setState({selectedIndex: nextIndex});
   },
 
   select() {

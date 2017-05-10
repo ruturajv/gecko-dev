@@ -67,6 +67,7 @@ module.exports = createClass({
     if (this.state.value !== this.refs.input.value) {
       this.setState({
         value: this.refs.input.value,
+        focused: true
       });
     }
 
@@ -111,15 +112,31 @@ module.exports = createClass({
 
     switch (e.key) {
       case "ArrowDown":
-        autocomplete.cycleDown();
+        autocomplete.jumpBy(1);
         break;
       case "ArrowUp":
-        autocomplete.cycleUp();
+        autocomplete.jumpBy(-1);
+        break;
+      case "PageDown":
+        autocomplete.jumpBy(5);
+        break;
+      case "PageUp":
+        autocomplete.jumpBy(-5);
         break;
       case "Enter":
       case "Tab":
         e.preventDefault();
         autocomplete.select();
+        break;
+      case "Escape":
+        e.preventDefault();
+        this.onBlur();
+        break;
+      case "Home":
+        autocomplete.jumpToTop();
+        break;
+      case "End":
+        autocomplete.jumpToBottom();
         break;
     }
   },
