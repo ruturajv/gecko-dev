@@ -44,7 +44,7 @@ module.exports = createClass({
 
   /**
    * Use this method to select the top-most item
-   * @public
+   * This method is public, called outside of the autocomplete-popup component.
    */
   jumpToTop() {
     this.setState({ selectedIndex: 0 });
@@ -52,7 +52,7 @@ module.exports = createClass({
 
   /**
    * Use this method to select the bottom-most item
-   * @public
+   * This method is public.
    */
   jumpToBottom() {
     let selectedIndex = this.state.filteredList.length - 1;
@@ -60,12 +60,10 @@ module.exports = createClass({
   },
 
   /**
-   * Takes incremental jumps moving the selection of item in up or down direction.
-   * Use positive incements ie "1" for downward direction and "-1" for upward motion
-   * Can be given bigger leaps ie. -5 , +5 for PageUp, PageDown
-   * If the hops exceeds bottom or top it rolls over to begining or end of the list.
+   * Increment the selected index with the provided increment value. Will cycle to the
+   * beginning/end of the list if the index exceeds the list boundaries.
+   * This method is public.
    *
-   * @public
    * @param {number} increment - No. of hops in the direction
    */
   jumpBy(increment = 1) {
@@ -82,8 +80,8 @@ module.exports = createClass({
   },
 
   /**
-   * Selects the item (key cycled or clicked) and executes the callback bound
-   * @public
+   * Submit the currently selected item to the onItemSelected callback
+   * This method is public.
    */
   select() {
     if (this.refs.selected) {
