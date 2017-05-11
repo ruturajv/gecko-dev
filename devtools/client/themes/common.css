@@ -48,7 +48,6 @@ html|button, html|select {
   border-radius: 3px;
   overflow-x: hidden;
   max-height: 20rem;
-  z-index: 999;
 
   /* Devtools autocompletes display technical english keywords and should be displayed
      using LTR direction. */
@@ -90,7 +89,6 @@ html|button, html|select {
 .devtools-autocomplete-listbox .autocomplete-item > .autocomplete-value {
   margin: 0;
   padding: 0;
-  cursor: default;
 }
 
 .devtools-autocomplete-listbox .autocomplete-item > .autocomplete-count {
@@ -486,6 +484,7 @@ checkbox:-moz-focusring {
   top: 100%;
   width: 100%;
   line-height: initial !important;
+  z-index: 999;
 }
 
 /* Don't add 'double spacing' for inputs that are at beginning / end

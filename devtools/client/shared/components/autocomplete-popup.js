@@ -42,18 +42,32 @@ module.exports = createClass({
     return { filteredList, selectedIndex };
   },
 
-  // Use this method to getSelection of the topmost item
+  /**
+   * Use this method to select the top-most item
+   * @public
+   */
   jumpToTop() {
     this.setState({ selectedIndex: 0 });
   },
 
-  // Use this method to getSelection of the bottommost item
+  /**
+   * Use this method to select the bottom-most item
+   * @public
+   */
   jumpToBottom() {
     let selectedIndex = this.state.filteredList.length - 1;
     this.setState({ selectedIndex });
   },
 
-  // Takes incremental jumps, if it exceeds it hops to bottom or top based on direction
+  /**
+   * Takes incremental jumps moving the selection of item in up or down direction.
+   * Use positive incements ie "1" for downward direction and "-1" for upward motion
+   * Can be given bigger leaps ie. -5 , +5 for PageUp, PageDown
+   * If the hops exceeds bottom or top it rolls over to begining or end of the list.
+   *
+   * @public
+   * @param {number} increment - No. of hops in the direction
+   */
   jumpBy(increment = 1) {
     let { filteredList, selectedIndex } = this.state;
     let nextIndex = selectedIndex + increment;
@@ -67,7 +81,10 @@ module.exports = createClass({
     this.setState({selectedIndex: nextIndex});
   },
 
-  // Selects the hovered / clicked item
+  /**
+   * Selects the item (key cycled or clicked) and executes the callback bound
+   * @public
+   */
   select() {
     if (this.refs.selected) {
       this.props.onItemSelected(this.refs.selected.textContent);
