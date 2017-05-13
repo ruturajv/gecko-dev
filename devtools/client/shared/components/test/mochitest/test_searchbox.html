@@ -1,0 +1,104 @@
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!DOCTYPE html>
+<html>
+<!--
+Test the searchbox component
+-->
+<head>
+  <meta charset="utf-8">
+  <title>SearchBox component test</title>
+  <script src="chrome://mochikit/content/tests/SimpleTest/SimpleTest.js"></script>
+  <script src="chrome://mochikit/content/tests/SimpleTest/SpawnTask.js"></script>
+  <link rel="stylesheet" type="text/css" href="chrome://mochikit/content/tests/SimpleTest/test.css">
+</head>
+<body>
+<script src="head.js"></script>
+<script>
+/* import-globals-from head.js */
+"use strict";
+window.onload = function () {
+  async function createComponentTest(factory, props) {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const component = ReactDOM.render(factory(props), container);
+    await forceRender(component);
+
+    return {
+      container,
+      component,
+      $: (s) => container.querySelector(s),
+    };
+  }
+
+  function compareAutocompleteList(list, reference) {
+    let items = [...list.children].map(el => el.textContent);
+    for (let i = 0; i < items.length; i++) {
+      let item = items[i];
+      let ref = reference[i];
+      is(item, ref, `Item ${i} in list is correct`);
+    }
+  }
+
+  let ReactDOM = browserRequire("devtools/client/shared/vendor/react-dom");
+  let React = browserRequire("devtools/client/shared/vendor/react");
+  let SearchBox = React.createFactory(
+    browserRequire("devtools/client/shared/components/search-box")
+  );
+  ok(SearchBox, "Got the SearchBox factory");
+
+  async function testSimpleSearchBox() {
+    // Test initial state
+    const { component, $ } = await createComponentTest(SearchBox, {
+      type: "search",
+    });
+
+    is(component.state.value, "", "Initial value is blank");
+    ok(!component.state.focused, "Input isn't initially focused");
+
+    // Test changing value in state
+    await setState(component, {
+      value: "foo",
+    });
+
+    is(component.state.value, "foo", "value was properly set on state");
+    is($(".devtools-searchinput").value, "foo", "value was properly set on element");
+
+    // Test focused state
+    $(".devtools-searchinput").focus();
+    await forceRender(component); // Wait for state update
+    ok(component.state.focused, "focused state was properly set");
+  }
+
+  async function testSearchBoxWithAutocomplete() {
+    const { component, $ } = await createComponentTest(SearchBox, {
+      type: "search",
+      autocompleteList: [
+        "foo",
+        "BAR",
+        "baZ"
+      ],
+    });
+
+    ok(!$(".devtools-autocomplete-popup"), "Autocomplete list not visible");
+
+    $(".devtools-searchinput").focus();
+    await forceRender(component); // Wait for state update
+
+    compareAutocompleteList($(".devtools-autocomplete-listbox"), [
+      "BAR", "baZ", "foo"
+    ]);
+
+    // TODO: Add more test cases
+  }
+
+  add_task(async function () {
+    await testSimpleSearchBox();
+    await testSearchBoxWithAutocomplete();
+  });
+};
+</script>
+</body>
+</html>
