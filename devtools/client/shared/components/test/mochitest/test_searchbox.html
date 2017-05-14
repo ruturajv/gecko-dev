@@ -34,15 +34,6 @@ window.onload = function () {
     };
   }
 
-  function compareAutocompleteList(list, reference) {
-    let items = [...list.children].map(el => el.textContent);
-    for (let i = 0; i < items.length; i++) {
-      let item = items[i];
-      let ref = reference[i];
-      is(item, ref, `Item ${i} in list is correct`);
-    }
-  }
-
   let ReactDOM = browserRequire("devtools/client/shared/vendor/react-dom");
   let React = browserRequire("devtools/client/shared/vendor/react");
   let SearchBox = React.createFactory(
@@ -54,11 +45,23 @@ window.onload = function () {
     // Test initial state
     const { component, $ } = await createComponentTest(SearchBox, {
       type: "search",
+      keyShortcut: "CmdOrCtrl+F",
+      placeholder: "crazy placeholder",
     });
 
     is(component.state.value, "", "Initial value is blank");
     ok(!component.state.focused, "Input isn't initially focused");
     ok($(".devtools-searchinput-clear").hidden, "ClearButton hidden");
+    ok($(".devtools-searchinput").placeholder, "crazy placeholder",
+      "ClearButton hidden");
+
+    synthesizeKey("f", {ctrlKey: 1});
+    await forceRender(component); // Wait for state update
+    ok(component.state.focused, "Shortcut key focussed the input box");
+
+    $(".devtools-searchinput").blur();
+    await forceRender(component); // Wait for state update
+    ok(!component.state.focused, "onBlur focussed correctly set");
 
     // Test changing value in state
     await setState(component, {
@@ -78,133 +81,8 @@ window.onload = function () {
     ok($(".devtools-searchinput-clear").hidden, "ClearButton was removed");
   }
 
-  async function testSearchBoxWithAutocomplete() {
-    const { component, $ } = await createComponentTest(SearchBox, {
-      type: "search",
-      autocompleteList: [
-        "foo",
-        "BAR",
-        "baZ",
-        "abc",
-        "pqr",
-        "xyz",
-        "ABC",
-      ],
-    });
-    const refs = component.refs;
-
-    ok(!$(".devtools-autocomplete-popup"), "Autocomplete list not visible");
-
-    $(".devtools-searchinput").focus();
-    await forceRender(component); // Wait for state update
-
-    compareAutocompleteList($(".devtools-autocomplete-listbox"), [
-      "ABC",
-      "BAR",
-      "abc",
-      "baZ",
-      "foo",
-      "pqr",
-      "xyz",
-    ]);
-
-    is(refs.autocomplete.state.selectedIndex, -1, "Initialised selectedIndex is -1");
-
-    // Blur event
-    $(".devtools-searchinput").blur();
-    await forceRender(component); // Wait for state update
-    ok(!component.state.focused, "focused state was properly set");
-    ok(!$(".devtools-autocomplete-popup"), "Autocomplete list removed from DOM");
-
-    // Start keyboardEvent Tests
-    $(".devtools-searchinput").focus();
-    await forceRender(component); // Wait for state update
-    // ArrowDown
-    synthesizeKey("VK_DOWN", {});
-    await forceRender(component); // Wait for state update
-    is(refs.autocomplete.state.selectedIndex, 0, "selectedIndex is 0");
-    ok($(".devtools-autocomplete-listbox")
-      .childNodes[0].className.includes("autocomplete-selected"),
-      "Selection class applied");
-
-    // ArrowUp should roll back to the bottom of the list
-    synthesizeKey("VK_UP", {});
-    await forceRender(component); // Wait for state update
-    is(refs.autocomplete.state.selectedIndex, 6, "ArrowUp works");
-
-    // PageDown should take -5 places up
-    synthesizeKey("VK_PAGE_UP", {});
-    await forceRender(component); // Wait for state update
-    is(refs.autocomplete.state.selectedIndex, 1, "PageUp works");
-
-    // PageDown should take +5 places down
-    synthesizeKey("VK_PAGE_DOWN", {});
-    await forceRender(component); // Wait for state update
-    is(refs.autocomplete.state.selectedIndex, 6, "PageDown works");
-
-    // Home should take to top of the list
-    synthesizeKey("VK_HOME", {});
-    await forceRender(component); // Wait for state update
-    is(refs.autocomplete.state.selectedIndex, 0, "Home works");
-
-    // End should take at the bottom
-    synthesizeKey("VK_END", {});
-    await forceRender(component); // Wait for state update
-    is(refs.autocomplete.state.selectedIndex, 6, "End works");
-
-    // Filtering of list
-    $(".devtools-searchinput").focus();
-    await forceRender(component); // Wait for state update
-    sendString("aB");
-    await forceRender(component); // Wait for state update
-    is(refs.autocomplete.state.filteredList.length,
-      2, "Filtering works (case insensitive)");
-
-    synthesizeKey("VK_DOWN", {});
-    await forceRender(component); // Wait for state update
-    synthesizeKey("VK_TAB", {});
-    await forceRender(component); // Wait for state update
-    is(component.state.value, "ABC", "Tab hit selects the item");
-    ok(!$(".devtools-autocomplete-popup"), "Tab hit hides the popup");
-
-    // Activate popup by removing a key
-    synthesizeKey("VK_BACK_SPACE", {});
-    await forceRender(component); // Wait for state update
-    ok($(".devtools-autocomplete-popup"), "Popup is up");
-    is(refs.autocomplete.state.filteredList.length,
-      2, "Filtered elements shown (case insensitive)");
-
-    // Enter key selection
-    synthesizeKey("VK_UP", {});
-    await forceRender(component); // Wait for state update
-    synthesizeKey("VK_RETURN", {});
-    is(component.state.value, "abc", "Enter selection");
-    ok(!$(".devtools-autocomplete-popup"), "Enter/Return hides the popup");
-
-    // Mouse selection
-    synthesizeKey("VK_BACK_SPACE", {});
-    synthesizeKey("VK_BACK_SPACE", {});
-    synthesizeKey("VK_BACK_SPACE", {});
-    sendString("pq");
-    synthesizeMouse(
-      $(".devtools-autocomplete-listbox").childNodes[0],
-      5, 5,
-      {}
-    );
-    await forceRender(component); // Wait for state update
-    is(component.state.value, "pqr", "Mouse click selects the item");
-    ok(!$(".devtools-autocomplete-popup"), "Tab hit hides the popup");
-
-    // Escape should remove the autocomplete component
-    synthesizeKey("VK_ESCAPE", {});
-    await forceRender(component); // Wait for state update
-    ok(!$(".devtools-autocomplete-popup"),
-      "Autocomplete list removed from DOM on Escape");
-  }
-
   add_task(async function () {
     await testSimpleSearchBox();
-    await testSearchBoxWithAutocomplete();
   });
 };
 </script>

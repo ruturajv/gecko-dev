@@ -1,0 +1,191 @@
+<!-- This Source Code Form is subject to the terms of the Mozilla Public
+   - License, v. 2.0. If a copy of the MPL was not distributed with this
+   - file, You can obtain one at http://mozilla.org/MPL/2.0/. -->
+<!DOCTYPE html>
+<html>
+<!--
+Test the searchbox component
+-->
+<head>
+  <meta charset="utf-8">
+  <title>SearchBox component test</title>
+  <script src="chrome://mochikit/content/tests/SimpleTest/SimpleTest.js"></script>
+  <script src="chrome://mochikit/content/tests/SimpleTest/SpawnTask.js"></script>
+  <script src="chrome://mochikit/content/tests/SimpleTest/EventUtils.js"></script>
+  <link rel="stylesheet" type="text/css" href="chrome://mochikit/content/tests/SimpleTest/test.css">
+</head>
+<body>
+<script src="head.js"></script>
+<script>
+/* import-globals-from head.js */
+"use strict";
+window.onload = async function () {
+  async function createComponentTest(factory, props) {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const component = ReactDOM.render(factory(props), container);
+    await forceRender(component);
+
+    return {
+      container,
+      component,
+      $: (s) => container.querySelector(s),
+    };
+  }
+
+  function compareAutocompleteList(list, reference) {
+    let items = [...list.children].map(el => el.textContent);
+    for (let i = 0; i < items.length; i++) {
+      let item = items[i];
+      let ref = reference[i];
+      is(item, ref, `Item ${i} in list is correct`);
+    }
+  }
+
+  let ReactDOM = browserRequire("devtools/client/shared/vendor/react-dom");
+  let React = browserRequire("devtools/client/shared/vendor/react");
+  let SearchBox = React.createFactory(
+    browserRequire("devtools/client/shared/components/search-box")
+  );
+  const { component, $ } = await createComponentTest(SearchBox, {
+    type: "search",
+    autocompleteList: [
+      "foo",
+      "BAR",
+      "baZ",
+      "abc",
+      "pqr",
+      "xyz",
+      "ABC",
+    ],
+  });
+  const refs = component.refs;
+
+  async function testSearchBoxWithAutocomplete() {
+    ok(!$(".devtools-autocomplete-popup"), "Autocomplete list not visible");
+
+    $(".devtools-searchinput").focus();
+    await forceRender(component); // Wait for state update
+
+    compareAutocompleteList($(".devtools-autocomplete-listbox"), [
+      "ABC",
+      "BAR",
+      "abc",
+      "baZ",
+      "foo",
+      "pqr",
+      "xyz",
+    ]);
+
+    is(refs.autocomplete.state.selectedIndex, -1, "Initialised selectedIndex is -1");
+
+    // Blur event
+    $(".devtools-searchinput").blur();
+    await forceRender(component); // Wait for state update
+    ok(!component.state.focused, "focused state was properly set");
+    ok(!$(".devtools-autocomplete-popup"), "Autocomplete list removed from DOM");
+
+    // Start keyboardEvent Tests
+    $(".devtools-searchinput").focus();
+    await forceRender(component); // Wait for state update
+
+    // Filtering of list
+    $(".devtools-searchinput").focus();
+    await forceRender(component); // Wait for state update
+    sendString("aB");
+    await forceRender(component); // Wait for state update
+    compareAutocompleteList($(".devtools-autocomplete-listbox"), ["ABC", "abc"]);
+  }
+
+  async function testKeyEventsWithAutocomplete() {
+    // Clear the initial input
+    synthesizeKey("VK_BACK_SPACE", {});
+    synthesizeKey("VK_BACK_SPACE", {});
+
+    // ArrowDown
+    synthesizeKey("VK_DOWN", {});
+    await forceRender(component); // Wait for state update
+    is(refs.autocomplete.state.selectedIndex, 0, "selectedIndex is 0");
+    ok($(".devtools-autocomplete-listbox")
+      .childNodes[0].className.includes("autocomplete-selected"),
+      "Selection class applied");
+
+    // ArrowUp should roll back to the bottom of the list
+    synthesizeKey("VK_UP", {});
+    await forceRender(component); // Wait for state update
+    is(refs.autocomplete.state.selectedIndex, 6, "ArrowUp works");
+
+    // PageDown should take -5 places up
+    synthesizeKey("VK_PAGE_UP", {});
+    await forceRender(component); // Wait for state update
+    is(refs.autocomplete.state.selectedIndex, 1, "PageUp works");
+
+    // PageDown should take +5 places down
+    synthesizeKey("VK_PAGE_DOWN", {});
+    await forceRender(component); // Wait for state update
+    is(refs.autocomplete.state.selectedIndex, 6, "PageDown works");
+
+    // Home should take to top of the list
+    synthesizeKey("VK_HOME", {});
+    await forceRender(component); // Wait for state update
+    is(refs.autocomplete.state.selectedIndex, 0, "Home works");
+
+    // End should take at the bottom
+    synthesizeKey("VK_END", {});
+    await forceRender(component); // Wait for state update
+    is(refs.autocomplete.state.selectedIndex, 6, "End works");
+    synthesizeKey("VK_DOWN", {});
+    await forceRender(component); // Wait for state update
+    synthesizeKey("VK_TAB", {});
+    await forceRender(component); // Wait for state update
+    is(component.state.value, "ABC", "Tab hit selects the item");
+    ok(!$(".devtools-autocomplete-popup"), "Tab hit hides the popup");
+
+    // Activate popup by removing a key
+    synthesizeKey("VK_BACK_SPACE", {});
+    await forceRender(component); // Wait for state update
+    ok($(".devtools-autocomplete-popup"), "Popup is up");
+    compareAutocompleteList($(".devtools-autocomplete-listbox"), ["ABC", "abc"]);
+
+    // Enter key selection
+    synthesizeKey("VK_UP", {});
+    await forceRender(component); // Wait for state update
+    synthesizeKey("VK_RETURN", {});
+    is(component.state.value, "abc", "Enter selection");
+    ok(!$(".devtools-autocomplete-popup"), "Enter/Return hides the popup");
+
+    // Mouse selection
+    synthesizeKey("VK_BACK_SPACE", {});
+    synthesizeKey("VK_BACK_SPACE", {});
+    synthesizeKey("VK_BACK_SPACE", {});
+    sendString("pq");
+    synthesizeMouse(
+      $(".devtools-autocomplete-listbox").childNodes[0],
+      5, 5,
+      {}
+    );
+    await forceRender(component); // Wait for state update
+    is(component.state.value, "pqr", "Mouse click selects the item");
+    ok(!$(".devtools-autocomplete-popup"), "Tab hit hides the popup");
+
+    // Escape should remove the autocomplete component
+    synthesizeKey("VK_ESCAPE", {});
+    await forceRender(component); // Wait for state update
+    ok(!$(".devtools-autocomplete-popup"),
+      "Autocomplete list removed from DOM on Escape");
+  }
+
+  async function mouseEventsWithAutocomplete() {
+    
+  }
+
+  add_task(async function () {
+    await testSearchBoxWithAutocomplete();
+    await testKeyEventsWithAutocomplete();
+    await mouseEventsWithAutocomplete();
+  });
+};
+</script>
+</body>
+</html>
