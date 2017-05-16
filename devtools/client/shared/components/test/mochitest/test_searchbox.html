@@ -36,17 +36,16 @@ window.onload = function () {
 
     is(component.state.value, "", "Initial value is blank");
     ok(!component.state.focused, "Input isn't initially focused");
-    ok($(".devtools-searchinput-clear").hidden, "ClearButton hidden");
-    ok($(".devtools-searchinput").placeholder, "crazy placeholder",
-      "ClearButton hidden");
+    ok($(".devtools-searchinput-clear").hidden, "Clear button hidden");
+    ok($(".devtools-searchinput").placeholder, "crazy placeholder");
 
-    synthesizeKey("f", {accelKey: 1});
+    synthesizeKey("f", {accelKey: true});
     await forceRender(component); // Wait for state update
-    ok(component.state.focused, "Shortcut key focussed the input box");
+    ok(component.state.focused, "Shortcut key focused the input box");
 
     $(".devtools-searchinput").blur();
     await forceRender(component);
-    ok(!component.state.focused, "onBlur focussed correctly set");
+    ok(!component.state.focused, "focused state set to false after blur");
 
     // Test changing value in state
     await setState(component, {
@@ -56,14 +55,14 @@ window.onload = function () {
     is(component.state.value, "foo", "value was properly set on state");
     is($(".devtools-searchinput").value, "foo", "value was properly set on element");
 
-    // text in input box should trigger showing ClearButton
-    ok(!$(".devtools-searchinput-clear").hidden, "ClearButton shown");
-    // Clearing value should remove ClearButton
+    // text in input box should trigger showing Clear button
+    ok(!$(".devtools-searchinput-clear").hidden, "Clear button shown");
+    // Clearing value should remove Clear button
     await setState(component, {
       value: "",
     });
     await forceRender(component);
-    ok($(".devtools-searchinput-clear").hidden, "ClearButton was removed");
+    ok($(".devtools-searchinput-clear").hidden, "Clear button was removed");
   }
 
   add_task(async function () {

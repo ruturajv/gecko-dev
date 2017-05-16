@@ -54,7 +54,7 @@ window.onload = async function () {
     ],
     onChange: () => null,
   });
-  const refs = component.refs;
+  const { refs } = component;
 
   async function testSearchBoxWithAutocomplete() {
     ok(!$(".devtools-autocomplete-popup"), "Autocomplete list not visible");
@@ -166,24 +166,19 @@ window.onload = async function () {
     // ArrowDown
     synthesizeKey("VK_DOWN", {});
     await forceRender(component);
-    // Click on input should activate the autocomplete
-    synthesizeMouse(
-      $(".devtools-searchinput"),
-      5, 5,
-      {}
-    );
+    synthesizeMouseAtCenter($(".devtools-searchinput"), {}, window);
     await forceRender(component);
-    is(component.state.focused, true, "focussed");
+    is(component.state.focused, true, "Component should now be focused");
+
     sendString("pq");
     await forceRender(component);
-    synthesizeMouse(
+    synthesizeMouseAtCenter(
       $(".devtools-autocomplete-listbox .autocomplete-item:nth-child(1)"),
-      5, 5,
-      {}
+      {}, window
     );
     await forceRender(component);
     is(component.state.value, "pqr", "Mouse click selects the item.");
-    ok(!$(".devtools-autocomplete-popup"), "Mouse click hides the popup");
+    ok(!$(".devtools-autocomplete-popup"), "Mouse click on item hides the popup");
   }
 
   add_task(async function () {
