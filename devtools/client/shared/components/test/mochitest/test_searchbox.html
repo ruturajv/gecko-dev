@@ -20,21 +20,6 @@ Test the searchbox component
 /* import-globals-from head.js */
 "use strict";
 window.onload = function () {
-  async function createComponentTest(factory, props) {
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-
-    const component = ReactDOM.render(factory(props), container);
-    await forceRender(component);
-
-    return {
-      container,
-      component,
-      $: (s) => container.querySelector(s),
-    };
-  }
-
-  let ReactDOM = browserRequire("devtools/client/shared/vendor/react-dom");
   let React = browserRequire("devtools/client/shared/vendor/react");
   let SearchBox = React.createFactory(
     browserRequire("devtools/client/shared/components/search-box")
@@ -55,12 +40,12 @@ window.onload = function () {
     ok($(".devtools-searchinput").placeholder, "crazy placeholder",
       "ClearButton hidden");
 
-    synthesizeKey("f", {ctrlKey: 1});
+    synthesizeKey("f", {accelKey: 1});
     await forceRender(component); // Wait for state update
     ok(component.state.focused, "Shortcut key focussed the input box");
 
     $(".devtools-searchinput").blur();
-    await forceRender(component); // Wait for state update
+    await forceRender(component);
     ok(!component.state.focused, "onBlur focussed correctly set");
 
     // Test changing value in state
@@ -77,7 +62,7 @@ window.onload = function () {
     await setState(component, {
       value: "",
     });
-    await forceRender(component); // Wait for state update
+    await forceRender(component);
     ok($(".devtools-searchinput-clear").hidden, "ClearButton was removed");
   }
 
