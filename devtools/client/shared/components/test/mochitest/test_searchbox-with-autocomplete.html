@@ -155,7 +155,7 @@ window.onload = async function () {
       "Autocomplete list removed from DOM on Escape");
   }
 
-  async function mouseEventsWithAutocomplete() {
+  async function testMouseEventsWithAutocomplete() {
     $(".devtools-searchinput").focus();
     await setState(component, {
       value: "",
@@ -184,7 +184,7 @@ window.onload = async function () {
   add_task(async function () {
     await testSearchBoxWithAutocomplete();
     await testKeyEventsWithAutocomplete();
-    await mouseEventsWithAutocomplete();
+    await testMouseEventsWithAutocomplete();
   });
 };
 </script>
