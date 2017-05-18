@@ -170,7 +170,7 @@ module.exports = createClass({
         hidden: value == "",
         onClick: this.onClearButtonClick
       }),
-      autocompleteList.length > 0 && this.state.focused &&
+      autocompleteList.length > 0 && this.state.focused && value &&
       AutocompletePopup({
         list: autocompleteList,
         filter: value,
