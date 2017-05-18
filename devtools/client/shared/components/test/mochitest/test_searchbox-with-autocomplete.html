@@ -44,13 +44,13 @@ window.onload = async function () {
   const { component, $ } = await createComponentTest(SearchBox, {
     type: "search",
     autocompleteList: [
-      "foo",
+      "ABC",
       "BAR",
-      "baZ",
       "abc",
+      "baZ",
+      "foo",
       "pqr",
       "xyz",
-      "ABC",
     ],
     onChange: () => null,
   });

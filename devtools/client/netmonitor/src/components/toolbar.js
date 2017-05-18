@@ -21,6 +21,12 @@ const {
 
 const { L10N } = require("../utils/l10n");
 
+// Setup autocomplete list
+FILTER_FLAGS.sort();
+let negativeAutocompleteList = FILTER_FLAGS.map((item) => `-${item}`);
+let autocompleteList = [...FILTER_FLAGS, ...negativeAutocompleteList]
+  .map((item) => `${item}:`);
+
 // Components
 const SearchBox = createFactory(require("devtools/client/shared/components/search-box"));
 
@@ -109,7 +115,7 @@ const Toolbar = createClass({
             placeholder: SEARCH_PLACE_HOLDER,
             type: "filter",
             onChange: setRequestFilterText,
-            autocompleteList: FILTER_FLAGS.map((item) => `${item}:`),
+            autocompleteList,
           }),
           button({
             className: toggleButtonClassName.join(" "),
