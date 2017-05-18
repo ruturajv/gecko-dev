@@ -32,14 +32,33 @@ module.exports = createClass({
     }
   },
 
+  computeFilterTokens(filter) {
+    let tokens = filter.split(/\s+/);
+    let lastFilterChar = filter.length > 0 ? filter.slice(-1) : "";
+    let filterToUse = "";
+    if (tokens.length > 0) {
+      if (lastFilterChar !== " ") {
+        filterToUse = tokens.slice(-1)[0];
+      } else {
+        filterToUse = "";
+      }
+    } else {
+      filterToUse = filter;
+    }
+
+    return { filterToUse, tokens };
+  },
+
   computeState({ filter, list }) {
+    let { filterToUse, tokens } = this.computeFilterTokens(filter);
+
     let filteredList = list.filter((item) => {
-      return item.toLowerCase().startsWith(filter.toLowerCase())
-        && item.toLowerCase() !== filter.toLowerCase();
+      return item.toLowerCase().startsWith(filterToUse.toLowerCase())
+        && item.toLowerCase() !== filterToUse.toLowerCase();
     }).sort();
     let selectedIndex = filteredList.length == 1 ? 0 : -1;
 
-    return { filteredList, selectedIndex };
+    return { filteredList, selectedIndex, tokens };
   },
 
   /**
@@ -85,7 +104,15 @@ module.exports = createClass({
    */
   select() {
     if (this.refs.selected) {
-      this.props.onItemSelected(this.refs.selected.textContent);
+      let { tokens } = this.state;
+      let selectionItem = "";
+      if (tokens.length > 1) {
+        selectionItem = tokens.slice(0, tokens.length - 1).join(" ") +
+        " " + this.refs.selected.textContent;
+      } else {
+        selectionItem = this.refs.selected.textContent;
+      }
+      this.props.onItemSelected(selectionItem);
     }
   },
 
