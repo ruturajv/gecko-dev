@@ -66,6 +66,8 @@ window.onload = async function () {
 
     $(".devtools-searchinput").focus();
     await forceRender(component); // Wait for state update
+    ok(!$(".devtools-autocomplete-popup"), "Autocomplete list not visible");
+
     sendString("a");
     await forceRender(component);
 
