@@ -47,8 +47,8 @@ window.onload = async function () {
       "ABC",
       "BAR",
       "abc",
-      "baZ",
-      "foo",
+      "@baZ",
+      "@baZfoo",
       "pqr",
       "xyz",
       "a1",
@@ -57,6 +57,7 @@ window.onload = async function () {
       "a4",
       "a5",
     ],
+    ignorePrefixForAutocomplete: "@",
     onChange: () => null,
   });
   const { refs } = component;
@@ -80,8 +81,19 @@ window.onload = async function () {
       "a4",
       "a5",
     ]);
-
     is(refs.autocomplete.state.selectedIndex, -1, "Initialised selectedIndex is -1");
+
+    // Check for ignored prefix
+    synthesizeKey("VK_BACK_SPACE", {});
+    await forceRender(component);
+    sendString("@");
+    await forceRender(component);
+    ok(!$(".devtools-autocomplete-popup"), "Autocomplete list not visible");
+
+    // Ignored prefixes with more chars
+    sendString("b");
+    await forceRender(component);
+    compareAutocompleteList($(".devtools-autocomplete-listbox"), ["@baZ", "@baZfoo"]);
 
     // Blur event
     $(".devtools-searchinput").blur();
@@ -91,8 +103,11 @@ window.onload = async function () {
   }
 
   async function testKeyEventsWithAutocomplete() {
-    // Clear the initial input
     $(".devtools-searchinput").focus();
+    synthesizeKey("VK_BACK_SPACE", {});
+    synthesizeKey("VK_BACK_SPACE", {});
+    sendString("a");
+    await forceRender(component);
 
     // ArrowDown
     synthesizeKey("VK_DOWN", {});
