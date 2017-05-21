@@ -23,7 +23,6 @@ module.exports = createClass({
     placeholder: PropTypes.string,
     type: PropTypes.string,
     autocompleteList: PropTypes.array,
-    ignorePrefixForAutocomplete: PropTypes.string,
   },
 
   getDefaultProps() {
@@ -141,14 +140,6 @@ module.exports = createClass({
     }
   },
 
-  showAutocomplete() {
-    let { value, focused } = this.state;
-    let { autocompleteList, ignorePrefixForAutocomplete } = this.props;
-
-    return autocompleteList.length > 0 && focused
-      && value !== "" && ignorePrefixForAutocomplete !== value;
-  },
-
   render() {
     let {
       type = "search",
@@ -158,6 +149,8 @@ module.exports = createClass({
     let { value } = this.state;
     let divClassList = ["devtools-searchbox", "has-clear-btn"];
     let inputClassList = [`devtools-${type}input`];
+    let showAutocomplete = autocompleteList.length > 0 && this.state.focused
+      && value !== "";
 
     if (value !== "") {
       inputClassList.push("filled");
@@ -179,7 +172,7 @@ module.exports = createClass({
         hidden: value == "",
         onClick: this.onClearButtonClick
       }),
-      this.showAutocomplete() && AutocompletePopup({
+      showAutocomplete && AutocompletePopup({
         list: autocompleteList,
         filter: value,
         ref: "autocomplete",
