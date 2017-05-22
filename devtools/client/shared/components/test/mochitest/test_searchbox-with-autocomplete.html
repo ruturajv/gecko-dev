@@ -93,14 +93,6 @@ window.onload = async function () {
   async function testKeyEventsWithAutocomplete() {
     // Clear the initial input
     $(".devtools-searchinput").focus();
-    await forceRender(component);
-    sendString("aB");
-    await forceRender(component);
-    compareAutocompleteList($(".devtools-autocomplete-listbox"), ["ABC", "abc"]);
-
-    // Clear the initial input
-    synthesizeKey("VK_BACK_SPACE", {});
-    synthesizeKey("VK_BACK_SPACE", {});
 
     // ArrowDown
     synthesizeKey("VK_DOWN", {});
