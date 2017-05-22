@@ -84,6 +84,7 @@ var gPlayedTests = [
   { name:"seek-short.webm", type:"video/webm", duration:0.23 },
   { name:"gizmo-short.mp4", type:"video/mp4", duration:0.27 },
   { name:"owl-short.mp3", type:"audio/mpeg", duration:0.52 },
+  { name:"very-short.mp3", type:"audio/mpeg", duration:0.07 },
   // Disable vbr.mp3 to see if it reduces the error of AUDCLNT_E_CPUUSAGE_EXCEEDED.
   // See bug 1110922 comment 26.
   //{ name:"vbr.mp3", type:"audio/mpeg", duration:10.0 },
@@ -544,6 +545,13 @@ if (manifestNavigator().userAgent.includes("Windows") &&
   gErrorTests = gErrorTests.concat({name: "red-46x48.mp4", type:"video/mp4"},
                                    {name: "red-48x46.mp4", type:"video/mp4"});
 }
+
+// These files would get error after receiving "loadedmetadata", we would like
+// to check duration in "onerror" and make sure the duration is still available.
+var gDurationTests = [
+  { name:"bug603918.webm", duration:6.076 },
+  { name:"bug604067.webm", duration:6.076 }
+]
 
 // These are files that have nontrivial duration and are useful for seeking within.
 var gSeekTests = [

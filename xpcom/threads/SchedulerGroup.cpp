@@ -19,35 +19,6 @@
 
 using namespace mozilla;
 
-class SchedulerGroup::Runnable final : public mozilla::Runnable
-{
-public:
-  Runnable(already_AddRefed<nsIRunnable>&& aRunnable,
-           SchedulerGroup* aDispatcher);
-
-  NS_IMETHODIMP
-  GetName(nsACString& aName) override
-  {
-    mozilla::Runnable::GetName(aName);
-    if (aName.IsEmpty()) {
-      // Try to get a name from the underlying runnable.
-      nsCOMPtr<nsINamed> named = do_QueryInterface(mRunnable);
-      if (named) {
-        named->GetName(aName);
-      }
-    }
-    aName.AppendASCII("(labeled)");
-    return NS_OK;
-  }
-
-  bool IsBackground() const { return mDispatcher->IsBackground(); }
-
-  NS_DECL_NSIRUNNABLE
-private:
-  nsCOMPtr<nsIRunnable> mRunnable;
-  RefPtr<SchedulerGroup> mDispatcher;
-};
-
 /* SchedulerEventTarget */
 
 namespace {
@@ -90,17 +61,23 @@ public:
     : mIsBackground(aRunnable->IsBackground())
   {
     MOZ_GUARD_OBJECT_NOTIFIER_INIT;
+// Telemetry collection temporarily disabled in bug 1366156.
+#if 0
 #ifdef EARLY_BETA_OR_EARLIER
     aRunnable->GetName(mKey);
     mStart = TimeStamp::Now();
 #endif
+#endif
   }
   ~AutoCollectVsyncTelemetry()
   {
+// Telemetry collection temporarily disabled in bug 1366156.
+#if 0
 #ifdef EARLY_BETA_OR_EARLIER
     if (Telemetry::CanRecordBase()) {
       CollectTelemetry();
     }
+#endif
 #endif
   }
 
@@ -350,10 +327,28 @@ SchedulerGroup::SetValidatingAccess(ValidationType aType)
 }
 
 SchedulerGroup::Runnable::Runnable(already_AddRefed<nsIRunnable>&& aRunnable,
-                                   SchedulerGroup* aDispatcher)
+                                   SchedulerGroup* aGroup)
  : mRunnable(Move(aRunnable)),
-   mDispatcher(aDispatcher)
+   mGroup(aGroup)
 {
+}
+
+NS_IMETHODIMP
+SchedulerGroup::Runnable::GetName(nsACString& aName)
+{
+  mozilla::Runnable::GetName(aName);
+  if (aName.IsEmpty()) {
+    // Try to get a name from the underlying runnable.
+    nsCOMPtr<nsINamed> named = do_QueryInterface(mRunnable);
+    if (named) {
+      named->GetName(aName);
+    }
+    if (aName.IsEmpty()) {
+      aName.AssignLiteral("anonymous");
+    }
+  }
+  aName.AppendASCII("(labeled)");
+  return NS_OK;
 }
 
 NS_IMETHODIMP
@@ -361,7 +356,7 @@ SchedulerGroup::Runnable::Run()
 {
   MOZ_RELEASE_ASSERT(NS_IsMainThread());
 
-  mDispatcher->SetValidatingAccess(StartValidation);
+  mGroup->SetValidatingAccess(StartValidation);
 
   nsresult result;
 
@@ -374,9 +369,13 @@ SchedulerGroup::Runnable::Run()
   // the scope of the TabGroup.
   mRunnable = nullptr;
 
-  mDispatcher->SetValidatingAccess(EndValidation);
+  mGroup->SetValidatingAccess(EndValidation);
   return result;
 }
+
+NS_IMPL_ISUPPORTS_INHERITED(SchedulerGroup::Runnable,
+                            mozilla::Runnable,
+                            SchedulerGroup::Runnable)
 
 SchedulerGroup::AutoProcessEvent::AutoProcessEvent()
  : mPrevRunningDispatcher(SchedulerGroup::sRunningDispatcher)

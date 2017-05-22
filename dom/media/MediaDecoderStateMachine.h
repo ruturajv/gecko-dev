@@ -214,8 +214,8 @@ public:
 
   MediaEventSource<void>& OnMediaNotSeekable() const;
 
-  MediaEventSourceExc<nsAutoPtr<MediaInfo>,
-                      nsAutoPtr<MetadataTags>,
+  MediaEventSourceExc<UniquePtr<MediaInfo>,
+                      UniquePtr<MetadataTags>,
                       MediaDecoderEventVisibility>&
   MetadataLoadedEvent() { return mMetadataLoadedEvent; }
 
@@ -422,11 +422,6 @@ protected:
   // The decoder monitor must be held. This is only called on the
   // decode thread.
   void DecodeError(const MediaResult& aError);
-
-  // Dispatches a LoadedMetadataEvent.
-  // This is threadsafe and can be called on any thread.
-  // The decoder monitor must be held.
-  void EnqueueLoadedMetadataEvent();
 
   void EnqueueFirstFrameLoadedEvent();
 
@@ -636,13 +631,7 @@ private:
   // Stores presentation info required for playback.
   Maybe<MediaInfo> mInfo;
 
-  nsAutoPtr<MetadataTags> mMetadataTags;
-
   mozilla::MediaMetadataManager mMetadataManager;
-
-  // True if we are back from DECODER_STATE_DORMANT state and
-  // LoadedMetadataEvent was already sent.
-  bool mSentLoadedMetadataEvent;
 
   // True if we've decoded first frames (thus having the start time) and
   // notified the FirstFrameLoaded event. Note we can't initiate seek until the
@@ -680,8 +669,8 @@ private:
   MediaEventListener mAudibleListener;
   MediaEventListener mOnMediaNotSeekable;
 
-  MediaEventProducerExc<nsAutoPtr<MediaInfo>,
-                        nsAutoPtr<MetadataTags>,
+  MediaEventProducerExc<UniquePtr<MediaInfo>,
+                        UniquePtr<MetadataTags>,
                         MediaDecoderEventVisibility> mMetadataLoadedEvent;
   MediaEventProducerExc<nsAutoPtr<MediaInfo>,
                         MediaDecoderEventVisibility> mFirstFrameLoadedEvent;

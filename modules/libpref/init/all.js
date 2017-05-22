@@ -209,6 +209,16 @@ pref("dom.keyboardevent.dispatch_during_composition", false);
 // significantly increase the number of compartments in the system.
 pref("dom.compartment_per_addon", true);
 
+// Whether to enable the JavaScript start-up cache. This causes one of the first
+// execution to record the bytecode of the JavaScript function used, and save it
+// in the existing cache entry. On the following loads of the same script, the
+// bytecode would be loaded from the cache instead of being generated once more.
+pref("dom.script_loader.bytecode_cache.enabled", false); // Not tuned yet.
+
+// Ignore the heuristics of the bytecode cache, and always record on the first
+// visit. (used for testing purposes).
+pref("dom.script_loader.bytecode_cache.eager", false);
+
 // Fastback caching - if this pref is negative, then we calculate the number
 // of content viewers to cache based on the amount of available memory.
 pref("browser.sessionhistory.max_total_viewers", -1);
@@ -1211,6 +1221,14 @@ pref("dom.send_after_paint_to_content", false);
 pref("dom.min_timeout_value", 4);
 // And for background windows
 pref("dom.min_background_timeout_value", 1000);
+// Timeout clamp in ms for tracking timeouts we clamp
+// Note that this requires the privacy.trackingprotection.annotate_channels pref to be on in order to have any effect.
+pref("dom.min_tracking_timeout_value", 4);
+// And for background windows
+// Note that this requires the privacy.trackingprotection.annotate_channels pref to be on in order to have any effect.
+pref("dom.min_tracking_background_timeout_value", 10000);
+// Delay in ms from document load until we start throttling tracking timeouts.
+pref("dom.timeout.tracking_throttling_delay", 30000);
 
 // Don't use new input types
 pref("dom.experimental_forms", false);
@@ -2781,6 +2799,8 @@ pref("layout.css.prefixes.transitions", true);
 pref("layout.css.prefixes.animations", true);
 pref("layout.css.prefixes.box-sizing", true);
 pref("layout.css.prefixes.font-features", true);
+
+// Is -moz-prefixed gradient functions enabled?
 pref("layout.css.prefixes.gradients", true);
 
 // Are webkit-prefixed properties & property-values supported?
@@ -3143,7 +3163,7 @@ pref("browser.tabs.remote.separateFileUriProcess", false);
 // This has been added in case breaking any window references between these
 // sorts of pages, which we have to do when we run them in the normal web
 // content process, causes compatibility issues.
-pref("browser.tabs.remote.allowLinkedWebInFileUriProcess", false);
+pref("browser.tabs.remote.allowLinkedWebInFileUriProcess", true);
 
 // Enable caching of Moz2D Path objects for SVG geometry elements
 pref("svg.path-caching.enabled", true);
@@ -4808,6 +4828,7 @@ pref("xpinstall.signatures.required", false);
 pref("extensions.alwaysUnpack", false);
 pref("extensions.minCompatiblePlatformVersion", "2.0");
 pref("extensions.webExtensionsMinPlatformVersion", "42.0a1");
+pref("extensions.legacy.enabled", true);
 pref("extensions.allow-non-mpc-extensions", true);
 
 // Other webextensions prefs
@@ -5638,9 +5659,11 @@ pref("media.block-autoplay-until-in-foreground", false);
 pref("media.block-autoplay-until-in-foreground", true);
 #endif
 
-#ifdef MOZ_STYLO
 // Is the Servo-backed style system enabled?
+#ifdef MOZ_STYLO_ENABLE
 pref("layout.css.servo.enabled", true);
+#else
+pref("layout.css.servo.enabled", false);
 #endif
 
 // HSTS Priming
@@ -5698,9 +5721,9 @@ pref("dom.IntersectionObserver.enabled", true);
 // Whether module scripts (<script type="module">) are enabled for content.
 pref("dom.moduleScripts.enabled", false);
 
-// Maximum number of setTimeout()/setInterval() callbacks to run in a single
-// event loop runnable. Minimum value of 1.
-pref("dom.timeout.max_consecutive_callbacks", 5);
+// Maximum amount of time in milliseconds consecutive setTimeout()/setInterval()
+// callback are allowed to run before yielding the event loop.
+pref("dom.timeout.max_consecutive_callbacks_ms", 4);
 
 #ifdef FUZZING
 pref("fuzzing.enabled", false);
@@ -5712,13 +5735,25 @@ pref("fuzzing.enabled", false);
 // it to a boolean as appropriate. In particular, do NOT add ifdefs here to
 // turn these on and off, instead use the conditional-pref code in gfxPrefs.h
 // to do that.
+pref("layers.advanced.background-color", 2);
+pref("layers.advanced.background-image", 2);
 pref("layers.advanced.border-layers", 2);
 pref("layers.advanced.boxshadow-inset-layers", 2);
 pref("layers.advanced.boxshadow-outer-layers", 2);
+pref("layers.advanced.bullet-layers", 2);
+pref("layers.advanced.button-foreground-layers", 2);
+pref("layers.advanced.canvas-background-color", 2);
 pref("layers.advanced.caret-layers", 2);
+pref("layers.advanced.columnRule-layers", 2);
 pref("layers.advanced.displaybuttonborder-layers", 2);
+pref("layers.advanced.image-layers", 2);
 pref("layers.advanced.outline-layers", 2);
-pref("layers.advanced.solid-color-layers", 2);
+pref("layers.advanced.solid-color", 2);
+pref("layers.advanced.table", 2);
+pref("layers.advanced.text-layers", 2);
+
+// Whether webrender should be used as much as possible.
+pref("gfx.webrendest.enabled", false);
 
 // Enable lowercased response header name
 pref("dom.xhr.lowercase_header.enabled", true);

@@ -750,7 +750,7 @@ nsStyleXUL::nsStyleXUL(const nsPresContext* aContext)
   , mBoxDirection(StyleBoxDirection::Normal)
   , mBoxOrient(StyleBoxOrient::Horizontal)
   , mBoxPack(StyleBoxPack::Start)
-  , mStretchStack(true)
+  , mStackSizing(StyleStackSizing::StretchToFit)
 {
   MOZ_COUNT_CTOR(nsStyleXUL);
 }
@@ -767,7 +767,7 @@ nsStyleXUL::nsStyleXUL(const nsStyleXUL& aSource)
   , mBoxDirection(aSource.mBoxDirection)
   , mBoxOrient(aSource.mBoxOrient)
   , mBoxPack(aSource.mBoxPack)
-  , mStretchStack(aSource.mStretchStack)
+  , mStackSizing(aSource.mStackSizing)
 {
   MOZ_COUNT_CTOR(nsStyleXUL);
 }
@@ -781,7 +781,7 @@ nsStyleXUL::CalcDifference(const nsStyleXUL& aNewData) const
       mBoxOrient == aNewData.mBoxOrient &&
       mBoxPack == aNewData.mBoxPack &&
       mBoxOrdinal == aNewData.mBoxOrdinal &&
-      mStretchStack == aNewData.mStretchStack) {
+      mStackSizing == aNewData.mStackSizing) {
     return nsChangeHint(0);
   }
   if (mBoxOrdinal != aNewData.mBoxOrdinal) {
@@ -2019,16 +2019,6 @@ nsStyleImageRequest::nsStyleImageRequest(Mode aModeFlags,
 
 nsStyleImageRequest::nsStyleImageRequest(
     Mode aModeFlags,
-    const nsAString& aURL,
-    already_AddRefed<URLExtraData> aExtraData)
-  : mImageValue(new css::ImageValue(aURL, Move(aExtraData)))
-  , mModeFlags(aModeFlags)
-  , mResolved(false)
-{
-}
-
-nsStyleImageRequest::nsStyleImageRequest(
-    Mode aModeFlags,
     mozilla::css::ImageValue* aImageValue)
   : mImageValue(aImageValue)
   , mModeFlags(aModeFlags)
@@ -2088,10 +2078,6 @@ nsStyleImageRequest::Resolve(nsPresContext* aPresContext)
 
   mDocGroup = doc->GetDocGroup();
 
-  // For now, just have unique nsCSSValue/ImageValue objects.  We should
-  // really store the ImageValue on the Servo specified value, so that we can
-  // share imgRequestProxys that come from the same rule in the same
-  // document.
   mImageValue->Initialize(doc);
 
   nsCSSValue value;

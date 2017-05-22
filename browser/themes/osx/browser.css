@@ -520,15 +520,14 @@ toolbarpaletteitem[place="palette"] > #personal-bookmarks > #bookmarks-toolbar-p
 
 /* ::::: nav-bar-inner ::::: */
 
+%include ../shared/urlbar-searchbar.inc.css
+
 %ifdef MOZ_PHOTON_THEME
 
 #main-window {
   --urlbar-border-color: hsla(240, 5%, 5%, .25);
   --urlbar-border-color-hover: hsla(240, 5%, 5%, .35);
-  --urlbar-background-color: -moz-field;
 }
-
-%include ../shared/location-search-bar.inc.css
 
 #urlbar[focused="true"],
 .searchbar-textbox[focused="true"] {
@@ -538,7 +537,7 @@ toolbarpaletteitem[place="palette"] > #personal-bookmarks > #bookmarks-toolbar-p
 
 #urlbar,
 .searchbar-textbox {
-  font: icon;
+  font-size: 1.25em;
 }
 
 %else
@@ -581,10 +580,6 @@ toolbarpaletteitem[place="palette"] > #personal-bookmarks > #bookmarks-toolbar-p
 .searchbar-textbox[focused="true"] {
   border-color: -moz-mac-focusring;
   box-shadow: var(--focus-ring-box-shadow);
-}
-
-#urlbar-container {
-  -moz-box-align: center;
 }
 
 #urlbar {
@@ -753,14 +748,6 @@ toolbarpaletteitem[place="palette"] > #personal-bookmarks > #bookmarks-toolbar-p
 
 #urlbar-search-settings:hover:active {
   background-color: var(--arrowpanel-dimmed-further);
-}
-
-#urlbar-search-splitter {
-  min-width: 8px;
-  width: 8px;
-  background-image: none;
-  margin: 0 -4px;
-  position: relative;
 }
 
 #search-container {

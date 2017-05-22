@@ -12,13 +12,16 @@
 #include "nsAnimationManager.h"
 #include "nsAttrValueInlines.h"
 #include "nsCSSCounterStyleRule.h"
+#include "nsCSSFontFaceRule.h"
 #include "nsCSSFrameConstructor.h"
 #include "nsCSSProps.h"
 #include "nsCSSParser.h"
 #include "nsCSSPseudoElements.h"
 #include "nsCSSRuleProcessor.h"
+#include "nsCSSRules.h"
 #include "nsContentUtils.h"
 #include "nsDOMTokenList.h"
+#include "nsDeviceContext.h"
 #include "nsIContentInlines.h"
 #include "nsIDOMNode.h"
 #include "nsIDocument.h"
@@ -329,20 +332,18 @@ Gecko_GetImplementedPseudo(RawGeckoElementBorrowed aElement)
 
 nsChangeHint
 Gecko_CalcStyleDifference(nsStyleContext* aOldStyleContext,
-                          ServoComputedValuesBorrowed aComputedValues)
+                          ServoComputedValuesBorrowed aComputedValues,
+                          bool* aAnyStyleChanged)
 {
   MOZ_ASSERT(aOldStyleContext);
   MOZ_ASSERT(aComputedValues);
 
-  // Eventually, we should compute things out of these flags like
-  // ElementRestyler::RestyleSelf does and pass the result to the caller to
-  // potentially halt traversal. See bug 1289868.
   uint32_t equalStructs, samePointerStructs;
   nsChangeHint result =
     aOldStyleContext->CalcStyleDifference(aComputedValues,
                                           &equalStructs,
                                           &samePointerStructs);
-
+  *aAnyStyleChanged = equalStructs != NS_STYLE_INHERIT_MASK;
   return result;
 }
 
@@ -538,9 +539,21 @@ Gecko_UpdateAnimations(RawGeckoElementBorrowed aElement,
         UpdateTransitions(const_cast<dom::Element*>(aElement), pseudoType,
                           oldServoValues, servoValues);
     }
+
     if (aTasks & UpdateAnimationsTasks::EffectProperties) {
       presContext->EffectCompositor()->UpdateEffectProperties(
         servoValues, const_cast<dom::Element*>(aElement), pseudoType);
+    }
+
+    if (aTasks & UpdateAnimationsTasks::CascadeResults) {
+      // This task will be scheduled if we detected any changes to !important
+      // rules. We post a restyle here so that we can update the cascade
+      // results in the pre-traversal of the next restyle.
+      presContext->EffectCompositor()
+                 ->RequestRestyle(const_cast<Element*>(aElement),
+                                  pseudoType,
+                                  EffectCompositor::RestyleType::Standard,
+                                  EffectCompositor::CascadeLevel::Animations);
     }
   }
 }
@@ -1159,22 +1172,6 @@ Gecko_SetGradientImageValue(nsStyleImage* aImage, nsStyleGradient* aGradient)
   aImage->SetGradientData(aGradient);
 }
 
-static already_AddRefed<nsStyleImageRequest>
-CreateStyleImageRequest(nsStyleImageRequest::Mode aModeFlags,
-                        ServoBundledURI aURI)
-{
-  MOZ_ASSERT(aURI.mURLString);
-  MOZ_ASSERT(aURI.mExtraData->GetReferrer());
-  MOZ_ASSERT(aURI.mExtraData->GetPrincipal());
-
-  NS_ConvertUTF8toUTF16 url(reinterpret_cast<const char*>(aURI.mURLString),
-                            aURI.mURLStringLength);
-
-  RefPtr<nsStyleImageRequest> req =
-    new nsStyleImageRequest(aModeFlags, url, do_AddRef(aURI.mExtraData));
-  return req.forget();
-}
-
 NS_IMPL_THREADSAFE_FFI_REFCOUNTING(mozilla::css::ImageValue, ImageValue);
 
 static already_AddRefed<nsStyleImageRequest>
@@ -1192,7 +1189,8 @@ Gecko_ImageValue_Create(ServoBundledURI aURI)
   NS_ConvertUTF8toUTF16 url(reinterpret_cast<const char*>(aURI.mURLString),
                             aURI.mURLStringLength);
 
-  RefPtr<ImageValue> value(new ImageValue(url, do_AddRef(aURI.mExtraData)));
+  RefPtr<css::ImageValue> value(
+    new css::ImageValue(url, do_AddRef(aURI.mExtraData)));
   return value.forget().take();
 }
 
@@ -1204,15 +1202,6 @@ Gecko_SetLayerImageImageValue(nsStyleImage* aImage,
 
   RefPtr<nsStyleImageRequest> req =
     CreateStyleImageRequest(nsStyleImageRequest::Mode::Track, aImageValue);
-  aImage->SetImageRequest(req.forget());
-}
-
-void
-Gecko_SetUrlImageValue(nsStyleImage* aImage, ServoBundledURI aURI)
-{
-  MOZ_ASSERT(aImage);
-  RefPtr<nsStyleImageRequest> req =
-    CreateStyleImageRequest(nsStyleImageRequest::Mode::Track, aURI);
   aImage->SetImageRequest(req.forget());
 }
 
@@ -1256,13 +1245,6 @@ Gecko_SetCursorImageValue(nsCursorImage* aCursor,
 }
 
 void
-Gecko_SetCursorImage(nsCursorImage* aCursor, ServoBundledURI aURI)
-{
-  aCursor->mImage =
-    CreateStyleImageRequest(nsStyleImageRequest::Mode::Discard, aURI);
-}
-
-void
 Gecko_CopyCursorArrayFrom(nsStyleUserInterface* aDest,
                           const nsStyleUserInterface* aSrc)
 {
@@ -1277,13 +1259,6 @@ Gecko_SetContentDataImageValue(nsStyleContentData* aContent,
 
   RefPtr<nsStyleImageRequest> req =
     CreateStyleImageRequest(nsStyleImageRequest::Mode::Track, aImageValue);
-  aContent->SetImageRequest(req.forget());
-}
-
-void
-Gecko_SetContentDataImage(nsStyleContentData* aContent, ServoBundledURI aURI)
-{
-  RefPtr<nsStyleImageRequest> req = CreateStyleImageRequest(nsStyleImageRequest::Mode::Track, aURI);
   aContent->SetImageRequest(req.forget());
 }
 
@@ -1344,14 +1319,6 @@ Gecko_SetListStyleImageImageValue(nsStyleList* aList,
 }
 
 void
-Gecko_SetListStyleImage(nsStyleList* aList,
-                        ServoBundledURI aURI)
-{
-  aList->mListStyleImage =
-    CreateStyleImageRequest(nsStyleImageRequest::Mode(0), aURI);
-}
-
-void
 Gecko_CopyListStyleImageFrom(nsStyleList* aList, const nsStyleList* aSource)
 {
   aList->mListStyleImage = aSource->mListStyleImage;
@@ -1376,6 +1343,19 @@ Gecko_ClearPODTArray(void* aArray, size_t aElementSize, size_t aElementAlign)
 
   base->template ShiftData<nsTArrayInfallibleAllocator>(0, base->Length(), 0,
                                                         aElementSize, aElementAlign);
+}
+
+void Gecko_SetStyleGridTemplateArrayLengths(nsStyleGridTemplate* aValue,
+                                            uint32_t aTrackSizes)
+{
+  aValue->mMinTrackSizingFunctions.SetLength(aTrackSizes);
+  aValue->mMaxTrackSizingFunctions.SetLength(aTrackSizes);
+  aValue->mLineNameLists.SetLength(aTrackSizes + 1);
+}
+
+void Gecko_ResizeTArrayForStrings(nsTArray<nsString>* aArray, uint32_t aLength)
+{
+  aArray->SetLength(aLength);
 }
 
 void
@@ -1762,6 +1742,15 @@ Gecko_NewCSSValueSharedList(uint32_t aLen)
   return list.forget().take();
 }
 
+nsCSSValueSharedList*
+Gecko_NewNoneTransform()
+{
+  RefPtr<nsCSSValueSharedList> list = new nsCSSValueSharedList;
+  list->mHead = new nsCSSValueList;
+  list->mHead->mValue.SetNoneValue();
+  return list.forget().take();
+}
+
 void
 Gecko_CSSValue_SetAbsoluteLength(nsCSSValueBorrowedMut aCSSValue, nscoord aLen)
 {
@@ -2140,6 +2129,13 @@ Gecko_CSSFontFaceRule_GetCssText(const nsCSSFontFaceRule* aRule,
   MOZ_ASSERT(NS_IsMainThread());
 
   aRule->GetCssText(*aResult);
+}
+
+void
+Gecko_AddPropertyToSet(nsCSSPropertyIDSetBorrowedMut aPropertySet,
+                       nsCSSPropertyID aProperty)
+{
+  aPropertySet->AddProperty(aProperty);
 }
 
 NS_IMPL_FFI_REFCOUNTING(nsCSSFontFaceRule, CSSFontFaceRule);

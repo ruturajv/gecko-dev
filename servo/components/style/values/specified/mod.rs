@@ -13,6 +13,7 @@ use euclid::size::Size2D;
 use itoa;
 use parser::{ParserContext, Parse};
 use self::grid::{TrackBreadth as GenericTrackBreadth, TrackSize as GenericTrackSize};
+use self::grid::{TrackList as GenericTrackList, TrackSizeOrRepeat};
 use self::url::SpecifiedUrl;
 use std::ascii::AsciiExt;
 use std::f32;
@@ -20,7 +21,7 @@ use std::fmt;
 use std::io::Write;
 use style_traits::ToCss;
 use style_traits::values::specified::AllowedNumericType;
-use super::{Auto, CSSFloat, CSSInteger, HasViewportPercentage, Either, None_};
+use super::{Auto, CSSFloat, CSSInteger, Either, None_};
 use super::computed::{self, Context};
 use super::computed::{Shadow as ComputedShadow, ToComputedValue};
 use super::generics::BorderRadiusSize as GenericBorderRadiusSize;
@@ -74,8 +75,6 @@ impl ComputedValueAsSpecified for SpecifiedUrl {}
 
 no_viewport_percentage!(SpecifiedUrl);
 }
-
-no_viewport_percentage!(i32);  // For PropertyDeclaration::Order
 
 #[derive(Clone, PartialEq, Debug)]
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
@@ -288,7 +287,7 @@ impl Parse for BorderRadiusSize {
     }
 }
 
-#[derive(Clone, PartialEq, Copy, Debug)]
+#[derive(Clone, Copy, Debug, HasViewportPercentage, PartialEq)]
 #[cfg_attr(feature = "servo", derive(HeapSizeOf, Deserialize, Serialize))]
 /// An angle consisting of a value and a unit.
 ///
@@ -454,7 +453,7 @@ pub fn parse_border_width(context: &ParserContext, input: &mut Parser) -> Result
     })
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug, HasViewportPercentage, PartialEq)]
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
 #[allow(missing_docs)]
 pub enum BorderWidth {
@@ -502,15 +501,6 @@ impl ToCss for BorderWidth {
             BorderWidth::Medium => dest.write_str("medium"),
             BorderWidth::Thick => dest.write_str("thick"),
             BorderWidth::Width(ref length) => length.to_css(dest)
-        }
-    }
-}
-
-impl HasViewportPercentage for BorderWidth {
-    fn has_viewport_percentage(&self) -> bool {
-        match *self {
-            BorderWidth::Thin | BorderWidth::Medium | BorderWidth::Thick => false,
-            BorderWidth::Width(ref length) => length.has_viewport_percentage()
         }
     }
 }
@@ -942,7 +932,14 @@ pub type TrackBreadth = GenericTrackBreadth<LengthOrPercentage>;
 /// The specified value of a grid `<track-size>`
 pub type TrackSize = GenericTrackSize<LengthOrPercentage>;
 
-#[derive(Debug, Clone, PartialEq)]
+/// The specified value of a grid `<track-list>`
+/// (could also be `<auto-track-list>` or `<explicit-track-list>`)
+pub type TrackList = GenericTrackList<TrackSizeOrRepeat>;
+
+/// `<track-list> | none`
+pub type TrackListOrNone = Either<TrackList, None_>;
+
+#[derive(Clone, Debug, HasViewportPercentage, PartialEq)]
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
 #[allow(missing_docs)]
 pub struct Shadow {
@@ -952,15 +949,6 @@ pub struct Shadow {
     pub spread_radius: Length,
     pub color: Option<CSSColor>,
     pub inset: bool,
-}
-
-impl HasViewportPercentage for Shadow {
-    fn has_viewport_percentage(&self) -> bool {
-        self.offset_x.has_viewport_percentage() ||
-        self.offset_y.has_viewport_percentage() ||
-        self.blur_radius.has_viewport_percentage() ||
-        self.spread_radius.has_viewport_percentage()
-    }
 }
 
 impl ToComputedValue for Shadow {
@@ -1222,16 +1210,7 @@ impl LengthOrPercentageOrNumber {
     }
 }
 
-impl HasViewportPercentage for ClipRect {
-    fn has_viewport_percentage(&self) -> bool {
-        self.top.as_ref().map_or(false, |x| x.has_viewport_percentage()) ||
-        self.right.as_ref().map_or(false, |x| x.has_viewport_percentage()) ||
-        self.bottom.as_ref().map_or(false, |x| x.has_viewport_percentage()) ||
-        self.left.as_ref().map_or(false, |x| x.has_viewport_percentage())
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, HasViewportPercentage, PartialEq)]
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
 /// rect(<top>, <left>, <bottom>, <right>) used by clip and image-region
 pub struct ClipRect {

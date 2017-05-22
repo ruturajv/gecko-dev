@@ -282,9 +282,6 @@ mozilla::css::ImageValue* Gecko_ImageValue_Create(ServoBundledURI aURI);
 void Gecko_SetLayerImageImageValue(nsStyleImage* image,
                                    mozilla::css::ImageValue* aImageValue);
 
-// XXX cku: remove this function after gecko and stylo side are both ready
-void Gecko_SetUrlImageValue(nsStyleImage* image,
-                            ServoBundledURI uri);
 void Gecko_SetImageElement(nsStyleImage* image, nsIAtom* atom);
 void Gecko_CopyImageValueFrom(nsStyleImage* image, const nsStyleImage* other);
 void Gecko_InitializeImageCropRect(nsStyleImage* image);
@@ -299,25 +296,17 @@ nsStyleGradient* Gecko_CreateGradient(uint8_t shape,
 void Gecko_SetListStyleImageNone(nsStyleList* style_struct);
 void Gecko_SetListStyleImageImageValue(nsStyleList* style_struct,
                                   mozilla::css::ImageValue* aImageValue);
-// XXX cku: remove this function after gecko and stylo side are both ready
-void Gecko_SetListStyleImage(nsStyleList* style_struct,
-                             ServoBundledURI uri);
 void Gecko_CopyListStyleImageFrom(nsStyleList* dest, const nsStyleList* src);
 
 // cursor style.
 void Gecko_SetCursorArrayLength(nsStyleUserInterface* ui, size_t len);
 void Gecko_SetCursorImageValue(nsCursorImage* aCursor,
                                mozilla::css::ImageValue* aImageValue);
-// XXX cku: remove this function after gecko and stylo side are both ready
-void Gecko_SetCursorImage(nsCursorImage* cursor,
-                          ServoBundledURI uri);
 void Gecko_CopyCursorArrayFrom(nsStyleUserInterface* dest,
                                const nsStyleUserInterface* src);
 
 void Gecko_SetContentDataImageValue(nsStyleContentData* aList,
                                     mozilla::css::ImageValue* aImageValue);
-// XXX cku: remove this function after gecko and stylo side are both ready
-void Gecko_SetContentDataImage(nsStyleContentData* content_data, ServoBundledURI uri);
 void Gecko_SetContentDataArray(nsStyleContentData* content_data, nsStyleContentType type, uint32_t len);
 
 // Dirtiness tracking.
@@ -333,7 +322,8 @@ nsStyleContext* Gecko_GetStyleContext(RawGeckoElementBorrowed element,
                                       nsIAtom* aPseudoTagOrNull);
 mozilla::CSSPseudoElementType Gecko_GetImplementedPseudo(RawGeckoElementBorrowed element);
 nsChangeHint Gecko_CalcStyleDifference(nsStyleContext* oldstyle,
-                                       ServoComputedValuesBorrowed newstyle);
+                                       ServoComputedValuesBorrowed newstyle,
+                                       bool* any_style_changed);
 nsChangeHint Gecko_HintsHandledForDescendants(nsChangeHint aHint);
 
 // Get an element snapshot for a given element from the table.
@@ -353,6 +343,11 @@ void Gecko_EnsureTArrayCapacity(void* array, size_t capacity, size_t elem_size);
 // Important note: Only valid for POD types, since destructors won't be run
 // otherwise. This is ensured with rust traits for the relevant structs.
 void Gecko_ClearPODTArray(void* array, size_t elem_size, size_t elem_align);
+
+void Gecko_ResizeTArrayForStrings(nsTArray<nsString>* array, uint32_t length);
+
+void Gecko_SetStyleGridTemplateArrayLengths(nsStyleGridTemplate* grid_template,
+                                            uint32_t track_sizes);
 
 void Gecko_CopyStyleGridTemplateValues(nsStyleGridTemplate* grid_template,
                                        const nsStyleGridTemplate* other);
@@ -459,6 +454,7 @@ nsStyleQuoteValues* Gecko_NewStyleQuoteValues(uint32_t len);
 NS_DECL_THREADSAFE_FFI_REFCOUNTING(nsStyleQuoteValues, QuoteValues);
 
 nsCSSValueSharedList* Gecko_NewCSSValueSharedList(uint32_t len);
+nsCSSValueSharedList* Gecko_NewNoneTransform();
 
 // Getter for nsCSSValue
 nsCSSValueBorrowedMut Gecko_CSSValue_GetArrayItem(nsCSSValueBorrowedMut css_value, int32_t index);
@@ -541,6 +537,8 @@ bool Gecko_MatchStringArgPseudo(RawGeckoElementBorrowed element,
                                 mozilla::CSSPseudoClassType type,
                                 const char16_t* ident,
                                 bool* set_slow_selector);
+
+void Gecko_AddPropertyToSet(nsCSSPropertyIDSetBorrowedMut, nsCSSPropertyID);
 
 // Style-struct management.
 #define STYLE_STRUCT(name, checkdata_cb)                                       \

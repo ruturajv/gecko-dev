@@ -344,13 +344,6 @@ public:
   // on the main thread before get() can be used.
   nsStyleImageRequest(
       Mode aModeFlags,
-      const nsAString& aURL,
-      already_AddRefed<mozilla::URLExtraData> aExtraData);
-
-  // Can be called from any thread, but Resolve() must be called later
-  // on the main thread before get() can be used.
-  nsStyleImageRequest(
-      Mode aModeFlags,
       mozilla::css::ImageValue* aImageValue);
 
   bool Resolve(nsPresContext* aPresContext);
@@ -3334,7 +3327,7 @@ struct MOZ_NEEDS_MEMMOVABLE_MEMBERS nsStyleXUL
   mozilla::StyleBoxDirection mBoxDirection; // [reset]
   mozilla::StyleBoxOrient mBoxOrient;       // [reset]
   mozilla::StyleBoxPack mBoxPack;           // [reset]
-  bool          mStretchStack;          // [reset] see nsStyleConsts.h
+  mozilla::StyleStackSizing mStackSizing;   // [reset] see nsStyleConsts.h
 };
 
 struct MOZ_NEEDS_MEMMOVABLE_MEMBERS nsStyleColumn

@@ -19,6 +19,7 @@ use super::{CSSFloat, CSSInteger, RGBA};
 use super::generics::BorderRadiusSize as GenericBorderRadiusSize;
 use super::specified;
 use super::specified::grid::{TrackBreadth as GenericTrackBreadth, TrackSize as GenericTrackSize};
+use super::specified::grid::TrackList as GenericTrackList;
 
 pub use app_units::Au;
 pub use cssparser::Color as CSSColor;
@@ -174,7 +175,7 @@ impl<T> ToComputedValue for T
 }
 
 /// A computed `<angle>` value.
-#[derive(Clone, PartialEq, PartialOrd, Copy, Debug)]
+#[derive(Clone, Copy, Debug, HasViewportPercentage, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "servo", derive(HeapSizeOf, Deserialize, Serialize))]
 pub enum Angle {
     /// An angle with degree unit
@@ -594,6 +595,13 @@ pub type TrackBreadth = GenericTrackBreadth<LengthOrPercentage>;
 
 /// The computed value of a grid `<track-size>`
 pub type TrackSize = GenericTrackSize<LengthOrPercentage>;
+
+/// The computed value of a grid `<track-list>`
+/// (could also be `<auto-track-list>` or `<explicit-track-list>`)
+pub type TrackList = GenericTrackList<TrackSize>;
+
+/// `<track-list> | none`
+pub type TrackListOrNone = Either<TrackList, None_>;
 
 impl ClipRectOrAuto {
     /// Return an auto (default for clip-rect and image-region) value

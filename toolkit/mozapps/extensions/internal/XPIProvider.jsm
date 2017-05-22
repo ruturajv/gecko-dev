@@ -11,10 +11,6 @@ const Cu = Components.utils;
 
 this.EXPORTED_SYMBOLS = ["XPIProvider"];
 
-const CONSTANTS = {};
-Cu.import("resource://gre/modules/addons/AddonConstants.jsm", CONSTANTS);
-const { ADDON_SIGNING, REQUIRE_SIGNING } = CONSTANTS
-
 Cu.import("resource://gre/modules/Services.jsm");
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 Cu.import("resource://gre/modules/AddonManager.jsm");
@@ -22,6 +18,10 @@ Cu.import("resource://gre/modules/Preferences.jsm");
 
 XPCOMUtils.defineLazyModuleGetter(this, "AddonRepository",
                                   "resource://gre/modules/addons/AddonRepository.jsm");
+XPCOMUtils.defineLazyModuleGetter(this, "AddonSettings",
+                                  "resource://gre/modules/addons/AddonSettings.jsm");
+XPCOMUtils.defineLazyModuleGetter(this, "AppConstants",
+                                  "resource://gre/modules/AppConstants.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "ChromeManifestParser",
                                   "resource://gre/modules/ChromeManifestParser.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "LightweightThemeManager",
@@ -229,6 +229,7 @@ const PREF_E10S_BLOCK_ENABLE          = "extensions.e10sBlocksEnabling";
 const PREF_E10S_ADDON_BLOCKLIST       = "extensions.e10s.rollout.blocklist";
 const PREF_E10S_ADDON_POLICY          = "extensions.e10s.rollout.policy";
 const PREF_E10S_HAS_NONEXEMPT_ADDON   = "extensions.e10s.rollout.hasAddon";
+const PREF_ALLOW_LEGACY               = "extensions.legacy.enabled";
 const PREF_ALLOW_NON_MPC              = "extensions.allow-non-mpc-extensions";
 
 const PREF_EM_MIN_COMPAT_APP_VERSION      = "extensions.minCompatibleAppVersion";
@@ -263,6 +264,8 @@ const FILE_OLD_CACHE                  = "extensions.cache";
 const FILE_RDF_MANIFEST               = "install.rdf";
 const FILE_WEB_MANIFEST               = "manifest.json";
 const FILE_XPI_ADDONS_LIST            = "extensions.ini";
+
+const ADDON_ID_DEFAULT_THEME          = "{972ce4c6-7e08-4474-a285-3208198ce6fd}";
 
 const KEY_PROFILEDIR                  = "ProfD";
 const KEY_ADDON_APP_DIR               = "XREAddonAppDir";
@@ -393,6 +396,14 @@ const SIGNED_TYPES = new Set([
   "webextension-theme",
 ]);
 
+const ALL_TYPES = new Set([
+  "dictionary",
+  "extension",
+  "experiment",
+  "locale",
+  "theme",
+]);
+
 // This is a random number array that can be used as "salt" when generating
 // an automatic ID based on the directory path of an add-on. It will prevent
 // someone from creating an ID for a permanent add-on that could be replaced
@@ -405,8 +416,7 @@ function mustSign(aType) {
   if (!SIGNED_TYPES.has(aType))
     return false;
 
-  return ((REQUIRE_SIGNING && !Cu.isInAutomation) ||
-          Preferences.get(PREF_XPI_SIGNATURES_REQUIRED, false));
+  return AddonSettings.REQUIRE_SIGNING;
 }
 
 // Keep track of where we are in startup for telemetry
@@ -455,7 +465,7 @@ function loadLazyObjects() {
   });
 
   Object.assign(scope, {
-    ADDON_SIGNING,
+    ADDON_SIGNING: AddonSettings.ADDON_SIGNING,
     SIGNED_TYPES,
     BOOTSTRAP_REASONS,
     DB_SCHEMA,
@@ -925,6 +935,13 @@ function isUsableAddon(aAddon) {
 
     if (aAddon.dependencies.some(id => !isActive(id)))
       return false;
+  }
+
+  if (!AddonSettings.ALLOW_LEGACY_EXTENSIONS &&
+      aAddon.type == "extension" && !aAddon.isSystem &&
+      aAddon.signedState !== AddonManager.SIGNEDSTATE_PRIVILEGED) {
+    logger.warn(`disabling legacy extension ${aAddon.id}`);
+    return false;
   }
 
   if (!ALLOW_NON_MPC && aAddon.type == "extension" &&
@@ -1953,7 +1970,7 @@ function shouldVerifySignedState(aAddon) {
 
   // Otherwise only check signatures if signing is enabled and the add-on is one
   // of the signed types.
-  return ADDON_SIGNING && SIGNED_TYPES.has(aAddon.type);
+  return AddonSettings.ADDON_SIGNING && SIGNED_TYPES.has(aAddon.type);
 }
 
 /**
@@ -1976,7 +1993,7 @@ function verifyZipSignedState(aFile, aAddon) {
     });
 
   let root = Ci.nsIX509CertDB.AddonsPublicRoot;
-  if (!REQUIRE_SIGNING && Preferences.get(PREF_XPI_SIGNATURES_DEV_ROOT, false))
+  if (!AppConstants.MOZ_REQUIRE_SIGNING && Preferences.get(PREF_XPI_SIGNATURES_DEV_ROOT, false))
     root = Ci.nsIX509CertDB.AddonsStageRoot;
 
   return new Promise(resolve => {
@@ -2018,7 +2035,7 @@ function verifyDirSignedState(aDir, aAddon) {
     });
 
   let root = Ci.nsIX509CertDB.AddonsPublicRoot;
-  if (!REQUIRE_SIGNING && Preferences.get(PREF_XPI_SIGNATURES_DEV_ROOT, false))
+  if (!AppConstants.MOZ_REQUIRE_SIGNING && Preferences.get(PREF_XPI_SIGNATURES_DEV_ROOT, false))
     root = Ci.nsIX509CertDB.AddonsStageRoot;
 
   return new Promise(resolve => {
@@ -2406,7 +2423,15 @@ class XPIState {
     // We don't use aDBAddon.active here because it's not updated until after restart.
     let mustGetMod = (aDBAddon.visible && !aDBAddon.disabled && !this.enabled);
 
-    this.enabled = aDBAddon.visible && !aDBAddon.disabled;
+    // We need to treat XUL themes specially here, since lightweight
+    // themes require the default theme's chrome to be registered even
+    // though we report it as disabled for UI purposes.
+    if (aDBAddon.type == "theme") {
+      this.enabled = aDBAddon.internalName == XPIProvider.selectedSkin;
+    } else {
+      this.enabled = aDBAddon.visible && !aDBAddon.disabled;
+    }
+
     this.version = aDBAddon.version;
     this.type = aDBAddon.type;
     this.enableShims = this.type == "extension" && !aDBAddon.multiprocessCompatible;
@@ -2909,6 +2934,12 @@ this.XPIProvider = {
   // Have we started shutting down bootstrap add-ons?
   _closing: false,
 
+  // Check if the XPIDatabase has been loaded (without actually
+  // triggering unwanted imports or I/O)
+  get isDBLoaded() {
+    return gLazyObjectsLoaded && XPIDatabase.initialized;
+  },
+
   /**
    * Returns true if the add-on with the given ID is currently active,
    * without forcing the add-ons database to load.
@@ -3229,8 +3260,9 @@ this.XPIProvider = {
       Services.prefs.addObserver(PREF_EM_MIN_COMPAT_PLATFORM_VERSION, this);
       Services.prefs.addObserver(PREF_E10S_ADDON_BLOCKLIST, this);
       Services.prefs.addObserver(PREF_E10S_ADDON_POLICY, this);
-      if (!REQUIRE_SIGNING || Cu.isInAutomation)
+      if (!AppConstants.MOZ_REQUIRE_SIGNING || Cu.isInAutomation)
         Services.prefs.addObserver(PREF_XPI_SIGNATURES_REQUIRED, this);
+      Services.prefs.addObserver(PREF_ALLOW_LEGACY, this);
       Services.prefs.addObserver(PREF_ALLOW_NON_MPC, this);
       Services.obs.addObserver(this, NOTIFICATION_FLUSH_PERMISSIONS);
 
@@ -3350,6 +3382,22 @@ this.XPIProvider = {
           Services.obs.removeObserver(this, "final-ui-startup");
         }
       }, "final-ui-startup");
+
+      // Once other important startup work is finished, try to load the
+      // XPI database so that the telemetry environment can be populated
+      // with detailed addon information.
+      if (!this.isDBLoaded) {
+        Services.obs.addObserver({
+          observe(subject, topic, data) {
+            Services.obs.removeObserver(this, "sessionstore-windows-restored");
+
+            // It would be nice to defer some of the work here until we
+            // have idle time but we can't yet use requestIdleCallback()
+            // from chrome.  See bug 1358476.
+            XPIDatabase.asyncLoadDB();
+          },
+        }, "sessionstore-windows-restored");
+      }
 
       AddonManagerPrivate.recordTimestamp("XPI_startup_end");
 
@@ -4089,6 +4137,30 @@ this.XPIProvider = {
   },
 
   /**
+   * Returns the add-on state data for the restartful extensions which
+   * should be available in safe mode. In particular, this means the
+   * default theme, and only the default theme.
+   *
+   * @returns {object}
+   */
+  getSafeModeExtensions() {
+    let loc = XPIStates.getLocation(KEY_APP_GLOBAL);
+    let state = loc.get(ADDON_ID_DEFAULT_THEME);
+
+    // Use the default state data for the default theme, but always mark
+    // it enabled, in case another theme is enabled in normal mode.
+    let addonData = state.toJSON();
+    addonData.enabled = true;
+
+    return {
+      [KEY_APP_GLOBAL]: {
+        path: loc.path,
+        addons: { [ADDON_ID_DEFAULT_THEME]: addonData },
+      },
+    };
+  },
+
+  /**
    * Checks for any changes that have occurred since the last time the
    * application was launched.
    *
@@ -4205,6 +4277,12 @@ this.XPIProvider = {
         } catch (e) {
           logger.warn("Unable to remove old extension cache " + oldCache.path, e);
         }
+      }
+
+      if (Services.appinfo.inSafeMode) {
+        aomStartup.initializeExtensions(this.getSafeModeExtensions());
+        logger.debug("Initialized safe mode add-ons");
+        return false;
       }
 
       // If the application crashed before completing any pending operations then
@@ -4567,16 +4645,7 @@ this.XPIProvider = {
 
      for (let [id, val] of this.activeAddons) {
        if (aInstanceID == val.instanceID) {
-         if (val.safeWrapper) {
-           return Promise.resolve(val.safeWrapper);
-         }
-
-         return new Promise(resolve => {
-           this.getAddonByID(id, function(addon) {
-             val.safeWrapper = new PrivateWrapper(addon);
-             resolve(val.safeWrapper);
-           });
-         });
+         return new Promise(resolve => this.getAddonByID(id, resolve));
        }
      }
 
@@ -4617,11 +4686,65 @@ this.XPIProvider = {
    */
   getAddonsByTypes(aTypes, aCallback) {
     let typesToGet = getAllAliasesForTypes(aTypes);
+    if (typesToGet && !typesToGet.some(type => ALL_TYPES.has(type))) {
+      aCallback([]);
+      return;
+    }
 
     XPIDatabase.getVisibleAddons(typesToGet, function(aAddons) {
       aCallback(aAddons.map(a => a.wrapper));
     });
   },
+
+  /**
+   * Called to get active Addons of a particular type
+   *
+   * @param  aTypes
+   *         An array of types to fetch. Can be null to get all types.
+   * @returns {Promise<Array<Addon>>}
+   */
+  getActiveAddons(aTypes) {
+    // If we already have the database loaded, returning full info is fast.
+    if (this.isDBLoaded) {
+      return new Promise(resolve => {
+        this.getAddonsByTypes(aTypes, addons => {
+          // The thing with experiments is an ugly hack but we want
+          // Experiments.jsm to use this interface instead of getAddonsByTypes.
+          // They'll go away at some point and we can forget this ever happened.
+          resolve(addons.filter(addon => addon.isActive ||
+                                       (addon.type == "experiment" && !addon.appDisabled)));
+        });
+      });
+    }
+
+    // Construct addon-like objects with the information we already
+    // have in memory.
+    if (!XPIStates.db) {
+      return Promise.reject(new Error("XPIStates not yet initialized"));
+    }
+
+    let result = [];
+    for (let addon of XPIStates.enabledAddons()) {
+      let location = this.installLocationsByName[addon.location.name];
+      let scope, isSystem;
+      if (location) {
+        ({scope, isSystem} = location);
+      }
+      result.push({
+        id: addon.id,
+        version: addon.version,
+        type: addon.type,
+        updateDate: addon.lastModifiedTime,
+        scope,
+        isSystem,
+        isWebExtension: isWebExtension(addon),
+        multiprocessCompatible: addon.multiprocessCompatible,
+      });
+    }
+
+    return Promise.resolve(result);
+  },
+
 
   /**
    * Obtain an Addon having the specified Sync GUID.
@@ -4843,7 +4966,7 @@ this.XPIProvider = {
 
     for (let [id, val] of this.activeAddons) {
       aConnection.setAddonOptions(
-        id, { global: val.debugGlobal || val.bootstrapScope });
+        id, { global: val.bootstrapScope });
     }
   },
 
@@ -4878,6 +5001,7 @@ this.XPIProvider = {
         this.updateAddonAppDisabledStates();
         break;
       case PREF_XPI_SIGNATURES_REQUIRED:
+      case PREF_ALLOW_LEGACY:
       case PREF_ALLOW_NON_MPC:
         this.updateAddonAppDisabledStates();
         break;
@@ -5159,8 +5283,6 @@ this.XPIProvider = {
                                aMultiprocessCompatible, aRunInSafeMode,
                                aDependencies, hasEmbeddedWebExtension) {
     this.activeAddons.set(aId, {
-      debugGlobal: null,
-      safeWrapper: null,
       bootstrapScope: null,
       // a Symbol passed to this add-on, which it can use to identify itself
       instanceID: Symbol(aId),
@@ -5224,15 +5346,8 @@ this.XPIProvider = {
         activeAddon.bootstrapScope, "console",
         () => new ConsoleAPI({ consoleID: "addon/" + aId }));
 
-      // As we don't want our caller to control the JS version used for the
-      // bootstrap file, we run loadSubScript within the context of the
-      // sandbox with the latest JS version set explicitly.
       activeAddon.bootstrapScope.__SCRIPT_URI_SPEC__ = uri;
-      Components.utils.evalInSandbox(
-        "Components.classes['@mozilla.org/moz/jssubscript-loader;1'] \
-                   .getService(Components.interfaces.mozIJSSubScriptLoader) \
-                   .loadSubScript(__SCRIPT_URI_SPEC__);",
-                   activeAddon.bootstrapScope, "ECMAv5");
+      Services.scriptloader.loadSubScript(uri, activeAddon.bootstrapScope);
     } catch (e) {
       logger.warn("Error loading bootstrap.js for " + aId, e);
     }
@@ -5324,8 +5439,8 @@ this.XPIProvider = {
 
       let method = undefined;
       try {
-        method = Components.utils.evalInSandbox(`${aMethod};`,
-          activeAddon.bootstrapScope, "ECMAv5");
+        let scope = activeAddon.bootstrapScope;
+        method = scope[aMethod] || Cu.evalInSandbox(`${aMethod};`, scope);
       } catch (e) {
         // An exception will be caught if the expected method is not defined.
         // That will be logged below.
@@ -5521,8 +5636,14 @@ this.XPIProvider = {
     }
 
     // Notify any other providers that a new theme has been enabled
-    if (isTheme(aAddon.type) && !isDisabled)
+    if (isTheme(aAddon.type) && !isDisabled) {
       AddonManagerPrivate.notifyAddonChanged(aAddon.id, aAddon.type, needsRestart);
+
+      if (xpiState) {
+        xpiState.syncWithDB(aAddon);
+        XPIStates.save();
+      }
+    }
 
     return isDisabled;
   },
@@ -8121,68 +8242,6 @@ AddonWrapper.prototype = {
     return getURIForResourceInFile(addon._sourceBundle, aPath);
   }
 };
-
-/**
- * The PrivateWrapper is used to expose certain functionality only when being
- * called with the add-on instanceID, disallowing other add-ons to access it.
- */
-function PrivateWrapper(aAddon) {
-  AddonWrapper.call(this, aAddon);
-}
-
-PrivateWrapper.prototype = Object.create(AddonWrapper.prototype);
-Object.assign(PrivateWrapper.prototype, {
-  addonId() {
-    return this.id;
-  },
-
-  /**
-   * Retrieves the preferred global context to be used from the
-   * add-on debugging window.
-   *
-   * @returns  global
-   *         The object set as global context. Must be a window object.
-   */
-  getDebugGlobal(global) {
-    let activeAddon = XPIProvider.activeAddons.get(this.id);
-    if (activeAddon) {
-      return activeAddon.debugGlobal;
-    }
-
-    return null;
-  },
-
-  /**
-   * Defines a global context to be used in the console
-   * of the add-on debugging window.
-   *
-   * @param  global
-   *         The object to set as global context. Must be a window object.
-   */
-  setDebugGlobal(global) {
-    if (!global) {
-      // If the new global is null, notify the listeners regardless
-      // from the current state of the addon.
-      // NOTE: this happen after the addon has been disabled and
-      // the global will never be set to null otherwise.
-      AddonManagerPrivate.callAddonListeners("onPropertyChanged",
-                                             addonFor(this),
-                                             ["debugGlobal"]);
-    } else {
-      let activeAddon = XPIProvider.activeAddons.get(this.id);
-      if (activeAddon) {
-        let globalChanged = activeAddon.debugGlobal != global;
-        activeAddon.debugGlobal = global;
-
-        if (globalChanged) {
-          AddonManagerPrivate.callAddonListeners("onPropertyChanged",
-                                                 addonFor(this),
-                                                 ["debugGlobal"]);
-        }
-      }
-    }
-  }
-});
 
 function chooseValue(aAddon, aObj, aProp) {
   let repositoryAddon = aAddon._repositoryAddon;

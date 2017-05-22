@@ -2419,6 +2419,39 @@
     "n_buckets": 100,
     "description": "Time in milliseconds between onStartRequest from the cache and onCacheEntryCheck. Report only when net wins and OCEC is before onStartRequest from net."
   },
+  "NETWORK_RACE_CACHE_BANDWITH_RACE_NETWORK_WIN": {
+    "record_in_processes": ["main", "content"],
+    "expires_in_version": "62",
+    "kind": "exponential",
+    "low": 32,
+    "high": 16777216,
+    "n_buckets": 100,
+    "description": "Amount of bytes received when we decide to race cache with network and network wins.",
+    "alert_emails": ["necko@mozilla.com", "bsmedberg@mozilla.com"],
+    "bug_numbers": [1354405]
+  },
+  "NETWORK_RACE_CACHE_BANDWITH_RACE_CACHE_WIN": {
+    "record_in_processes": ["main", "content"],
+    "expires_in_version": "62",
+    "kind": "exponential",
+    "low": 32,
+    "high": 16777216,
+    "n_buckets": 100,
+    "description": "Amount of bytes received when we decide to race cache with network and cache wins.",
+    "alert_emails": ["necko@mozilla.com", "bsmedberg@mozilla.com"],
+    "bug_numbers": [1354405]
+  },
+  "NETWORK_RACE_CACHE_BANDWITH_NOT_RACE": {
+    "record_in_processes": ["main", "content"],
+    "expires_in_version": "62",
+    "kind": "exponential",
+    "low": 32,
+    "high": 16777216,
+    "n_buckets": 100,
+    "description": "Amount of bytes received when we decide not to race cache with network.",
+    "alert_emails": ["necko@mozilla.com", "bsmedberg@mozilla.com"],
+    "bug_numbers": [1354405]
+  },
   "HTTP_AUTH_DIALOG_STATS_2": {
     "record_in_processes": ["main", "content"],
     "expires_in_version": "61",
@@ -12881,7 +12914,7 @@
   },
   "DISPLAY_ITEM_USAGE_COUNT": {
     "record_in_processes": ["main", "content"],
-    "alert_emails": ["mchang@mozilla.com", "gfx-telemetry@mozilla.com"],
+    "alert_emails": ["mchang@mozilla.com", "gfx-telemetry-alerts@mozilla.com"],
     "bug_numbers": [1353521],
     "expires_in_version": "56",
     "kind": "enumerated",
@@ -13072,5 +13105,15 @@
     "n_buckets": 100,
     "bug_numbers": [1345540],
     "description": "Time (ms) for the APZ handled wheel event spent in handlers."
+  },
+  "TIME_BETWEEN_UNLABELED_RUNNABLES_MS": {
+    "record_in_processes": ["content"],
+    "alert_emails": ["wmccloskey@mozilla.com"],
+    "expires_in_version": "60",
+    "kind": "exponential",
+    "high": 30000,
+    "n_buckets": 30,
+    "bug_numbers": [1351021],
+    "description": "Every time we run an unlabeled runnable, this histogram records the time (in ms) since the last unlabeled runnable ran."
   }
 }

@@ -17,6 +17,7 @@ use properties::{CSSWideKeyword, PropertyDeclaration};
 use properties::longhands;
 use properties::longhands::background_size::computed_value::T as BackgroundSizeList;
 use properties::longhands::font_weight::computed_value::T as FontWeight;
+use properties::longhands::font_stretch::computed_value::T as FontStretch;
 use properties::longhands::line_height::computed_value::T as LineHeight;
 use properties::longhands::text_shadow::computed_value::T as TextShadowList;
 use properties::longhands::text_shadow::computed_value::TextShadow;
@@ -1035,11 +1036,9 @@ impl Animatable for CalcLengthOrPercentage {
             }
         }
 
-        Ok(CalcLengthOrPercentage {
-            length: try!(self.length.add_weighted(&other.length, self_portion, other_portion)),
-            percentage: try!(add_weighted_half(self.percentage, other.percentage,
-                                               self_portion, other_portion)),
-        })
+        let length = self.unclamped_length().add_weighted(&other.unclamped_length(), self_portion, other_portion)?;
+        let percentage = add_weighted_half(self.percentage, other.percentage, self_portion, other_portion)?;
+        Ok(CalcLengthOrPercentage::with_clamping_mode(length, percentage, self.clamping_mode))
     }
 
     #[inline]
@@ -1049,7 +1048,7 @@ impl Animatable for CalcLengthOrPercentage {
 
     #[inline]
     fn compute_squared_distance(&self, other: &Self) -> Result<f64, ()> {
-        let length_diff = (self.length().0 - other.length().0) as f64;
+        let length_diff = (self.unclamped_length().0 - other.unclamped_length().0) as f64;
         let percentage_diff = (self.percentage() - other.percentage()) as f64;
         Ok(length_diff * length_diff + percentage_diff * percentage_diff)
     }
@@ -1114,7 +1113,7 @@ impl Animatable for LengthOrPercentage {
             (this, other) => {
                 let this: CalcLengthOrPercentage = From::from(this);
                 let other: CalcLengthOrPercentage = From::from(other);
-                let length_diff = (this.length().0 - other.length().0) as f64;
+                let length_diff = (this.unclamped_length().0 - other.unclamped_length().0) as f64;
                 let percentage_diff = (this.percentage() - other.percentage()) as f64;
                 Ok(length_diff * length_diff + percentage_diff * percentage_diff)
             }
@@ -1187,12 +1186,12 @@ impl Animatable for LengthOrPercentageOrAuto {
             (this, other) => {
                 let this: Option<CalcLengthOrPercentage> = From::from(this);
                 let other: Option<CalcLengthOrPercentage> = From::from(other);
-                if this.is_none() || other.is_none() {
-                    Err(())
-                } else {
-                    let length_diff = (this.unwrap().length().0 - other.unwrap().length().0) as f64;
-                    let percentage_diff = (this.unwrap().percentage() - other.unwrap().percentage()) as f64;
+                if let (Some(this), Some(other)) = (this, other) {
+                    let length_diff = (this.unclamped_length().0 - other.unclamped_length().0) as f64;
+                    let percentage_diff = (this.percentage() - other.percentage()) as f64;
                     Ok(length_diff * length_diff + percentage_diff * percentage_diff)
+                } else {
+                    Err(())
                 }
             }
         }
@@ -1359,6 +1358,54 @@ impl Animatable for FontWeight {
         let a = (*self as u32) as f64;
         let b = (*other as u32) as f64;
         a.compute_distance(&b)
+    }
+}
+
+/// https://drafts.csswg.org/css-fonts/#font-stretch-prop
+impl Animatable for FontStretch {
+    #[inline]
+    fn add_weighted(&self, other: &Self, self_portion: f64, other_portion: f64) -> Result<Self, ()> {
+        let from = f64::from(*self);
+        let to   = f64::from(*other);
+        let interpolated_mapped_index = ((from * self_portion + to * other_portion) + 0.5).floor();
+        Ok(interpolated_mapped_index.into())
+    }
+
+    #[inline]
+    fn compute_distance(&self, other: &Self) -> Result<f64, ()> {
+        let from = f64::from(*self);
+        let to   = f64::from(*other);
+        from.compute_distance(&to)
+    }
+}
+
+/// We should treat font stretch as real number in order to interpolate this property.
+/// https://drafts.csswg.org/css-fonts-3/#font-stretch-animation
+impl From<FontStretch> for f64 {
+    fn from(stretch: FontStretch) -> f64 {
+        use self::FontStretch::*;
+        match stretch {
+            ultra_condensed => 1.0,
+            extra_condensed => 2.0,
+            condensed       => 3.0,
+            semi_condensed  => 4.0,
+            normal          => 5.0,
+            semi_expanded   => 6.0,
+            expanded        => 7.0,
+            extra_expanded  => 8.0,
+            ultra_expanded  => 9.0,
+        }
+    }
+}
+
+impl Into<FontStretch> for f64 {
+    fn into(self) -> FontStretch {
+        use properties::longhands::font_stretch::computed_value::T::*;
+        debug_assert!(self >= 1.0 && self <= 9.0);
+        static FONT_STRETCH_ENUM_MAP: [FontStretch; 9] =
+            [ ultra_condensed, extra_condensed, condensed, semi_condensed, normal,
+              semi_expanded, expanded, extra_expanded, ultra_expanded ];
+        FONT_STRETCH_ENUM_MAP[(self - 1.0) as usize]
     }
 }
 

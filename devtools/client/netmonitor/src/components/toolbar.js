@@ -95,14 +95,7 @@ const Toolbar = createClass({
     // Setup autocomplete list
     let negativeAutocompleteList = FILTER_FLAGS.map((item) => `-${item}`);
     let autocompleteList = [...FILTER_FLAGS, ...negativeAutocompleteList]
-      .map((item) => `${item}:`)
-      .sort((a, b) => {
-        if (a.startsWith("-") != b.startsWith("-")) {
-          // Items starting with "-" have greater index than the others.
-          return a.startsWith("-") ? 1 : -1;
-        }
-        return a.localeCompare(b);
-      });
+      .map((item) => `${item}:`);
 
     return (
       span({ className: "devtools-toolbar devtools-toolbar-container" },
