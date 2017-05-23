@@ -23,6 +23,7 @@ module.exports = createClass({
     placeholder: PropTypes.string,
     type: PropTypes.string,
     autocompleteList: PropTypes.array,
+    tokenizer: PropTypes.object,
   },
 
   getDefaultProps() {
@@ -35,6 +36,8 @@ module.exports = createClass({
     return {
       value: "",
       focused: false,
+      tokens: [""],
+      autocompleteFilter: "",
     };
   },
 
@@ -63,10 +66,41 @@ module.exports = createClass({
     }
   },
 
+  computeFilterTokens(filter) {
+    let {tokenizer} = this.props;
+    if (!(tokenizer instanceof RegExp)) {
+      return {
+        autocompleteFilter: filter,
+        tokens: [filter],
+      };
+    }
+
+    let tokens = filter.split(tokenizer);
+    let lastFilterChar = filter.length > 0 ? filter.slice(-1) : "";
+    let autocompleteFilter = "";
+    if (tokens.length > 0) {
+      if (lastFilterChar !== " ") {
+        autocompleteFilter = tokens.slice(-1)[0];
+      } else {
+        autocompleteFilter = "";
+      }
+    } else {
+      autocompleteFilter = filter;
+    }
+
+    return { autocompleteFilter, tokens };
+  },
+
   onChange() {
     if (this.state.value !== this.refs.input.value) {
+      let {
+        tokens,
+        autocompleteFilter
+      } = this.computeFilterTokens(this.refs.input.value);
       this.setState({
         value: this.refs.input.value,
+        tokens,
+        autocompleteFilter,
       });
     }
 
@@ -146,7 +180,7 @@ module.exports = createClass({
       placeholder,
       autocompleteList
     } = this.props;
-    let { value } = this.state;
+    let { value, autocompleteFilter, tokens } = this.state;
     let divClassList = ["devtools-searchbox", "has-clear-btn"];
     let inputClassList = [`devtools-${type}input`];
     let showAutocomplete =
@@ -174,10 +208,17 @@ module.exports = createClass({
       }),
       showAutocomplete && AutocompletePopup({
         list: autocompleteList,
-        filter: value,
+        filter: autocompleteFilter,
         ref: "autocomplete",
         onItemSelected: (itemValue) => {
-          this.setState({ value: itemValue });
+          let selectionItem = "";
+          if (tokens.length > 1) {
+            selectionItem = tokens.slice(0, tokens.length - 1).join(" ") +
+            " " + itemValue;
+          } else {
+            selectionItem = itemValue;
+          }
+          this.setState({ value: selectionItem });
           this.onChange();
         }
       })

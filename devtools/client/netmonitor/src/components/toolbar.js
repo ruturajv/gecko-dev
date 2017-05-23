@@ -115,6 +115,7 @@ const Toolbar = createClass({
             type: "filter",
             onChange: setRequestFilterText,
             autocompleteList,
+            tokenizer: /\s+/,
           }),
           button({
             className: toggleButtonClassName.join(" "),
