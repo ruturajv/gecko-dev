@@ -127,8 +127,8 @@ endif
 
 ifeq ($(MOZ_PKG_FORMAT),SFX7Z)
   PKG_SUFFIX	= .exe
-  INNER_MAKE_PACKAGE = $(call py_action,7z_exe_archive,'$(MOZ_PKG_DIR)' '$(MOZ_INSTALLER_PATH)/app.tag' '$(MOZ_SFX_PACKAGE)' '$(PACKAGE)')
-  INNER_UNMAKE_PACKAGE = $(call py_action,7z_exe_extract,$(UNPACKAGE) $(MOZ_PKG_DIR))
+  INNER_MAKE_PACKAGE = $(call py_action,exe_7z_archive,'$(MOZ_PKG_DIR)' '$(MOZ_INSTALLER_PATH)/app.tag' '$(MOZ_SFX_PACKAGE)' '$(PACKAGE)')
+  INNER_UNMAKE_PACKAGE = $(call py_action,exe_7z_extract,$(UNPACKAGE) $(MOZ_PKG_DIR))
 endif
 
 #Create an RPM file
@@ -335,6 +335,9 @@ endif
 
 ifneq (android,$(MOZ_WIDGET_TOOLKIT))
   OPTIMIZEJARS = 1
+  ifneq (gonk,$(MOZ_WIDGET_TOOLKIT))
+    DISABLE_JAR_COMPRESSION = 1
+  endif
 endif
 
 # A js binary is needed to perform verification of JavaScript minification.

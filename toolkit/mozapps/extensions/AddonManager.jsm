@@ -2231,7 +2231,7 @@ var AddonManagerInternal = {
      if (!wrapper) {
        throw Error("No addon matching instanceID:", aInstanceID.toString());
      }
-     let addonId = wrapper.addonId();
+     let addonId = wrapper.id;
      logger.debug(`Registering upgrade listener for ${addonId}`);
      this.upgradeListeners.set(addonId, aCallback);
    });
@@ -2496,6 +2496,44 @@ var AddonManagerInternal = {
 
       return addons;
     })();
+  },
+
+  /**
+   * Gets active add-ons of specific types.
+   *
+   * This is similar to getAddonsByTypes() but it may return a limited
+   * amount of information about only active addons.  Consequently, it
+   * can be implemented by providers using only immediately available
+   * data as opposed to getAddonsByTypes which may require I/O).
+   *
+   * @param  aTypes
+   *         An optional array of types to retrieve. Each type is a string name
+   */
+  async getActiveAddons(aTypes) {
+    if (!gStarted)
+      throw Components.Exception("AddonManager is not initialized",
+                                 Cr.NS_ERROR_NOT_INITIALIZED);
+
+    if (aTypes && !Array.isArray(aTypes))
+      throw Components.Exception("aTypes must be an array or null",
+                                 Cr.NS_ERROR_INVALID_ARG);
+
+    let addons = [];
+
+    for (let provider of this.providers) {
+      let providerAddons;
+      if ("getActiveAddons" in provider) {
+        providerAddons = await callProvider(provider, "getActiveAddons", aTypes);
+      } else {
+        providerAddons = await promiseCallProvider(provider, "getAddonsByTypes", aTypes);
+        providerAddons = providerAddons.filter(a => a.isActive);
+      }
+
+      if (providerAddons)
+        addons.push(...providerAddons);
+    }
+
+    return addons;
   },
 
   /**
@@ -3267,6 +3305,11 @@ this.AddonManagerPrivate = {
   set nonMpcDisabled(val) {
     gNonMpcDisabled = val;
   },
+
+  isDBLoaded() {
+    let provider = AddonManagerInternal._getProviderByName("XPIProvider");
+    return provider ? provider.isDBLoaded : false;
+  },
 };
 
 /**
@@ -3583,6 +3626,12 @@ this.AddonManager = {
   getAddonsByTypes(aTypes, aCallback) {
     return promiseOrCallback(
       AddonManagerInternal.getAddonsByTypes(aTypes),
+      aCallback);
+  },
+
+  getActiveAddons(aTypes, aCallback) {
+    return promiseOrCallback(
+      AddonManagerInternal.getActiveAddons(aTypes),
       aCallback);
   },
 

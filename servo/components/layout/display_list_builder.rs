@@ -33,7 +33,7 @@ use gfx_traits::{combine_id_with_fragment_type, FragmentType, StackingContextId}
 use inline::{FIRST_FRAGMENT_OF_ELEMENT, InlineFlow, LAST_FRAGMENT_OF_ELEMENT};
 use ipc_channel::ipc;
 use list_item::ListItemFlow;
-use model::{self, MaybeAuto, specified};
+use model::{self, MaybeAuto};
 use msg::constellation_msg::BrowsingContextId;
 use net_traits::image::base::PixelFormat;
 use net_traits::image_cache::UsePlaceholder;
@@ -68,7 +68,8 @@ use style::values::specified::position::{X, Y};
 use style_traits::CSSPixel;
 use style_traits::cursor::Cursor;
 use table_cell::CollapsedBordersForCell;
-use webrender_traits::{ColorF, ClipId, GradientStop, RepeatMode, ScrollPolicy};
+use webrender_helpers::{ToMixBlendMode, ToTransformStyle};
+use webrender_traits::{ColorF, ClipId, GradientStop, RepeatMode, ScrollPolicy, TransformStyle};
 
 trait ResolvePercentage {
     fn resolve(&self, length: u32) -> u32;
@@ -184,6 +185,9 @@ pub struct DisplayListBuildState<'a> {
     /// A stack of clips used to cull display list entries that are outside the
     /// rendered region, but only collected at containing block boundaries.
     pub containing_block_clip_stack: Vec<Rect<Au>>,
+
+    /// The current transform style of the stacking context.
+    current_transform_style: TransformStyle,
 }
 
 impl<'a> DisplayListBuildState<'a> {
@@ -201,6 +205,7 @@ impl<'a> DisplayListBuildState<'a> {
             iframe_sizes: Vec::new(),
             clip_stack: Vec::new(),
             containing_block_clip_stack: Vec::new(),
+            current_transform_style: TransformStyle::Flat,
         }
     }
 
@@ -212,6 +217,7 @@ impl<'a> DisplayListBuildState<'a> {
     fn add_stacking_context(&mut self,
                             parent_id: StackingContextId,
                             stacking_context: StackingContext) {
+        self.current_transform_style = stacking_context.transform_style;
         let info = self.stacking_context_info
                        .entry(parent_id)
                        .or_insert(StackingContextInfo::new());
@@ -1020,10 +1026,8 @@ impl FragmentDisplayListBuilding for Fragment {
             let horiz_position = *get_cyclic(&background.background_position_x.0, index);
             let vert_position = *get_cyclic(&background.background_position_y.0, index);
             // Use `background-position` to get the offset.
-            let horizontal_position = model::specified(horiz_position,
-                                                       bounds.size.width - image_size.width);
-            let vertical_position = model::specified(vert_position,
-                                                     bounds.size.height - image_size.height);
+            let horizontal_position = horiz_position.to_used_value(bounds.size.width - image_size.width);
+            let vertical_position = vert_position.to_used_value(bounds.size.height - image_size.height);
 
             // The anchor position for this background, based on both the background-attachment
             // and background-position properties.
@@ -1179,8 +1183,8 @@ impl FragmentDisplayListBuilding for Fragment {
                                repeating: bool,
                                style: &ServoComputedValues)
                                -> display_list::RadialGradient {
-        let center = Point2D::new(specified(center.horizontal, bounds.size.width),
-                                  specified(center.vertical, bounds.size.height));
+        let center = Point2D::new(center.horizontal.to_used_value(bounds.size.width),
+                                  center.vertical.to_used_value(bounds.size.height));
         let radius = match *shape {
             GenericEndingShape::Circle(Circle::Radius(length)) => {
                 Size2D::new(length, length)
@@ -1189,7 +1193,7 @@ impl FragmentDisplayListBuilding for Fragment {
                 convert_circle_size_keyword(extent, &bounds.size, &center)
             },
             GenericEndingShape::Ellipse(Ellipse::Radii(x, y)) => {
-                Size2D::new(specified(x, bounds.size.width), specified(y, bounds.size.height))
+                Size2D::new(x.to_used_value(bounds.size.width), y.to_used_value(bounds.size.height))
             },
             GenericEndingShape::Ellipse(Ellipse::Extent(extent)) => {
                 convert_ellipse_size_keyword(extent, &bounds.size, &center)
@@ -1947,8 +1951,9 @@ impl FragmentDisplayListBuilding for Fragment {
                              &overflow,
                              self.effective_z_index(),
                              filters,
-                             self.style().get_effects().mix_blend_mode,
+                             self.style().get_effects().mix_blend_mode.to_mix_blend_mode(),
                              self.transform_matrix(&border_box),
+                             self.style().get_used_transform_style().to_transform_style(),
                              self.perspective_matrix(&border_box),
                              scroll_policy,
                              parent_scroll_id)
@@ -2153,6 +2158,7 @@ pub struct PreservedDisplayListState {
     containing_block_scroll_root_id: ClipId,
     clips_pushed: usize,
     containing_block_clips_pushed: usize,
+    transform_style: TransformStyle,
 }
 
 impl PreservedDisplayListState {
@@ -2163,6 +2169,7 @@ impl PreservedDisplayListState {
             containing_block_scroll_root_id: state.containing_block_scroll_root_id,
             clips_pushed: 0,
             containing_block_clips_pushed: 0,
+            transform_style: state.current_transform_style,
         }
     }
 
@@ -2183,6 +2190,8 @@ impl PreservedDisplayListState {
         let truncate_length = state.containing_block_clip_stack.len() -
                               self.containing_block_clips_pushed;
         state.containing_block_clip_stack.truncate(truncate_length);
+
+        state.current_transform_style = self.transform_style;
     }
 
     fn push_clip(&mut self,
@@ -2622,14 +2631,14 @@ impl InlineFlowDisplayListBuilding for InlineFlow {
                     fragment.stacking_context_id = fragment.stacking_context_id();
 
                     let current_stacking_context_id = state.current_stacking_context_id;
-                    let current_scroll_root_id = state.current_scroll_root_id;
+                    let stacking_context = fragment.create_stacking_context(fragment.stacking_context_id,
+                                                                            &self.base,
+                                                                            ScrollPolicy::Scrollable,
+                                                                            StackingContextCreationMode::Normal,
+                                                                            state.current_scroll_root_id);
+
                     state.add_stacking_context(current_stacking_context_id,
-                                               fragment.create_stacking_context(
-                                                   fragment.stacking_context_id,
-                                                   &self.base,
-                                                   ScrollPolicy::Scrollable,
-                                                   StackingContextCreationMode::Normal,
-                                                   current_scroll_root_id));
+                                               stacking_context);
                 }
                 _ => fragment.stacking_context_id = state.current_stacking_context_id,
             }
@@ -2794,12 +2803,13 @@ struct StopRun {
     stop_count: usize,
 }
 
-fn position_to_offset(position: LengthOrPercentage, Au(total_length): Au) -> f32 {
+fn position_to_offset(position: LengthOrPercentage, total_length: Au) -> f32 {
     match position {
-        LengthOrPercentage::Length(Au(length)) => length as f32 / total_length as f32,
+        LengthOrPercentage::Length(Au(length)) => length as f32 / total_length.0 as f32,
         LengthOrPercentage::Percentage(percentage) => percentage as f32,
-        LengthOrPercentage::Calc(calc) =>
-            calc.percentage() + (calc.length().0 as f32) / (total_length as f32),
+        LengthOrPercentage::Calc(calc) => {
+            calc.to_used_value(Some(total_length)).unwrap().0 as f32 / total_length.0 as f32
+        },
     }
 }
 

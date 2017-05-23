@@ -44,6 +44,26 @@ var gMainPane = {
       }
     }
 
+    this.buildContentProcessCountMenuList();
+    let processCountPref =
+      document.getElementById("dom.ipc.processCount");
+    processCountPref.addEventListener("change", () => {
+      this.updateDefaultPerformanceSettingsPref();
+    });
+    let accelerationPref =
+      document.getElementById("layers.acceleration.disabled");
+    accelerationPref.addEventListener("change", () => {
+      this.updateDefaultPerformanceSettingsPref();
+    });
+    this.updateDefaultPerformanceSettingsPref();
+
+    let defaultPerformancePref =
+      document.getElementById("browser.preferences.defaultPerformanceSettings.enabled");
+    defaultPerformancePref.addEventListener("change", () => {
+      this.updatePerformanceSettingsBox();
+    });
+    this.updatePerformanceSettingsBox();
+
     // set up the "use current page" label-changing listener
     this._updateUseCurrentButton();
     window.addEventListener("focus", this._updateUseCurrentButton.bind(this));
@@ -385,6 +405,43 @@ var gMainPane = {
     homePage.value = homePage.defaultValue;
   },
 
+  updateDefaultPerformanceSettingsPref() {
+    let defaultPerformancePref =
+      document.getElementById("browser.preferences.defaultPerformanceSettings.enabled");
+    let processCountPref = document.getElementById("dom.ipc.processCount");
+    let accelerationPref = document.getElementById("layers.acceleration.disabled");
+    if (processCountPref.value != processCountPref.defaultValue ||
+        accelerationPref.value != accelerationPref.defaultValue) {
+      defaultPerformancePref.value = false;
+    }
+  },
+
+  updatePerformanceSettingsBox() {
+    let defaultPerformancePref =
+      document.getElementById("browser.preferences.defaultPerformanceSettings.enabled");
+    let performanceSettings = document.getElementById("performanceSettings");
+    if (defaultPerformancePref.value) {
+      let processCountPref = document.getElementById("dom.ipc.processCount");
+      let accelerationPref = document.getElementById("layers.acceleration.disabled");
+      processCountPref.value = processCountPref.defaultValue;
+      accelerationPref.value = accelerationPref.defaultValue;
+      performanceSettings.hidden = true;
+    } else {
+      performanceSettings.hidden = false;
+    }
+  },
+
+  buildContentProcessCountMenuList() {
+    let processCountPref = document.getElementById("dom.ipc.processCount");
+    let bundlePreferences = document.getElementById("bundlePreferences");
+    let label = bundlePreferences.getFormattedString("defaultContentProcessCount",
+      [processCountPref.defaultValue]);
+    let contentProcessCount =
+      document.querySelector(`#contentProcessCount > menupopup >
+                              menuitem[value="${processCountPref.defaultValue}"]`);
+    contentProcessCount.label = label;
+  },
+
   // DOWNLOADS
 
   /*
@@ -507,15 +564,6 @@ var gMainPane = {
       iconUrlSpec = fph.getURLSpecFromFile(currentDirPref.value);
     } else if (folderListPref.value == 1) {
       // 'Downloads'
-      // In 1.5, this pointed to a folder we created called 'My Downloads'
-      // and was available as an option in the 1.5 drop down. On XP this
-      // was in My Documents, on OSX it was in User Docs. In 2.0, we did
-      // away with the drop down option, although the special label was
-      // still supported for the folder if it existed. Because it was
-      // not exposed it was rarely used.
-      // With 3.0, a new desktop folder - 'Downloads' was introduced for
-      // platforms and versions that don't support a default system downloads
-      // folder. See nsDownloadManager for details.
       downloadFolder.label = bundlePreferences.getString("downloadsFolderName");
       iconUrlSpec = fph.getURLSpecFromFile(await this._indexToFolder(1));
     } else {

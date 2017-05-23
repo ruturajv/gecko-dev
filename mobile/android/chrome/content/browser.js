@@ -458,7 +458,6 @@ var BrowserApp = {
     CharacterEncoding.init();
     ActivityObserver.init();
     RemoteDebugger.init();
-    UserAgentOverrides.init();
     DesktopUserAgent.init();
     Distribution.init();
     Tabs.init();
@@ -1509,6 +1508,11 @@ var BrowserApp = {
     let success = true;
     var promises = [];
     let refObj = {};
+
+    if (aShutdown && Object.getOwnPropertyNames(aItems).length > 0) {
+      let msg = Strings.browser.GetStringFromName("alertShutdownSanitize");
+      Snackbars.show(msg, Snackbars.LENGTH_INDEFINITE);
+    }
 
     TelemetryStopwatch.start("FX_SANITIZE_TOTAL", refObj);
 
@@ -4500,9 +4504,6 @@ Tab.prototype = {
       ExternalApps.updatePageActionUri(fixedURI);
     }
 
-    // Strip reader mode URI and also make it exposable if needed
-    fixedURI = this._stripAboutReaderURL(fixedURI);
-
     let message = {
       type: "Content:LocationChange",
       tabID: this.id,
@@ -4527,10 +4528,6 @@ Tab.prototype = {
       this.hasTouchListener = false;
       Services.obs.notifyObservers(this.browser, "Session:NotifyLocationChange");
     }
-  },
-
-  _stripAboutReaderURL: function (originalURI) {
-    return ReaderMode.getOriginalUrlObjectForDisplay(originalURI.spec) || originalURI;
   },
 
   // Properties used to cache security state used to update the UI
