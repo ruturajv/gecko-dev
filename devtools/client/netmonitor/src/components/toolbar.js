@@ -97,9 +97,10 @@ const Toolbar = createClass({
     let baseList = [...FILTER_FLAGS, ...negativeAutocompleteList]
       .map((item) => `${item}:`);
 
-    function getAutocompleteList(filter) {
+    function getAutocompleteData(filter) {
+      let emptyObject = { list: [], filterUsed: "" };
       if (filter === "" || typeof filter === "undefined") {
-        return [];
+        return emptyObject;
       }
 
       let tokens = filter.split(/\s+/);
@@ -109,7 +110,7 @@ const Toolbar = createClass({
         if (lastFilterChar !== " ") {
           autocompleteFilter = tokens.slice(-1)[0];
         } else {
-          return [];
+          return emptyObject;
         }
       } else {
         autocompleteFilter = filter;
@@ -120,7 +121,7 @@ const Toolbar = createClass({
           && item.toLowerCase() !== autocompleteFilter.toLowerCase();
       }).sort();
 
-      return filteredList;
+      return { list: filteredList, filterUsed: autocompleteFilter };
     }
 
     return (
@@ -140,7 +141,7 @@ const Toolbar = createClass({
             placeholder: SEARCH_PLACE_HOLDER,
             type: "filter",
             onChange: setRequestFilterText,
-            getAutocompleteList,
+            getAutocompleteData,
           }),
           button({
             className: toggleButtonClassName.join(" "),

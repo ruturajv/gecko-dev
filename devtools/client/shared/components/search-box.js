@@ -22,13 +22,13 @@ module.exports = createClass({
     onChange: PropTypes.func,
     placeholder: PropTypes.string,
     type: PropTypes.string,
-    getAutocompleteList: PropTypes.func,
+    getAutocompleteData: PropTypes.func,
   },
 
   getDefaultProps() {
     return {
-      getAutocompleteList: function () {
-        return [];
+      getAutocompleteData: function () {
+        return { list: [], filterUsed: "" };
       },
     };
   },
@@ -104,9 +104,9 @@ module.exports = createClass({
   },
 
   onKeyDown(e) {
-    let { getAutocompleteList } = this.props;
+    let { getAutocompleteData } = this.props;
     let { autocomplete } = this.refs;
-    let autocompleteList = getAutocompleteList(this.state.value);
+    let { list: autocompleteList } = getAutocompleteData(this.state.value);
 
     if (autocompleteList.length == 0) {
       return;
@@ -147,12 +147,15 @@ module.exports = createClass({
     let {
       type = "search",
       placeholder,
-      getAutocompleteList
+      getAutocompleteData
     } = this.props;
     let { value } = this.state;
     let divClassList = ["devtools-searchbox", "has-clear-btn"];
     let inputClassList = [`devtools-${type}input`];
-    let autocompleteList = getAutocompleteList(value);
+    let {
+      list: autocompleteList,
+      filterUsed: autocompleteFilter
+    } = getAutocompleteData(value);
     let showAutocomplete =
       autocompleteList.length > 0 && this.state.focused && value !== "";
 
@@ -181,9 +184,8 @@ module.exports = createClass({
         filter: value,
         ref: "autocomplete",
         onItemSelected: (itemValue) => {
-          let tokens = value.split(/\s+/);
-          let newValue = tokens.length == 1 ?
-            itemValue : tokens.slice(0, tokens.length - 1).join(" ") + " " + itemValue;
+          let newValue = value.substring(0, value.lastIndexOf(autocompleteFilter))
+            + itemValue;
           this.setState({ value: newValue });
           this.onChange();
         }
