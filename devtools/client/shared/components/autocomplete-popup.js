@@ -33,10 +33,11 @@ module.exports = createClass({
   },
 
   computeState({ filter, list }) {
-    let filteredList = list.filter((item) => {
-      return item.toLowerCase().startsWith(filter.toLowerCase())
-        && item.toLowerCase() !== filter.toLowerCase();
-    }).sort();
+    // let filteredList = list.filter((item) => {
+    //   return item.toLowerCase().startsWith(filter.toLowerCase())
+    //     && item.toLowerCase() !== filter.toLowerCase();
+    // }).sort();
+    let filteredList = list;
     let selectedIndex = filteredList.length == 1 ? 0 : -1;
 
     return { filteredList, selectedIndex };

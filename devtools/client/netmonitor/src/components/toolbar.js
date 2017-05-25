@@ -94,8 +94,34 @@ const Toolbar = createClass({
 
     // Setup autocomplete list
     let negativeAutocompleteList = FILTER_FLAGS.map((item) => `-${item}`);
-    let autocompleteList = [...FILTER_FLAGS, ...negativeAutocompleteList]
+    let baseList = [...FILTER_FLAGS, ...negativeAutocompleteList]
       .map((item) => `${item}:`);
+
+    function getAutocompleteList(filter) {
+      if (filter === "" || typeof filter === "undefined") {
+        return [];
+      }
+
+      let tokens = filter.split(/\s+/);
+      let lastFilterChar = filter.length > 0 ? filter.slice(-1) : "";
+      let autocompleteFilter = "";
+      if (tokens.length > 0) {
+        if (lastFilterChar !== " ") {
+          autocompleteFilter = tokens.slice(-1)[0];
+        } else {
+          return [];
+        }
+      } else {
+        autocompleteFilter = filter;
+      }
+
+      let filteredList = baseList.filter((item) => {
+        return item.toLowerCase().startsWith(autocompleteFilter.toLowerCase())
+          && item.toLowerCase() !== autocompleteFilter.toLowerCase();
+      }).sort();
+
+      return filteredList;
+    }
 
     return (
       span({ className: "devtools-toolbar devtools-toolbar-container" },
@@ -114,8 +140,7 @@ const Toolbar = createClass({
             placeholder: SEARCH_PLACE_HOLDER,
             type: "filter",
             onChange: setRequestFilterText,
-            autocompleteList,
-            tokenizer: /\s+/,
+            getAutocompleteList,
           }),
           button({
             className: toggleButtonClassName.join(" "),

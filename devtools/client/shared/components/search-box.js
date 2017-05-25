@@ -22,13 +22,14 @@ module.exports = createClass({
     onChange: PropTypes.func,
     placeholder: PropTypes.string,
     type: PropTypes.string,
-    autocompleteList: PropTypes.array,
-    tokenizer: PropTypes.object,
+    getAutocompleteList: PropTypes.func,
   },
 
   getDefaultProps() {
     return {
-      autocompleteList: [],
+      getAutocompleteList: function () {
+        return [];
+      },
     };
   },
 
@@ -36,8 +37,6 @@ module.exports = createClass({
     return {
       value: "",
       focused: false,
-      tokens: [""],
-      autocompleteFilter: "",
     };
   },
 
@@ -66,41 +65,10 @@ module.exports = createClass({
     }
   },
 
-  computeFilterTokens(filter) {
-    let {tokenizer} = this.props;
-    if (!(tokenizer instanceof RegExp)) {
-      return {
-        autocompleteFilter: filter,
-        tokens: [filter],
-      };
-    }
-
-    let tokens = filter.split(tokenizer);
-    let lastFilterChar = filter.length > 0 ? filter.slice(-1) : "";
-    let autocompleteFilter = "";
-    if (tokens.length > 0) {
-      if (lastFilterChar !== " ") {
-        autocompleteFilter = tokens.slice(-1)[0];
-      } else {
-        autocompleteFilter = "";
-      }
-    } else {
-      autocompleteFilter = filter;
-    }
-
-    return { autocompleteFilter, tokens };
-  },
-
   onChange() {
     if (this.state.value !== this.refs.input.value) {
-      let {
-        tokens,
-        autocompleteFilter
-      } = this.computeFilterTokens(this.refs.input.value);
       this.setState({
         value: this.refs.input.value,
-        tokens,
-        autocompleteFilter,
       });
     }
 
@@ -136,8 +104,9 @@ module.exports = createClass({
   },
 
   onKeyDown(e) {
-    let { autocompleteList } = this.props;
+    let { getAutocompleteList } = this.props;
     let { autocomplete } = this.refs;
+    let autocompleteList = getAutocompleteList(this.state.value);
 
     if (autocompleteList.length == 0) {
       return;
@@ -178,11 +147,12 @@ module.exports = createClass({
     let {
       type = "search",
       placeholder,
-      autocompleteList
+      getAutocompleteList
     } = this.props;
-    let { value, autocompleteFilter, tokens } = this.state;
+    let { value } = this.state;
     let divClassList = ["devtools-searchbox", "has-clear-btn"];
     let inputClassList = [`devtools-${type}input`];
+    let autocompleteList = getAutocompleteList(value);
     let showAutocomplete =
       autocompleteList.length > 0 && this.state.focused && value !== "";
 
@@ -208,17 +178,13 @@ module.exports = createClass({
       }),
       showAutocomplete && AutocompletePopup({
         list: autocompleteList,
-        filter: autocompleteFilter,
+        filter: value,
         ref: "autocomplete",
         onItemSelected: (itemValue) => {
-          let selectionItem = "";
-          if (tokens.length > 1) {
-            selectionItem = tokens.slice(0, tokens.length - 1).join(" ") +
-            " " + itemValue;
-          } else {
-            selectionItem = itemValue;
-          }
-          this.setState({ value: selectionItem });
+          let tokens = value.split(/\s+/);
+          let newValue = tokens.length == 1 ?
+            itemValue : tokens.slice(0, tokens.length - 1).join(" ") + " " + itemValue;
+          this.setState({ value: newValue });
           this.onChange();
         }
       })
