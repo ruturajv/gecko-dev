@@ -98,25 +98,30 @@ const Toolbar = createClass({
       .map((item) => `${item}:`);
 
     function getAutocompleteList(filter) {
-      let emptyObject = { list: [], filterUsed: "" };
+      let emptyObject = [];
       if (filter === "" || typeof filter === "undefined") {
         return emptyObject;
       }
 
       let tokens = filter.split(/\s+/g);
       let lastToken = tokens[tokens.length - 1];
-      let autocompleteFilter = lastToken !== "" ? lastToken : "";
+      let previousTokens = tokens.slice(0, tokens.length - 1);
 
+      let autocompleteFilter = lastToken !== "" ? lastToken : "";
       if (autocompleteFilter === "") {
         return emptyObject;
       }
 
-      let filteredList = baseList.filter((item) => {
-        return item.toLowerCase().startsWith(autocompleteFilter.toLowerCase())
-          && item.toLowerCase() !== autocompleteFilter.toLowerCase();
-      }).sort();
-
-      return { list: filteredList, filterUsed: autocompleteFilter };
+      return baseList
+        .filter((item) => {
+          return item.toLowerCase().startsWith(autocompleteFilter.toLowerCase())
+            && item.toLowerCase() !== autocompleteFilter.toLowerCase();
+        })
+        .sort()
+        .map(item => ({
+          value: [...previousTokens, item].join(" "),
+          displayValue: item,
+        }));
     }
 
     return (

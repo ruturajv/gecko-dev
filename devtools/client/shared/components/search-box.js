@@ -28,7 +28,7 @@ module.exports = createClass({
   getDefaultProps() {
     return {
       getAutocompleteList: function () {
-        return { list: [], filterUsed: "" };
+        return [];
       },
     };
   },
@@ -38,6 +38,7 @@ module.exports = createClass({
       autocompleteList: this.computeAutoCompleteList(""),
       value: "",
       focused: false,
+      selected: false,
     };
   },
 
@@ -76,6 +77,7 @@ module.exports = createClass({
       this.setState({
         value: this.refs.input.value,
         autocompleteList: this.computeAutoCompleteList(this.refs.input.value),
+        selected: false,
       });
     }
 
@@ -112,11 +114,11 @@ module.exports = createClass({
 
   onKeyDown(e) {
     let { autocompleteList } = this.state;
-    let { autocomplete } = this.refs;
 
-    if (autocompleteList.list.length == 0) {
+    if (autocompleteList.length == 0) {
       return;
     }
+    let { autocomplete } = this.refs;
 
     switch (e.key) {
       case "ArrowDown":
@@ -153,17 +155,12 @@ module.exports = createClass({
     let {
       type = "search",
       placeholder,
-      getAutocompleteList
     } = this.props;
-    let { value } = this.state;
+    let { value, autocompleteList, selected } = this.state;
     let divClassList = ["devtools-searchbox", "has-clear-btn"];
     let inputClassList = [`devtools-${type}input`];
-    let {
-      list: autocompleteList,
-      filterUsed: autocompleteFilter
-    } = getAutocompleteList(value);
-    let showAutocomplete =
-      autocompleteList.length > 0 && this.state.focused && value !== "";
+    let showAutocomplete = autocompleteList.length > 0
+      && selected !== true && this.state.focused && value !== "";
 
     if (value !== "") {
       inputClassList.push("filled");
@@ -189,10 +186,8 @@ module.exports = createClass({
         list: autocompleteList,
         filter: value,
         ref: "autocomplete",
-        onItemSelected: (itemValue) => {
-          let newValue = value.substring(0, value.lastIndexOf(autocompleteFilter))
-            + itemValue;
-          this.setState({ value: newValue });
+        onItemSelected: (selectedValue) => {
+          this.setState({ value: selectedValue, selected: true });
           this.onChange();
         }
       })

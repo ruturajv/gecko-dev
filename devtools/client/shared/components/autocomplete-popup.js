@@ -32,15 +32,14 @@ module.exports = createClass({
     }
   },
 
-  computeState({ filter, list }) {
-    // let filteredList = list.filter((item) => {
+  computeState({ list }) {
+    // let list = list.filter((item) => {
     //   return item.toLowerCase().startsWith(filter.toLowerCase())
     //     && item.toLowerCase() !== filter.toLowerCase();
     // }).sort();
-    let filteredList = list;
-    let selectedIndex = filteredList.length == 1 ? 0 : -1;
+    let selectedIndex = list.length == 1 ? 0 : -1;
 
-    return { filteredList, selectedIndex };
+    return { selectedIndex };
   },
 
   /**
@@ -56,7 +55,7 @@ module.exports = createClass({
    * This method is public.
    */
   jumpToBottom() {
-    let selectedIndex = this.state.filteredList.length - 1;
+    let selectedIndex = this.props.list.length - 1;
     this.setState({ selectedIndex });
   },
 
@@ -68,14 +67,15 @@ module.exports = createClass({
    * @param {number} increment - No. of hops in the direction
    */
   jumpBy(increment = 1) {
-    let { filteredList, selectedIndex } = this.state;
+    let { selectedIndex } = this.state;
+    let { list } = this.props;
     let nextIndex = selectedIndex + increment;
     if (increment > 0) {
       // Positive cycling
-      nextIndex = nextIndex > filteredList.length - 1 ? 0 : nextIndex;
+      nextIndex = nextIndex > list.length - 1 ? 0 : nextIndex;
     } else if (increment < 0) {
       // Inverse cycling
-      nextIndex = nextIndex < 0 ? filteredList.length - 1 : nextIndex;
+      nextIndex = nextIndex < 0 ? list.length - 1 : nextIndex;
     }
     this.setState({selectedIndex: nextIndex});
   },
@@ -86,7 +86,7 @@ module.exports = createClass({
    */
   select() {
     if (this.refs.selected) {
-      this.props.onItemSelected(this.refs.selected.textContent);
+      this.props.onItemSelected(this.refs.selected.dataset.value);
     }
   },
 
@@ -96,13 +96,13 @@ module.exports = createClass({
   },
 
   render() {
-    let { filteredList } = this.state;
+    let { list } = this.props;
 
-    return filteredList.length > 0 && dom.div(
+    return list.length > 0 && dom.div(
       { className: "devtools-autocomplete-popup devtools-monospace" },
       dom.ul(
         { className: "devtools-autocomplete-listbox" },
-        filteredList.map((item, i) => {
+        list.map((item, i) => {
           let isSelected = this.state.selectedIndex == i;
           let itemClassList = ["autocomplete-item"];
 
@@ -112,10 +112,11 @@ module.exports = createClass({
           return dom.li({
             key: i,
             "data-index": i,
+            "data-value": item.value,
             className: itemClassList.join(" "),
             ref: isSelected ? "selected" : null,
             onMouseDown: this.onMouseDown,
-          }, item);
+          }, item.displayValue);
         })
       )
     );
