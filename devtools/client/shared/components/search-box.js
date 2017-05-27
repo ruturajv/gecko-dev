@@ -22,12 +22,12 @@ module.exports = createClass({
     onChange: PropTypes.func,
     placeholder: PropTypes.string,
     type: PropTypes.string,
-    getAutocompleteData: PropTypes.func,
+    getAutocompleteList: PropTypes.func,
   },
 
   getDefaultProps() {
     return {
-      getAutocompleteData: function () {
+      getAutocompleteList: function () {
         return { list: [], filterUsed: "" };
       },
     };
@@ -35,6 +35,7 @@ module.exports = createClass({
 
   getInitialState() {
     return {
+      autocompleteList: this.computeAutoCompleteList(""),
       value: "",
       focused: false,
     };
@@ -65,10 +66,16 @@ module.exports = createClass({
     }
   },
 
+  computeAutoCompleteList(filter) {
+    let { getAutocompleteList } = this.props;
+    return getAutocompleteList(filter);
+  },
+
   onChange() {
     if (this.state.value !== this.refs.input.value) {
       this.setState({
         value: this.refs.input.value,
+        autocompleteList: this.computeAutoCompleteList(this.refs.input.value),
       });
     }
 
@@ -104,11 +111,10 @@ module.exports = createClass({
   },
 
   onKeyDown(e) {
-    let { getAutocompleteData } = this.props;
+    let { autocompleteList } = this.state;
     let { autocomplete } = this.refs;
-    let { list: autocompleteList } = getAutocompleteData(this.state.value);
 
-    if (autocompleteList.length == 0) {
+    if (autocompleteList.list.length == 0) {
       return;
     }
 
@@ -147,7 +153,7 @@ module.exports = createClass({
     let {
       type = "search",
       placeholder,
-      getAutocompleteData
+      getAutocompleteList
     } = this.props;
     let { value } = this.state;
     let divClassList = ["devtools-searchbox", "has-clear-btn"];
@@ -155,7 +161,7 @@ module.exports = createClass({
     let {
       list: autocompleteList,
       filterUsed: autocompleteFilter
-    } = getAutocompleteData(value);
+    } = getAutocompleteList(value);
     let showAutocomplete =
       autocompleteList.length > 0 && this.state.focused && value !== "";
 
