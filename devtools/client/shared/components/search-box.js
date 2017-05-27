@@ -27,9 +27,7 @@ module.exports = createClass({
 
   getDefaultProps() {
     return {
-      autocompleteProvider: function () {
-        return [];
-      },
+      autocompleteProvider: () => [],
     };
   },
 
@@ -106,7 +104,7 @@ module.exports = createClass({
 
   onKeyDown(e) {
     let { autocomplete } = this.refs;
-    if (!autocomplete || autocomplete.state.list.length < 1) {
+    if (!autocomplete || autocomplete.state.list.length <= 0) {
       return;
     }
 
@@ -176,8 +174,8 @@ module.exports = createClass({
         autocompleteProvider,
         filter: value,
         ref: "autocomplete",
-        onItemSelected: (selectedValue) => {
-          this.setState({ value: selectedValue });
+        onItemSelected: (itemValue) => {
+          this.setState({ value: itemValue });
           this.onChange();
         }
       })

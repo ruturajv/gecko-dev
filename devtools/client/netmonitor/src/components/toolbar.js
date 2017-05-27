@@ -18,8 +18,8 @@ const {
   getRequestFilterTypes,
   isNetworkDetailsToggleButtonDisabled,
 } = require("../selectors/index");
-const { autocompleteProvider } = require("../utils/filter-text-utils");
 
+const { autocompleteProvider } = require("../utils/filter-text-utils");
 const { L10N } = require("../utils/l10n");
 
 // Components

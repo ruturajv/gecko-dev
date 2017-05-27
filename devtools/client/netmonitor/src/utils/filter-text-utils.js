@@ -255,7 +255,7 @@ function autocompleteProvider(filter) {
   let lastToken = tokens[tokens.length - 1];
   let previousTokens = tokens.slice(0, tokens.length - 1);
 
-  if (lastToken === "" || !lastToken) {
+  if (!lastToken) {
     return [];
   }
 

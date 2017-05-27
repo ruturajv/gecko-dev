@@ -36,7 +36,7 @@ module.exports = createClass({
     let list = autocompleteProvider(filter);
     let selectedIndex = list.length == 1 ? 0 : -1;
 
-    return { selectedIndex, list };
+    return { list, selectedIndex };
   },
 
   /**
@@ -63,7 +63,7 @@ module.exports = createClass({
    * @param {number} increment - No. of hops in the direction
    */
   jumpBy(increment = 1) {
-    let { selectedIndex, list } = this.state;
+    let { list, selectedIndex } = this.state;
     let nextIndex = selectedIndex + increment;
     if (increment > 0) {
       // Positive cycling
