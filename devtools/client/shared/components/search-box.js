@@ -22,12 +22,12 @@ module.exports = createClass({
     onChange: PropTypes.func,
     placeholder: PropTypes.string,
     type: PropTypes.string,
-    getAutocompleteList: PropTypes.func,
+    autocompleteProvider: PropTypes.func,
   },
 
   getDefaultProps() {
     return {
-      getAutocompleteList: function () {
+      autocompleteProvider: function () {
         return [];
       },
     };
@@ -68,8 +68,8 @@ module.exports = createClass({
   },
 
   computeAutoCompleteList(filter) {
-    let { getAutocompleteList } = this.props;
-    return getAutocompleteList(filter);
+    let { autocompleteProvider } = this.props;
+    return autocompleteProvider(filter);
   },
 
   onChange() {

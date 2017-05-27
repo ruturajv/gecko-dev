@@ -12,12 +12,13 @@ const {
 } = require("devtools/client/shared/vendor/react");
 const { connect } = require("devtools/client/shared/vendor/react-redux");
 const Actions = require("../actions/index");
-const { FILTER_SEARCH_DELAY, FILTER_FLAGS } = require("../constants");
+const { FILTER_SEARCH_DELAY } = require("../constants");
 const {
   getDisplayedRequestsSummary,
   getRequestFilterTypes,
   isNetworkDetailsToggleButtonDisabled,
 } = require("../selectors/index");
+const { autocompleteProvider } = require("../utils/filter-text-utils");
 
 const { L10N } = require("../utils/l10n");
 
@@ -92,38 +93,6 @@ const Toolbar = createClass({
       );
     });
 
-    // Setup autocomplete list
-    let negativeAutocompleteList = FILTER_FLAGS.map((item) => `-${item}`);
-    let baseList = [...FILTER_FLAGS, ...negativeAutocompleteList]
-      .map((item) => `${item}:`);
-
-    function getAutocompleteList(filter) {
-      let emptyObject = [];
-      if (filter === "" || typeof filter === "undefined") {
-        return emptyObject;
-      }
-
-      let tokens = filter.split(/\s+/g);
-      let lastToken = tokens[tokens.length - 1];
-      let previousTokens = tokens.slice(0, tokens.length - 1);
-
-      let autocompleteFilter = lastToken !== "" ? lastToken : "";
-      if (autocompleteFilter === "") {
-        return emptyObject;
-      }
-
-      return baseList
-        .filter((item) => {
-          return item.toLowerCase().startsWith(autocompleteFilter.toLowerCase())
-            && item.toLowerCase() !== autocompleteFilter.toLowerCase();
-        })
-        .sort()
-        .map(item => ({
-          value: [...previousTokens, item].join(" "),
-          displayValue: item,
-        }));
-    }
-
     return (
       span({ className: "devtools-toolbar devtools-toolbar-container" },
         span({ className: "devtools-toolbar-group" },
@@ -141,7 +110,7 @@ const Toolbar = createClass({
             placeholder: SEARCH_PLACE_HOLDER,
             type: "filter",
             onChange: setRequestFilterText,
-            getAutocompleteList,
+            autocompleteProvider,
           }),
           button({
             className: toggleButtonClassName.join(" "),

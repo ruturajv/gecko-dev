@@ -242,6 +242,36 @@ function isFreetextMatch(item, text) {
   return match;
 }
 
+function autocompleteProvider(filter) {
+  let negativeAutocompleteList = FILTER_FLAGS.map((item) => `-${item}`);
+  let baseList = [...FILTER_FLAGS, ...negativeAutocompleteList]
+    .map((item) => `${item}:`);
+
+  if (!filter) {
+    return [];
+  }
+
+  let tokens = filter.split(/\s+/g);
+  let lastToken = tokens[tokens.length - 1];
+  let previousTokens = tokens.slice(0, tokens.length - 1);
+
+  if (lastToken === "" || !lastToken) {
+    return [];
+  }
+
+  return baseList
+    .filter((item) => {
+      return item.toLowerCase().startsWith(lastToken.toLowerCase())
+        && item.toLowerCase() !== lastToken.toLowerCase();
+    })
+    .sort()
+    .map(item => ({
+      value: [...previousTokens, item].join(" "),
+      displayValue: item,
+    }));
+}
+
 module.exports = {
   isFreetextMatch,
+  autocompleteProvider,
 };
