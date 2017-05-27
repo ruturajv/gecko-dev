@@ -10,7 +10,7 @@ module.exports = createClass({
   displayName: "AutocompletePopup",
 
   propTypes: {
-    list: PropTypes.array.isRequired,
+    autocompleteProvider: PropTypes.func.isRequired,
     filter: PropTypes.string.isRequired,
     onItemSelected: PropTypes.func.isRequired,
   },
@@ -32,14 +32,11 @@ module.exports = createClass({
     }
   },
 
-  computeState({ list }) {
-    // let list = list.filter((item) => {
-    //   return item.toLowerCase().startsWith(filter.toLowerCase())
-    //     && item.toLowerCase() !== filter.toLowerCase();
-    // }).sort();
+  computeState({ autocompleteProvider, filter }) {
+    let list = autocompleteProvider(filter);
     let selectedIndex = list.length == 1 ? 0 : -1;
 
-    return { selectedIndex };
+    return { selectedIndex, list };
   },
 
   /**
@@ -55,8 +52,7 @@ module.exports = createClass({
    * This method is public.
    */
   jumpToBottom() {
-    let selectedIndex = this.props.list.length - 1;
-    this.setState({ selectedIndex });
+    this.setState({ selectedIndex: this.state.list.length - 1 });
   },
 
   /**
@@ -67,8 +63,7 @@ module.exports = createClass({
    * @param {number} increment - No. of hops in the direction
    */
   jumpBy(increment = 1) {
-    let { selectedIndex } = this.state;
-    let { list } = this.props;
+    let { selectedIndex, list } = this.state;
     let nextIndex = selectedIndex + increment;
     if (increment > 0) {
       // Positive cycling
@@ -96,7 +91,7 @@ module.exports = createClass({
   },
 
   render() {
-    let { list } = this.props;
+    let { list } = this.state;
 
     return list.length > 0 && dom.div(
       { className: "devtools-autocomplete-popup devtools-monospace" },

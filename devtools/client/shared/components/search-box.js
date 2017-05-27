@@ -35,10 +35,8 @@ module.exports = createClass({
 
   getInitialState() {
     return {
-      autocompleteList: this.computeAutoCompleteList(""),
       value: "",
       focused: false,
-      selected: false,
     };
   },
 
@@ -67,17 +65,11 @@ module.exports = createClass({
     }
   },
 
-  computeAutoCompleteList(filter) {
-    let { autocompleteProvider } = this.props;
-    return autocompleteProvider(filter);
-  },
-
   onChange() {
     if (this.state.value !== this.refs.input.value) {
       this.setState({
+        focused: true,
         value: this.refs.input.value,
-        autocompleteList: this.computeAutoCompleteList(this.refs.input.value),
-        selected: false,
       });
     }
 
@@ -113,12 +105,10 @@ module.exports = createClass({
   },
 
   onKeyDown(e) {
-    let { autocompleteList } = this.state;
-
-    if (autocompleteList.length == 0) {
+    let { autocomplete } = this.refs;
+    if (!autocomplete || autocomplete.state.list.length < 1) {
       return;
     }
-    let { autocomplete } = this.refs;
 
     switch (e.key) {
       case "ArrowDown":
@@ -155,12 +145,12 @@ module.exports = createClass({
     let {
       type = "search",
       placeholder,
+      autocompleteProvider,
     } = this.props;
-    let { value, autocompleteList, selected } = this.state;
+    let { value } = this.state;
     let divClassList = ["devtools-searchbox", "has-clear-btn"];
     let inputClassList = [`devtools-${type}input`];
-    let showAutocomplete = autocompleteList.length > 0
-      && selected !== true && this.state.focused && value !== "";
+    let showAutocomplete = this.state.focused && value !== "";
 
     if (value !== "") {
       inputClassList.push("filled");
@@ -183,11 +173,11 @@ module.exports = createClass({
         onClick: this.onClearButtonClick
       }),
       showAutocomplete && AutocompletePopup({
-        list: autocompleteList,
+        autocompleteProvider,
         filter: value,
         ref: "autocomplete",
         onItemSelected: (selectedValue) => {
-          this.setState({ value: selectedValue, selected: true });
+          this.setState({ value: selectedValue });
           this.onChange();
         }
       })
