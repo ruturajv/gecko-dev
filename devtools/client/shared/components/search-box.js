@@ -25,12 +25,6 @@ module.exports = createClass({
     autocompleteProvider: PropTypes.func,
   },
 
-  getDefaultProps() {
-    return {
-      autocompleteProvider: () => [],
-    };
-  },
-
   getInitialState() {
     return {
       value: "",
@@ -148,7 +142,7 @@ module.exports = createClass({
     let { value } = this.state;
     let divClassList = ["devtools-searchbox", "has-clear-btn"];
     let inputClassList = [`devtools-${type}input`];
-    let showAutocomplete = this.state.focused && value !== "";
+    let showAutocomplete = autocompleteProvider && this.state.focused && value !== "";
 
     if (value !== "") {
       inputClassList.push("filled");
