@@ -20,6 +20,8 @@ Test the searchbox and autocomplete-popup components
 /* import-globals-from head.js */
 "use strict";
 window.onload = async function () {
+  let { autocompleteProvider } =
+    browserRequire("devtools/client/netmonitor/src/utils/filter-text-utils");
   /**
    * Takes a DOMNode with its children as list items,
    * Typically UL > LI and each item's text value is
@@ -222,11 +224,32 @@ window.onload = async function () {
     is(component.state.value, "pqr ABC", "Post Tokenization value selection");
   }
 
+  function testAutocompleteProvider() {
+    let s = autocompleteProvider("s");
+    let sExpectation = [
+      "scheme:",
+      "set-cookie-domain:",
+      "set-cookie-name:",
+      "set-cookie-value:",
+      "size:",
+      "status-code:",
+    ];
+    s.map(function (item, i) {
+      is(item.value, sExpectation[i], `${sExpectation[i]} found`);
+    });
+
+    let searchSchemeProtocol = autocompleteProvider("scheme: p");
+    is(searchSchemeProtocol.length, 1, "Scheme: protocol search length correct");
+    is(searchSchemeProtocol[0].displayValue, "protocol:", "obj.displayValue correct");
+    is(searchSchemeProtocol[0].value, "scheme: protocol:", "obj.value correct");
+  }
+
   add_task(async function () {
     await testSearchBoxWithAutocomplete();
     await testKeyEventsWithAutocomplete();
     await testMouseEventsWithAutocomplete();
     await testTokenizedAutocomplete();
+    testAutocompleteProvider();
   });
 };
 </script>
