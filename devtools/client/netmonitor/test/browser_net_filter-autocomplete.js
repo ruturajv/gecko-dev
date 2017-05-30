@@ -17,12 +17,9 @@ function testAutocompleteContents(expected, document) {
 
 add_task(async function () {
   let { monitor } = await initNetMonitor(FILTERING_URL);
-  let { document, store, windowRequire, window } = monitor.panelWin;
+  let { document, window } = monitor.panelWin;
 
   info("Starting test... ");
-
-  let wait = waitForNetworkEvents(monitor, 9);
-  loadCommonFrameScript();
 
   EventUtils.synthesizeMouseAtCenter(
     document.querySelector(".devtools-filterinput"), {}, window);
@@ -64,6 +61,29 @@ add_task(async function () {
   EventUtils.synthesizeKey("VK_RETURN", {});
   is(document.querySelector(".devtools-filterinput").value,
     "scheme: protocol:", "Tokenized click generates correct value in input box");
+
+  // The negative filter flags
+  EventUtils.synthesizeKey(" -", {});
+  testAutocompleteContents([
+    "-cause:",
+    "-domain:",
+    "-has-response-header:",
+    "-is:",
+    "-larger-than:",
+    "-method:",
+    "-mime-type:",
+    "-protocol:",
+    "-regexp:",
+    "-remote-ip:",
+    "-scheme:",
+    "-set-cookie-domain:",
+    "-set-cookie-name:",
+    "-set-cookie-value:",
+    "-size:",
+    "-status-code:",
+    "-transferred-larger-than:",
+    "-transferred:",
+  ], document);
 
   await teardown(monitor);
 });
