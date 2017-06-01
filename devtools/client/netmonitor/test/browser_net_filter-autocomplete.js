@@ -4,7 +4,7 @@
 "use strict";
 
 function testAutocompleteContents(expected, document) {
-  expected.map(function (item, i) {
+  expected.forEach(function (item, i) {
     is(
       document
         .querySelector(`.devtools-autocomplete-listbox .autocomplete-item:nth-child(${i + 1})`)
@@ -45,13 +45,15 @@ add_task(async function () {
   EventUtils.synthesizeKey("VK_TAB", {});
   // Tab selection should hide autocomplete
   ok(!document.querySelector(".devtools-autocomplete-popup"),
-    "Autocomplete Popup Created");
+    "Autocomplete Popup Hidden");
+  ok(document.querySelector(".devtools-filterinput"),
+    "scheme:");
 
   // Space separated tokens
   EventUtils.synthesizeKey(" ", {});
   // Adding just a space should keep popup hidden
   ok(!document.querySelector(".devtools-autocomplete-popup"),
-    "Autocomplete Popup Created");
+    "Autocomplete Popup still hidden");
 
   // The last token where autocomplete is availabe shall generate the popup
   EventUtils.synthesizeKey("p", {});
@@ -60,7 +62,7 @@ add_task(async function () {
   // The new value of the text box should be previousTokens + latest value selected
   EventUtils.synthesizeKey("VK_RETURN", {});
   is(document.querySelector(".devtools-filterinput").value,
-    "scheme: protocol:", "Tokenized click generates correct value in input box");
+    "scheme:https protocol:", "Tokenized click generates correct value in input box");
 
   // The negative filter flags
   EventUtils.synthesizeKey(" -", {});
