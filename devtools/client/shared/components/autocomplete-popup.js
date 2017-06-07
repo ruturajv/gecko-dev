@@ -10,6 +10,14 @@ module.exports = createClass({
   displayName: "AutocompletePopup",
 
   propTypes: {
+    /**
+     * autocompleteProvider takes search-box's entire input text as `filter` argument
+     * ie. "is:cached pr"
+     * returned value is array of objects like below
+     * [{value: "is:cached protocol", displayValue: "protocol"}[, ...]]
+     * `value` is used to update the search-box input box for given item
+     * `displayValue` is used to render the autocomplete list
+     */
     autocompleteProvider: PropTypes.func.isRequired,
     filter: PropTypes.string.isRequired,
     onItemSelected: PropTypes.func.isRequired,
