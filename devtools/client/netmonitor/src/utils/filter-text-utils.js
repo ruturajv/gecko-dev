@@ -248,13 +248,11 @@ function isFreetextMatch(item, text) {
  * It expects an entire string of the searchbox ie "is:cached pr".
  * The string is then tokenized into "is:cached" and "pr"
  *
- * The output is an array of objects
+ * @param {string} filter - The entire search string of the search box
+ * @return {Array} - The output is an array of objects as below
  * [{value: "is:cached protocol", displayValue: "protocol"}[, ...]]
- *
  * `value` is used to update the search-box input box for given item
  * `displayValue` is used to render the autocomplete list
- *
- * @param {string} filter - The entire search string of the search box
  */
 function autocompleteProvider(filter) {
   if (!filter) {
