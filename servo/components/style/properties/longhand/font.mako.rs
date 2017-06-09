@@ -191,6 +191,33 @@
                     quoted: false,
                 }))
             }
+
+            #[cfg(feature = "gecko")]
+            /// Return the generic ID for a given generic font name
+            pub fn generic(name: &Atom) -> (::gecko_bindings::structs::FontFamilyType, u8) {
+                use gecko_bindings::structs::{self, FontFamilyType};
+                if *name == atom!("serif") {
+                    (FontFamilyType::eFamily_serif,
+                     structs::kGenericFont_serif)
+                } else if *name == atom!("sans-serif") {
+                    (FontFamilyType::eFamily_sans_serif,
+                     structs::kGenericFont_sans_serif)
+                } else if *name == atom!("cursive") {
+                    (FontFamilyType::eFamily_cursive,
+                     structs::kGenericFont_cursive)
+                } else if *name == atom!("fantasy") {
+                    (FontFamilyType::eFamily_fantasy,
+                     structs::kGenericFont_fantasy)
+                } else if *name == atom!("monospace") {
+                    (FontFamilyType::eFamily_monospace,
+                     structs::kGenericFont_monospace)
+                } else if *name == atom!("-moz-fixed") {
+                    (FontFamilyType::eFamily_moz_fixed,
+                     structs::kGenericFont_moz_fixed)
+                } else {
+                    panic!("Unknown generic {}", name);
+                }
+            }
         }
 
         impl ToCss for FamilyName {
@@ -258,6 +285,21 @@
     pub enum SpecifiedValue {
         Values(Vec<FontFamily>),
         System(SystemFont),
+    }
+
+    #[cfg(feature = "gecko")]
+    impl SpecifiedValue {
+        /// Return the generic ID if it is a single generic font
+        pub fn single_generic(&self) -> Option<u8> {
+            if let SpecifiedValue::Values(ref values) = *self {
+                if values.len() == 1 {
+                    if let FontFamily::Generic(ref name) = values[0] {
+                        return Some(FontFamily::generic(name).1);
+                    }
+                }
+            }
+            None
+        }
     }
 
     impl ToComputedValue for SpecifiedValue {
@@ -330,7 +372,7 @@ ${helpers.single_keyword_system("font-style",
                                 gecko_constant_prefix="NS_FONT_STYLE",
                                 gecko_ffi_name="mFont.style",
                                 spec="https://drafts.csswg.org/css-fonts/#propdef-font-style",
-                                animation_value_type="none")}
+                                animation_value_type="discrete")}
 
 
 <% font_variant_caps_custom_consts= { "small-caps": "SMALLCAPS",
@@ -346,7 +388,7 @@ ${helpers.single_keyword_system("font-variant-caps",
                                gecko_ffi_name="mFont.variantCaps",
                                spec="https://drafts.csswg.org/css-fonts/#propdef-font-variant-caps",
                                custom_consts=font_variant_caps_custom_consts,
-                               animation_value_type="none")}
+                               animation_value_type="discrete")}
 
 <%helpers:longhand name="font-weight" need_clone="True" animation_value_type="ComputedValue"
                    spec="https://drafts.csswg.org/css-fonts/#propdef-font-weight">
@@ -464,12 +506,13 @@ ${helpers.single_keyword_system("font-variant-caps",
             }
 
             /// Obtain a Servo computed value from a Gecko computed font-weight
-            pub unsafe fn from_gecko_weight(weight: u16) -> Self {
-                use std::mem::transmute;
-                debug_assert!(weight >= 100);
-                debug_assert!(weight <= 900);
-                debug_assert!(weight % 10 == 0);
-                transmute(weight)
+            pub fn from_gecko_weight(weight: u16) -> Self {
+                match weight {
+                    % for weight in range(100, 901, 100):
+                        ${weight} => T::Weight${weight},
+                    % endfor
+                    _ => panic!("from_gecko_weight: called with invalid weight")
+                }
             }
         }
     }
@@ -899,7 +942,7 @@ ${helpers.single_keyword_system("font-variant-caps",
             // recomputed from the base size for the keyword and the relative size.
             //
             // See bug 1355707
-            if let Some((kw, fraction)) = context.inherited_style().font_size_keyword {
+            if let Some((kw, fraction)) = context.inherited_style().font_computation_data.font_size_keyword {
                 context.mutate_style().font_size_keyword = Some((kw, fraction * ratio));
             } else {
                 context.mutate_style().font_size_keyword = None;
@@ -924,10 +967,12 @@ ${helpers.single_keyword_system("font-variant-caps",
             }
         % endif
 
-        let parent_unconstrained = context.mutate_style()
-                                       .mutate_font()
-                                       .apply_font_size(computed,
-                                                        parent);
+        let parent_unconstrained = {
+            let (style, device) = context.mutate_style_with_device();
+
+            style.mutate_font().apply_font_size(computed, parent, device)
+        };
+
 
         if let Some(parent) = parent_unconstrained {
             let new_unconstrained = specified_value
@@ -945,13 +990,14 @@ ${helpers.single_keyword_system("font-variant-caps",
         let kw_inherited_size = context.style().font_size_keyword.map(|(kw, ratio)| {
             SpecifiedValue::Keyword(kw, ratio).to_computed_value(context)
         });
-        let used_kw = context.mutate_style().mutate_font()
-               .inherit_font_size_from(parent, kw_inherited_size);
+        let parent_kw = context.inherited_style.font_computation_data.font_size_keyword;
+        let (style, device) = context.mutate_style_with_device();
+        let used_kw = style.mutate_font()
+               .inherit_font_size_from(parent, kw_inherited_size, device);
         if used_kw {
-            context.mutate_style().font_size_keyword =
-                context.inherited_style.font_size_keyword;
+            style.font_size_keyword = parent_kw;
         } else {
-            context.mutate_style().font_size_keyword = None;
+            style.font_size_keyword = None;
         }
     }
 
@@ -960,9 +1006,12 @@ ${helpers.single_keyword_system("font-variant-caps",
         // compute to the same value and depends on the font
         let computed = longhands::font_size::get_initial_specified_value()
                             .to_computed_value(context);
-        context.mutate_style().mutate_${data.current_style_struct.name_lower}()
-               .set_font_size(computed);
-        context.mutate_style().font_size_keyword = Some((Default::default(), 1.));
+        let (style, _device) = context.mutate_style_with_device();
+        style.mutate_font().set_font_size(computed);
+        % if product == "gecko":
+            style.mutate_font().fixup_font_min_size(_device);
+        % endif
+        style.font_size_keyword = Some((Default::default(), 1.));
     }
 </%helpers:longhand>
 
@@ -1032,26 +1081,13 @@ ${helpers.single_keyword_system("font-variant-caps",
 
     pub mod computed_value {
         use properties::animated_properties::Animatable;
-        use std::fmt;
-        use style_traits::ToCss;
         use values::CSSFloat;
 
-        #[derive(Copy, Clone, Debug, PartialEq)]
         #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
+        #[derive(Copy, Clone, Debug, PartialEq, ToCss)]
         pub enum T {
             None,
             Number(CSSFloat),
-        }
-
-        impl ToCss for T {
-            fn to_css<W>(&self, dest: &mut W) -> fmt::Result
-                where W: fmt::Write,
-            {
-                match *self {
-                    T::None => dest.write_str("none"),
-                    T::Number(number) => number.to_css(dest),
-                }
-            }
         }
 
         impl T {
@@ -1186,7 +1222,7 @@ ${helpers.single_keyword_system("font-kerning",
                                 gecko_ffi_name="mFont.kerning",
                                 gecko_constant_prefix="NS_FONT_KERNING",
                                 spec="https://drafts.csswg.org/css-fonts/#propdef-font-kerning",
-                                animation_value_type="none")}
+                                animation_value_type="discrete")}
 
 /// FIXME: Implement proper handling of each values.
 /// https://github.com/servo/servo/issues/15957
@@ -1765,7 +1801,7 @@ ${helpers.single_keyword_system("font-variant-position",
                                 gecko_ffi_name="mFont.variantPosition",
                                 gecko_constant_prefix="NS_FONT_VARIANT_POSITION",
                                 spec="https://drafts.csswg.org/css-fonts/#propdef-font-variant-position",
-                                animation_value_type="none")}
+                                animation_value_type="discrete")}
 
 <%helpers:longhand name="font-feature-settings" products="gecko" animation_value_type="none"
                    extra_prefixes="moz" boxed="True"
@@ -1773,6 +1809,7 @@ ${helpers.single_keyword_system("font-variant-position",
     use properties::longhands::system_font::SystemFont;
     use std::fmt;
     use style_traits::ToCss;
+    use values::generics::FontSettings;
 
     #[derive(Debug, Clone, PartialEq)]
     pub enum SpecifiedValue {
@@ -1784,125 +1821,57 @@ ${helpers.single_keyword_system("font-variant-position",
     <%self:simple_system_boilerplate name="font_feature_settings"></%self:simple_system_boilerplate>
 
     pub mod computed_value {
-        use cssparser::Parser;
-        use parser::{Parse, ParserContext};
-        use std::fmt;
-        use style_traits::ToCss;
-
-        #[derive(Clone, Debug, Eq, PartialEq)]
-        #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
-        pub enum T {
-            Normal,
-            Tag(Vec<FeatureTagValue>)
-        }
-
-        #[derive(Clone, Debug, Eq, PartialEq)]
-        #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
-        pub struct FeatureTagValue {
-            pub tag: u32,
-            pub value: u32
-        }
-
-        impl ToCss for T {
-            fn to_css<W>(&self, dest: &mut W) -> fmt::Result where W: fmt::Write {
-                match *self {
-                    T::Normal => dest.write_str("normal"),
-                    T::Tag(ref ftvs) => {
-                        let mut iter = ftvs.iter();
-                        // handle head element
-                        try!(iter.next().unwrap().to_css(dest));
-                        // handle tail, precede each with a delimiter
-                        for ftv in iter {
-                            try!(dest.write_str(", "));
-                            try!(ftv.to_css(dest));
-                        }
-                        Ok(())
-                    }
-                }
-            }
-        }
-
-        impl Parse for T {
-            /// https://www.w3.org/TR/css-fonts-3/#propdef-font-feature-settings
-            fn parse(context: &ParserContext, input: &mut Parser) -> Result<Self, ()> {
-                if input.try(|i| i.expect_ident_matching("normal")).is_ok() {
-                    return Ok(T::Normal);
-                }
-                input.parse_comma_separated(|i| FeatureTagValue::parse(context, i)).map(T::Tag)
-            }
-        }
-
-        impl ToCss for FeatureTagValue {
-            fn to_css<W>(&self, dest: &mut W) -> fmt::Result where W: fmt::Write {
-                use std::str;
-                use byteorder::{WriteBytesExt, BigEndian};
-                use cssparser::serialize_string;
-
-                let mut raw: Vec<u8> = vec!();
-                raw.write_u32::<BigEndian>(self.tag).unwrap();
-                serialize_string(str::from_utf8(&raw).unwrap_or_default(), dest)?;
-
-                match self.value {
-                    1 => Ok(()),
-                    0 => dest.write_str(" off"),
-                    x => write!(dest, " {}", x)
-                }
-            }
-        }
-
-        impl Parse for FeatureTagValue {
-            /// https://www.w3.org/TR/css-fonts-3/#propdef-font-feature-settings
-            /// <string> [ on | off | <integer> ]
-            fn parse(_context: &ParserContext, input: &mut Parser) -> Result<Self, ()> {
-                use std::io::Cursor;
-                use byteorder::{ReadBytesExt, BigEndian};
-
-                let tag = try!(input.expect_string());
-
-                // allowed strings of length 4 containing chars: <U+20, U+7E>
-                if tag.len() != 4 ||
-                   tag.chars().any(|c| c < ' ' || c > '~')
-                {
-                    return Err(())
-                }
-
-                let mut raw = Cursor::new(tag.as_bytes());
-                let u_tag = raw.read_u32::<BigEndian>().unwrap();
-
-                if let Ok(value) = input.try(|input| input.expect_integer()) {
-                    // handle integer, throw if it is negative
-                    if value >= 0 {
-                        Ok(FeatureTagValue { tag: u_tag, value: value as u32 })
-                    } else {
-                        Err(())
-                    }
-                } else if let Ok(_) = input.try(|input| input.expect_ident_matching("on")) {
-                    // on is an alias for '1'
-                    Ok(FeatureTagValue { tag: u_tag, value: 1 })
-                } else if let Ok(_) = input.try(|input| input.expect_ident_matching("off")) {
-                    // off is an alias for '0'
-                    Ok(FeatureTagValue { tag: u_tag, value: 0 })
-                } else {
-                    // empty value is an alias for '1'
-                    Ok(FeatureTagValue { tag: u_tag, value: 1 })
-                }
-            }
-        }
+        use values::generics::{FontSettings, FontSettingTagInt};
+        pub type T = FontSettings<FontSettingTagInt>;
     }
 
     #[inline]
     pub fn get_initial_value() -> computed_value::T {
-        computed_value::T::Normal
+        FontSettings::Normal
     }
 
     #[inline]
     pub fn get_initial_specified_value() -> SpecifiedValue {
-        SpecifiedValue::Value(computed_value::T::Normal)
+        SpecifiedValue::Value(FontSettings::Normal)
     }
 
     /// normal | <feature-tag-value>#
     pub fn parse(context: &ParserContext, input: &mut Parser) -> Result<SpecifiedValue, ()> {
         computed_value::T::parse(context, input).map(SpecifiedValue::Value)
+    }
+</%helpers:longhand>
+
+<%
+# This spec link is too long to fit elsewhere
+variation_spec = """\
+https://drafts.csswg.org/css-fonts-4/#low-level-font-variation-settings-control-the-font-variation-settings-property\
+"""
+%>
+<%helpers:longhand name="font-variation-settings" products="gecko" animation_value_type="none"
+                   spec="${variation_spec}">
+    use values::computed::ComputedValueAsSpecified;
+    use values::generics::FontSettings;
+
+    impl ComputedValueAsSpecified for SpecifiedValue {}
+
+    pub type SpecifiedValue = computed_value::T;
+
+    no_viewport_percentage!(SpecifiedValue);
+
+
+    pub mod computed_value {
+        use values::generics::{FontSettings, FontSettingTagFloat};
+        pub type T = FontSettings<FontSettingTagFloat>;
+    }
+
+    #[inline]
+    pub fn get_initial_value() -> computed_value::T {
+        FontSettings::Normal
+    }
+
+    /// normal | <feature-tag-value>#
+    pub fn parse(context: &ParserContext, input: &mut Parser) -> Result<SpecifiedValue, ()> {
+        computed_value::T::parse(context, input)
     }
 </%helpers:longhand>
 
@@ -2191,7 +2160,7 @@ ${helpers.single_keyword("-moz-math-display",
                          need_clone="True")}
 
 ${helpers.single_keyword("-moz-math-variant",
-                         """normal bold italic bold-italic script bold-script
+                         """none normal bold italic bold-italic script bold-script
                             fraktur double-struck bold-fraktur sans-serif
                             bold-sans-serif sans-serif-italic sans-serif-bold-italic
                             monospace initial tailed looped stretched""",
@@ -2200,6 +2169,7 @@ ${helpers.single_keyword("-moz-math-variant",
                          products="gecko",
                          spec="Internal (not web-exposed)",
                          animation_value_type="none",
+                         need_clone="True",
                          needs_conversion=True)}
 
 <%helpers:longhand name="-moz-script-min-size" products="gecko" animation_value_type="none"
@@ -2208,17 +2178,14 @@ ${helpers.single_keyword("-moz-math-variant",
                    internal="True" disable_when_testing="True">
     use app_units::Au;
     use gecko_bindings::structs::NS_MATHML_DEFAULT_SCRIPT_MIN_SIZE_PT;
-    use std::fmt;
-    use style_traits::ToCss;
     use values::specified::length::{AU_PER_PT, FontBaseSize, NoCalcLength};
 
-    #[derive(Clone, Debug, HasViewportPercentage, PartialEq)]
+    #[derive(Clone, Debug, HasViewportPercentage, PartialEq, ToCss)]
     pub struct SpecifiedValue(pub NoCalcLength);
 
     pub mod computed_value {
         pub type T = super::Au;
     }
-
 
     impl ToComputedValue for SpecifiedValue {
         type ComputedValue = computed_value::T;
@@ -2241,12 +2208,6 @@ ${helpers.single_keyword("-moz-math-variant",
         }
         fn from_computed_value(other: &computed_value::T) -> Self {
             SpecifiedValue(ToComputedValue::from_computed_value(other))
-        }
-    }
-
-    impl ToCss for SpecifiedValue {
-        fn to_css<W>(&self, dest: &mut W) -> fmt::Result where W: fmt::Write {
-            self.0.to_css(dest)
         }
     }
 
@@ -2282,9 +2243,7 @@ ${helpers.single_keyword("-moz-math-variant",
         use app_units::Au;
         use cssparser::Parser;
         use properties::longhands;
-        use std::fmt;
         use std::hash::{Hash, Hasher};
-        use style_traits::ToCss;
         use values::computed::{ToComputedValue, Context};
         <%
             system_fonts = """caption icon menu message-box small-caption status-bar
@@ -2298,21 +2257,11 @@ ${helpers.single_keyword("-moz-math-variant",
             kw_cast = """font_style font_variant_caps font_stretch
                          font_kerning font_variant_position""".split()
         %>
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+        #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, ToCss)]
         pub enum SystemFont {
             % for font in system_fonts:
                 ${to_camel_case(font)},
             % endfor
-        }
-
-        impl ToCss for SystemFont {
-            fn to_css<W>(&self, dest: &mut W) -> fmt::Result where W: fmt::Write {
-                dest.write_str(match *self {
-                    % for font in system_fonts:
-                        SystemFont::${to_camel_case(font)} => "${font}",
-                    % endfor
-                })
-            }
         }
 
         // ComputedValues are compared at times
@@ -2362,9 +2311,7 @@ ${helpers.single_keyword("-moz-math-variant",
                         quoted: true
                     })
                 }).collect::<Vec<_>>();
-                let weight = unsafe {
-                    longhands::font_weight::computed_value::T::from_gecko_weight(system.weight)
-                };
+                let weight = longhands::font_weight::computed_value::T::from_gecko_weight(system.weight);
                 let ret = ComputedSystemFont {
                     font_family: longhands::font_family::computed_value::T(family),
                     font_size: Au(system.size),
@@ -2451,5 +2398,12 @@ ${helpers.single_keyword("-moz-osx-font-smoothing",
                          gecko_ffi_name="mFont.smoothing",
                          products="gecko",
                          spec="Nonstandard (https://developer.mozilla.org/en-US/docs/Web/CSS/font-smooth)",
-                         animation_value_type="none",
-                         need_clone=True)}
+                         animation_value_type="discrete")}
+
+${helpers.predefined_type("-moz-min-font-size-ratio",
+                          "Percentage",
+                          "computed::Percentage::hundred()",
+                          animation_value_type="none",
+                          products="gecko",
+                          internal=True,
+                          spec="Nonstandard (Internal-only)")}

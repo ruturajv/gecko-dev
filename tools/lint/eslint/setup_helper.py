@@ -12,11 +12,17 @@ import re
 import subprocess
 import sys
 from distutils.version import LooseVersion
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", "..", "python", "which"))
+sys.path.append(os.path.join(
+    os.path.dirname(__file__), "..", "..", "..", "third_party", "python", "which"))
 import which
 
+NODE_MACHING_VERSION_NOT_FOUND_MESSAGE = """
+nodejs is out of date. You currently have node %s but v6.9.1 is required.
+Please update nodejs from https://nodejs.org and try again.
+""".strip()
+
 NODE_NOT_FOUND_MESSAGE = """
-nodejs v6.9.1 is either not installed or is installed to a non-standard path.
+nodejs is either not installed or is installed to a non-standard path.
 Please install nodejs from https://nodejs.org and try again.
 
 Valid installation paths:
@@ -33,10 +39,6 @@ Valid installation paths:
 
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 CARET_VERSION_RANGE_RE = re.compile(r"^\^((\d+)\.\d+\.\d+)$")
-
-LINTED_EXTENSIONS = ['js', 'jsm', 'jsx', 'xml', 'html', 'xhtml']
-EXTENSIONS = [".%s" % x for x in LINTED_EXTENSIONS]
-EXTENSIONS_RE = re.compile(r'.+\.(?:%s)$' % '|'.join(LINTED_EXTENSIONS))
 
 project_root = None
 
@@ -241,59 +243,83 @@ def get_possible_node_paths_win():
     })
 
 
-def get_node_or_npm_path(filename, minversion=None):
+def simple_which(filename, path=None):
+    try:
+        return which.which(filename, path)
+    except which.WhichError:
+        return None
+
+
+def which_path(filename):
     """
     Return the nodejs or npm path.
     """
-
     if platform.system() == "Windows":
         for ext in [".cmd", ".exe", ""]:
-            try:
-                node_or_npm_path = which.which(filename + ext,
-                                               path=get_possible_node_paths_win())
-                if is_valid(node_or_npm_path, minversion):
-                    return node_or_npm_path
-            except which.WhichError:
-                pass
-    else:
-        try:
-            node_or_npm_path = which.which(filename)
-            if is_valid(node_or_npm_path, minversion):
-                return node_or_npm_path
-        except which.WhichError:
-            if filename == "node":
-                # Retry it with "nodejs" as Linux tends to prefer nodejs rather than node.
-                return get_node_or_npm_path("nodejs", minversion)
+            # Look in the system path first.
+            filepath = simple_which(filename + ext)
+            if filepath is None:
+                # If we don't find it there, fallback to the non-system paths.
+                filepath = simple_which(filename + ext, get_possible_node_paths_win())
 
-    if filename in ('node', 'nodejs'):
-        print(NODE_NOT_FOUND_MESSAGE)
-    elif filename == "npm":
-        print(NPM_NOT_FOUND_MESSAGE)
+            if filepath is not None:
+                return filepath
 
-    if platform.system() == "Windows":
-        app_paths = get_possible_node_paths_win()
+        # If we got this far, we didn't find it with any of the extensions, so
+        # just return.
+        return None
 
-        for p in app_paths:
-            print("  - %s" % p)
-    elif platform.system() == "Darwin":
-        print("  - /usr/local/bin/{}".format(filename))
-    elif platform.system() == "Linux":
-        print("  - /usr/bin/{}".format(filename))
+    # Non-windows.
+    path = simple_which(filename)
+    if path is None and filename == "node":
+        path = simple_which("nodejs")
+
+    return path
+
+
+def get_node_or_npm_path(filename, minversion=None):
+    node_or_npm_path = which_path(filename)
+
+    if not node_or_npm_path:
+        if filename in ('node', 'nodejs'):
+            print(NODE_NOT_FOUND_MESSAGE)
+        elif filename == "npm":
+            print(NPM_NOT_FOUND_MESSAGE)
+
+        if platform.system() == "Windows":
+            app_paths = get_possible_node_paths_win()
+
+            for p in app_paths:
+                print("  - %s" % p)
+        elif platform.system() == "Darwin":
+            print("  - /usr/local/bin/{}".format(filename))
+        elif platform.system() == "Linux":
+            print("  - /usr/bin/{}".format(filename))
+
+        return None
+
+    if not minversion:
+        return node_or_npm_path
+
+    version_str = get_version(node_or_npm_path)
+
+    version = LooseVersion(version_str.lstrip('v'))
+
+    if version > minversion:
+        return node_or_npm_path
+
+    print(NODE_MACHING_VERSION_NOT_FOUND_MESSAGE % version_str.strip())
 
     return None
 
 
-def is_valid(path, minversion=None):
+def get_version(path):
     try:
         version_str = subprocess.check_output([path, "--version"],
                                               stderr=subprocess.STDOUT)
-        if minversion:
-            # nodejs prefixes its version strings with "v"
-            version = LooseVersion(version_str.lstrip('v'))
-            return version >= minversion
-        return True
+        return version_str
     except (subprocess.CalledProcessError, OSError):
-        return False
+        return None
 
 
 def set_project_root(root=None):

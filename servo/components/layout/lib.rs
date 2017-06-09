@@ -16,7 +16,6 @@ extern crate atomic_refcell;
 extern crate bitflags;
 extern crate canvas_traits;
 extern crate core;
-extern crate cssparser;
 extern crate euclid;
 extern crate fnv;
 extern crate gfx;
@@ -93,7 +92,7 @@ pub mod wrapper;
 // For unit tests:
 pub use fragment::Fragment;
 pub use fragment::SpecificFragmentInfo;
-pub use self::data::PersistentLayoutData;
+pub use self::data::LayoutData;
 
 /// Returns whether the two arguments point to the same value.
 ///

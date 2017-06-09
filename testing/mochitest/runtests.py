@@ -153,6 +153,7 @@ class MessageLogger(object):
                          'test_status', 'log',
                          'buffering_on', 'buffering_off'])
     TEST_PATH_PREFIXES = ['/tests/',
+                          'chrome://mochitests/content/a11y/',
                           'chrome://mochitests/content/browser/',
                           'chrome://mochitests/content/chrome/']
 
@@ -774,6 +775,17 @@ def parseKeyValue(strings, separator='=', context='key, value: '):
             "Error: syntax error in %s" %
             (context, ','.join(missing)), errors=missing)
     return [string.split(separator, 1) for string in strings]
+
+
+def create_zip(path):
+    """
+    Takes a `path` on disk and creates a zipfile with its contents. Returns a
+    path to the location of the temporary zip file.
+    """
+    with tempfile.NamedTemporaryFile() as f:
+        # `shutil.make_archive` writes to "{f.name}.zip", so we're really just
+        # using `NamedTemporaryFile` as a way to get a random path.
+        return shutil.make_archive(f.name, "zip", path)
 
 
 class MochitestDesktop(object):
@@ -2106,12 +2118,14 @@ toolbar#nav-bar {
             self.marionette = Marionette(**marionette_args)
             self.marionette.start_session(timeout=port_timeout)
 
-            # install specialpowers and mochikit as temporary addons
+            # install specialpowers and mochikit addons
             addons = Addons(self.marionette)
 
             if mozinfo.info.get('toolkit') != 'gonk':
-                addons.install(os.path.join(here, 'extensions', 'specialpowers'), temp=True)
-                addons.install(self.mochijar, temp=True)
+                addons.install(create_zip(
+                    os.path.join(here, 'extensions', 'specialpowers')
+                ))
+                addons.install(create_zip(self.mochijar))
 
             self.execute_start_script()
 
@@ -2168,7 +2182,7 @@ toolbar#nav-bar {
                 os.remove(processLog)
             self.urlOpts = []
 
-        return status
+        return status, self.lastTestSeen
 
     def initializeLooping(self, options):
         """
@@ -2489,7 +2503,7 @@ toolbar#nav-bar {
 
                 self.log.info("runtests.py | Running with e10s: {}".format(options.e10s))
                 self.log.info("runtests.py | Running tests: start.\n")
-                ret = self.runApp(
+                ret, _ = self.runApp(
                     testURL,
                     self.browserEnv,
                     options.app,

@@ -11,8 +11,9 @@ win32-clang-cl:
         tier: 2
     worker-type: aws-provisioner-v1/gecko-{level}-b-win2012
     worker:
-        implementation: generic-worker
         max-run-time: 36000
+        env:
+            TOOLTOOL_MANIFEST: "browser/config/tooltool-manifests/win32/build-clang-cl.manifest"
     run:
         using: toolchain-script
         script: build-clang32-windows.sh
@@ -29,8 +30,9 @@ win64-clang-cl:
         tier: 2
     worker-type: aws-provisioner-v1/gecko-{level}-b-win2012
     worker:
-        implementation: generic-worker
         max-run-time: 36000
+        env:
+            TOOLTOOL_MANIFEST: "browser/config/tooltool-manifests/win32/build-clang-cl.manifest"
     run:
         using: toolchain-script
         script: build-clang64-windows.sh
@@ -50,8 +52,9 @@ win32-clang-tidy:
         tier: 2
     worker-type: aws-provisioner-v1/gecko-{level}-b-win2012
     worker:
-        implementation: generic-worker
         max-run-time: 36000
+        env:
+            TOOLTOOL_MANIFEST: "browser/config/tooltool-manifests/win32/build-clang-cl.manifest"
     run:
         using: toolchain-script
         script: build-clang-tidy32-windows.sh
@@ -71,8 +74,9 @@ win64-clang-tidy:
         tier: 2
     worker-type: aws-provisioner-v1/gecko-{level}-b-win2012
     worker:
-        implementation: generic-worker
         max-run-time: 36000
+        env:
+            TOOLTOOL_MANIFEST: "browser/config/tooltool-manifests/win32/build-clang-cl.manifest"
     run:
         using: toolchain-script
         script: build-clang-tidy64-windows.sh

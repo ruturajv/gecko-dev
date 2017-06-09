@@ -6,11 +6,13 @@
 
 #define INITGUID
 
+#include "mozilla/dom/ContentChild.h"
 #include "mozilla/Move.h"
 #include "mozilla/mscom/DispatchForwarder.h"
 #include "mozilla/mscom/Interceptor.h"
 #include "mozilla/mscom/InterceptorLog.h"
 #include "mozilla/mscom/MainThreadInvoker.h"
+#include "mozilla/mscom/Objref.h"
 #include "mozilla/mscom/Registration.h"
 #include "mozilla/mscom/Utils.h"
 #include "MainThreadUtils.h"
@@ -18,39 +20,100 @@
 #include "mozilla/DebugOnly.h"
 #include "nsDirectoryServiceDefs.h"
 #include "nsDirectoryServiceUtils.h"
+#include "nsRefPtrHashtable.h"
 #include "nsThreadUtils.h"
+#include "nsXULAppAPI.h"
 
 namespace mozilla {
 namespace mscom {
 
+class LiveSet final
+{
+public:
+  LiveSet()
+    : mMutex("mozilla::mscom::LiveSet::mMutex")
+  {
+  }
+
+  void Lock()
+  {
+    mMutex.Lock();
+  }
+
+  void Unlock()
+  {
+    mMutex.Unlock();
+  }
+
+  void Put(IUnknown* aKey, already_AddRefed<IWeakReference> aValue)
+  {
+    mMutex.AssertCurrentThreadOwns();
+    mLiveSet.Put(aKey, Move(aValue));
+  }
+
+  RefPtr<IWeakReference> Get(IUnknown* aKey)
+  {
+    mMutex.AssertCurrentThreadOwns();
+    RefPtr<IWeakReference> result;
+    mLiveSet.Get(aKey, getter_AddRefs(result));
+    return result;
+  }
+
+  void Remove(IUnknown* aKey)
+  {
+    mMutex.AssertCurrentThreadOwns();
+    mLiveSet.Remove(aKey);
+  }
+
+  typedef BaseAutoLock<LiveSet> AutoLock;
+
+private:
+  Mutex mMutex;
+  nsRefPtrHashtable<nsPtrHashKey<IUnknown>, IWeakReference> mLiveSet;
+};
+
+static LiveSet&
+GetLiveSet()
+{
+  static LiveSet sLiveSet;
+  return sLiveSet;
+}
+
 /* static */ HRESULT
 Interceptor::Create(STAUniquePtr<IUnknown> aTarget, IInterceptorSink* aSink,
-                    REFIID aIid, void** aOutput)
+                    REFIID aInitialIid, void** aOutInterface)
 {
-  MOZ_ASSERT(aOutput && aTarget && aSink);
-  if (!aOutput) {
+  MOZ_ASSERT(aOutInterface && aTarget && aSink);
+  if (!aOutInterface) {
     return E_INVALIDARG;
   }
 
-  *aOutput = nullptr;
+  LiveSet::AutoLock lock(GetLiveSet());
+
+  RefPtr<IWeakReference> existingInterceptor(Move(GetLiveSet().Get(aTarget.get())));
+  if (existingInterceptor &&
+      SUCCEEDED(existingInterceptor->Resolve(aInitialIid, aOutInterface))) {
+    return S_OK;
+  }
+
+  *aOutInterface = nullptr;
 
   if (!aTarget || !aSink) {
     return E_INVALIDARG;
   }
 
-  RefPtr<WeakReferenceSupport> intcpt(new Interceptor(Move(aTarget), aSink));
-  return intcpt->QueryInterface(aIid, aOutput);
+  RefPtr<Interceptor> intcpt(new Interceptor(aSink));
+  return intcpt->GetInitialInterceptorForIID(aInitialIid, Move(aTarget),
+                                             aOutInterface);
 }
 
-Interceptor::Interceptor(STAUniquePtr<IUnknown> aTarget, IInterceptorSink* aSink)
+Interceptor::Interceptor(IInterceptorSink* aSink)
   : WeakReferenceSupport(WeakReferenceSupport::Flags::eDestroyOnMainThread)
-  , mTarget(Move(aTarget))
   , mEventSink(aSink)
   , mMutex("mozilla::mscom::Interceptor::mMutex")
   , mStdMarshal(nullptr)
 {
   MOZ_ASSERT(aSink);
-  MOZ_ASSERT(!IsProxy(mTarget.get()));
   RefPtr<IWeakReference> weakRef;
   if (SUCCEEDED(GetWeakReference(getter_AddRefs(weakRef)))) {
     aSink->SetInterceptor(weakRef);
@@ -59,6 +122,11 @@ Interceptor::Interceptor(STAUniquePtr<IUnknown> aTarget, IInterceptorSink* aSink
 
 Interceptor::~Interceptor()
 {
+  { // Scope for lock
+    LiveSet::AutoLock lock(GetLiveSet());
+    GetLiveSet().Remove(mTarget.get());
+  }
+
   // This needs to run on the main thread because it releases target interface
   // reference counts which may not be thread-safe.
   MOZ_ASSERT(NS_IsMainThread());
@@ -77,6 +145,7 @@ Interceptor::GetClassForHandler(DWORD aDestContext, void* aDestContextPtr,
       aDestContext == MSHCTX_DIFFERENTMACHINE) {
     return E_INVALIDARG;
   }
+
   MOZ_ASSERT(mEventSink);
   return mEventSink->GetHandler(WrapNotNull(aHandlerClsid));
 }
@@ -112,11 +181,59 @@ Interceptor::MarshalInterface(IStream* pStm, REFIID riid, void* pv,
                               DWORD dwDestContext, void* pvDestContext,
                               DWORD mshlflags)
 {
-  HRESULT hr = mStdMarshal->MarshalInterface(pStm, riid, pv, dwDestContext,
-                                             pvDestContext, mshlflags);
+  HRESULT hr;
+
+#if defined(MOZ_MSCOM_REMARSHAL_NO_HANDLER)
+  // Save the current stream position
+  LARGE_INTEGER seekTo;
+  seekTo.QuadPart = 0;
+
+  ULARGE_INTEGER objrefPos;
+
+  hr = pStm->Seek(seekTo, STREAM_SEEK_CUR, &objrefPos);
   if (FAILED(hr)) {
     return hr;
   }
+
+#endif // defined(MOZ_MSCOM_REMARSHAL_NO_HANDLER)
+
+  hr = mStdMarshal->MarshalInterface(pStm, riid, pv, dwDestContext,
+                                     pvDestContext, mshlflags);
+  if (FAILED(hr)) {
+    return hr;
+  }
+
+#if defined(MOZ_MSCOM_REMARSHAL_NO_HANDLER)
+  if (XRE_IsContentProcess()) {
+    const DWORD chromeMainTid =
+      dom::ContentChild::GetSingleton()->GetChromeMainThreadId();
+
+    /*
+     * CoGetCallerTID() gives us the caller's thread ID when that thread resides
+     * in a single-threaded apartment. Since our chrome main thread does live
+     * inside an STA, we will therefore be able to check whether the caller TID
+     * equals our chrome main thread TID. This enables us to distinguish
+     * between our chrome thread vs other out-of-process callers.
+     */
+    DWORD callerTid;
+    if (::CoGetCallerTID(&callerTid) == S_FALSE && callerTid != chromeMainTid) {
+      // The caller isn't our chrome process, so do not provide a handler.
+      // First, seek back to the stream position that we prevously saved.
+      seekTo.QuadPart = objrefPos.QuadPart;
+      hr = pStm->Seek(seekTo, STREAM_SEEK_SET, nullptr);
+      if (FAILED(hr)) {
+        return hr;
+      }
+
+      // Now strip out the handler.
+      if (!StripHandlerFromOBJREF(WrapNotNull(pStm))) {
+        return E_FAIL;
+      }
+
+      return S_OK;
+    }
+  }
+#endif // defined(MOZ_MSCOM_REMARSHAL_NO_HANDLER)
 
   return mEventSink->WriteHandlerPayload(WrapNotNull(pStm));
 }
@@ -203,6 +320,62 @@ Interceptor::CreateInterceptor(REFIID aIid, IUnknown* aOuter, IUnknown** aOutput
   // is complex types that contain unions.
   MOZ_ASSERT(SUCCEEDED(hr));
   return hr;
+}
+
+HRESULT
+Interceptor::GetInitialInterceptorForIID(REFIID aTargetIid,
+                                         STAUniquePtr<IUnknown> aTarget,
+                                         void** aOutInterceptor)
+{
+  MOZ_ASSERT(aOutInterceptor);
+  MOZ_ASSERT(aTargetIid != IID_IUnknown && aTargetIid != IID_IMarshal);
+  MOZ_ASSERT(!IsProxy(aTarget.get()));
+
+  // Raise the refcount for stabilization purposes during aggregation
+  RefPtr<IUnknown> kungFuDeathGrip(static_cast<IUnknown*>(
+        static_cast<WeakReferenceSupport*>(this)));
+
+  RefPtr<IUnknown> unkInterceptor;
+  HRESULT hr = CreateInterceptor(aTargetIid, kungFuDeathGrip,
+                                 getter_AddRefs(unkInterceptor));
+  if (FAILED(hr)) {
+    return hr;
+  }
+
+  RefPtr<ICallInterceptor> interceptor;
+  hr = unkInterceptor->QueryInterface(IID_ICallInterceptor,
+                                      getter_AddRefs(interceptor));
+  if (FAILED(hr)) {
+    return hr;
+  }
+
+  hr = interceptor->RegisterSink(mEventSink);
+  if (FAILED(hr)) {
+    return hr;
+  }
+
+  RefPtr<IWeakReference> weakRef;
+  hr = GetWeakReference(getter_AddRefs(weakRef));
+  if (FAILED(hr)) {
+    return hr;
+  }
+
+  // mTarget is a weak reference to aTarget. This is safe because we transfer
+  // ownership of aTarget into mInterceptorMap which remains live for the
+  // lifetime of this Interceptor.
+  mTarget = ToInterceptorTargetPtr(aTarget);
+  GetLiveSet().Put(mTarget.get(), weakRef.forget());
+
+  // Now we transfer aTarget's ownership into mInterceptorMap.
+  mInterceptorMap.AppendElement(MapEntry(aTargetIid,
+                                         unkInterceptor,
+                                         aTarget.release()));
+
+  if (mEventSink->MarshalAs(aTargetIid) == aTargetIid) {
+    return unkInterceptor->QueryInterface(aTargetIid, aOutInterceptor);
+  }
+
+  return GetInterceptorForIID(aTargetIid, aOutInterceptor);
 }
 
 /**

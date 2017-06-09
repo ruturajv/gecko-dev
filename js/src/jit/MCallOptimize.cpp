@@ -90,7 +90,7 @@ IonBuilder::inlineNativeCall(CallInfo& callInfo, JSFunction* target)
 
       // Array intrinsics.
       case InlinableNative::IntrinsicNewArrayIterator:
-        return inlineNewArrayIterator(callInfo);
+        return inlineNewIterator(callInfo, MNewIterator::ArrayIterator);
 
       // Atomic natives.
       case InlinableNative::AtomicsCompareExchange:
@@ -109,6 +109,10 @@ IonBuilder::inlineNativeCall(CallInfo& callInfo, JSFunction* target)
         return inlineAtomicsBinop(callInfo, inlNative);
       case InlinableNative::AtomicsIsLockFree:
         return inlineAtomicsIsLockFree(callInfo);
+
+      // Boolean natives.
+      case InlinableNative::Boolean:
+        return inlineBoolean(callInfo);
 
       // Intl natives.
       case InlinableNative::IntlIsCollator:
@@ -225,6 +229,8 @@ IonBuilder::inlineNativeCall(CallInfo& callInfo, JSFunction* target)
         return inlineStringReplaceString(callInfo);
       case InlinableNative::IntrinsicStringSplitString:
         return inlineStringSplitString(callInfo);
+      case InlinableNative::IntrinsicNewStringIterator:
+        return inlineNewIterator(callInfo, MNewIterator::StringIterator);
 
       // Object natives.
       case InlinableNative::ObjectCreate:
@@ -897,24 +903,56 @@ IonBuilder::inlineArraySlice(CallInfo& callInfo)
 }
 
 IonBuilder::InliningResult
-IonBuilder::inlineNewArrayIterator(CallInfo& callInfo)
+IonBuilder::inlineBoolean(CallInfo& callInfo)
+{
+    if (callInfo.constructing()) {
+        trackOptimizationOutcome(TrackedOutcome::CantInlineNativeBadForm);
+        return InliningStatus_NotInlined;
+    }
+
+    if (getInlineReturnType() != MIRType::Boolean)
+        return InliningStatus_NotInlined;
+
+    callInfo.setImplicitlyUsedUnchecked();
+
+    if (callInfo.argc() > 0) {
+        MDefinition* result = convertToBoolean(callInfo.getArg(0));
+        current->push(result);
+    } else {
+        pushConstant(BooleanValue(false));
+    }
+    return InliningStatus_Inlined;
+}
+
+IonBuilder::InliningResult
+IonBuilder::inlineNewIterator(CallInfo& callInfo, MNewIterator::Type type)
 {
     if (callInfo.argc() != 0 || callInfo.constructing()) {
         trackOptimizationOutcome(TrackedOutcome::CantInlineNativeBadForm);
         return InliningStatus_NotInlined;
     }
 
-    JSObject* templateObject = inspector->getTemplateObjectForNative(pc, js::intrinsic_NewArrayIterator);
+    JSObject* templateObject = nullptr;
+    switch (type) {
+      case MNewIterator::ArrayIterator:
+        templateObject = inspector->getTemplateObjectForNative(pc, js::intrinsic_NewArrayIterator);
+        MOZ_ASSERT_IF(templateObject, templateObject->is<ArrayIteratorObject>());
+        break;
+      case MNewIterator::StringIterator:
+        templateObject = inspector->getTemplateObjectForNative(pc, js::intrinsic_NewStringIterator);
+        MOZ_ASSERT_IF(templateObject, templateObject->is<StringIteratorObject>());
+        break;
+    }
+
     if (!templateObject)
         return InliningStatus_NotInlined;
-    MOZ_ASSERT(templateObject->is<ArrayIteratorObject>());
 
     callInfo.setImplicitlyUsedUnchecked();
 
     MConstant* templateConst = MConstant::NewConstraintlessObject(alloc(), templateObject);
     current->add(templateConst);
 
-    MNewArrayIterator* ins = MNewArrayIterator::New(alloc(), constraints(), templateConst);
+    MNewIterator* ins = MNewIterator::New(alloc(), constraints(), templateConst, type);
     current->add(ins);
     current->push(ins);
 

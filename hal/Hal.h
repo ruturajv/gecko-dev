@@ -431,15 +431,19 @@ void NotifySwitchStateFromInputDevice(hal::SwitchDevice aDevice,
                                       hal::SwitchState aState);
 
 /**
+ * Return true if the current platform supports the setting of process
+ * priority.
+ */
+bool SetProcessPrioritySupported();
+
+/**
  * Set the priority of the given process.
  *
  * Exactly what this does will vary between platforms.  On *nix we might give
  * background processes higher nice values.  On other platforms, we might
  * ignore this call entirely.
  */
-void SetProcessPriority(int aPid,
-                        hal::ProcessPriority aPriority,
-                        uint32_t aLRU = 0);
+void SetProcessPriority(int aPid, hal::ProcessPriority aPriority);
 
 
 /**

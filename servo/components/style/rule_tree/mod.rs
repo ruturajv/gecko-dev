@@ -8,14 +8,15 @@
 
 #[cfg(feature = "servo")]
 use heapsize::HeapSizeOf;
-use properties::{Importance, LonghandIdSet, PropertyDeclarationBlock};
+use properties::{AnimationRules, Importance, LonghandIdSet, PropertyDeclarationBlock};
 use shared_lock::{Locked, StylesheetGuards, SharedRwLockReadGuard};
 use smallvec::SmallVec;
 use std::io::{self, Write};
 use std::ptr;
 use std::sync::atomic::{AtomicPtr, AtomicUsize, Ordering};
-use stylearc::Arc;
+use stylearc::{Arc, NonZeroPtrMut};
 use stylesheets::StyleRule;
+use stylist::ApplicableDeclarationList;
 use thread_state;
 
 /// The rule tree, the structure servo uses to preserve the results of selector
@@ -58,6 +59,12 @@ pub enum StyleSource {
     Style(Arc<Locked<StyleRule>>),
     /// A declaration block stable pointer.
     Declarations(Arc<Locked<PropertyDeclarationBlock>>),
+}
+
+impl PartialEq for StyleSource {
+    fn eq(&self, other: &Self) -> bool {
+        self.ptr_equals(other)
+    }
 }
 
 impl StyleSource {
@@ -215,6 +222,18 @@ impl RuleTree {
         current
     }
 
+    /// Given a list of applicable declarations, insert the rules and return the
+    /// corresponding rule node.
+    pub fn compute_rule_node(&self,
+                             applicable_declarations: &mut ApplicableDeclarationList,
+                             guards: &StylesheetGuards)
+                             -> StrongRuleNode
+    {
+        let rules = applicable_declarations.drain().map(|d| (d.source, d.level));
+        let rule_node = self.insert_ordered_rules_with_important(rules, guards);
+        rule_node
+    }
+
     /// Insert the given rules, that must be in proper order by specifity, and
     /// return the corresponding rule node representing the last inserted one.
     pub fn insert_ordered_rules<'a, I>(&self, iter: I) -> StrongRuleNode
@@ -356,7 +375,7 @@ impl RuleTree {
         let mut last = path;
         let mut children = vec![];
         for node in iter {
-            if node.cascade_level().is_animation() {
+            if !node.cascade_level().is_animation() {
                 children.push((node.get().source.clone().unwrap(), node.cascade_level()));
             }
             last = node;
@@ -387,6 +406,8 @@ pub enum CascadeLevel {
     PresHints,
     /// User normal rules.
     UserNormal,
+    /// XBL <stylesheet> rules.
+    XBL,
     /// Author normal rules.
     AuthorNormal,
     /// Style attribute normal rules.
@@ -562,7 +583,7 @@ impl RuleNode {
 
         // Store the `next` pointer as appropriate, either in the previous
         // sibling, or in the parent otherwise.
-        if prev_sibling == ptr::null_mut() {
+        if prev_sibling.is_null() {
             let parent = self.parent.as_ref().unwrap();
             parent.get().first_child.store(next_sibling, Ordering::Relaxed);
         } else {
@@ -572,7 +593,7 @@ impl RuleNode {
 
         // Store the previous sibling pointer in the next sibling if present,
         // otherwise we're done.
-        if next_sibling != ptr::null_mut() {
+        if !next_sibling.is_null() {
             let next = &*next_sibling;
             next.prev_sibling.store(prev_sibling, Ordering::Relaxed);
         }
@@ -618,7 +639,7 @@ impl RuleNode {
             current: if first_child.is_null() {
                 None
             } else {
-                Some(WeakRuleNode { ptr: first_child })
+                Some(WeakRuleNode::from_ptr(first_child))
             }
         }
     }
@@ -626,13 +647,13 @@ impl RuleNode {
 
 #[derive(Clone)]
 struct WeakRuleNode {
-    ptr: *mut RuleNode,
+    p: NonZeroPtrMut<RuleNode>,
 }
 
 /// A strong reference to a rule node.
 #[derive(Debug, PartialEq)]
 pub struct StrongRuleNode {
-    ptr: *mut RuleNode,
+    p: NonZeroPtrMut<RuleNode>,
 }
 
 #[cfg(feature = "servo")]
@@ -649,15 +670,17 @@ impl StrongRuleNode {
 
         debug!("Creating rule node: {:p}", ptr);
 
+        StrongRuleNode::from_ptr(ptr)
+    }
+
+    fn from_ptr(ptr: *mut RuleNode) -> Self {
         StrongRuleNode {
-            ptr: ptr,
+            p: NonZeroPtrMut::new(ptr)
         }
     }
 
     fn downgrade(&self) -> WeakRuleNode {
-        WeakRuleNode {
-            ptr: self.ptr,
-        }
+        WeakRuleNode::from_ptr(self.ptr())
     }
 
     fn next_sibling(&self) -> Option<WeakRuleNode> {
@@ -667,9 +690,7 @@ impl StrongRuleNode {
         if ptr.is_null() {
             None
         } else {
-            Some(WeakRuleNode {
-                ptr: ptr
-            })
+            Some(WeakRuleNode::from_ptr(ptr))
         }
     }
 
@@ -684,7 +705,7 @@ impl StrongRuleNode {
         let mut last = None;
         // TODO(emilio): We could avoid all the refcount churn here.
         for child in self.get().iter_children() {
-            if child .get().level == level &&
+            if child.get().level == level &&
                 child.get().source.as_ref().unwrap().ptr_equals(&source) {
                 return child;
             }
@@ -713,7 +734,7 @@ impl StrongRuleNode {
                                                       new_ptr,
                                                       Ordering::AcqRel);
 
-                if existing == ptr::null_mut() {
+                if existing.is_null() {
                     // Now we know we're in the correct position in the child
                     // list, we can set the back pointer, knowing that this will
                     // only be accessed again in a single-threaded manner when
@@ -725,8 +746,9 @@ impl StrongRuleNode {
                     return StrongRuleNode::new(node);
                 }
 
-                // Existing is not null: some thread insert a child node since we accessed `last`.
-                strong = WeakRuleNode { ptr: existing }.upgrade();
+                // Existing is not null: some thread inserted a child node since
+                // we accessed `last`.
+                strong = WeakRuleNode::from_ptr(existing).upgrade();
 
                 if strong.get().source.as_ref().unwrap().ptr_equals(&source) {
                     // That node happens to be for the same style source, use
@@ -742,15 +764,15 @@ impl StrongRuleNode {
 
     /// Raw pointer to the RuleNode
     pub fn ptr(&self) -> *mut RuleNode {
-        self.ptr
+        self.p.ptr()
     }
 
     fn get(&self) -> &RuleNode {
         if cfg!(debug_assertions) {
-            let node = unsafe { &*self.ptr };
+            let node = unsafe { &*self.ptr() };
             assert!(node.refcount.load(Ordering::Relaxed) > 0);
         }
-        unsafe { &*self.ptr }
+        unsafe { &*self.ptr() }
     }
 
     /// Get the style source corresponding to this rule node. May return `None`
@@ -786,7 +808,7 @@ impl StrongRuleNode {
     unsafe fn pop_from_free_list(&self) -> Option<WeakRuleNode> {
         // NB: This can run from the root node destructor, so we can't use
         // `get()`, since it asserts the refcount is bigger than zero.
-        let me = &*self.ptr;
+        let me = &*self.ptr();
 
         debug_assert!(me.is_root());
 
@@ -809,7 +831,7 @@ impl StrongRuleNode {
         debug_assert!(!current.is_null(),
                       "Multiple threads are operating on the free list at the \
                        same time?");
-        debug_assert!(current != self.ptr,
+        debug_assert!(current != self.ptr(),
                       "How did the root end up in the free list?");
 
         let next = (*current).next_free.swap(ptr::null_mut(), Ordering::Relaxed);
@@ -821,17 +843,17 @@ impl StrongRuleNode {
 
         debug!("Popping from free list: cur: {:?}, next: {:?}", current, next);
 
-        Some(WeakRuleNode { ptr: current })
+        Some(WeakRuleNode::from_ptr(current))
     }
 
     unsafe fn assert_free_list_has_no_duplicates_or_null(&self) {
         assert!(cfg!(debug_assertions), "This is an expensive check!");
         use std::collections::HashSet;
 
-        let me = &*self.ptr;
+        let me = &*self.ptr();
         assert!(me.is_root());
 
-        let mut current = self.ptr;
+        let mut current = self.ptr();
         let mut seen = HashSet::new();
         while current != FREE_LIST_SENTINEL {
             let next = (*current).next_free.load(Ordering::Relaxed);
@@ -850,25 +872,20 @@ impl StrongRuleNode {
 
         // NB: This can run from the root node destructor, so we can't use
         // `get()`, since it asserts the refcount is bigger than zero.
-        let me = &*self.ptr;
+        let me = &*self.ptr();
 
         debug_assert!(me.is_root(), "Can't call GC on a non-root node!");
 
         while let Some(weak) = self.pop_from_free_list() {
-            let needs_drop = {
-                let node = &*weak.ptr();
-                if node.refcount.load(Ordering::Relaxed) == 0 {
-                    node.remove_from_child_list();
-                    true
-                } else {
-                    false
-                }
-            };
-
-            debug!("GC'ing {:?}: {}", weak.ptr(), needs_drop);
-            if needs_drop {
-                let _ = Box::from_raw(weak.ptr());
+            let node = &*weak.ptr();
+            if node.refcount.load(Ordering::Relaxed) != 0 {
+                // Nothing to do, the node is still alive.
+                continue;
             }
+
+            debug!("GC'ing {:?}", weak.ptr());
+            node.remove_from_child_list();
+            let _ = Box::from_raw(weak.ptr());
         }
 
         me.free_count.store(0, Ordering::Relaxed);
@@ -883,9 +900,11 @@ impl StrongRuleNode {
         }
     }
 
-    /// Implementation of `nsRuleNode::HasAuthorSpecifiedRules` for Servo rule nodes.
+    /// Implementation of `nsRuleNode::HasAuthorSpecifiedRules` for Servo rule
+    /// nodes.
     ///
-    /// Returns true if any properties specified by `rule_type_mask` was set by an author rule.
+    /// Returns true if any properties specified by `rule_type_mask` was set by
+    /// an author rule.
     #[cfg(feature = "gecko")]
     pub fn has_author_specified_rules<E>(&self,
                                          mut element: E,
@@ -895,7 +914,6 @@ impl StrongRuleNode {
         -> bool
         where E: ::dom::TElement
     {
-        use cssparser::RGBA;
         use gecko_bindings::structs::{NS_AUTHOR_SPECIFIED_BACKGROUND, NS_AUTHOR_SPECIFIED_BORDER};
         use gecko_bindings::structs::{NS_AUTHOR_SPECIFIED_PADDING, NS_AUTHOR_SPECIFIED_TEXT_SHADOW};
         use properties::{CSSWideKeyword, LonghandId, LonghandIdSet};
@@ -968,9 +986,9 @@ impl StrongRuleNode {
             }
         }
 
-        // If author colors are not allowed, only claim to have author-specified rules if we're
-        // looking at a non-color property or if we're looking at the background color and it's
-        // set to transparent.
+        // If author colors are not allowed, only claim to have author-specified
+        // rules if we're looking at a non-color property or if we're looking at
+        // the background color and it's set to transparent.
         const IGNORED_WHEN_COLORS_DISABLED: &'static [LonghandId]  = &[
             LonghandId::BackgroundImage,
             LonghandId::BorderTopColor,
@@ -989,15 +1007,21 @@ impl StrongRuleNode {
         let mut element_rule_node = Cow::Borrowed(self);
 
         loop {
-            // We need to be careful not to count styles covered up by user-important or
-            // UA-important declarations.  But we do want to catch explicit inherit styling in
-            // those and check our parent element to see whether we have user styling for
-            // those properties.  Note that we don't care here about inheritance due to lack of
-            // a specified value, since all the properties we care about are reset properties.
+            // We need to be careful not to count styles covered up by
+            // user-important or UA-important declarations.  But we do want to
+            // catch explicit inherit styling in those and check our parent
+            // element to see whether we have user styling for those properties.
+            // Note that we don't care here about inheritance due to lack of a
+            // specified value, since all the properties we care about are reset
+            // properties.
             //
-            // FIXME: The above comment is copied from Gecko, but the last sentence is no longer
-            // correct since 'text-shadow' support was added.  This is a bug in Gecko, replicated
-            // in Stylo for now: https://bugzilla.mozilla.org/show_bug.cgi?id=1363088
+            // FIXME: The above comment is copied from Gecko, but the last
+            // sentence is no longer correct since 'text-shadow' support was
+            // added.
+            //
+            // This is a bug in Gecko, replicated in Stylo for now:
+            //
+            // https://bugzilla.mozilla.org/show_bug.cgi?id=1363088
 
             let mut inherited_properties = LonghandIdSet::new();
             let mut have_explicit_ua_inherit = false;
@@ -1026,15 +1050,18 @@ impl StrongRuleNode {
                     CascadeLevel::UANormal |
                     CascadeLevel::UAImportant |
                     CascadeLevel::UserNormal |
-                    CascadeLevel::UserImportant => {
+                    CascadeLevel::UserImportant |
+                    CascadeLevel::XBL => {
                         for (id, declaration) in longhands {
                             if properties.contains(id) {
-                                // This property was set by a non-author rule. Stop looking for it in
-                                // this element's rule nodes.
+                                // This property was set by a non-author rule.
+                                // Stop looking for it in this element's rule
+                                // nodes.
                                 properties.remove(id);
 
-                                // However, if it is inherited, then it might be inherited from an
-                                // author rule from an ancestor element's rule nodes.
+                                // However, if it is inherited, then it might be
+                                // inherited from an author rule from an
+                                // ancestor element's rule nodes.
                                 if declaration.get_css_wide_keyword() == Some(CSSWideKeyword::Inherit) ||
                                     (declaration.get_css_wide_keyword() == Some(CSSWideKeyword::Unset) &&
                                      inherited(id))
@@ -1058,7 +1085,7 @@ impl StrongRuleNode {
                             if properties.contains(id) {
                                 if !author_colors_allowed {
                                     if let PropertyDeclaration::BackgroundColor(ref color) = *declaration {
-                                        return color.parsed == Color::RGBA(RGBA::transparent())
+                                        return *color == Color::transparent()
                                     }
                                 }
                                 return true
@@ -1093,30 +1120,38 @@ impl StrongRuleNode {
             .any(|node| node.cascade_level().is_animation())
     }
 
-    /// Get a set of properties whose CascadeLevel are higher than Animations but not equal to
-    /// Transitions. If there are any custom properties, we set the boolean value of the returned
-    /// tuple to true.
-    pub fn get_properties_overriding_animations(&self, guards: &StylesheetGuards)
+    /// Get a set of properties whose CascadeLevel are higher than Animations
+    /// but not equal to Transitions.
+    ///
+    /// If there are any custom properties, we set the boolean value of the
+    /// returned tuple to true.
+    pub fn get_properties_overriding_animations(&self,
+                                                guards: &StylesheetGuards)
                                                 -> (LonghandIdSet, bool) {
         use properties::PropertyDeclarationId;
 
-        // We want to iterate over cascade levels that override the animations level, i.e.
-        // !important levels and the transitions level. However, we actually want to skip the
-        // transitions level because although it is higher in the cascade than animations, when
-        // both transitions and animations are present for a given element and property, transitions
-        // are suppressed so that they don't actually override animations.
-        let iter = self.self_and_ancestors()
-                       .skip_while(|node| node.cascade_level() == CascadeLevel::Transitions)
-                       .take_while(|node| node.cascade_level() > CascadeLevel::Animations);
+        // We want to iterate over cascade levels that override the animations
+        // level, i.e.  !important levels and the transitions level.
+        //
+        // However, we actually want to skip the transitions level because
+        // although it is higher in the cascade than animations, when both
+        // transitions and animations are present for a given element and
+        // property, transitions are suppressed so that they don't actually
+        // override animations.
+        let iter =
+            self.self_and_ancestors()
+                .skip_while(|node| node.cascade_level() == CascadeLevel::Transitions)
+                .take_while(|node| node.cascade_level() > CascadeLevel::Animations);
         let mut result = (LonghandIdSet::new(), false);
         for node in iter {
             let style = node.style_source().unwrap();
             for &(ref decl, important) in style.read(node.cascade_level().guard(guards))
                                                .declarations()
                                                .iter() {
-                // Although we are only iterating over cascade levels that override animations,
-                // in a given property declaration block we can have a mixture of !important and
-                // non-!important declarations but only the !important declarations actually
+                // Although we are only iterating over cascade levels that
+                // override animations, in a given property declaration block we
+                // can have a mixture of !important and non-!important
+                // declarations but only the !important declarations actually
                 // override animations.
                 if important.important() {
                     match decl.id() {
@@ -1127,6 +1162,56 @@ impl StrongRuleNode {
             }
         }
         result
+    }
+
+    /// Returns PropertyDeclarationBlock for this node.
+    /// This function must be called only for animation level node.
+    fn get_animation_style(&self) -> &Arc<Locked<PropertyDeclarationBlock>> {
+        debug_assert!(self.cascade_level().is_animation(),
+                      "The cascade level should be an animation level");
+        match *self.style_source().unwrap() {
+            StyleSource::Declarations(ref block) => block,
+            StyleSource::Style(_) => unreachable!("animating style should not be a style rule"),
+        }
+    }
+
+    /// Returns SMIL override declaration block if exists.
+    pub fn get_smil_animation_rule(&self) -> Option<&Arc<Locked<PropertyDeclarationBlock>>> {
+        if cfg!(feature = "servo") {
+            // Servo has no knowledge of a SMIL rule, so just avoid looking for it.
+            return None;
+        }
+
+        self.self_and_ancestors()
+            .take_while(|node| node.cascade_level() >= CascadeLevel::SMILOverride)
+            .find(|node| node.cascade_level() == CascadeLevel::SMILOverride)
+            .map(|node| node.get_animation_style())
+    }
+
+    /// Returns AnimationRules that has processed during animation-only restyles.
+    pub fn get_animation_rules(&self) -> AnimationRules {
+        if cfg!(feature = "servo") {
+            return AnimationRules(None, None);
+        }
+
+        let mut animation = None;
+        let mut transition = None;
+
+        for node in self.self_and_ancestors()
+                        .take_while(|node| node.cascade_level() >= CascadeLevel::Animations) {
+            match node.cascade_level() {
+                CascadeLevel::Animations => {
+                    debug_assert!(animation.is_none());
+                    animation = Some(node.get_animation_style())
+                },
+                CascadeLevel::Transitions => {
+                    debug_assert!(transition.is_none());
+                    transition = Some(node.get_animation_style())
+                },
+                _ => {},
+            }
+        }
+        AnimationRules(animation, transition)
     }
 }
 
@@ -1152,19 +1237,17 @@ impl Clone for StrongRuleNode {
         debug!("{:?}: {:?}+", self.ptr(), self.get().refcount.load(Ordering::Relaxed));
         debug_assert!(self.get().refcount.load(Ordering::Relaxed) > 0);
         self.get().refcount.fetch_add(1, Ordering::Relaxed);
-        StrongRuleNode {
-            ptr: self.ptr,
-        }
+        StrongRuleNode::from_ptr(self.ptr())
     }
 }
 
 impl Drop for StrongRuleNode {
     fn drop(&mut self) {
-        let node = unsafe { &*self.ptr };
+        let node = unsafe { &*self.ptr() };
 
         debug!("{:?}: {:?}-", self.ptr(), node.refcount.load(Ordering::Relaxed));
         debug!("Dropping node: {:?}, root: {:?}, parent: {:?}",
-               self.ptr,
+               self.ptr(),
                node.root.as_ref().map(|r| r.ptr()),
                node.parent.as_ref().map(|p| p.ptr()));
         let should_drop = {
@@ -1211,7 +1294,7 @@ impl Drop for StrongRuleNode {
                                                   Ordering::Acquire,
                                                   Ordering::Relaxed) {
                 Ok(..) => {
-                    if old_head != ptr::null_mut() {
+                    if !old_head.is_null() {
                         break;
                     }
                 },
@@ -1245,9 +1328,7 @@ impl Drop for StrongRuleNode {
 
 impl<'a> From<&'a StrongRuleNode> for WeakRuleNode {
     fn from(node: &'a StrongRuleNode) -> Self {
-        WeakRuleNode {
-            ptr: node.ptr(),
-        }
+        WeakRuleNode::from_ptr(node.ptr())
     }
 }
 
@@ -1255,15 +1336,19 @@ impl WeakRuleNode {
     fn upgrade(&self) -> StrongRuleNode {
         debug!("Upgrading weak node: {:p}", self.ptr());
 
-        let node = unsafe { &*self.ptr };
+        let node = unsafe { &*self.ptr() };
         node.refcount.fetch_add(1, Ordering::Relaxed);
-        StrongRuleNode {
-            ptr: self.ptr,
+        StrongRuleNode::from_ptr(self.ptr())
+    }
+
+    fn from_ptr(ptr: *mut RuleNode) -> Self {
+        WeakRuleNode {
+            p: NonZeroPtrMut::new(ptr)
         }
     }
 
     fn ptr(&self) -> *mut RuleNode {
-        self.ptr
+        self.p.ptr()
     }
 }
 

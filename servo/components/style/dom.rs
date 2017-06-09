@@ -17,10 +17,12 @@ use properties::{ComputedValues, PropertyDeclarationBlock};
 #[cfg(feature = "gecko")] use properties::animated_properties::AnimationValue;
 #[cfg(feature = "gecko")] use properties::animated_properties::TransitionProperty;
 use rule_tree::CascadeLevel;
-use selector_parser::{ElementExt, PreExistingComputedValues, PseudoElement};
-use selectors::matching::ElementSelectorFlags;
+use selector_parser::{AttrValue, ElementExt, PreExistingComputedValues};
+use selector_parser::{PseudoClassStringArg, PseudoElement};
+use selectors::matching::{ElementSelectorFlags, VisitedHandlingMode};
 use shared_lock::Locked;
 use sink::Push;
+use smallvec::VecLike;
 use std::fmt;
 #[cfg(feature = "gecko")] use std::collections::HashMap;
 use std::fmt::Debug;
@@ -270,22 +272,10 @@ pub unsafe fn raw_note_descendants<E, B>(element: E) -> bool
 pub trait PresentationalHintsSynthesizer {
     /// Generate the proper applicable declarations due to presentational hints,
     /// and insert them into `hints`.
-    fn synthesize_presentational_hints_for_legacy_attributes<V>(&self, hints: &mut V)
+    fn synthesize_presentational_hints_for_legacy_attributes<V>(&self,
+                                                                visited_handling: VisitedHandlingMode,
+                                                                hints: &mut V)
         where V: Push<ApplicableDeclarationBlock>;
-}
-
-/// The animation rules.
-///
-/// The first one is for Animation cascade level, and the second one is for
-/// Transition cascade level.
-pub struct AnimationRules(pub Option<Arc<Locked<PropertyDeclarationBlock>>>,
-                          pub Option<Arc<Locked<PropertyDeclarationBlock>>>);
-
-impl AnimationRules {
-    /// Returns whether these animation rules represents an actual rule or not.
-    pub fn is_empty(&self) -> bool {
-        self.0.is_none() && self.1.is_none()
-    }
 }
 
 /// The element trait, the main abstraction the style crate acts over.
@@ -343,14 +333,14 @@ pub trait TElement : Eq + PartialEq + Debug + Hash + Sized + Copy + Clone +
     /// Get this element's style attribute.
     fn style_attribute(&self) -> Option<&Arc<Locked<PropertyDeclarationBlock>>>;
 
+    /// Unset the style attribute's dirty bit.
+    /// Servo doesn't need to manage ditry bit for style attribute.
+    fn unset_dirty_style_attribute(&self) {
+    }
+
     /// Get this element's SMIL override declarations.
     fn get_smil_override(&self) -> Option<&Arc<Locked<PropertyDeclarationBlock>>> {
         None
-    }
-
-    /// Get this element's animation rules.
-    fn get_animation_rules(&self) -> AnimationRules {
-        AnimationRules(None, None)
     }
 
     /// Get this element's animation rule by the cascade level.
@@ -395,6 +385,20 @@ pub trait TElement : Eq + PartialEq + Debug + Hash + Sized + Copy + Clone +
                                              current_computed_values: &'a ComputedValues,
                                              pseudo: Option<&PseudoElement>)
                                              -> Option<&'a PreExistingComputedValues>;
+
+    /// Whether a given element may generate a pseudo-element.
+    ///
+    /// This is useful to avoid computing, for example, pseudo styles for
+    /// `::-first-line` or `::-first-letter`, when we know it won't affect us.
+    ///
+    /// TODO(emilio, bz): actually implement the logic for it.
+    fn may_generate_pseudo(
+        &self,
+        _pseudo: &PseudoElement,
+        _primary_style: &ComputedValues,
+    ) -> bool {
+        true
+    }
 
     /// Returns true if this element may have a descendant needing style processing.
     ///
@@ -458,7 +462,8 @@ pub trait TElement : Eq + PartialEq + Debug + Hash + Sized + Copy + Clone +
         false
     }
 
-    /// Flag that this element has a descendant for animation-only restyle processing.
+    /// Flag that this element has a descendant for animation-only restyle
+    /// processing.
     ///
     /// Only safe to call with exclusive access to the element.
     unsafe fn set_animation_only_dirty_descendants(&self) {
@@ -525,6 +530,11 @@ pub trait TElement : Eq + PartialEq + Debug + Hash + Sized + Copy + Clone +
     /// Returns true if the element has all the specified selector flags.
     fn has_selector_flags(&self, flags: ElementSelectorFlags) -> bool;
 
+    /// In Gecko, element has a flag that represents the element may have
+    /// any type of animations or not to bail out animation stuff early.
+    /// Whereas Servo doesn't have such flag.
+    fn may_have_animations(&self) -> bool { false }
+
     /// Creates a task to update various animation state on a given (pseudo-)element.
     #[cfg(feature = "gecko")]
     fn update_animations(&self,
@@ -551,6 +561,14 @@ pub trait TElement : Eq + PartialEq + Debug + Hash + Sized + Copy + Clone +
         };
         return data.get_restyle()
                    .map_or(false, |r| r.hint.has_animation_hint());
+    }
+
+    /// Gets declarations from XBL bindings from the element. Only gecko element could have this.
+    fn get_declarations_from_xbl_bindings<V>(&self,
+                                             _: &mut V)
+                                             -> bool
+        where V: Push<ApplicableDeclarationBlock> + VecLike<ApplicableDeclarationBlock> {
+        false
     }
 
     /// Gets the current existing CSS transitions, by |property, end value| pairs in a HashMap.
@@ -589,6 +607,20 @@ pub trait TElement : Eq + PartialEq + Debug + Hash + Sized + Copy + Clone +
                                              existing_transitions: &HashMap<TransitionProperty,
                                                                             Arc<AnimationValue>>)
                                              -> bool;
+
+    /// Returns the value of the `xml:lang=""` attribute (or, if appropriate,
+    /// the `lang=""` attribute) on this element.
+    fn lang_attr(&self) -> Option<AttrValue>;
+
+    /// Returns whether this element's language matches the language tag
+    /// `value`.  If `override_lang` is not `None`, it specifies the value
+    /// of the `xml:lang=""` or `lang=""` attribute to use in place of
+    /// looking at the element and its ancestors.  (This argument is used
+    /// to implement matching of `:lang()` against snapshots.)
+    fn match_element_lang(&self,
+                          override_lang: Option<Option<AttrValue>>,
+                          value: &PseudoClassStringArg)
+                          -> bool;
 }
 
 /// Trait abstracting over different kinds of dirty-descendants bits.

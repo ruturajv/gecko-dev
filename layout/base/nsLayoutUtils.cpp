@@ -122,6 +122,7 @@
 #include "RegionBuilder.h"
 #include "SVGSVGElement.h"
 #include "DisplayItemClip.h"
+#include "mozilla/layers/WebRenderLayerManager.h"
 
 #ifdef MOZ_XUL
 #include "nsXULPopupManager.h"
@@ -152,10 +153,8 @@ using namespace mozilla::gfx;
 #define GRID_ENABLED_PREF_NAME "layout.css.grid.enabled"
 #define GRID_TEMPLATE_SUBGRID_ENABLED_PREF_NAME "layout.css.grid-template-subgrid-value.enabled"
 #define WEBKIT_PREFIXES_ENABLED_PREF_NAME "layout.css.prefixes.webkit"
-#define DISPLAY_FLOW_ROOT_ENABLED_PREF_NAME "layout.css.display-flow-root.enabled"
 #define TEXT_ALIGN_UNSAFE_ENABLED_PREF_NAME "layout.css.text-align-unsafe-value.enabled"
 #define FLOAT_LOGICAL_VALUES_ENABLED_PREF_NAME "layout.css.float-logical-values.enabled"
-#define BG_CLIP_TEXT_ENABLED_PREF_NAME "layout.css.background-clip-text.enabled"
 
 // The time in number of frames that we estimate for a refresh driver
 // to be quiescent
@@ -320,36 +319,6 @@ WebkitPrefixEnabledPrefChangeCallback(const char* aPrefName, void* aClosure)
   }
 }
 
-// When the pref "layout.css.display-flow-root.enabled" changes, this function is
-// invoked to let us update kDisplayKTable, to selectively disable or restore
-// the entries for "flow-root" in that table.
-static void
-DisplayFlowRootEnabledPrefChangeCallback(const char* aPrefName, void* aClosure)
-{
-  NS_ASSERTION(strcmp(aPrefName, DISPLAY_FLOW_ROOT_ENABLED_PREF_NAME) == 0,
-               "Did you misspell " DISPLAY_FLOW_ROOT_ENABLED_PREF_NAME " ?");
-
-  static bool sIsDisplayFlowRootKeywordIndexInitialized;
-  static int32_t sIndexOfFlowRootInDisplayTable;
-  bool isDisplayFlowRootEnabled =
-    Preferences::GetBool(DISPLAY_FLOW_ROOT_ENABLED_PREF_NAME, false);
-
-  if (!sIsDisplayFlowRootKeywordIndexInitialized) {
-    // First run: find the position of "flow-root" in kDisplayKTable.
-    sIndexOfFlowRootInDisplayTable =
-      nsCSSProps::FindIndexOfKeyword(eCSSKeyword_flow_root,
-                                     nsCSSProps::kDisplayKTable);
-    sIsDisplayFlowRootKeywordIndexInitialized = true;
-  }
-
-  // OK -- now, stomp on or restore the "flow-root" entry in kDisplayKTable,
-  // depending on whether the pref is enabled vs. disabled.
-  if (sIndexOfFlowRootInDisplayTable >= 0) {
-    nsCSSProps::kDisplayKTable[sIndexOfFlowRootInDisplayTable].mKeyword =
-      isDisplayFlowRootEnabled ? eCSSKeyword_flow_root : eCSSKeyword_UNKNOWN;
-  }
-}
-
 // When the pref "layout.css.text-align-unsafe-value.enabled" changes, this
 // function is called to let us update kTextAlignKTable & kTextAlignLastKTable,
 // to selectively disable or restore the entries for "unsafe" in those tables.
@@ -440,39 +409,6 @@ FloatLogicalValuesEnabledPrefChangeCallback(const char* aPrefName,
   MOZ_ASSERT(sIndexOfInlineEndInClearTable >= 0);
   nsCSSProps::kClearKTable[sIndexOfInlineEndInClearTable].mKeyword =
     isFloatLogicalValuesEnabled ? eCSSKeyword_inline_end : eCSSKeyword_UNKNOWN;
-}
-
-
-// When the pref "layout.css.background-clip-text.enabled" changes, this
-// function is invoked to let us update kBackgroundClipKTable, to selectively
-// disable or restore the entries for "text" in that table.
-static void
-BackgroundClipTextEnabledPrefChangeCallback(const char* aPrefName,
-                                            void* aClosure)
-{
-  NS_ASSERTION(strcmp(aPrefName, BG_CLIP_TEXT_ENABLED_PREF_NAME) == 0,
-               "Did you misspell " BG_CLIP_TEXT_ENABLED_PREF_NAME " ?");
-
-  static bool sIsBGClipKeywordIndexInitialized;
-  static int32_t sIndexOfTextInBGClipTable;
-  bool isBGClipTextEnabled =
-    Preferences::GetBool(BG_CLIP_TEXT_ENABLED_PREF_NAME, false);
-
-  if (!sIsBGClipKeywordIndexInitialized) {
-    // First run: find the position of "text" in kBackgroundClipKTable.
-    sIndexOfTextInBGClipTable =
-      nsCSSProps::FindIndexOfKeyword(eCSSKeyword_text,
-                                     nsCSSProps::kBackgroundClipKTable);
-
-    sIsBGClipKeywordIndexInitialized = true;
-  }
-
-  // OK -- now, stomp on or restore the "text" entry in kBackgroundClipKTable,
-  // depending on whether the pref is enabled vs. disabled.
-  if (sIndexOfTextInBGClipTable >= 0) {
-    nsCSSProps::kBackgroundClipKTable[sIndexOfTextInBGClipTable].mKeyword =
-      isBGClipTextEnabled ? eCSSKeyword_text : eCSSKeyword_UNKNOWN;
-  }
 }
 
 template<typename TestType>
@@ -2151,13 +2087,13 @@ NS_DECLARE_FRAME_PROPERTY_SMALL_VALUE(ScrollbarThumbLayerized, bool)
 /* static */ void
 nsLayoutUtils::SetScrollbarThumbLayerization(nsIFrame* aThumbFrame, bool aLayerize)
 {
-  aThumbFrame->Properties().Set(ScrollbarThumbLayerized(), aLayerize);
+  aThumbFrame->SetProperty(ScrollbarThumbLayerized(), aLayerize);
 }
 
 bool
 nsLayoutUtils::IsScrollbarThumbLayerized(nsIFrame* aThumbFrame)
 {
-  return aThumbFrame->Properties().Get(ScrollbarThumbLayerized());
+  return aThumbFrame->GetProperty(ScrollbarThumbLayerized());
 }
 
 // static
@@ -2706,19 +2642,21 @@ nsLayoutUtils::PostTranslate(Matrix4x4& aTransform, const nsPoint& aOrigin, floa
 }
 
 Matrix4x4
-nsLayoutUtils::GetTransformToAncestor(nsIFrame *aFrame, const nsIFrame *aAncestor)
+nsLayoutUtils::GetTransformToAncestor(nsIFrame *aFrame,
+                                      const nsIFrame *aAncestor,
+                                      bool aInCSSUnits)
 {
   nsIFrame* parent;
   Matrix4x4 ctm;
   if (aFrame == aAncestor) {
     return ctm;
   }
-  ctm = aFrame->GetTransformMatrix(aAncestor, &parent);
+  ctm = aFrame->GetTransformMatrix(aAncestor, &parent, aInCSSUnits);
   while (parent && parent != aAncestor) {
     if (!parent->Extend3DContext()) {
       ctm.ProjectTo2D();
     }
-    ctm = ctm * parent->GetTransformMatrix(aAncestor, &parent);
+    ctm = ctm * parent->GetTransformMatrix(aAncestor, &parent, aInCSSUnits);
   }
   return ctm;
 }
@@ -2897,10 +2835,10 @@ nsLayoutUtils::TransformRect(nsIFrame* aFromFrame, nsIFrame* aToFrame,
          -std::numeric_limits<Float>::max() * devPixelsPerAppUnitFromFrame * 0.5f,
          std::numeric_limits<Float>::max() * devPixelsPerAppUnitFromFrame,
          std::numeric_limits<Float>::max() * devPixelsPerAppUnitFromFrame));
-  aRect.x = toDevPixels.x / devPixelsPerAppUnitToFrame;
-  aRect.y = toDevPixels.y / devPixelsPerAppUnitToFrame;
-  aRect.width = toDevPixels.width / devPixelsPerAppUnitToFrame;
-  aRect.height = toDevPixels.height / devPixelsPerAppUnitToFrame;
+  aRect.x = NSToCoordRound(toDevPixels.x / devPixelsPerAppUnitToFrame);
+  aRect.y = NSToCoordRound(toDevPixels.y / devPixelsPerAppUnitToFrame);
+  aRect.width = NSToCoordRound(toDevPixels.width / devPixelsPerAppUnitToFrame);
+  aRect.height = NSToCoordRound(toDevPixels.height / devPixelsPerAppUnitToFrame);
   return TRANSFORM_SUCCEEDED;
 }
 
@@ -4529,8 +4467,7 @@ nsLayoutUtils::GetParentOrPlaceholderFor(nsIFrame* aFrame)
 {
   if ((aFrame->GetStateBits() & NS_FRAME_OUT_OF_FLOW)
       && !aFrame->GetPrevInFlow()) {
-    return aFrame->PresContext()->PresShell()->FrameManager()->
-      GetPlaceholderFrameFor(aFrame);
+    return aFrame->GetProperty(nsIFrame::PlaceholderFrameProperty());
   }
   return aFrame->GetParent();
 }
@@ -4556,7 +4493,7 @@ nsLayoutUtils::GetNextContinuationOrIBSplitSibling(nsIFrame *aFrame)
     // frame in the continuation chain. Walk back to find that frame now.
     aFrame = aFrame->FirstContinuation();
 
-    return aFrame->Properties().Get(nsIFrame::IBSplitSibling());
+    return aFrame->GetProperty(nsIFrame::IBSplitSibling());
   }
 
   return nullptr;
@@ -4569,7 +4506,7 @@ nsLayoutUtils::FirstContinuationOrIBSplitSibling(nsIFrame *aFrame)
   if (result->GetStateBits() & NS_FRAME_PART_OF_IBSPLIT) {
     while (true) {
       nsIFrame* f =
-        result->Properties().Get(nsIFrame::IBSplitPrevSibling());
+        result->GetProperty(nsIFrame::IBSplitPrevSibling());
       if (!f)
         break;
       result = f;
@@ -4585,10 +4522,10 @@ nsLayoutUtils::LastContinuationOrIBSplitSibling(nsIFrame *aFrame)
   nsIFrame *result = aFrame->FirstContinuation();
   if (result->GetStateBits() & NS_FRAME_PART_OF_IBSPLIT) {
     while (true) {
-      nsIFrame* f =
-        result->Properties().Get(nsIFrame::IBSplitSibling());
-      if (!f)
+      nsIFrame* f = result->GetProperty(nsIFrame::IBSplitSibling());
+      if (!f) {
         break;
+      }
       result = f;
     }
   }
@@ -4605,7 +4542,7 @@ nsLayoutUtils::IsFirstContinuationOrIBSplitSibling(nsIFrame *aFrame)
     return false;
   }
   if ((aFrame->GetStateBits() & NS_FRAME_PART_OF_IBSPLIT) &&
-      aFrame->Properties().Get(nsIFrame::IBSplitPrevSibling())) {
+      aFrame->GetProperty(nsIFrame::IBSplitPrevSibling())) {
     return false;
   }
 
@@ -5143,7 +5080,7 @@ AddIntrinsicSizeOffset(nsRenderingContext* aRenderingContext,
     LayoutDeviceIntSize devSize;
     bool canOverride = true;
     nsPresContext* pc = aFrame->PresContext();
-    pc->GetTheme()->GetMinimumWidgetSize(pc, aFrame, disp->UsedAppearance(),
+    pc->GetTheme()->GetMinimumWidgetSize(pc, aFrame, disp->mAppearance,
                                          &devSize, &canOverride);
     nscoord themeSize =
       pc->DevPixelsToAppUnits(aAxis == eAxisVertical ? devSize.height
@@ -7070,10 +7007,10 @@ nsLayoutUtils::GetFrameTransparency(nsIFrame* aBackgroundFrame,
   if (HasNonZeroCorner(aCSSRootFrame->StyleBorder()->mBorderRadius))
     return eTransparencyTransparent;
 
-  if (aCSSRootFrame->StyleDisplay()->UsedAppearance() == NS_THEME_WIN_GLASS)
+  if (aCSSRootFrame->StyleDisplay()->mAppearance == NS_THEME_WIN_GLASS)
     return eTransparencyGlass;
 
-  if (aCSSRootFrame->StyleDisplay()->UsedAppearance() == NS_THEME_WIN_BORDERLESS_GLASS)
+  if (aCSSRootFrame->StyleDisplay()->mAppearance == NS_THEME_WIN_BORDERLESS_GLASS)
     return eTransparencyBorderlessGlass;
 
   nsITheme::Transparency transparency;
@@ -7812,12 +7749,8 @@ static const PrefCallbacks kPrefCallbacks[] = {
     WebkitPrefixEnabledPrefChangeCallback },
   { TEXT_ALIGN_UNSAFE_ENABLED_PREF_NAME,
     TextAlignUnsafeEnabledPrefChangeCallback },
-  { DISPLAY_FLOW_ROOT_ENABLED_PREF_NAME,
-    DisplayFlowRootEnabledPrefChangeCallback },
   { FLOAT_LOGICAL_VALUES_ENABLED_PREF_NAME,
     FloatLogicalValuesEnabledPrefChangeCallback },
-  { BG_CLIP_TEXT_ENABLED_PREF_NAME,
-    BackgroundClipTextEnabledPrefChangeCallback },
 };
 
 /* static */
@@ -8543,6 +8476,8 @@ nsLayoutUtils::DoLogTestDataForPaint(LayerManager* aManager,
 {
   if (ClientLayerManager* mgr = aManager->AsClientLayerManager()) {
     mgr->LogTestDataForCurrentPaint(aScrollId, aKey, aValue);
+  } else if (WebRenderLayerManager* wrlm = aManager->AsWebRenderLayerManager()) {
+    wrlm->LogTestDataForCurrentPaint(aScrollId, aKey, aValue);
   }
 }
 
@@ -9375,15 +9310,6 @@ nsLayoutUtils::ComputePartialPrerenderArea(const nsRect& aDirtyRect,
   nsRect result = aDirtyRect;
   result.Inflate(xExcess / 2, yExcess / 2);
   return result.MoveInsideAndClamp(aOverflow);
-}
-
-
-/* static */ bool
-nsLayoutUtils::SupportsServoStyleBackend(nsIDocument* aDocument)
-{
-  return StyloEnabled() &&
-         (aDocument->IsHTMLOrXHTML() || aDocument->IsSVGDocument()) &&
-         static_cast<nsDocument*>(aDocument)->IsContentDocument();
 }
 
 static

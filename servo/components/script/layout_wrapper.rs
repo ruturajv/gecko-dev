@@ -30,11 +30,10 @@
 
 #![allow(unsafe_code)]
 
-use atomic_refcell::AtomicRefCell;
+use atomic_refcell::{AtomicRef, AtomicRefCell};
 use dom::bindings::inheritance::{CharacterDataTypeId, ElementTypeId};
 use dom::bindings::inheritance::{HTMLElementTypeId, NodeTypeId};
 use dom::bindings::js::LayoutJS;
-use dom::bindings::str::extended_filtering;
 use dom::characterdata::LayoutCharacterDataHelpers;
 use dom::document::{Document, LayoutDocumentHelpers, PendingRestyle};
 use dom::element::{Element, LayoutElementHelpers, RawLayoutElementHelpers};
@@ -47,11 +46,11 @@ use html5ever::{LocalName, Namespace};
 use msg::constellation_msg::{BrowsingContextId, PipelineId};
 use range::Range;
 use script_layout_interface::{HTMLCanvasData, LayoutNodeType, SVGSVGData, TrustedNodeAddress};
-use script_layout_interface::{OpaqueStyleAndLayoutData, PartialPersistentLayoutData};
+use script_layout_interface::{OpaqueStyleAndLayoutData, StyleData};
 use script_layout_interface::wrapper_traits::{DangerousThreadSafeLayoutNode, GetLayoutData, LayoutNode};
 use script_layout_interface::wrapper_traits::{PseudoElementType, ThreadSafeLayoutElement, ThreadSafeLayoutNode};
 use selectors::attr::{AttrSelectorOperation, NamespaceConstraint};
-use selectors::matching::{ElementSelectorFlags, MatchingContext};
+use selectors::matching::{ElementSelectorFlags, MatchingContext, RelevantLinkStatus, VisitedHandlingMode};
 use servo_atoms::Atom;
 use servo_url::ServoUrl;
 use std::fmt;
@@ -70,7 +69,8 @@ use style::dom::{PresentationalHintsSynthesizer, TElement, TNode, UnsafeNode};
 use style::element_state::*;
 use style::font_metrics::ServoMetricsProvider;
 use style::properties::{ComputedValues, PropertyDeclarationBlock};
-use style::selector_parser::{NonTSPseudoClass, PseudoElement, SelectorImpl};
+use style::selector_parser::{AttrValue as SelectorAttrValue, NonTSPseudoClass, PseudoClassStringArg};
+use style::selector_parser::{PseudoElement, SelectorImpl, extended_filtering};
 use style::shared_lock::{SharedRwLock as StyleSharedRwLock, Locked as StyleLocked};
 use style::sink::Push;
 use style::str::is_whitespace;
@@ -364,7 +364,9 @@ impl<'le> fmt::Debug for ServoLayoutElement<'le> {
 }
 
 impl<'le> PresentationalHintsSynthesizer for ServoLayoutElement<'le> {
-    fn synthesize_presentational_hints_for_legacy_attributes<V>(&self, hints: &mut V)
+    fn synthesize_presentational_hints_for_legacy_attributes<V>(&self,
+                                                                _visited_handling: VisitedHandlingMode,
+                                                                hints: &mut V)
         where V: Push<ApplicableDeclarationBlock>
     {
         unsafe {
@@ -452,12 +454,12 @@ impl<'le> TElement for ServoLayoutElement<'le> {
     }
 
     fn store_children_to_process(&self, n: isize) {
-        let data = self.get_partial_layout_data().unwrap().borrow();
+        let data = self.get_style_data().unwrap();
         data.parallel.children_to_process.store(n, Ordering::Relaxed);
     }
 
     fn did_process_child(&self) -> isize {
-        let data = self.get_partial_layout_data().unwrap().borrow();
+        let data = self.get_style_data().unwrap();
         let old_value = data.parallel.children_to_process.fetch_sub(1, Ordering::Relaxed);
         debug_assert!(old_value >= 1);
         old_value - 1
@@ -466,9 +468,7 @@ impl<'le> TElement for ServoLayoutElement<'le> {
     fn get_data(&self) -> Option<&AtomicRefCell<ElementData>> {
         unsafe {
             self.get_style_and_layout_data().map(|d| {
-                let ppld: &AtomicRefCell<PartialPersistentLayoutData> = &*d.ptr.get();
-                let psd: &AtomicRefCell<ElementData> = transmute(ppld);
-                psd
+                &(*d.ptr.get()).element_data
             })
         }
     }
@@ -498,6 +498,39 @@ impl<'le> TElement for ServoLayoutElement<'le> {
 
     fn has_css_transitions(&self) -> bool {
         unreachable!("this should be only called on gecko");
+    }
+
+    #[inline]
+    fn lang_attr(&self) -> Option<SelectorAttrValue> {
+        self.get_attr(&ns!(xml), &local_name!("lang"))
+            .or_else(|| self.get_attr(&ns!(), &local_name!("lang")))
+            .map(|v| String::from(v as &str))
+    }
+
+    fn match_element_lang(&self,
+                          override_lang: Option<Option<SelectorAttrValue>>,
+                          value: &PseudoClassStringArg)
+                          -> bool
+    {
+        // Servo supports :lang() from CSS Selectors 4, which can take a comma-
+        // separated list of language tags in the pseudo-class, and which
+        // performs RFC 4647 extended filtering matching on them.
+        //
+        // FIXME(heycam): This is wrong, since extended_filtering accepts
+        // a string containing commas (separating each language tag in
+        // a list) but the pseudo-class instead should be parsing and
+        // storing separate <ident> or <string>s for each language tag.
+        //
+        // FIXME(heycam): Look at `element`'s document's Content-Language
+        // HTTP header for language tags to match `value` against.  To
+        // do this, we should make `get_lang_for_layout` return an Option,
+        // so we can decide when to fall back to the Content-Language check.
+        let element_lang = match override_lang {
+            Some(Some(lang)) => lang,
+            Some(None) => String::new(),
+            None => self.element.get_lang_for_layout(),
+        };
+        extended_filtering(&element_lang, &*value)
     }
 }
 
@@ -537,7 +570,7 @@ impl<'le> ServoLayoutElement<'le> {
         }
     }
 
-    fn get_partial_layout_data(&self) -> Option<&AtomicRefCell<PartialPersistentLayoutData>> {
+    fn get_style_data(&self) -> Option<&StyleData> {
         unsafe {
             self.get_style_and_layout_data().map(|d| &*d.ptr.get())
         }
@@ -680,6 +713,7 @@ impl<'le> ::selectors::Element for ServoLayoutElement<'le> {
     fn match_non_ts_pseudo_class<F>(&self,
                                     pseudo_class: &NonTSPseudoClass,
                                     _: &mut MatchingContext,
+                                    _: &RelevantLinkStatus,
                                     _: &mut F)
                                     -> bool
         where F: FnMut(&Self, ElementSelectorFlags),
@@ -687,21 +721,10 @@ impl<'le> ::selectors::Element for ServoLayoutElement<'le> {
         match *pseudo_class {
             // https://github.com/servo/servo/issues/8718
             NonTSPseudoClass::Link |
-            NonTSPseudoClass::AnyLink => unsafe {
-                match self.as_node().script_type_id() {
-                    // https://html.spec.whatwg.org/multipage/#selector-link
-                    NodeTypeId::Element(ElementTypeId::HTMLElement(HTMLElementTypeId::HTMLAnchorElement)) |
-                    NodeTypeId::Element(ElementTypeId::HTMLElement(HTMLElementTypeId::HTMLAreaElement)) |
-                    NodeTypeId::Element(ElementTypeId::HTMLElement(HTMLElementTypeId::HTMLLinkElement)) =>
-                        (*self.element.unsafe_get()).get_attr_val_for_layout(&ns!(), &local_name!("href")).is_some(),
-                    _ => false,
-                }
-            },
+            NonTSPseudoClass::AnyLink => self.is_link(),
             NonTSPseudoClass::Visited => false,
 
-            // FIXME(#15746): This is wrong, we need to instead use extended filtering as per RFC4647
-            //                https://tools.ietf.org/html/rfc4647#section-3.3.2
-            NonTSPseudoClass::Lang(ref lang) => extended_filtering(&*self.element.get_lang_for_layout(), &*lang),
+            NonTSPseudoClass::Lang(ref lang) => self.match_element_lang(None, &*lang),
 
             NonTSPseudoClass::ServoNonZeroBorder => unsafe {
                 match (*self.element.unsafe_get()).get_attr_for_layout(&ns!(), &local_name!("border")) {
@@ -728,6 +751,20 @@ impl<'le> ::selectors::Element for ServoLayoutElement<'le> {
             NonTSPseudoClass::PlaceholderShown |
             NonTSPseudoClass::Target =>
                 self.element.get_state_for_layout().contains(pseudo_class.state_flag())
+        }
+    }
+
+    #[inline]
+    fn is_link(&self) -> bool {
+        unsafe {
+            match self.as_node().script_type_id() {
+                // https://html.spec.whatwg.org/multipage/#selector-link
+                NodeTypeId::Element(ElementTypeId::HTMLElement(HTMLElementTypeId::HTMLAnchorElement)) |
+                NodeTypeId::Element(ElementTypeId::HTMLElement(HTMLElementTypeId::HTMLAreaElement)) |
+                NodeTypeId::Element(ElementTypeId::HTMLElement(HTMLElementTypeId::HTMLLinkElement)) =>
+                    (*self.element.unsafe_get()).get_attr_val_for_layout(&ns!(), &local_name!("href")).is_some(),
+                _ => false,
+            }
         }
     }
 
@@ -1092,8 +1129,10 @@ impl<'le> ThreadSafeLayoutElement for ServoThreadSafeLayoutElement<'le> {
         self.element.get_attr(namespace, name)
     }
 
-    fn get_style_data(&self) -> Option<&AtomicRefCell<ElementData>> {
+    fn style_data(&self) -> AtomicRef<ElementData> {
         self.element.get_data()
+            .expect("Unstyled layout node?")
+            .borrow()
     }
 }
 
@@ -1185,12 +1224,18 @@ impl<'le> ::selectors::Element for ServoThreadSafeLayoutElement<'le> {
     fn match_non_ts_pseudo_class<F>(&self,
                                     _: &NonTSPseudoClass,
                                     _: &mut MatchingContext,
+                                    _: &RelevantLinkStatus,
                                     _: &mut F)
                                     -> bool
         where F: FnMut(&Self, ElementSelectorFlags),
     {
         // NB: This could maybe be implemented
         warn!("ServoThreadSafeLayoutElement::match_non_ts_pseudo_class called");
+        false
+    }
+
+    fn is_link(&self) -> bool {
+        warn!("ServoThreadSafeLayoutElement::is_link called");
         false
     }
 
@@ -1216,6 +1261,8 @@ impl<'le> ::selectors::Element for ServoThreadSafeLayoutElement<'le> {
 }
 
 impl<'le> PresentationalHintsSynthesizer for ServoThreadSafeLayoutElement<'le> {
-    fn synthesize_presentational_hints_for_legacy_attributes<V>(&self, _hints: &mut V)
+    fn synthesize_presentational_hints_for_legacy_attributes<V>(&self,
+                                                                _visited_handling: VisitedHandlingMode,
+                                                                _hints: &mut V)
         where V: Push<ApplicableDeclarationBlock> {}
 }

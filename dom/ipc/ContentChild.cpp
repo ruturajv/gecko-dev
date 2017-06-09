@@ -41,7 +41,6 @@
 #include "mozilla/dom/workers/ServiceWorkerManager.h"
 #include "mozilla/dom/nsIContentChild.h"
 #include "mozilla/dom/URLClassifierChild.h"
-#include "mozilla/dom/ipc/BlobChild.h"
 #include "mozilla/gfx/gfxVars.h"
 #include "mozilla/psm/PSMContentListener.h"
 #include "mozilla/hal_sandbox/PHalChild.h"
@@ -74,7 +73,12 @@
 #include "imgLoader.h"
 #include "GMPServiceChild.h"
 
+#ifdef MOZ_GECKO_PROFILER
+#include "ChildProfilerController.h"
+#endif
+
 #if defined(MOZ_CONTENT_SANDBOX)
+#include "mozilla/SandboxSettings.h"
 #if defined(XP_WIN)
 #define TARGET_SANDBOX_EXPORTS
 #include "mozilla/sandboxTarget.h"
@@ -124,6 +128,7 @@
 #include "nsDirectoryServiceUtils.h"
 #include "nsDirectoryServiceDefs.h"
 #include "nsContentPermissionHelper.h"
+#include "nsPluginHost.h"
 #ifdef NS_PRINTING
 #include "nsPrintingProxy.h"
 #endif
@@ -485,6 +490,7 @@ ContentChild* ContentChild::sSingleton;
 ContentChild::ContentChild()
  : mID(uint64_t(-1))
 #if defined(XP_WIN) && defined(ACCESSIBILITY)
+ , mMainChromeTid(0)
  , mMsaaID(0)
 #endif
  , mCanOverrideProcessName(true)
@@ -679,8 +685,7 @@ ContentChild::ProvideWindow(mozIDOMWindowProxy* aParent,
 
 static nsresult
 GetWindowParamsFromParent(mozIDOMWindowProxy* aParent,
-                          nsACString& aBaseURIString, float* aFullZoom,
-                          OriginAttributes& aOriginAttributes)
+                          nsACString& aBaseURIString, float* aFullZoom)
 {
   *aFullZoom = 1.0f;
   auto* opener = nsPIDOMWindowOuter::From(aParent);
@@ -702,8 +707,6 @@ GetWindowParamsFromParent(mozIDOMWindowProxy* aParent,
   if (!openerDocShell) {
     return NS_OK;
   }
-
-  aOriginAttributes = openerDocShell->GetOriginAttributes();
 
   nsCOMPtr<nsIContentViewer> cv;
   nsresult rv = openerDocShell->GetContentViewer(getter_AddRefs(cv));
@@ -734,42 +737,66 @@ ContentChild::ProvideWindowCommon(TabChild* aTabOpener,
   nsAutoPtr<IPCTabContext> ipcContext;
   TabId openerTabId = TabId(0);
   nsAutoCString features(aFeatures);
+  nsAutoString name(aName);
 
   nsresult rv;
-  if (aTabOpener) {
-    // Check to see if the target URI can be loaded in this process.
-    // If not create and load it in an unrelated tab/window.
+
+  MOZ_ASSERT(!aParent || aTabOpener,
+             "If aParent is non-null, we should have an aTabOpener");
+
+  // Cache the boolean preference for allowing noopener windows to open in a
+  // separate process.
+  static bool sNoopenerNewProcess = false;
+  static bool sNoopenerNewProcessInited = false;
+  if (!sNoopenerNewProcessInited) {
+    Preferences::AddBoolVarCache(&sNoopenerNewProcess,
+                                 "dom.noopener.newprocess.enabled");
+    sNoopenerNewProcessInited = true;
+  }
+
+  // Check if we should load in a different process. We always want to load in a
+  // different process if we have noopener set, but we also might if we can't
+  // load in the current process.
+  bool loadInDifferentProcess = aForceNoOpener && sNoopenerNewProcess;
+  if (aTabOpener && !loadInDifferentProcess) {
     nsCOMPtr<nsIWebBrowserChrome3> browserChrome3;
     rv = aTabOpener->GetWebBrowserChrome(getter_AddRefs(browserChrome3));
     if (NS_SUCCEEDED(rv) && browserChrome3) {
       bool shouldLoad;
       rv = browserChrome3->ShouldLoadURIInThisProcess(aURI, &shouldLoad);
-      if (NS_SUCCEEDED(rv) && !shouldLoad) {
-        nsAutoCString baseURIString;
-        float fullZoom;
-        OriginAttributes originAttributes;
-        rv = GetWindowParamsFromParent(aParent, baseURIString, &fullZoom,
-                                       originAttributes);
-        if (NS_WARN_IF(NS_FAILED(rv))) {
-          return rv;
-        }
+      loadInDifferentProcess = NS_SUCCEEDED(rv) && !shouldLoad;
+    }
+  }
 
-        URIParams uriToLoad;
-        SerializeURI(aURI, uriToLoad);
-        Unused << SendCreateWindowInDifferentProcess(aTabOpener, aChromeFlags,
-                                                     aCalledFromJS,
-                                                     aPositionSpecified,
-                                                     aSizeSpecified,
-                                                     uriToLoad, features,
-                                                     baseURIString,
-                                                     originAttributes, fullZoom);
-
-        // We return NS_ERROR_ABORT, so that the caller knows that we've abandoned
-        // the window open as far as it is concerned.
-        return NS_ERROR_ABORT;
-      }
+  // If we're in a content process and we have noopener set, there's no reason
+  // to load in our process, so let's load it elsewhere!
+  if (loadInDifferentProcess) {
+    nsAutoCString baseURIString;
+    float fullZoom;
+    rv = GetWindowParamsFromParent(aParent, baseURIString, &fullZoom);
+    if (NS_WARN_IF(NS_FAILED(rv))) {
+      return rv;
     }
 
+    URIParams uriToLoad;
+    SerializeURI(aURI, uriToLoad);
+    Unused << SendCreateWindowInDifferentProcess(aTabOpener,
+                                                 aChromeFlags,
+                                                 aCalledFromJS,
+                                                 aPositionSpecified,
+                                                 aSizeSpecified,
+                                                 uriToLoad,
+                                                 features,
+                                                 baseURIString,
+                                                 fullZoom,
+                                                 name);
+
+    // We return NS_ERROR_ABORT, so that the caller knows that we've abandoned
+    // the window open as far as it is concerned.
+    return NS_ERROR_ABORT;
+  }
+
+  if (aTabOpener) {
     PopupIPCTabContext context;
     openerTabId = aTabOpener->GetTabId();
     context.opener() = openerTabId;
@@ -817,7 +844,6 @@ ContentChild::ProvideWindowCommon(TabChild* aTabOpener,
     tabId, TabId(0), *ipcContext, aChromeFlags,
     GetID(), IsForBrowser());
 
-  nsString name(aName);
   nsTArray<FrameScriptInfo> frameScripts;
   nsCString urlToLoad;
 
@@ -825,6 +851,7 @@ ContentChild::ProvideWindowCommon(TabChild* aTabOpener,
   TextureFactoryIdentifier textureFactoryIdentifier;
   uint64_t layersId = 0;
   CompositorOptions compositorOptions;
+  uint32_t maxTouchPoints = 0;
 
   if (aIframeMoz) {
     MOZ_ASSERT(aTabOpener);
@@ -841,13 +868,11 @@ ContentChild::ProvideWindowCommon(TabChild* aTabOpener,
     newChild->SendBrowserFrameOpenWindow(aTabOpener, renderFrame, NS_ConvertUTF8toUTF16(url),
                                          name, NS_ConvertUTF8toUTF16(features),
                                          aWindowIsNew, &textureFactoryIdentifier,
-                                         &layersId, &compositorOptions);
+                                         &layersId, &compositorOptions, &maxTouchPoints);
   } else {
     nsAutoCString baseURIString;
     float fullZoom;
-    OriginAttributes originAttributes;
-    rv = GetWindowParamsFromParent(aParent, baseURIString, &fullZoom,
-                                   originAttributes);
+    rv = GetWindowParamsFromParent(aParent, baseURIString, &fullZoom);
     if (NS_WARN_IF(NS_FAILED(rv))) {
       return rv;
     }
@@ -857,7 +882,6 @@ ContentChild::ProvideWindowCommon(TabChild* aTabOpener,
                           aSizeSpecified,
                           features,
                           baseURIString,
-                          originAttributes,
                           fullZoom,
                           &rv,
                           aWindowIsNew,
@@ -865,7 +889,8 @@ ContentChild::ProvideWindowCommon(TabChild* aTabOpener,
                           &urlToLoad,
                           &textureFactoryIdentifier,
                           &layersId,
-                          &compositorOptions)) {
+                          &compositorOptions,
+                          &maxTouchPoints)) {
       PRenderFrameChild::Send__delete__(renderFrame);
       return NS_ERROR_NOT_AVAILABLE;
     }
@@ -895,6 +920,8 @@ ContentChild::ProvideWindowCommon(TabChild* aTabOpener,
                         aTabOpener->mDPI, aTabOpener->mRounding,
                         aTabOpener->mDefaultScale);
   }
+
+  newChild->SetMaxTouchPoints(maxTouchPoints);
 
   // Set the opener window for this window before we start loading the document
   // inside of it. We have to do this before loading the remote scripts, because
@@ -988,8 +1015,6 @@ ContentChild::InitXPCOM(const XPCOMInitData& aXPCOMInit,
   if (!BackgroundChild::GetOrCreateForCurrentThread(callback)) {
     MOZ_CRASH("Failed to create PBackgroundChild!");
   }
-
-  BlobChild::Startup(BlobChild::FriendKey());
 
   nsCOMPtr<nsIConsoleService> svc(do_GetService(NS_CONSOLESERVICE_CONTRACTID));
   if (!svc) {
@@ -1122,6 +1147,15 @@ ContentChild::RecvInitGMPService(Endpoint<PGMPServiceChild>&& aGMPService)
   if (!GMPServiceChild::Create(Move(aGMPService))) {
     return IPC_FAIL_NO_REASON(this);
   }
+  return IPC_OK();
+}
+
+mozilla::ipc::IPCResult
+ContentChild::RecvInitProfiler(Endpoint<PProfilerChild>&& aEndpoint)
+{
+#ifdef MOZ_GECKO_PROFILER
+  mProfilerController = ChildProfilerController::Create(Move(aEndpoint));
+#endif
   return IPC_OK();
 }
 
@@ -1266,6 +1300,14 @@ GetAppPaths(nsCString &aAppPath, nsCString &aAppBinaryPath, nsCString &aAppDir)
     return false;
   }
 
+  // appDir points to .app/Contents/Resources, for our purposes we want
+  // .app/Contents.
+  nsCOMPtr<nsIFile> appDirParent;
+  rv = appDir->GetParent(getter_AddRefs(appDirParent));
+  if (NS_FAILED(rv)) {
+    return false;
+  }
+
   bool isLink;
   app->IsSymlink(&isLink);
   if (isLink) {
@@ -1279,11 +1321,11 @@ GetAppPaths(nsCString &aAppPath, nsCString &aAppBinaryPath, nsCString &aAppDir)
   } else {
     appBinary->GetNativePath(aAppBinaryPath);
   }
-  appDir->IsSymlink(&isLink);
+  appDirParent->IsSymlink(&isLink);
   if (isLink) {
-    appDir->GetNativeTarget(aAppDir);
+    appDirParent->GetNativeTarget(aAppDir);
   } else {
-    appDir->GetNativePath(aAppDir);
+    appDirParent->GetNativePath(aAppDir);
   }
 
   return true;
@@ -1328,7 +1370,7 @@ GetDirectoryPath(const char *aPath) {
 static bool
 StartMacOSContentSandbox()
 {
-  int sandboxLevel = Preferences::GetInt("security.sandbox.content.level");
+  int sandboxLevel = GetEffectiveContentSandboxLevel();
   if (sandboxLevel < 1) {
     return false;
   }
@@ -1349,6 +1391,7 @@ StartMacOSContentSandbox()
   }
 
   nsAutoCString tempDirPath;
+  tempDir->Normalize();
   rv = tempDir->GetNativePath(tempDirPath);
   if (NS_FAILED(rv)) {
     MOZ_CRASH("Failed to get NS_OS_TEMP_DIR path");
@@ -1489,6 +1532,8 @@ ContentChild::RecvSetProcessSandbox(const MaybeFileDesc& aBroker)
   CrashReporter::AnnotateCrashReport(
     NS_LITERAL_CSTRING("ContentSandboxCapabilities"), flagsString);
 #endif /* XP_LINUX && !OS_ANDROID */
+  CrashReporter::AnnotateCrashReport(NS_LITERAL_CSTRING("RemoteType"),
+                                     NS_ConvertUTF16toUTF8(GetRemoteType()));
 #endif /* MOZ_CRASHREPORTER */
 #endif /* MOZ_CONTENT_SANDBOX */
 
@@ -1633,18 +1678,6 @@ ContentChild::DeallocPBrowserChild(PBrowserChild* aIframe)
   return nsIContentChild::DeallocPBrowserChild(aIframe);
 }
 
-PMemoryStreamChild*
-ContentChild::AllocPMemoryStreamChild(const uint64_t& aSize)
-{
-  return nsIContentChild::AllocPMemoryStreamChild(aSize);
-}
-
-bool
-ContentChild::DeallocPMemoryStreamChild(PMemoryStreamChild* aActor)
-{
-  return nsIContentChild::DeallocPMemoryStreamChild(aActor);
-}
-
 PIPCBlobInputStreamChild*
 ContentChild::AllocPIPCBlobInputStreamChild(const nsID& aID,
                                             const uint64_t& aSize)
@@ -1656,12 +1689,6 @@ bool
 ContentChild::DeallocPIPCBlobInputStreamChild(PIPCBlobInputStreamChild* aActor)
 {
   return nsIContentChild::DeallocPIPCBlobInputStreamChild(aActor);
-}
-
-PBlobChild*
-ContentChild::AllocPBlobChild(const BlobConstructorParams& aParams)
-{
-  return nsIContentChild::AllocPBlobChild(aParams);
 }
 
 mozilla::PRemoteSpellcheckEngineChild *
@@ -1676,33 +1703,6 @@ ContentChild::DeallocPRemoteSpellcheckEngineChild(PRemoteSpellcheckEngineChild *
 {
   delete child;
   return true;
-}
-
-bool
-ContentChild::DeallocPBlobChild(PBlobChild* aActor)
-{
-  return nsIContentChild::DeallocPBlobChild(aActor);
-}
-
-PBlobChild*
-ContentChild::SendPBlobConstructor(PBlobChild* aActor,
-                                   const BlobConstructorParams& aParams)
-{
-  if (IsShuttingDown()) {
-    return nullptr;
-  }
-
-  return PContentChild::SendPBlobConstructor(aActor, aParams);
-}
-
-PMemoryStreamChild*
-ContentChild::SendPMemoryStreamConstructor(const uint64_t& aSize)
-{
-  if (IsShuttingDown()) {
-    return nullptr;
-  }
-
-  return PContentChild::SendPMemoryStreamConstructor(aSize);
 }
 
 PPresentationChild*
@@ -2424,10 +2424,14 @@ ContentChild::RecvFlushMemory(const nsString& reason)
 }
 
 mozilla::ipc::IPCResult
-ContentChild::RecvActivateA11y(const uint32_t& aMsaaID)
+ContentChild::RecvActivateA11y(const uint32_t& aMainChromeTid,
+                               const uint32_t& aMsaaID)
 {
 #ifdef ACCESSIBILITY
 #ifdef XP_WIN
+  MOZ_ASSERT(aMainChromeTid != 0);
+  mMainChromeTid = aMainChromeTid;
+
   MOZ_ASSERT(aMsaaID != 0);
   mMsaaID = aMsaaID;
 #endif // XP_WIN
@@ -2652,60 +2656,6 @@ ContentChild::DeallocPOfflineCacheUpdateChild(POfflineCacheUpdateChild* actor)
 }
 
 mozilla::ipc::IPCResult
-ContentChild::RecvStartProfiler(const ProfilerInitParams& params)
-{
-  nsTArray<const char*> filterArray;
-  for (size_t i = 0; i < params.filters().Length(); ++i) {
-    filterArray.AppendElement(params.filters()[i].get());
-  }
-
-  profiler_start(params.entries(), params.interval(), params.features(),
-                 filterArray.Elements(), filterArray.Length());
-
- return IPC_OK();
-}
-
-mozilla::ipc::IPCResult
-ContentChild::RecvStopProfiler()
-{
-  profiler_stop();
-  return IPC_OK();
-}
-
-mozilla::ipc::IPCResult
-ContentChild::RecvPauseProfiler(const bool& aPause)
-{
-  if (aPause) {
-    profiler_pause();
-  } else {
-    profiler_resume();
-  }
-
-  return IPC_OK();
-}
-
-void
-ContentChild::GatherProfile(bool aIsExitProfile)
-{
-  nsCString profileCString;
-  UniquePtr<char[]> profile = profiler_get_profile();
-  if (profile) {
-    profileCString = nsCString(profile.get(), strlen(profile.get()));
-  } else {
-    profileCString = EmptyCString();
-  }
-
-  Unused << SendProfile(profileCString, aIsExitProfile);
-}
-
-mozilla::ipc::IPCResult
-ContentChild::RecvGatherProfile()
-{
-  GatherProfile(false);
-  return IPC_OK();
-}
-
-mozilla::ipc::IPCResult
 ContentChild::RecvLoadPluginResult(const uint32_t& aPluginId,
                                    const bool& aResult)
 {
@@ -2871,11 +2821,12 @@ ContentChild::RecvShutdown()
   GetIPCChannel()->SetAbortOnError(false);
 
 #ifdef MOZ_GECKO_PROFILER
-  if (profiler_is_active()) {
-    // We're shutting down while we were profiling. Send the
-    // profile up to the parent so that we don't lose this
-    // information.
-    GatherProfile(true);
+  if (mProfilerController) {
+    nsCString shutdownProfile = mProfilerController->GrabShutdownProfileAndShutdown();
+    mProfilerController = nullptr;
+    // Send the shutdown profile to the parent process through our own
+    // message channel, which we know will survive for long enough.
+    Unused << SendShutdownProfile(shutdownProfile);
   }
 #endif
 
@@ -3323,37 +3274,7 @@ ContentChild::GetConstructedEventTarget(const Message& aMsg)
     return nullptr;
   }
 
-  ActorHandle handle;
-  TabId tabId, sameTabGroupAs;
-  PickleIterator iter(aMsg);
-  if (!IPC::ReadParam(&aMsg, &iter, &handle)) {
-    return nullptr;
-  }
-  aMsg.IgnoreSentinel(&iter);
-  if (!IPC::ReadParam(&aMsg, &iter, &tabId)) {
-    return nullptr;
-  }
-  aMsg.IgnoreSentinel(&iter);
-  if (!IPC::ReadParam(&aMsg, &iter, &sameTabGroupAs)) {
-    return nullptr;
-  }
-
-  // If sameTabGroupAs is non-zero, then the new tab will be in the same
-  // TabGroup as a previously created tab. Rather than try to find the
-  // previously created tab (whose constructor message may not even have been
-  // processed yet, in theory) and look up its event target, we just use the
-  // default event target. This means that runnables for this tab will not be
-  // labeled. However, this path is only taken for print preview and view
-  // source, which are not performance-sensitive.
-  if (sameTabGroupAs) {
-    return nullptr;
-  }
-
-  // If the request for a new TabChild is coming from the parent process, then
-  // there is no opener. Therefore, we create a fresh TabGroup.
-  RefPtr<TabGroup> tabGroup = new TabGroup();
-  nsCOMPtr<nsIEventTarget> target = tabGroup->EventTargetFor(TaskCategory::Other);
-  return target.forget();
+  return nsIContentChild::GetConstructedEventTarget(aMsg);
 }
 
 void
@@ -3478,6 +3399,22 @@ ContentChild::RecvRefreshScreens(nsTArray<ScreenDetails>&& aScreens)
 {
   ScreenManager& screenManager = ScreenManager::GetSingleton();
   screenManager.Refresh(Move(aScreens));
+  return IPC_OK();
+}
+
+already_AddRefed<nsIEventTarget>
+ContentChild::GetEventTargetFor(TabChild* aTabChild)
+{
+  return IToplevelProtocol::GetActorEventTarget(aTabChild);
+}
+
+mozilla::ipc::IPCResult
+ContentChild::RecvSetPluginList(const uint32_t& aPluginEpoch,
+                                nsTArray<plugins::PluginTag>&& aPluginTags,
+                                nsTArray<plugins::FakePluginTag>&& aFakePluginTags)
+{
+  RefPtr<nsPluginHost> host = nsPluginHost::GetInst();
+  host->SetPluginsInContent(aPluginEpoch, aPluginTags, aFakePluginTags);
   return IPC_OK();
 }
 

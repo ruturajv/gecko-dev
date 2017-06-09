@@ -1054,7 +1054,9 @@ JSScript::setDefaultClassConstructorSpan(JSObject* sourceObject, uint32_t start,
 
 js::ScriptSourceObject&
 JSScript::scriptSourceUnwrap() const {
-    return UncheckedUnwrap(sourceObject())->as<ScriptSourceObject>();
+    // This may be called off the main thread. It's OK not to expose the source
+    // object here as it doesn't escape.
+    return UncheckedUnwrapWithoutExpose(sourceObject())->as<ScriptSourceObject>();
 }
 
 js::ScriptSource*
@@ -1064,7 +1066,10 @@ JSScript::scriptSource() const {
 
 js::ScriptSource*
 JSScript::maybeForwardedScriptSource() const {
-    return UncheckedUnwrap(MaybeForwarded(sourceObject()))->as<ScriptSourceObject>().source();
+    JSObject* source = MaybeForwarded(sourceObject());
+    // This may be called during GC. It's OK not to expose the source object
+    // here as it doesn't escape.
+    return UncheckedUnwrapWithoutExpose(source)->as<ScriptSourceObject>().source();
 }
 
 bool
@@ -2019,10 +2024,9 @@ ScriptSource::addSizeOfIncludingThis(mozilla::MallocSizeOf mallocSizeOf,
 }
 
 bool
-ScriptSource::xdrEncodeTopLevel(JSContext* cx, JS::TranscodeBuffer& buffer,
-                                HandleScript script)
+ScriptSource::xdrEncodeTopLevel(JSContext* cx, HandleScript script)
 {
-    xdrEncoder_ = js::MakeUnique<XDRIncrementalEncoder>(cx, buffer, buffer.length());
+    xdrEncoder_ = js::MakeUnique<XDRIncrementalEncoder>(cx);
     if (!xdrEncoder_) {
         ReportOutOfMemory(cx);
         return false;
@@ -2064,14 +2068,16 @@ ScriptSource::xdrEncodeFunction(JSContext* cx, HandleFunction fun, HandleScriptS
 }
 
 bool
-ScriptSource::xdrFinalizeEncoder()
+ScriptSource::xdrFinalizeEncoder(JS::TranscodeBuffer& buffer)
 {
-    MOZ_ASSERT(hasEncoder());
+    if (!hasEncoder())
+        return false;
+
     auto cleanup = mozilla::MakeScopeExit([&] {
         xdrEncoder_.reset(nullptr);
     });
 
-    if (!xdrEncoder_->linearize())
+    if (!xdrEncoder_->linearize(buffer))
         return false;
     return true;
 }
@@ -4202,7 +4208,8 @@ LazyScript::sourceObject() const
 ScriptSource*
 LazyScript::maybeForwardedScriptSource() const
 {
-    return UncheckedUnwrap(MaybeForwarded(sourceObject()))->as<ScriptSourceObject>().source();
+    JSObject* source = MaybeForwarded(sourceObject());
+    return UncheckedUnwrapWithoutExpose(source)->as<ScriptSourceObject>().source();
 }
 
 /* static */ LazyScript*

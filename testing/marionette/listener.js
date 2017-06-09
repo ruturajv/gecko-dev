@@ -27,9 +27,9 @@ Cu.import("chrome://marionette/content/logging.js");
 Cu.import("chrome://marionette/content/navigate.js");
 Cu.import("chrome://marionette/content/proxy.js");
 Cu.import("chrome://marionette/content/session.js");
-Cu.import("chrome://marionette/content/simpletest.js");
 
 Cu.import("resource://gre/modules/FileUtils.jsm");
+Cu.import("resource://gre/modules/Preferences.jsm");
 Cu.import("resource://gre/modules/Task.jsm");
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 
@@ -83,7 +83,6 @@ var asyncChrome = proxy.toChromeAsync({
 });
 var syncChrome = proxy.toChrome(sendSyncMessage.bind(this));
 var cookies = new Cookies(() => curContainer.frame.document, syncChrome);
-var importedScripts = new evaluate.ScriptStorageServiceClient(syncChrome);
 
 Cu.import("resource://gre/modules/Log.jsm");
 var logger = Log.repository.getLogger("Marionette");
@@ -469,7 +468,6 @@ var getElementTextFn = dispatch(getElementText);
 var getElementTagNameFn = dispatch(getElementTagName);
 var getElementRectFn = dispatch(getElementRect);
 var isElementEnabledFn = dispatch(isElementEnabled);
-var getCurrentUrlFn = dispatch(getCurrentUrl);
 var findElementContentFn = dispatch(findElementContent);
 var findElementsContentFn = dispatch(findElementsContent);
 var isElementSelectedFn = dispatch(isElementSelected);
@@ -489,7 +487,6 @@ var deleteCookieFn = dispatch(deleteCookie);
 var deleteAllCookiesFn = dispatch(deleteAllCookies);
 var executeFn = dispatch(execute);
 var executeInSandboxFn = dispatch(executeInSandbox);
-var executeSimpleTestFn = dispatch(executeSimpleTest);
 var sendKeysToElementFn = dispatch(sendKeysToElement);
 
 /**
@@ -499,7 +496,6 @@ function startListeners() {
   addMessageListenerId("Marionette:newSession", newSession);
   addMessageListenerId("Marionette:execute", executeFn);
   addMessageListenerId("Marionette:executeInSandbox", executeInSandboxFn);
-  addMessageListenerId("Marionette:executeSimpleTest", executeSimpleTestFn);
   addMessageListenerId("Marionette:singleTap", singleTapFn);
   addMessageListenerId("Marionette:performActions", performActionsFn);
   addMessageListenerId("Marionette:releaseActions", releaseActionsFn);
@@ -508,7 +504,6 @@ function startListeners() {
   addMessageListenerId("Marionette:get", get);
   addMessageListenerId("Marionette:waitForPageLoaded", waitForPageLoaded);
   addMessageListenerId("Marionette:cancelRequest", cancelRequest);
-  addMessageListenerId("Marionette:getCurrentUrl", getCurrentUrlFn);
   addMessageListenerId("Marionette:getTitle", getTitleFn);
   addMessageListenerId("Marionette:getPageSource", getPageSourceFn);
   addMessageListenerId("Marionette:goBack", goBack);
@@ -535,7 +530,6 @@ function startListeners() {
   addMessageListenerId("Marionette:deleteSession", deleteSession);
   addMessageListenerId("Marionette:sleepSession", sleepSession);
   addMessageListenerId("Marionette:getAppCacheStatus", getAppCacheStatus);
-  addMessageListenerId("Marionette:setTestName", setTestName);
   addMessageListenerId("Marionette:takeScreenshot", takeScreenshotFn);
   addMessageListenerId("Marionette:addCookie", addCookieFn);
   addMessageListenerId("Marionette:getCookies", getCookiesFn);
@@ -576,7 +570,6 @@ function deleteSession(msg) {
   removeMessageListenerId("Marionette:newSession", newSession);
   removeMessageListenerId("Marionette:execute", executeFn);
   removeMessageListenerId("Marionette:executeInSandbox", executeInSandboxFn);
-  removeMessageListenerId("Marionette:executeSimpleTest", executeSimpleTestFn);
   removeMessageListenerId("Marionette:singleTap", singleTapFn);
   removeMessageListenerId("Marionette:performActions", performActionsFn);
   removeMessageListenerId("Marionette:releaseActions", releaseActionsFn);
@@ -587,7 +580,6 @@ function deleteSession(msg) {
   removeMessageListenerId("Marionette:cancelRequest", cancelRequest);
   removeMessageListenerId("Marionette:getTitle", getTitleFn);
   removeMessageListenerId("Marionette:getPageSource", getPageSourceFn);
-  removeMessageListenerId("Marionette:getCurrentUrl", getCurrentUrlFn);
   removeMessageListenerId("Marionette:goBack", goBack);
   removeMessageListenerId("Marionette:goForward", goForward);
   removeMessageListenerId("Marionette:refresh", refresh);
@@ -612,7 +604,6 @@ function deleteSession(msg) {
   removeMessageListenerId("Marionette:deleteSession", deleteSession);
   removeMessageListenerId("Marionette:sleepSession", sleepSession);
   removeMessageListenerId("Marionette:getAppCacheStatus", getAppCacheStatus);
-  removeMessageListenerId("Marionette:setTestName", setTestName);
   removeMessageListenerId("Marionette:takeScreenshot", takeScreenshotFn);
   removeMessageListenerId("Marionette:addCookie", addCookieFn);
   removeMessageListenerId("Marionette:getCookies", getCookiesFn);
@@ -735,7 +726,6 @@ function checkForInterrupted() {
 
 function* execute(script, args, timeout, opts) {
   opts.timeout = timeout;
-  script = importedScripts.for("content").concat(script);
 
   let sb = sandbox.createMutable(curContainer.frame);
   let wargs = evaluate.fromJSON(
@@ -747,7 +737,6 @@ function* execute(script, args, timeout, opts) {
 
 function* executeInSandbox(script, args, timeout, opts) {
   opts.timeout = timeout;
-  script = importedScripts.for("content").concat(script);
 
   let sb = sandboxes.get(opts.sandboxName, opts.newSandbox);
   if (opts.sandboxName) {
@@ -764,40 +753,6 @@ function* executeInSandbox(script, args, timeout, opts) {
       "Marionette:shareData",
       {log: evaluate.toJSON(contentLog.get(), seenEls)});
   return evaluate.toJSON(res, seenEls);
-}
-
-function* executeSimpleTest(script, args, timeout, opts) {
-  opts.timeout = timeout;
-  let win = curContainer.frame;
-  script = importedScripts.for("content").concat(script);
-
-  let harness = new simpletest.Harness(
-      win,
-      "content",
-      contentLog,
-      timeout,
-      marionetteTestName);
-  let sb = sandbox.createSimpleTest(curContainer.frame, harness);
-  // TODO(ato): Not sure this is needed:
-  sb = sandbox.augment(sb, new logging.Adapter(contentLog));
-
-  let wargs = evaluate.fromJSON(
-      args, seenEls, curContainer.frame, curContainer.shadowRoot);
-  let evaluatePromise = evaluate.sandbox(sb, script, wargs, opts);
-
-  let res = yield evaluatePromise;
-  sendSyncMessage(
-      "Marionette:shareData",
-      {log: evaluate.toJSON(contentLog.get(), seenEls)});
-  return evaluate.toJSON(res, seenEls);
-}
-
-/**
- * Sets the test name, used in logging messages.
- */
-function setTestName(msg) {
-  marionetteTestName = msg.json.value;
-  sendOk(msg.json.command_id);
 }
 
 /**
@@ -1223,13 +1178,6 @@ function refresh(msg) {
 }
 
 /**
- * Get URL of the top-level browsing context.
- */
-function getCurrentUrl() {
-  return content.location.href;
-}
-
-/**
  * Get the title of the current browsing context.
  */
 function getTitle() {
@@ -1451,6 +1399,9 @@ function* sendKeysToElement(id, val) {
   let el = seenEls.get(id, curContainer);
   if (el.type == "file") {
     yield interaction.uploadFile(el, val);
+  } else if ((el.type == "date" || el.type == "time") &&
+      Preferences.get("dom.forms.datetime")) {
+    yield interaction.setFormControlValue(el, val);
   } else {
     yield interaction.sendKeysToElement(
         el, val, false, capabilities.get("moz:accessibilityChecks"));

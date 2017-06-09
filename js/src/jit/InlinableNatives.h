@@ -27,6 +27,8 @@
     _(AtomicsXor)                   \
     _(AtomicsIsLockFree)            \
                                     \
+    _(Boolean)                      \
+                                    \
     _(IntlIsCollator)               \
     _(IntlIsDateTimeFormat)         \
     _(IntlIsNumberFormat)           \
@@ -130,6 +132,7 @@
     _(IntrinsicGetNextSetEntryForIterator) \
                                     \
     _(IntrinsicNewArrayIterator)    \
+    _(IntrinsicNewStringIterator)   \
                                     \
     _(IntrinsicArrayBufferByteLength) \
     _(IntrinsicPossiblyWrappedArrayBufferByteLength) \

@@ -10,7 +10,8 @@ Cu.import("resource://shield-recipe-client/lib/Utils.jsm", this);
 // Load mocking/stubbing library, sinon
 // docs: http://sinonjs.org/docs/
 const loader = Cc["@mozilla.org/moz/jssubscript-loader;1"].getService(Ci.mozIJSSubScriptLoader);
-loader.loadSubScript("resource://testing-common/sinon-1.16.1.js");
+/* global sinon */
+loader.loadSubScript("resource://testing-common/sinon-2.3.2.js");
 
 // Make sinon assertions fail in a way that mochitest understands
 sinon.assert.fail = function(message) {
@@ -20,8 +21,6 @@ sinon.assert.fail = function(message) {
 registerCleanupFunction(async function() {
   // Cleanup window or the test runner will throw an error
   delete window.sinon;
-  delete window.setImmediate;
-  delete window.clearImmediate;
 });
 
 

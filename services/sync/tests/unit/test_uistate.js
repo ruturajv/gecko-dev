@@ -5,20 +5,22 @@
 
 // ================================================
 // Load mocking/stubbing library, sinon
-// docs: http://sinonjs.org/docs/
-/* global sinon */
+// docs: http://sinonjs.org/releases/v2.3.2/
 Cu.import("resource://gre/modules/Timer.jsm");
-let window = {
-  document: {},
-  location: {},
-  setTimeout,
-  setInterval,
-  clearTimeout,
-  clearInterval,
-};
-let self = window;
-let loader = Cc["@mozilla.org/moz/jssubscript-loader;1"].getService(Ci.mozIJSSubScriptLoader);
-loader.loadSubScript("resource://testing-common/sinon-1.16.1.js");
+const {Loader} = Cu.import("resource://gre/modules/commonjs/toolkit/loader.js", {});
+const loader = new Loader.Loader({
+  paths: {
+    "": "resource://testing-common/",
+  },
+  globals: {
+    setTimeout,
+    setInterval,
+    clearTimeout,
+    clearInterval,
+  },
+});
+const require = Loader.Require(loader, {id: ""});
+const sinon = require("sinon-2.3.2");
 // ================================================
 
 Cu.import("resource://services-sync/UIState.jsm");
@@ -169,8 +171,9 @@ add_task(async function test_observer_refreshState() {
   let refreshState = sinon.spy(UIStateInternal, "refreshState");
 
   let shouldRefresh = ["weave:service:login:change", "weave:service:login:error",
-                       "weave:service:ready", "fxaccounts:onlogin",
-                       "fxaccounts:onlogout", "fxaccounts:profilechange"];
+                       "weave:service:ready", "fxaccounts:onverified",
+                       "fxaccounts:onlogin", "fxaccounts:onlogout",
+                       "fxaccounts:profilechange"];
 
   for (let topic of shouldRefresh) {
     let uiUpdateObserved = observeUIUpdate();

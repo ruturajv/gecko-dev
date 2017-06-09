@@ -15,7 +15,7 @@
     use properties::longhands::background_clip;
     use properties::longhands::background_clip::single_value::computed_value::T as Clip;
     use properties::longhands::background_origin::single_value::computed_value::T as Origin;
-    use values::specified::{CSSColor, Position, PositionComponent};
+    use values::specified::{Color, Position, PositionComponent};
     use parser::Parse;
 
     impl From<background_origin::single_value::SpecifiedValue> for background_clip::single_value::SpecifiedValue {
@@ -39,17 +39,20 @@
             let mut background_${name} = background_${name}::SpecifiedValue(Vec::new());
         % endfor
         try!(input.parse_comma_separated(|input| {
+            // background-color can only be in the last element, so if it
+            // is parsed anywhere before, the value is invalid.
+            if background_color.is_some() {
+                return Err(());
+            }
+
             % for name in "image position repeat size attachment origin clip".split():
                 let mut ${name} = None;
             % endfor
             loop {
-                if let Ok(value) = input.try(|i| CSSColor::parse(context, i)) {
-                    if background_color.is_none() {
+                if background_color.is_none() {
+                    if let Ok(value) = input.try(|i| Color::parse(context, i)) {
                         background_color = Some(value);
                         continue
-                    } else {
-                        // color can only be the last element
-                        return Err(())
                     }
                 }
                 if position.is_none() {
@@ -109,7 +112,7 @@
         }));
 
         Ok(expanded! {
-             background_color: background_color.unwrap_or(CSSColor::transparent()),
+             background_color: background_color.unwrap_or(Color::transparent()),
              background_image: background_image,
              background_position_x: background_position_x,
              background_position_y: background_position_y,

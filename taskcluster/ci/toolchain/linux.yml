@@ -11,9 +11,10 @@ linux64-clang:
         tier: 1
     worker-type: aws-provisioner-v1/gecko-{level}-b-linux
     worker:
-        implementation: docker-worker
         docker-image: {in-tree: desktop-build}
         max-run-time: 36000
+        env:
+            TOOLTOOL_MANIFEST: "browser/config/tooltool-manifests/linux64/releng.manifest"
     run:
         using: toolchain-script
         script: build-clang-linux.sh
@@ -34,9 +35,10 @@ linux64-clang-tidy:
         tier: 1
     worker-type: aws-provisioner-v1/gecko-{level}-b-linux
     worker:
-        implementation: docker-worker
         docker-image: {in-tree: desktop-build}
         max-run-time: 36000
+        env:
+            TOOLTOOL_MANIFEST: "browser/config/tooltool-manifests/linux64/releng.manifest"
     run:
         using: toolchain-script
         script: build-clang-tidy-linux.sh
@@ -55,7 +57,6 @@ linux64-gcc:
         tier: 1
     worker-type: aws-provisioner-v1/gecko-{level}-b-linux
     worker:
-        implementation: docker-worker
         docker-image: {in-tree: desktop-build}
         max-run-time: 36000
     run:
@@ -73,7 +74,6 @@ linux64-binutils:
         tier: 1
     worker-type: aws-provisioner-v1/gecko-{level}-b-linux
     worker:
-        implementation: docker-worker
         docker-image: {in-tree: desktop-build}
         max-run-time: 36000
     run:
@@ -91,9 +91,10 @@ linux64-cctools-port:
         tier: 1
     worker-type: aws-provisioner-v1/gecko-{level}-b-linux
     worker:
-        implementation: docker-worker
         docker-image: {in-tree: desktop-build}
         max-run-time: 36000
+        env:
+            TOOLTOOL_MANIFEST: "browser/config/tooltool-manifests/linux64/clang.manifest"
     run:
         using: toolchain-script
         script: build-cctools-port.sh
@@ -110,9 +111,10 @@ linux64-hfsplus:
         tier: 1
     worker-type: aws-provisioner-v1/gecko-{level}-b-linux
     worker:
-        implementation: docker-worker
         docker-image: {in-tree: desktop-build}
         max-run-time: 36000
+        env:
+            TOOLTOOL_MANIFEST: "browser/config/tooltool-manifests/linux64/clang.manifest"
     run:
         using: toolchain-script
         script: build-hfsplus-linux.sh
@@ -130,7 +132,6 @@ linux64-libdmg:
         tier: 1
     worker-type: aws-provisioner-v1/gecko-{level}-b-linux
     worker:
-        implementation: docker-worker
         docker-image: {in-tree: desktop-build}
         max-run-time: 36000
     run:

@@ -6,7 +6,6 @@
 
 "use strict";
 
-const promise = require("promise");
 const {Task} = require("devtools/shared/task");
 const EventEmitter = require("devtools/shared/event-emitter");
 const { VIEW_NODE_VALUE_TYPE } = require("devtools/client/inspector/shared/node-types");
@@ -267,18 +266,28 @@ HighlightersOverlay.prototype = {
    *         The highlighter type. One of this.highlighters.
    * @return {Promise} that resolves to the highlighter
    */
-  _getHighlighter: function (type) {
+  _getHighlighter: Task.async(function* (type) {
     let utils = this.highlighterUtils;
 
     if (this.highlighters[type]) {
-      return promise.resolve(this.highlighters[type]);
+      return this.highlighters[type];
     }
 
-    return utils.getHighlighterByType(type).then(highlighter => {
-      this.highlighters[type] = highlighter;
-      return highlighter;
-    });
-  },
+    let highlighter;
+
+    try {
+      highlighter = yield utils.getHighlighterByType(type);
+    } catch (e) {
+      // Ignore any error
+    }
+
+    if (!highlighter) {
+      return null;
+    }
+
+    this.highlighters[type] = highlighter;
+    return highlighter;
+  }),
 
   _handleRejection: function (error) {
     if (!this.destroyed) {
@@ -375,9 +384,14 @@ HighlightersOverlay.prototype = {
     }
 
     event.stopPropagation();
-    this.toggleGridHighlighter(this.inspector.selection.nodeFront, {
-      color: DEFAULT_GRID_COLOR
-    });
+
+    let { store } = this.inspector;
+    let { grids, highlighterSettings } = store.getState();
+    let grid = grids.find(g => g.nodeFront == this.inspector.selection.nodeFront);
+
+    highlighterSettings.color = grid ? grid.color : DEFAULT_GRID_COLOR;
+
+    this.toggleGridHighlighter(this.inspector.selection.nodeFront, highlighterSettings);
   },
 
   onMouseMove: function (event) {

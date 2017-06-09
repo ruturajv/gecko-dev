@@ -76,21 +76,35 @@ impl Parse for GridLine {
             return Ok(grid_line)
         }
 
+        // <custom-ident> | [ <integer> && <custom-ident>? ] | [ span && [ <integer> || <custom-ident> ] ]
+        // This <grid-line> horror is simply,
+        // [ span? && [ <custom-ident> || <integer> ] ]
+        // And, for some magical reason, "span" should be the first or last value and not in-between.
+        let mut val_before_span = false;
+
         for _ in 0..3 {     // Maximum possible entities for <grid-line>
             if input.try(|i| i.expect_ident_matching("span")).is_ok() {
-                if grid_line.is_span || grid_line.line_num.is_some() || grid_line.ident.is_some() {
-                    return Err(())      // span (if specified) should be first
-                }
-                grid_line.is_span = true;       // span (if specified) should be first
-            } else if let Ok(i) = input.try(|i| Integer::parse(context, i)) {
-                if i.value() == 0 || grid_line.line_num.is_some() {
+                if grid_line.is_span {
                     return Err(())
                 }
+
+                if grid_line.line_num.is_some() || grid_line.ident.is_some() {
+                    val_before_span = true;
+                }
+
+                grid_line.is_span = true;
+            } else if let Ok(i) = input.try(|i| Integer::parse(context, i)) {
+                if i.value() == 0 || val_before_span || grid_line.line_num.is_some() {
+                    return Err(())
+                }
+
                 grid_line.line_num = Some(i);
             } else if let Ok(name) = input.try(|i| i.expect_ident()) {
-                if grid_line.ident.is_some() || CustomIdent::from_ident((&*name).into(), &[]).is_err() {
+                if val_before_span || grid_line.ident.is_some() ||
+                   CustomIdent::from_ident((&*name).into(), &[]).is_err() {
                     return Err(())
                 }
+
                 grid_line.ident = Some(name.into_owned());
             } else {
                 break
@@ -292,8 +306,10 @@ impl<L: ToComputedValue> ToComputedValue for TrackSize<L> {
     }
 }
 
-fn concat_serialize_idents<W>(prefix: &str, suffix: &str,
-                              slice: &[String], sep: &str, dest: &mut W) -> fmt::Result
+/// Helper function for serializing identifiers with a prefix and suffix, used
+/// for serializing <line-names> (in grid).
+pub fn concat_serialize_idents<W>(prefix: &str, suffix: &str,
+                                  slice: &[String], sep: &str, dest: &mut W) -> fmt::Result
     where W: fmt::Write
 {
     if let Some((ref first, rest)) = slice.split_first() {
@@ -313,8 +329,8 @@ fn concat_serialize_idents<W>(prefix: &str, suffix: &str,
 /// The initial argument of the `repeat` function.
 ///
 /// https://drafts.csswg.org/css-grid/#typedef-track-repeat
-#[derive(Clone, Copy, PartialEq, Debug)]
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
+#[derive(Clone, Copy, Debug, PartialEq, ToCss)]
 pub enum RepeatCount {
     /// A positive integer. This is allowed only for `<track-repeat>` and `<fixed-repeat>`
     Number(Integer),
@@ -322,16 +338,6 @@ pub enum RepeatCount {
     AutoFill,
     /// An `<auto-fit>` keyword allowed only for `<auto-repeat>`
     AutoFit,
-}
-
-impl ToCss for RepeatCount {
-    fn to_css<W>(&self, dest: &mut W) -> fmt::Result where W: fmt::Write {
-        match *self {
-            RepeatCount::Number(ref c) => c.to_css(dest),
-            RepeatCount::AutoFill => dest.write_str("auto-fill"),
-            RepeatCount::AutoFit => dest.write_str("auto-fit"),
-        }
-    }
 }
 
 impl Parse for RepeatCount {

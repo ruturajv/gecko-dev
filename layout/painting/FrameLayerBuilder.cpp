@@ -270,8 +270,13 @@ DisplayItemData::~DisplayItemData()
     array.RemoveElement(this);
   }
 
-  MOZ_RELEASE_ASSERT(sAliveDisplayItemDatas && sAliveDisplayItemDatas->Contains(this));
-  sAliveDisplayItemDatas->RemoveEntry(this);
+  MOZ_RELEASE_ASSERT(sAliveDisplayItemDatas);
+  nsPtrHashKey<mozilla::DisplayItemData>* entry
+    = sAliveDisplayItemDatas->GetEntry(this);
+  MOZ_RELEASE_ASSERT(entry);
+
+  sAliveDisplayItemDatas->RemoveEntry(entry);
+
   if (sAliveDisplayItemDatas->Count() == 0) {
     delete sAliveDisplayItemDatas;
     sAliveDisplayItemDatas = nullptr;
@@ -1075,7 +1080,7 @@ public:
       const_cast<nsIFrame*>(aContainerItem ? aContainerItem->ReferenceFrameForChildren() :
                                              mBuilder->FindReferenceFrameFor(mContainerFrame));
     bool isAtRoot = !aContainerItem || (aContainerItem->Frame() == mBuilder->RootReferenceFrame());
-    MOZ_ASSERT_IF(isAtRoot, mContainerReferenceFrame == mBuilder->RootReferenceFrame());
+    MOZ_ASSERT(!isAtRoot || mContainerReferenceFrame == mBuilder->RootReferenceFrame());
     mContainerAnimatedGeometryRoot = isAtRoot
       ? aBuilder->GetRootAnimatedGeometryRoot()
       : aContainerItem->GetAnimatedGeometryRoot();
@@ -1618,27 +1623,30 @@ struct CSSMaskLayerUserData : public LayerUserData
     : mMaskStyle(nsStyleImageLayers::LayerType::Mask)
   { }
 
-  CSSMaskLayerUserData(nsIFrame* aFrame, const nsIntSize& aMaskSize)
-    : mMaskSize(aMaskSize),
-      mMaskStyle(aFrame->StyleSVGReset()->mMask)
+  CSSMaskLayerUserData(nsIFrame* aFrame, const nsIntRect& aMaskBounds,
+                       const nsPoint& aMaskLayerOffset)
+    : mMaskBounds(aMaskBounds),
+      mMaskStyle(aFrame->StyleSVGReset()->mMask),
+      mMaskLayerOffset(aMaskLayerOffset)
   {
   }
 
   void operator=(CSSMaskLayerUserData&& aOther)
   {
-    mMaskSize = aOther.mMaskSize;
+    mMaskBounds = aOther.mMaskBounds;
     mMaskStyle = Move(aOther.mMaskStyle);
+    mMaskLayerOffset = aOther.mMaskLayerOffset;
   }
 
   bool
   operator==(const CSSMaskLayerUserData& aOther) const
   {
-    // Even if the frame is valid, check the size of the display item's
-    // boundary is still necessary. For example, if we scale the masked frame
-    // by adding a transform property on it, the masked frame is valid itself
-    // but we have to regenerate mask according to the new size in device
-    // space.
-    if (mMaskSize != aOther.mMaskSize) {
+    if (!mMaskBounds.IsEqualInterior(aOther.mMaskBounds)) {
+      return false;
+    }
+
+    // Make sure we draw the same portion of the mask onto mask layer.
+    if (mMaskLayerOffset != aOther.mMaskLayerOffset) {
       return false;
     }
 
@@ -1646,8 +1654,10 @@ struct CSSMaskLayerUserData : public LayerUserData
   }
 
 private:
-  nsIntSize mMaskSize;
+  nsIntRect mMaskBounds;
   nsStyleImageLayers mMaskStyle;
+  nsPoint mMaskLayerOffset; // The offset from the origin of mask bounds to
+                            // the origin of mask layer.
 };
 
 /*
@@ -3886,7 +3896,9 @@ ContainerState::SetupMaskLayerForCSSMask(Layer* aLayer,
   matrix.PreTranslate(mParameters.mOffset.x, mParameters.mOffset.y, 0);
   maskLayer->SetBaseTransform(matrix);
 
-  CSSMaskLayerUserData newUserData(aMaskItem->Frame(), itemRect.Size());
+  nsPoint maskLayerOffset = aMaskItem->ToReferenceFrame() - bounds.TopLeft();
+    
+  CSSMaskLayerUserData newUserData(aMaskItem->Frame(), itemRect, maskLayerOffset);
   nsRect dirtyRect;
   if (!aMaskItem->IsInvalid(dirtyRect) && *oldUserData == newUserData) {
     aLayer->SetMaskLayer(maskLayer);
@@ -3913,7 +3925,7 @@ ContainerState::SetupMaskLayerForCSSMask(Layer* aLayer,
   maskCtx->SetMatrix(gfxMatrix::Translation(-itemRect.TopLeft()));
   maskCtx->Multiply(gfxMatrix::Scaling(mParameters.mXScale, mParameters.mYScale));
 
-  aMaskItem->PaintMask(mBuilder, maskCtx);
+  bool isPaintFinished = aMaskItem->PaintMask(mBuilder, maskCtx);
 
   RefPtr<ImageContainer> imgContainer =
     imageData.CreateImageAndImageContainer();
@@ -3922,8 +3934,17 @@ ContainerState::SetupMaskLayerForCSSMask(Layer* aLayer,
   }
   maskLayer->SetContainer(imgContainer);
 
-  *oldUserData = Move(newUserData);
+  if (isPaintFinished) {
+    *oldUserData = Move(newUserData);
+  }
   aLayer->SetMaskLayer(maskLayer);
+}
+
+static bool
+IsScrollThumbLayer(nsDisplayItem* aItem)
+{
+  return aItem->GetType() == nsDisplayItem::TYPE_OWN_LAYER &&
+         static_cast<nsDisplayOwnLayer*>(aItem)->IsScrollThumbLayer();
 }
 
 /*
@@ -4195,8 +4216,9 @@ ContainerState::ProcessDisplayItems(nsDisplayList* aList)
         mPaintedLayerDataTree.AddingOwnLayer(clipAGR,
                                              &scrolledClipRect,
                                              uniformColorPtr);
-      } else if (*animatedGeometryRoot == item->Frame() &&
-                 *animatedGeometryRoot != mBuilder->RootReferenceFrame()) {
+      } else if ((*animatedGeometryRoot == item->Frame() &&
+                  *animatedGeometryRoot != mBuilder->RootReferenceFrame()) ||
+                 (IsScrollThumbLayer(item) && mManager->IsWidgetLayerManager())) {
         // This is the case for scrollbar thumbs, for example. In that case the
         // clip we care about is the overflow:hidden clip on the scrollbar.
         mPaintedLayerDataTree.AddingOwnLayer(animatedGeometryRoot->mParentAGR,

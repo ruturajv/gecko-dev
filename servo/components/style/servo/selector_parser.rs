@@ -13,12 +13,12 @@ use dom::{OpaqueNode, TElement, TNode};
 use element_state::ElementState;
 use fnv::FnvHashMap;
 use restyle_hints::ElementSnapshot;
-use selector_parser::{ElementExt, PseudoElementCascadeType, SelectorParser};
+use selector_parser::{AttrValue as SelectorAttrValue, ElementExt, PseudoElementCascadeType, SelectorParser};
 use selectors::Element;
 use selectors::attr::{AttrSelectorOperation, NamespaceConstraint};
-use selectors::matching::{MatchingContext, MatchingMode};
 use selectors::parser::SelectorMethods;
 use selectors::visitor::SelectorVisitor;
+use std::ascii::AsciiExt;
 use std::borrow::Cow;
 use std::fmt;
 use std::fmt::Debug;
@@ -152,7 +152,16 @@ impl PseudoElement {
             PseudoElement::ServoInlineAbsolute => PseudoElementCascadeType::Precomputed,
         }
     }
+
+    /// Covert non-canonical pseudo-element to canonical one, and keep a
+    /// canonical one as it is.
+    pub fn canonical(&self) -> PseudoElement {
+        self.clone()
+    }
 }
+
+/// The type used for storing pseudo-class string arguments.
+pub type PseudoClassStringArg = Box<str>;
 
 /// A non tree-structural pseudo-class.
 /// See https://drafts.csswg.org/selectors-4/#structural-pseudos
@@ -169,7 +178,7 @@ pub enum NonTSPseudoClass {
     Fullscreen,
     Hover,
     Indeterminate,
-    Lang(Box<str>),
+    Lang(PseudoClassStringArg),
     Link,
     PlaceholderShown,
     ReadWrite,
@@ -262,6 +271,12 @@ impl NonTSPseudoClass {
     /// Returns true if the given pseudoclass should trigger style sharing cache revalidation.
     pub fn needs_cache_revalidation(&self) -> bool {
         self.state_flag().is_empty()
+    }
+
+    /// Returns true if the evaluation of the pseudo-class depends on the
+    /// element's attributes.
+    pub fn is_attr_based(&self) -> bool {
+        matches!(*self, NonTSPseudoClass::Lang(..))
     }
 }
 
@@ -425,11 +440,11 @@ impl<'a> ::selectors::Parser for SelectorParser<'a> {
     }
 
     fn default_namespace(&self) -> Option<Namespace> {
-        self.namespaces.default.clone()
+        self.namespaces.default.as_ref().map(|&(ref ns, _)| ns.clone())
     }
 
     fn namespace_for_prefix(&self, prefix: &Prefix) -> Option<Namespace> {
-        self.namespaces.prefixes.get(prefix).cloned()
+        self.namespaces.prefixes.get(prefix).map(|&(ref ns, _)| ns.clone())
     }
 }
 
@@ -573,6 +588,12 @@ impl ElementSnapshot for ServoElementSnapshot {
             }
         }
     }
+
+    fn lang_attr(&self) -> Option<SelectorAttrValue> {
+        self.get_attr(&ns!(xml), &local_name!("lang"))
+            .or_else(|| self.get_attr(&ns!(), &local_name!("lang")))
+            .map(|v| String::from(v as &str))
+    }
 }
 
 impl ServoElementSnapshot {
@@ -595,15 +616,60 @@ impl ServoElementSnapshot {
 }
 
 impl<E: Element<Impl=SelectorImpl> + Debug> ElementExt for E {
-    fn is_link(&self) -> bool {
-        let mut context = MatchingContext::new(MatchingMode::Normal, None);
-        self.match_non_ts_pseudo_class(&NonTSPseudoClass::AnyLink,
-                                       &mut context,
-                                       &mut |_, _| {})
-    }
-
     #[inline]
     fn matches_user_and_author_rules(&self) -> bool {
         true
     }
+}
+
+/// Returns whether the language is matched, as defined by
+/// [RFC 4647](https://tools.ietf.org/html/rfc4647#section-3.3.2).
+pub fn extended_filtering(tag: &str, range: &str) -> bool {
+    range.split(',').any(|lang_range| {
+        // step 1
+        let mut range_subtags = lang_range.split('\x2d');
+        let mut tag_subtags = tag.split('\x2d');
+
+        // step 2
+        // Note: [Level-4 spec](https://drafts.csswg.org/selectors/#lang-pseudo) check for wild card
+        if let (Some(range_subtag), Some(tag_subtag)) = (range_subtags.next(), tag_subtags.next()) {
+            if !(range_subtag.eq_ignore_ascii_case(tag_subtag) || range_subtag.eq_ignore_ascii_case("*")) {
+                return false;
+            }
+        }
+
+        let mut current_tag_subtag = tag_subtags.next();
+
+        // step 3
+        for range_subtag in range_subtags {
+            // step 3a
+            if range_subtag == "*" {
+                continue;
+            }
+            match current_tag_subtag.clone() {
+                Some(tag_subtag) => {
+                    // step 3c
+                    if range_subtag.eq_ignore_ascii_case(tag_subtag) {
+                        current_tag_subtag = tag_subtags.next();
+                        continue;
+                    }
+                    // step 3d
+                    if tag_subtag.len() == 1 {
+                        return false;
+                    }
+                    // else step 3e - continue with loop
+                    current_tag_subtag = tag_subtags.next();
+                    if current_tag_subtag.is_none() {
+                        return false;
+                    }
+                },
+                // step 3b
+                None => {
+                    return false;
+                }
+            }
+        }
+        // step 4
+        true
+    })
 }

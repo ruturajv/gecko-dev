@@ -795,7 +795,6 @@ nsBidiPresUtils::ResolveParagraph(BidiParagraphData* aBpd)
   nsIContent* content = nullptr;
   int32_t     contentTextLength = 0;
 
-  FramePropertyTable* propTable = aBpd->mPresContext->PropertyTable();
   nsLineBox* currentLine = nullptr;
   
 #ifdef DEBUG
@@ -832,7 +831,7 @@ nsBidiPresUtils::ResolveParagraph(BidiParagraphData* aBpd)
   }
 
   nsIFrame* lastRealFrame = nullptr;
-  nsBidiLevel lastEmbedingLevel = kBidiLevelNone;
+  nsBidiLevel lastEmbeddingLevel = kBidiLevelNone;
   nsBidiLevel precedingControl = kBidiLevelNone;
 
   auto storeBidiDataToFrame = [&]() {
@@ -844,14 +843,14 @@ nsBidiPresUtils::ResolveParagraph(BidiParagraphData* aBpd)
     // needed for getting the correct result. This optimization should
     // remove almost all of embeds and overrides, and some of isolates.
     if (precedingControl >= embeddingLevel ||
-        precedingControl >= lastEmbedingLevel) {
+        precedingControl >= lastEmbeddingLevel) {
       bidiData.precedingControl = kBidiLevelNone;
     } else {
       bidiData.precedingControl = precedingControl;
     }
     precedingControl = kBidiLevelNone;
-    lastEmbedingLevel = embeddingLevel;
-    propTable->Set(frame, nsIFrame::BidiDataProperty(), bidiData);
+    lastEmbeddingLevel = embeddingLevel;
+    frame->SetProperty(nsIFrame::BidiDataProperty(), bidiData);
   };
 
   for (; ;) {
@@ -876,13 +875,6 @@ nsBidiPresUtils::ResolveParagraph(BidiParagraphData* aBpd)
           break;
         }
         contentTextLength = content->TextLength();
-        if (contentTextLength == 0) {
-          frame->AdjustOffsetsForBidi(0, 0);
-          // Set the base level and embedding level of the current run even
-          // on an empty frame. Otherwise frame reordering will not be correct.
-          storeBidiDataToFrame();
-          continue;
-        }
         int32_t start, end;
         frame->GetOffsets(start, end);
         NS_ASSERTION(!(contentTextLength < end - start),
@@ -917,6 +909,13 @@ nsBidiPresUtils::ResolveParagraph(BidiParagraphData* aBpd)
     else {
       storeBidiDataToFrame();
       if (isTextFrame) {
+        if (contentTextLength == 0) {
+          // Set the base level and embedding level of the current run even
+          // on an empty frame. Otherwise frame reordering will not be correct.
+          frame->AdjustOffsetsForBidi(0, 0);
+          // Nothing more to do for an empty frame.
+          continue;
+        }
         if ( (runLength > 0) && (runLength < fragmentLength) ) {
           /*
            * The text in this frame continues beyond the end of this directional run.
@@ -983,14 +982,14 @@ nsBidiPresUtils::ResolveParagraph(BidiParagraphData* aBpd)
     runLength -= fragmentLength;
     fragmentLength -= temp;
 
-    // Record last real frame so that we can do spliting properly even
+    // Record last real frame so that we can do splitting properly even
     // if a run ends after a virtual bidi control frame.
     if (frame != NS_BIDI_CONTROL_FRAME) {
       lastRealFrame = frame;
     }
     if (lastRealFrame && fragmentLength <= 0) {
       // If the frame is at the end of a run, and this is not the end of our
-      // paragrah, split all ancestor inlines that need splitting.
+      // paragraph, split all ancestor inlines that need splitting.
       // To determine whether we're at the end of the run, we check that we've
       // finished processing the current run, and that the current frame
       // doesn't have a fluid continuation (it could have a fluid continuation
@@ -1316,6 +1315,14 @@ nsBidiPresUtils::ChildListMayRequireBidi(nsIFrame*    aFirstChild,
 
     if (IsBidiLeaf(frame)) {
       if (frame->IsTextFrame()) {
+        // If the frame already has a BidiDataProperty, we know we need to
+        // perform bidi resolution (even if no bidi content is NOW present --
+        // we might need to remove the property set by a previous reflow, if
+        // content has changed; see bug 1366623).
+        if (frame->HasProperty(nsIFrame::BidiDataProperty())) {
+          return true;
+        }
+
         // Check whether the text frame has any RTL characters; if so, bidi
         // resolution will be needed.
         nsIContent* content = frame->GetContent();
@@ -1874,7 +1881,7 @@ nsBidiPresUtils::RemoveBidiContinuation(BidiParagraphData *aBpd,
     if (frame != NS_BIDI_CONTROL_FRAME) {
       // Make the frame and its continuation ancestors fluid,
       // so they can be reused or deleted by normal reflow code
-      frame->Properties().Set(nsIFrame::BidiDataProperty(), bidiData);
+      frame->SetProperty(nsIFrame::BidiDataProperty(), bidiData);
       frame->AddStateBits(NS_FRAME_IS_BIDI);
       while (frame) {
         nsIFrame* prev = frame->GetPrevContinuation();

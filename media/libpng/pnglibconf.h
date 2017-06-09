@@ -8,12 +8,15 @@
 #define MOZ_EMBEDDED_LIBPNG
 
 /* Limit image dimensions (bug #251381, #591822, #967656, and #1283961) */
+#define PNG_USER_LIMITS_SUPPORTED
 #ifndef MOZ_PNG_MAX_WIDTH
 #  define MOZ_PNG_MAX_WIDTH 0x7fffffffL /* Unlimited */
 #endif
 #ifndef MOZ_PNG_MAX_HEIGHT
 #  define MOZ_PNG_MAX_HEIGHT 0x7fffffffL /* Unlimited */
 #endif
+/* but allow nsPNGDecoder to override the limits (bug #1368407) */
+#define PNG_SET_USER_LIMITS_SUPPORTED
 
 #define PNG_API_RULE 0
 #define PNG_COST_SHIFT 3
@@ -91,9 +94,8 @@
 #define PNG_READ_SCALE_16_TO_8_SUPPORTED
 #define PNG_READ_TRANSFORMS_SUPPORTED
 
-/* necessary for freetype color bitmap support (Android & B2G)
-   and boot animation code (Gonk) */
-#if defined(ANDROID) || defined(FT_CONFIG_OPTION_USE_PNG)
+/* necessary for freetype color bitmap support */
+#if defined(FT_CONFIG_OPTION_USE_PNG)
 #define PNG_READ_PACK_SUPPORTED
 #define PNG_READ_FILLER_SUPPORTED
 #define PNG_READ_STRIP_16_TO_8_SUPPORTED

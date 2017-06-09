@@ -4,7 +4,7 @@
 
 //! Abstract windowing methods. The concrete implementations of these can be found in `platform/`.
 
-use compositor_thread::{CompositorProxy, CompositorReceiver};
+use compositor_thread::EventLoopWaker;
 use euclid::{Point2D, Size2D};
 use euclid::point::TypedPoint2D;
 use euclid::rect::TypedRect;
@@ -54,8 +54,6 @@ pub enum WindowEvent {
     Resize(TypedSize2D<u32, DevicePixel>),
     /// Touchpad Pressure
     TouchpadPressure(TypedPoint2D<f32, DevicePixel>, f32, TouchpadPressurePhase),
-    /// Sent when you want to override the viewport.
-    Viewport(TypedPoint2D<u32, DevicePixel>, TypedSize2D<u32, DevicePixel>),
     /// Sent when a new URL is to be loaded.
     LoadUrl(String),
     /// Sent when a mouse hit test is to be performed.
@@ -91,7 +89,6 @@ impl Debug for WindowEvent {
             WindowEvent::InitializeCompositing => write!(f, "InitializeCompositing"),
             WindowEvent::Resize(..) => write!(f, "Resize"),
             WindowEvent::TouchpadPressure(..) => write!(f, "TouchpadPressure"),
-            WindowEvent::Viewport(..) => write!(f, "Viewport"),
             WindowEvent::KeyEvent(..) => write!(f, "Key"),
             WindowEvent::LoadUrl(..) => write!(f, "LoadUrl"),
             WindowEvent::MouseWindowEventClass(..) => write!(f, "Mouse"),
@@ -147,12 +144,8 @@ pub trait WindowMethods {
     /// Returns the scale factor of the system (device pixels / device independent pixels).
     fn hidpi_factor(&self) -> ScaleFactor<f32, DeviceIndependentPixel, DevicePixel>;
 
-    /// Creates a channel to the compositor. The dummy parameter is needed because we don't have
-    /// UFCS in Rust yet.
-    ///
-    /// This is part of the windowing system because its implementation often involves OS-specific
-    /// magic to wake the up window's event loop.
-    fn create_compositor_channel(&self) -> (Box<CompositorProxy + Send>, Box<CompositorReceiver>);
+    /// Returns a thread-safe object to wake up the window's event loop.
+    fn create_event_loop_waker(&self) -> Box<EventLoopWaker>;
 
     /// Requests that the window system prepare a composite. Typically this will involve making
     /// some type of platform-specific graphics context current. Returns true if the composite may

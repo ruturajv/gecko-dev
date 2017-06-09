@@ -42,7 +42,7 @@
 /* Toolbox tabbar */
 
 .devtools-tabbar {
-  -moz-appearance: none; appearance: none;
+  -moz-appearance: none;
   min-height: 24px;
   border: 0px solid;
   border-bottom-width: 1px;
@@ -171,12 +171,8 @@
   background-color: var(--theme-toolbar-hover-active);
 }
 
-.theme-dark .devtools-tab:not(.selected).highlighted {
-  background-color: hsla(99, 100%, 14%, .3);
-}
-
-.theme-light .devtools-tab:not(.selected).highlighted {
-  background-color: rgba(44, 187, 15, .2);
+.devtools-tab:not(.selected).highlighted {
+  background-color: var(--theme-toolbar-background-alt);
 }
 
 /* Display execution pointer in the Debugger tab to indicate

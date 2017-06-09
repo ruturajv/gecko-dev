@@ -7,22 +7,29 @@ package org.mozilla.gecko;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.support.annotation.ColorInt;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.v4.content.ContextCompat;
+import android.view.View;
 
 import org.mozilla.gecko.mozglue.SafeIntent;
+import org.mozilla.gecko.util.ThreadUtils;
 
 import static org.mozilla.gecko.Tabs.INTENT_EXTRA_SESSION_UUID;
 import static org.mozilla.gecko.Tabs.INTENT_EXTRA_TAB_ID;
 import static org.mozilla.gecko.Tabs.INVALID_TAB_ID;
 
 public abstract class SingleTabActivity extends GeckoApp {
+
+    private static final long SHOW_CONTENT_DELAY = 300;
+
+    private View mainLayout;
+    private View contentView;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         final Intent externalIntent = getIntent();
-        // We need the current activity to already be up-to-date before
-        // calling into the superclass.
-        GeckoActivityMonitor.getInstance().setCurrentActivity(this);
 
         decideTabAction(new SafeIntent(externalIntent), savedInstanceState);
 
@@ -30,22 +37,24 @@ public abstract class SingleTabActivity extends GeckoApp {
         // GeckoApp's default behaviour is to reset the intent if we've got any
         // savedInstanceState, which we don't want here.
         setIntent(externalIntent);
+
+        mainLayout = findViewById(R.id.main_layout);
+        contentView = findViewById(R.id.gecko_layout);
+        if ((mainLayout != null) && (contentView != null)) {
+            @ColorInt final int bg = ContextCompat.getColor(this, android.R.color.white);
+            mainLayout.setBackgroundColor(bg);
+            contentView.setVisibility(View.INVISIBLE);
+        }
     }
 
     @Override
     protected void onNewIntent(Intent externalIntent) {
         final SafeIntent intent = new SafeIntent(externalIntent);
-        // We need the current activity to already be up-to-date before
-        // calling into the superclass.
-        GeckoActivityMonitor.getInstance().setCurrentActivity(this);
 
         if (decideTabAction(intent, null)) {
             // GeckoApp will handle tab selection.
             super.onNewIntent(intent.getUnsafe());
         } else {
-            // We're not calling the superclass in this code path, so we'll
-            // have to notify the activity monitor ourselves.
-            GeckoActivityMonitor.getInstance().onActivityNewIntent(this);
             loadTabFromIntent(intent);
         }
         // Again, unlike GeckoApp's default behaviour we want to keep the intent around
@@ -76,7 +85,7 @@ public abstract class SingleTabActivity extends GeckoApp {
 
         // If the tab we've stored is still existing and valid select it...
         if (tabToSelect != null && GeckoApplication.getSessionUUID().equals(mLastSessionUUID) &&
-                tabs.currentActivityMatchesTab(tabToSelect)) {
+                tabToSelect.matchesActivity(this)) {
             tabs.selectTab(mLastSelectedTabId);
         } else {
             // ... otherwise fall back to the intent data and open a new tab.
@@ -98,7 +107,7 @@ public abstract class SingleTabActivity extends GeckoApp {
 
         if (hasGeckoTab(intent)) {
             final Tab tabToSelect = tabs.getTab(intent.getIntExtra(INTENT_EXTRA_TAB_ID, INVALID_TAB_ID));
-            if (tabs.currentActivityMatchesTab(tabToSelect)) {
+            if (tabToSelect.matchesActivity(this)) {
                 // Nothing further to do here, GeckoApp will select the correct
                 // tab from the intent.
                 return true;
@@ -125,7 +134,7 @@ public abstract class SingleTabActivity extends GeckoApp {
 
         final Tab tabToSelect = tabs.getTab(lastSelectedTabId);
         if (tabToSelect != null && GeckoApplication.getSessionUUID().equals(lastSessionUUID) &&
-                tabs.currentActivityMatchesTab(tabToSelect)) {
+                tabToSelect.matchesActivity(this)) {
             intent.getUnsafe().putExtra(INTENT_EXTRA_TAB_ID, lastSelectedTabId);
             intent.getUnsafe().putExtra(INTENT_EXTRA_SESSION_UUID, lastSessionUUID);
             return true;
@@ -154,6 +163,7 @@ public abstract class SingleTabActivity extends GeckoApp {
     protected void onTabOpenFromIntent(Tab tab) {
         mLastSelectedTabId = tab.getId();
         mLastSessionUUID = GeckoApplication.getSessionUUID();
+        showContentView();
     }
 
     /**
@@ -165,5 +175,24 @@ public abstract class SingleTabActivity extends GeckoApp {
     protected void onTabSelectFromIntent(Tab tab) {
         mLastSelectedTabId = tab.getId();
         mLastSessionUUID = GeckoApplication.getSessionUUID();
+        showContentView();
+    }
+
+    // Bug 1369681 - a workaround to prevent flash in first launch.
+    // This will be removed once we have GeckoView based implementation.
+    private void showContentView() {
+        if ((contentView != null)
+                && (mainLayout != null)
+                && (contentView.getVisibility() == View.INVISIBLE)) {
+            ThreadUtils.postDelayedToUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    @ColorInt final int bg =
+                            ContextCompat.getColor(mainLayout.getContext(), android.R.color.white);
+                    mainLayout.setBackgroundColor(bg);
+                    contentView.setVisibility(View.VISIBLE);
+                }
+            }, SHOW_CONTENT_DELAY);
+        }
     }
 }

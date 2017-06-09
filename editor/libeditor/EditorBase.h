@@ -72,6 +72,7 @@ enum class EditAction : int32_t
   setTextProperty    = 2003,
   removeTextProperty = 2004,
   outputText         = 2005,
+  setText            = 2006,
 
   // html only action
   insertBreak         = 3000,
@@ -116,6 +117,7 @@ class InsertNodeTransaction;
 class InsertTextTransaction;
 class JoinNodeTransaction;
 class RemoveStyleSheetTransaction;
+class SetTextTransaction;
 class SplitNodeTransaction;
 class TextComposition;
 class TextEditor;
@@ -204,6 +206,10 @@ public:
   nsresult InsertTextIntoTextNodeImpl(const nsAString& aStringToInsert,
                                       Text& aTextNode, int32_t aOffset,
                                       bool aSuppressIME = false);
+
+  nsresult SetTextImpl(const nsAString& aString,
+                       Text& aTextNode);
+
   NS_IMETHOD DeleteSelectionImpl(EDirection aAction,
                                  EStripWrappers aStripWrappers);
 
@@ -354,6 +360,9 @@ protected:
     CreateTxnForInsertText(const nsAString& aStringToInsert, Text& aTextNode,
                            int32_t aOffset);
 
+  already_AddRefed<SetTextTransaction>
+    CreateTxnForSetText(const nsAString& aString, Text& aTextNode);
+
   /**
    * Never returns null.
    */
@@ -484,6 +493,7 @@ protected:
    */
   bool EnsureComposition(WidgetCompositionEvent* aCompositionEvent);
 
+  already_AddRefed<nsISelectionController> GetSelectionController();
   nsresult GetSelection(SelectionType aSelectionType,
                         nsISelection** aSelection);
 

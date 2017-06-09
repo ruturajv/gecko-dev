@@ -1343,15 +1343,6 @@ public:
   // Set our title
   virtual void SetTitle(const nsAString& aTitle, mozilla::ErrorResult& rv) override;
 
-  bool mIsTopLevelContentDocument: 1;
-  bool mIsContentDocument: 1;
-
-  bool IsTopLevelContentDocument();
-  void SetIsTopLevelContentDocument(bool aIsTopLevelContentDocument);
-
-  bool IsContentDocument() const;
-  void SetIsContentDocument(bool aIsContentDocument);
-
   js::ExpandoAndGeneration mExpandoAndGeneration;
 
   bool ContainsEMEContent();
@@ -1573,7 +1564,6 @@ private:
   void PostUnblockOnloadEvent();
   void DoUnblockOnload();
 
-  nsresult CheckFrameOptions();
   nsresult InitCSP(nsIChannel* aChannel);
 
   /**

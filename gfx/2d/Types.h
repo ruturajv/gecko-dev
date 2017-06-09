@@ -16,6 +16,7 @@ namespace mozilla {
 namespace gfx {
 
 typedef float Float;
+typedef double Double;
 
 enum class SurfaceType : int8_t {
   DATA, /* Data surface - bitmap in memory */
@@ -275,6 +276,12 @@ enum class CapStyle : int8_t {
 enum class SamplingBounds : int8_t {
   UNBOUNDED,
   BOUNDED
+};
+
+// Moz2d version for SVG mask types
+enum class LuminanceType : int8_t {
+  LUMINANCE,
+  LINEARRGB,
 };
 
 /* Color is stored in non-premultiplied form */

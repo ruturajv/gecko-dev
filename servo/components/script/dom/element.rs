@@ -4,7 +4,6 @@
 
 //! Element nodes.
 
-use cssparser::Color;
 use devtools_traits::AttrInfo;
 use dom::activation::Activatable;
 use dom::attr::{Attr, AttrHelpersForLayout};
@@ -26,7 +25,7 @@ use dom::bindings::js::{JS, LayoutJS, MutNullableJS};
 use dom::bindings::js::{Root, RootedReference};
 use dom::bindings::refcounted::{Trusted, TrustedPromise};
 use dom::bindings::reflector::DomObject;
-use dom::bindings::str::{DOMString, extended_filtering};
+use dom::bindings::str::DOMString;
 use dom::bindings::xmlname::{namespace_from_domstring, validate_and_extract, xml_name_type};
 use dom::bindings::xmlname::XMLName::InvalidXMLName;
 use dom::characterdata::CharacterData;
@@ -87,8 +86,9 @@ use ref_filter_map::ref_filter_map;
 use script_layout_interface::message::ReflowQueryType;
 use script_thread::Runnable;
 use selectors::attr::{AttrSelectorOperation, NamespaceConstraint};
-use selectors::matching::{ElementSelectorFlags, MatchingContext, MatchingMode, matches_selector_list};
+use selectors::matching::{ElementSelectorFlags, MatchingContext, MatchingMode};
 use selectors::matching::{HAS_EDGE_CHILD_SELECTOR, HAS_SLOW_SELECTOR, HAS_SLOW_SELECTOR_LATER_SIBLINGS};
+use selectors::matching::{RelevantLinkStatus, matches_selector_list};
 use servo_atoms::Atom;
 use std::ascii::AsciiExt;
 use std::borrow::Cow;
@@ -105,13 +105,14 @@ use style::properties::longhands::{self, background_image, border_spacing, font_
 use style::restyle_hints::RestyleHint;
 use style::rule_tree::CascadeLevel;
 use style::selector_parser::{NonTSPseudoClass, PseudoElement, RestyleDamage, SelectorImpl, SelectorParser};
+use style::selector_parser::extended_filtering;
 use style::shared_lock::{SharedRwLock, Locked};
 use style::sink::Push;
 use style::stylearc::Arc;
 use style::stylist::ApplicableDeclarationBlock;
 use style::thread_state;
 use style::values::{CSSFloat, Either};
-use style::values::specified::{self, CSSColor};
+use style::values::specified;
 use stylesheet_loader::StylesheetOwner;
 
 // TODO: Update focus state when the top-level browsing context gains or loses system focus,
@@ -147,6 +148,12 @@ impl fmt::Debug for Element {
             try!(write!(f, " id={}", id));
         }
         write!(f, ">")
+    }
+}
+
+impl fmt::Debug for Root<Element> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        (**self).fmt(f)
     }
 }
 
@@ -414,8 +421,8 @@ impl LayoutElementHelpers for LayoutJS<Element> {
         if let Some(color) = bgcolor {
             hints.push(from_declaration(
                 shared_lock,
-                PropertyDeclaration::BackgroundColor(
-                    CSSColor { parsed: Color::RGBA(color), authored: None })));
+                PropertyDeclaration::BackgroundColor(color.into())
+            ));
         }
 
         let background = if let Some(this) = self.downcast::<HTMLBodyElement>() {
@@ -449,10 +456,7 @@ impl LayoutElementHelpers for LayoutJS<Element> {
             hints.push(from_declaration(
                 shared_lock,
                 PropertyDeclaration::Color(
-                    longhands::color::SpecifiedValue(CSSColor {
-                        parsed: Color::RGBA(color),
-                        authored: None,
-                    })
+                    longhands::color::SpecifiedValue(color.into())
                 )
             ));
         }
@@ -645,7 +649,7 @@ impl LayoutElementHelpers for LayoutJS<Element> {
         };
 
         if let Some(border) = border {
-            let width_value = specified::BorderWidth::from_length(specified::Length::from_px(border as f32));
+            let width_value = specified::BorderSideWidth::Length(specified::Length::from_px(border as f32));
             hints.push(from_declaration(
                 shared_lock,
                 PropertyDeclaration::BorderTopWidth(width_value.clone())));
@@ -2060,7 +2064,7 @@ impl ElementMethods for Element {
             Err(()) => Err(Error::Syntax),
             Ok(selectors) => {
                 let mut ctx = MatchingContext::new(MatchingMode::Normal, None);
-                Ok(matches_selector_list(&selectors.0, &Root::from_ref(self), &mut ctx))
+                Ok(matches_selector_list(&selectors, &Root::from_ref(self), &mut ctx))
             }
         }
     }
@@ -2079,7 +2083,7 @@ impl ElementMethods for Element {
                 for element in root.inclusive_ancestors() {
                     if let Some(element) = Root::downcast::<Element>(element) {
                         let mut ctx = MatchingContext::new(MatchingMode::Normal, None);
-                        if matches_selector_list(&selectors.0, &element, &mut ctx) {
+                        if matches_selector_list(&selectors, &element, &mut ctx) {
                             return Ok(Some(element));
                         }
                     }
@@ -2429,6 +2433,7 @@ impl<'a> ::selectors::Element for Root<Element> {
     fn match_non_ts_pseudo_class<F>(&self,
                                     pseudo_class: &NonTSPseudoClass,
                                     _: &mut MatchingContext,
+                                    _: &RelevantLinkStatus,
                                     _: &mut F)
                                     -> bool
         where F: FnMut(&Self, ElementSelectorFlags),
@@ -2456,8 +2461,10 @@ impl<'a> ::selectors::Element for Root<Element> {
                     .map_or(false, |attr| attr.value().eq(expected_value))
             }
 
-            // FIXME(#15746): This is wrong, we need to instead use extended filtering as per RFC4647
-            //                https://tools.ietf.org/html/rfc4647#section-3.3.2
+            // FIXME(heycam): This is wrong, since extended_filtering accepts
+            // a string containing commas (separating each language tag in
+            // a list) but the pseudo-class instead should be parsing and
+            // storing separate <ident> or <string>s for each language tag.
             NonTSPseudoClass::Lang(ref lang) => extended_filtering(&*self.get_lang(), &*lang),
 
             NonTSPseudoClass::ReadOnly =>
@@ -2475,6 +2482,20 @@ impl<'a> ::selectors::Element for Root<Element> {
             NonTSPseudoClass::PlaceholderShown |
             NonTSPseudoClass::Target =>
                 Element::state(self).contains(pseudo_class.state_flag()),
+        }
+    }
+
+    fn is_link(&self) -> bool {
+        // FIXME: This is HTML only.
+        let node = self.upcast::<Node>();
+        match node.type_id() {
+            // https://html.spec.whatwg.org/multipage/#selector-link
+            NodeTypeId::Element(ElementTypeId::HTMLElement(HTMLElementTypeId::HTMLAnchorElement)) |
+            NodeTypeId::Element(ElementTypeId::HTMLElement(HTMLElementTypeId::HTMLAreaElement)) |
+            NodeTypeId::Element(ElementTypeId::HTMLElement(HTMLElementTypeId::HTMLLinkElement)) => {
+                self.has_attribute(&local_name!("href"))
+            },
+            _ => false,
         }
     }
 
@@ -2589,20 +2610,6 @@ impl Element {
                 }
                 None
             }
-        }
-    }
-
-    fn is_link(&self) -> bool {
-        // FIXME: This is HTML only.
-        let node = self.upcast::<Node>();
-        match node.type_id() {
-            // https://html.spec.whatwg.org/multipage/#selector-link
-            NodeTypeId::Element(ElementTypeId::HTMLElement(HTMLElementTypeId::HTMLAnchorElement)) |
-            NodeTypeId::Element(ElementTypeId::HTMLElement(HTMLElementTypeId::HTMLAreaElement)) |
-            NodeTypeId::Element(ElementTypeId::HTMLElement(HTMLElementTypeId::HTMLLinkElement)) => {
-                self.has_attribute(&local_name!("href"))
-            },
-            _ => false,
         }
     }
 

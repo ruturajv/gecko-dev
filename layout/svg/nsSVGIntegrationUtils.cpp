@@ -81,7 +81,7 @@ private:
 
   static nsRect GetPreEffectsVisualOverflowRect(nsIFrame* aFrame,
                                                 bool aInReflow) {
-    nsRect* r = aFrame->Properties().Get(nsIFrame::PreEffectsBBoxProperty());
+    nsRect* r = aFrame->GetProperty(nsIFrame::PreEffectsBBoxProperty());
     if (r) {
       return *r;
     }
@@ -98,7 +98,7 @@ private:
     // continuations are not set correctly while reflowing.
     if (nsSVGIntegrationUtils::UsingEffectsForFrame(aFrame) && !aInReflow) {
       nsOverflowAreas* preTransformOverflows =
-        aFrame->Properties().Get(aFrame->PreTransformOverflowAreasProperty());
+        aFrame->GetProperty(aFrame->PreTransformOverflowAreasProperty());
 
       MOZ_ASSERT(!preTransformOverflows,
                  "GetVisualOverflowRect() won't return the pre-effects rect!");
@@ -205,8 +205,8 @@ nsSVGIntegrationUtils::GetSVGBBoxForNonSVGFrame(nsIFrame* aNonSVGFrame)
   // CSS box model rules.
   NS_ASSERTION(!(aNonSVGFrame->GetStateBits() & NS_FRAME_SVG_LAYOUT),
                "Frames with SVG layout should not get here");
-  MOZ_ASSERT_IF(aNonSVGFrame->IsFrameOfType(nsIFrame::eSVG),
-                aNonSVGFrame->IsSVGOuterSVGFrame());
+  MOZ_ASSERT(!aNonSVGFrame->IsFrameOfType(nsIFrame::eSVG) ||
+             aNonSVGFrame->IsSVGOuterSVGFrame());
 
   nsIFrame* firstFrame =
     nsLayoutUtils::FirstContinuationOrIBSplitSibling(aNonSVGFrame);

@@ -55,6 +55,7 @@ const PREF_GETADDONS_CACHE_ID_ENABLED = "extensions.%ID%.getAddons.cache.enabled
 const PREF_UI_TYPE_HIDDEN = "extensions.ui.%TYPE%.hidden";
 const PREF_UI_LASTCATEGORY = "extensions.ui.lastCategory";
 const PREF_LEGACY_EXCEPTIONS = "extensions.legacy.exceptions";
+const PREF_LEGACY_ENABLED = "extensions.legacy.enabled";
 
 const LOADING_MSG_DELAY = 100;
 
@@ -72,6 +73,11 @@ const UPDATES_RELEASENOTES_TRANSFORMFILE = "chrome://mozapps/content/extensions/
 const XMLURI_PARSE_ERROR = "http://www.mozilla.org/newlayout/xml/parsererror.xml"
 
 var gViewDefault = "addons://discover/";
+
+XPCOMUtils.defineLazyGetter(this, "extensionStylesheets", () => {
+  const {ExtensionParent} = Cu.import("resource://gre/modules/ExtensionParent.jsm", {});
+  return ExtensionParent.extensionStylesheets;
+});
 
 var gStrings = {};
 XPCOMUtils.defineLazyServiceGetter(gStrings, "bundleSvc",
@@ -95,17 +101,13 @@ XPCOMUtils.defineLazyGetter(gStrings, "appVersion", function() {
   return Services.appinfo.version;
 });
 
-XPCOMUtils.defineLazyGetter(this, "gInlineOptionsStylesheets", () => {
-  let stylesheets = ["chrome://browser/content/extension.css"];
-  if (AppConstants.platform === "macosx") {
-    stylesheets.push("chrome://browser/content/extension-mac.css");
-  }
-  return stylesheets;
-});
 
 XPCOMUtils.defineLazyPreferenceGetter(this, "legacyWarningExceptions",
                                       PREF_LEGACY_EXCEPTIONS, "",
                                       raw => raw.split(","));
+XPCOMUtils.defineLazyPreferenceGetter(this, "legacyExtensionsEnabled",
+                                      PREF_LEGACY_ENABLED, true,
+                                      () => gLegacyView.refresh());
 
 document.addEventListener("load", initialize, true);
 window.addEventListener("unload", shutdown);
@@ -313,6 +315,31 @@ function isCorrectlySigned(aAddon) {
   // Add-ons without an "isCorrectlySigned" property are correctly signed as
   // they aren't the correct type for signing.
   return aAddon.isCorrectlySigned !== false;
+}
+
+function isLegacyExtension(addon) {
+  let legacy = false;
+  if (addon.type == "extension" && !addon.isWebExtension) {
+    legacy = true;
+  }
+  if (addon.type == "theme") {
+    // The logic here is kind of clunky but we want to mark complete
+    // themes as legacy.  There's no explicit flag for complete
+    // themes so explicitly check for new style themes (for which
+    // isWebExtension is true) or lightweight themes (which have
+    // ids that end with @personas.mozilla.org)
+    legacy = !(addon.isWebExtension || addon.id.endsWith("@personas.mozilla.org"));
+  }
+
+  if (legacy && (addon.hidden || addon.signedState == AddonManager.SIGNEDSTATE_PRIVILEGED)) {
+    legacy = false;
+  }
+  // Exceptions that can slip through above: the default theme plus
+  // test pilot addons until we get SIGNEDSTATE_PRIVILEGED deployed.
+  if (legacy && legacyWarningExceptions.includes(addon.id)) {
+    legacy = false;
+  }
+  return legacy;
 }
 
 function isDiscoverEnabled() {
@@ -773,6 +800,7 @@ var gViewController = {
     this.viewObjects["search"] = gSearchView;
     this.viewObjects["discover"] = gDiscoverView;
     this.viewObjects["list"] = gListView;
+    this.viewObjects["legacy"] = gLegacyView;
     this.viewObjects["detail"] = gDetailView;
     this.viewObjects["updates"] = gUpdatesView;
 
@@ -1547,7 +1575,7 @@ var gViewController = {
         let mainWindow = getMainWindowWithPreferencesPane();
         // The advanced subpanes are only supported in the old organization, which will
         // be removed by bug 1349689.
-        if (Preferences.get("browser.preferences.useOldOrganization", false)) {
+        if (Preferences.get("browser.preferences.useOldOrganization")) {
           mainWindow.openAdvancedPreferences("dataChoicesTab", {origin: "experimentsOpenPref"});
         } else {
           mainWindow.openPreferences("paneAdvanced", {origin: "experimentsOpenPref"});
@@ -2804,6 +2832,76 @@ var gSearchView = {
   }
 };
 
+var gLegacyView = {
+  node: null,
+  _listBox: null,
+  _categoryItem: null,
+
+  initialize() {
+    this.node = document.getElementById("legacy-view");
+    this._listBox = document.getElementById("legacy-list");
+    this._categoryItem = gCategories.get("addons://legacy/");
+
+    document.getElementById("legacy-learnmore").href = SUPPORT_URL + "webextensions";
+
+    this.refresh();
+  },
+
+  async show(type, request) {
+    let addons = await AddonManager.getAddonsByTypes(["extension"]);
+    addons = addons.filter(a => !a.hidden &&
+                              (isLegacyExtension(a) || !isCorrectlySigned(a)));
+
+    while (this._listBox.itemCount > 0)
+      this._listBox.removeItemAt(0);
+
+    let elements = addons.map(a => createItem(a));
+    sortElements(elements, ["uiState", "name"], true);
+    for (let element of elements) {
+      this._listBox.appendChild(element);
+    }
+
+    gViewController.notifyViewChanged();
+  },
+
+  hide() {},
+
+  getSelectedAddon() {
+    var item = this._listBox.selectedItem;
+    if (item)
+      return item.mAddon;
+    return null;
+  },
+
+  async refresh() {
+    if (legacyExtensionsEnabled) {
+      this._categoryItem.disabled = true;
+      return;
+    }
+
+    let extensions = await AddonManager.getAddonsByTypes(["extension"]);
+
+    let haveUnsigned = false;
+    let haveLegacy = false;
+    for (let extension of extensions) {
+      if (AddonSettings.REQUIRE_SIGNING && !isCorrectlySigned(extension)) {
+        haveUnsigned = true;
+      }
+      if (isLegacyExtension(extension)) {
+        haveLegacy = true;
+      }
+    }
+
+    if (haveLegacy || haveUnsigned) {
+      this._categoryItem.disabled = false;
+      let name = gStrings.ext.GetStringFromName(`type.${haveUnsigned ? "unsupported" : "legacy"}.name`);
+      this._categoryItem.setAttribute("name", name);
+      this._categoryItem.tooltiptext = name;
+    } else {
+      this._categoryItem.disabled = true;
+    }
+  },
+};
 
 var gListView = {
   node: null,
@@ -2825,6 +2923,9 @@ var gListView = {
     });
 
     document.getElementById("signing-learn-more").setAttribute("href", SUPPORT_URL + "unsigned-addons");
+    document.getElementById("legacy-extensions-learnmore-link").addEventListener("click", evt => {
+      gViewController.loadView("addons://legacy/");
+    });
 
     let findSignedAddonsLink = document.getElementById("find-alternative-addons");
     try {
@@ -2881,6 +2982,17 @@ var gListView = {
       if (gViewController && aRequest != gViewController.currentViewRequest)
         return;
 
+      let showLegacyInfo = false;
+      if (!legacyExtensionsEnabled) {
+        let preLen = aAddonsList.length;
+        aAddonsList = aAddonsList.filter(addon => !isLegacyExtension(addon) &&
+                                                  (isCorrectlySigned(addon) ||
+                                                   !AddonSettings.REQUIRE_SIGNING));
+        if (aAddonsList.length != preLen) {
+          showLegacyInfo = true;
+        }
+      }
+
       var elements = [];
 
       for (let addonItem of aAddonsList)
@@ -2897,6 +3009,7 @@ var gListView = {
       }
 
       this.filterDisabledUnsigned(showOnlyDisabledUnsigned);
+      document.getElementById("legacy-extensions-notice").hidden = !showLegacyInfo;
 
       gEventManager.registerInstallListener(this);
       gViewController.updateCommands();
@@ -3709,7 +3822,7 @@ var gDetailView = {
       };
 
       if (this._addon.optionsBrowserStyle) {
-        browserOptions.stylesheets = gInlineOptionsStylesheets;
+        browserOptions.stylesheets = extensionStylesheets;
       }
 
       mm.sendAsyncMessage("Extension:InitBrowser", browserOptions);

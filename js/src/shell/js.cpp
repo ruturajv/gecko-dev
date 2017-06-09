@@ -267,6 +267,7 @@ static bool enableNativeRegExp = false;
 static bool enableUnboxedArrays = false;
 static bool enableSharedMemory = SHARED_MEMORY_DEFAULT;
 static bool enableWasmAlwaysBaseline = false;
+static bool enableAsyncStacks = false;
 #ifdef JS_GC_ZEAL
 static uint32_t gZealBits = 0;
 static uint32_t gZealFrequency = 0;
@@ -387,8 +388,7 @@ ShellContext::ShellContext(JSContext* cx)
     quitting(false),
     readLineBufPos(0),
     errFilePtr(nullptr),
-    outFilePtr(nullptr),
-    geckoProfilingStackSize(0)
+    outFilePtr(nullptr)
 {}
 
 ShellContext*
@@ -715,7 +715,11 @@ DrainJobQueue(JSContext* cx, unsigned argc, Value* vp)
 {
     CallArgs args = CallArgsFromVp(argc, vp);
 
-    MOZ_ASSERT(!GetShellContext(cx)->quitting);
+    if (GetShellContext(cx)->quitting) {
+        JS_ReportErrorASCII(cx, "Mustn't drain the job queue when the shell is quitting");
+        return false;
+    }
+
     js::RunJobs(cx);
 
     args.rval().setUndefined();
@@ -1645,7 +1649,7 @@ Evaluate(JSContext* cx, unsigned argc, Value* vp)
         // register ahead the fact that every JSFunction which is being
         // delazified should be encoded at the end of the delazification.
         if (saveIncrementalBytecode) {
-            if (!StartIncrementalEncoding(cx, saveBuffer, script))
+            if (!StartIncrementalEncoding(cx, script))
                 return false;
         }
 
@@ -1671,7 +1675,7 @@ Evaluate(JSContext* cx, unsigned argc, Value* vp)
         // Serialize the encoded bytecode, recorded before the execution, into a
         // buffer which can be deserialized linearly.
         if (saveIncrementalBytecode) {
-            if (!FinishIncrementalEncoding(cx, script))
+            if (!FinishIncrementalEncoding(cx, script, saveBuffer))
                 return false;
         }
     }
@@ -3126,7 +3130,7 @@ NewSandbox(JSContext* cx, bool lazy)
             return nullptr;
 
         RootedValue value(cx, BooleanValue(lazy));
-        if (!JS_SetProperty(cx, obj, "lazy", value))
+        if (!JS_DefineProperty(cx, obj, "lazy", value, JSPROP_PERMANENT | JSPROP_READONLY))
             return nullptr;
 
         JS_FireOnNewGlobalObject(cx, obj);
@@ -3427,6 +3431,11 @@ WorkerMain(void* arg)
 
     KillWatchdog(cx);
     JS_SetGrayGCRootsTracer(cx, nullptr, nullptr);
+
+    if (sc->geckoProfilingStack) {
+        MOZ_ALWAYS_TRUE(cx->runtime()->geckoProfiler().enable(false));
+        SetContextProfilingStack(cx, nullptr);
+    }
 }
 
 // Workers can spawn other workers, so we need a lock to access workerThreads.
@@ -5203,21 +5212,48 @@ IsLatin1(JSContext* cx, unsigned argc, Value* vp)
 }
 
 static bool
+EnsureGeckoProfilingStackInstalled(JSContext* cx, ShellContext* sc)
+{
+    if (cx->runtime()->geckoProfiler().installed()) {
+        if (!sc->geckoProfilingStack) {
+            JS_ReportErrorASCII(cx, "Profiler already installed by another context");
+            return false;
+        }
+
+        return true;
+    }
+
+    MOZ_ASSERT(!sc->geckoProfilingStack);
+    sc->geckoProfilingStack = MakeUnique<PseudoStack>();
+    if (!sc->geckoProfilingStack) {
+        JS_ReportOutOfMemory(cx);
+        return false;
+    }
+
+    SetContextProfilingStack(cx, sc->geckoProfilingStack.get());
+    return true;
+}
+
+static bool
 EnableGeckoProfiling(JSContext* cx, unsigned argc, Value* vp)
 {
     CallArgs args = CallArgsFromVp(argc, vp);
 
     ShellContext* sc = GetShellContext(cx);
 
-    // Disable before re-enabling; see the assertion in |GeckoProfiler::setProfilingStack|.
+    if (!EnsureGeckoProfilingStackInstalled(cx, sc))
+        return false;
+
+    // Disable before re-enabling; see the assertion in
+    // |GeckoProfiler::setProfilingStack|.
     if (cx->runtime()->geckoProfiler().installed())
         MOZ_ALWAYS_TRUE(cx->runtime()->geckoProfiler().enable(false));
 
-    SetContextProfilingStack(cx, sc->geckoProfilingStack, &sc->geckoProfilingStackSize,
-                             ShellContext::GeckoProfilingMaxStackSize);
     cx->runtime()->geckoProfiler().enableSlowAssertions(false);
-    if (!cx->runtime()->geckoProfiler().enable(true))
+    if (!cx->runtime()->geckoProfiler().enable(true)) {
         JS_ReportErrorASCII(cx, "Cannot ensure single threaded execution in profiler");
+        return false;
+    }
 
     args.rval().setUndefined();
     return true;
@@ -5230,6 +5266,9 @@ EnableGeckoProfilingWithSlowAssertions(JSContext* cx, unsigned argc, Value* vp)
     args.rval().setUndefined();
 
     ShellContext* sc = GetShellContext(cx);
+
+    if (!EnsureGeckoProfilingStackInstalled(cx, sc))
+        return false;
 
     if (cx->runtime()->geckoProfiler().enabled()) {
         // If profiling already enabled with slow assertions disabled,
@@ -5246,11 +5285,11 @@ EnableGeckoProfilingWithSlowAssertions(JSContext* cx, unsigned argc, Value* vp)
     if (cx->runtime()->geckoProfiler().installed())
         MOZ_ALWAYS_TRUE(cx->runtime()->geckoProfiler().enable(false));
 
-    SetContextProfilingStack(cx, sc->geckoProfilingStack, &sc->geckoProfilingStackSize,
-                             ShellContext::GeckoProfilingMaxStackSize);
     cx->runtime()->geckoProfiler().enableSlowAssertions(true);
-    if (!cx->runtime()->geckoProfiler().enable(true))
+    if (!cx->runtime()->geckoProfiler().enable(true)) {
         JS_ReportErrorASCII(cx, "Cannot ensure single threaded execution in profiler");
+        return false;
+    }
 
     return true;
 }
@@ -5259,9 +5298,19 @@ static bool
 DisableGeckoProfiling(JSContext* cx, unsigned argc, Value* vp)
 {
     CallArgs args = CallArgsFromVp(argc, vp);
-    if (cx->runtime()->geckoProfiler().installed())
-        MOZ_ALWAYS_TRUE(cx->runtime()->geckoProfiler().enable(false));
     args.rval().setUndefined();
+
+    ShellContext* sc = GetShellContext(cx);
+
+    if (!cx->runtime()->geckoProfiler().installed())
+        return true;
+
+    if (!sc->geckoProfilingStack) {
+        JS_ReportErrorASCII(cx, "Profiler was not installed by this context");
+        return false;
+    }
+
+    MOZ_ALWAYS_TRUE(cx->runtime()->geckoProfiler().enable(false));
     return true;
 }
 
@@ -7723,6 +7772,7 @@ SetContextOptions(JSContext* cx, const OptionParser& op)
     enableNativeRegExp = !op.getBoolOption("no-native-regexp");
     enableUnboxedArrays = op.getBoolOption("unboxed-arrays");
     enableWasmAlwaysBaseline = op.getBoolOption("wasm-always-baseline");
+    enableAsyncStacks = !op.getBoolOption("no-async-stacks");
 
     JS::ContextOptionsRef(cx).setBaseline(enableBaseline)
                              .setIon(enableIon)
@@ -7730,7 +7780,8 @@ SetContextOptions(JSContext* cx, const OptionParser& op)
                              .setWasm(enableWasm)
                              .setWasmAlwaysBaseline(enableWasmAlwaysBaseline)
                              .setNativeRegExp(enableNativeRegExp)
-                             .setUnboxedArrays(enableUnboxedArrays);
+                             .setUnboxedArrays(enableUnboxedArrays)
+                             .setAsyncStack(enableAsyncStacks);
 
     if (op.getBoolOption("wasm-check-bce"))
         jit::JitOptions.wasmAlwaysCheckBounds = true;
@@ -8331,6 +8382,7 @@ main(int argc, char** argv, char** envp)
         || !op.addStringOption('z', "gc-zeal", "LEVEL(;LEVEL)*[,N]", gc::ZealModeHelpText)
 #endif
         || !op.addStringOption('\0', "module-load-path", "DIR", "Set directory to load modules from")
+        || !op.addBoolOption('\0', "no-async-stacks", "Disable async stacks")
     )
     {
         return EXIT_FAILURE;

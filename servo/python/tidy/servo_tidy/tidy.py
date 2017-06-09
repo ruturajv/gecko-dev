@@ -828,8 +828,8 @@ def check_spec(file_name, lines):
     # Pattern representing a line with comment containing a spec link
     link_patt = re.compile("^\s*///? https://.+$")
 
-    # Pattern representing a line with comment
-    comment_patt = re.compile("^\s*///?.+$")
+    # Pattern representing a line with comment or attribute
+    comment_patt = re.compile("^\s*(///?.+|#\[.+\])$")
 
     brace_count = 0
     in_impl = False
@@ -851,12 +851,11 @@ def check_spec(file_name, lines):
                         # No more comments exist above, yield warning
                         yield (idx + 1, "method declared in webidl is missing a comment with a specification link")
                         break
-            if '{' in line and in_impl:
-                brace_count += 1
-            if '}' in line and in_impl:
-                if brace_count == 1:
+            if in_impl:
+                brace_count += line.count('{')
+                brace_count -= line.count('}')
+                if brace_count < 1:
                     break
-                brace_count -= 1
 
 
 def check_config_file(config_file, print_text=True):
@@ -1072,34 +1071,6 @@ def run_lint_scripts(only_changed_files=False, progress=True, stylo=False):
             yield error
 
 
-def check_commits(path='.'):
-    """ Checks if the test is being run under Travis CI environment
-        This is necessary since, after travis clones the branch for a PR, it merges
-        the branch against master, creating a merge commit. Hence, as a workaround,
-        we have to check if the second last merge commit is done by the author of
-        the pull request.
-        """
-    is_travis = os.environ.get('TRAVIS') == 'true'
-    number_commits = '-n2' if is_travis else '-n1'
-
-    """Gets all commits since the last merge."""
-    args = ['git', 'log', number_commits, '--merges', '--format=%H:%an']
-    # last_merge stores both the commit hash and the author name of the last merge in the output
-    last_merge_hash, last_merge_author = subprocess.check_output(args, cwd=path).strip().splitlines()[-1].split(':')
-    args = ['git', 'log', '{}..HEAD'.format(last_merge_hash), '--format=%s']
-    commits = subprocess.check_output(args, cwd=path).lower().splitlines()
-
-    for commit in commits:
-        # .split() to only match entire words
-        if 'wip' in commit.split():
-            yield (':', ':', 'no commits should contain WIP')
-
-    if last_merge_author != 'bors-servo':
-        yield (':', ':', 'no merge commits allowed, please rebase your commits over the upstream master branch')
-
-    raise StopIteration
-
-
 def scan(only_changed_files=False, progress=True, stylo=False):
     # check config file for errors
     config_errors = check_config_file(CONFIG_FILE_PATH)
@@ -1115,11 +1086,9 @@ def scan(only_changed_files=False, progress=True, stylo=False):
     dep_license_errors = check_dep_license_errors(get_dep_toml_files(only_changed_files), progress)
     # other lint checks
     lint_errors = run_lint_scripts(only_changed_files, progress, stylo=stylo)
-    # check commits for WIP
-    commit_errors = [] if stylo else check_commits()
     # chain all the iterators
     errors = itertools.chain(config_errors, directory_errors, lint_errors,
-                             file_errors, dep_license_errors, commit_errors)
+                             file_errors, dep_license_errors)
 
     error = None
     for error in errors:

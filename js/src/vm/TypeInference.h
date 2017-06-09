@@ -146,8 +146,8 @@ enum : uint32_t {
     /* Whether any objects have been iterated over. */
     OBJECT_FLAG_ITERATED              = 0x00080000,
 
-    /* Whether any object this represents may be frozen. */
-    OBJECT_FLAG_FROZEN                = 0x00100000,
+    /* Whether any object this represents may have frozen elements. */
+    OBJECT_FLAG_FROZEN_ELEMENTS       = 0x00100000,
 
     /*
      * For the function on a run-once script, whether the function has actually
@@ -1244,6 +1244,9 @@ class TypeScript
     static inline void Monitor(JSContext* cx, JSScript* script, jsbytecode* pc,
                                TypeSet::Type type);
     static inline void Monitor(JSContext* cx, const js::Value& rval);
+
+    static inline void Monitor(JSContext* cx, JSScript* script, jsbytecode* pc,
+                               StackTypeSet* types, const js::Value& val);
 
     /* Monitor an assignment at a SETELEM on a non-integer identifier. */
     static inline void MonitorAssign(JSContext* cx, HandleObject obj, jsid id);

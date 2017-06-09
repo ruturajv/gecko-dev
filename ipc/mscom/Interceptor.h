@@ -67,7 +67,7 @@ class Interceptor final : public WeakReferenceSupport
 {
 public:
   static HRESULT Create(STAUniquePtr<IUnknown> aTarget, IInterceptorSink* aSink,
-                        REFIID aIid, void** aOutput);
+                        REFIID aInitialIid, void** aOutInterface);
 
   // IUnknown
   STDMETHODIMP QueryInterface(REFIID riid, void** ppv) override;
@@ -106,14 +106,18 @@ private:
       , mInterceptor(aInterceptor)
       , mTargetInterface(aTargetInterface)
     {}
+
     IID               mIID;
     RefPtr<IUnknown>  mInterceptor;
     IUnknown*         mTargetInterface;
   };
 
 private:
-  Interceptor(STAUniquePtr<IUnknown> aTarget, IInterceptorSink* aSink);
+  explicit Interceptor(IInterceptorSink* aSink);
   ~Interceptor();
+  HRESULT GetInitialInterceptorForIID(REFIID aTargetIid,
+                                      STAUniquePtr<IUnknown> aTarget,
+                                      void** aOutInterface);
   MapEntry* Lookup(REFIID aIid);
   HRESULT QueryInterfaceTarget(REFIID aIid, void** aOutput);
   HRESULT ThreadSafeQueryInterface(REFIID aIid,
@@ -121,7 +125,7 @@ private:
   HRESULT CreateInterceptor(REFIID aIid, IUnknown* aOuter, IUnknown** aOutput);
 
 private:
-  STAUniquePtr<IUnknown>    mTarget;
+  InterceptorTargetPtr<IUnknown>  mTarget;
   RefPtr<IInterceptorSink>  mEventSink;
   mozilla::Mutex            mMutex; // Guards mInterceptorMap
   // Using a nsTArray since the # of interfaces is not going to be very high

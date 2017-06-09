@@ -20,6 +20,7 @@
 #include "mozilla/ClearOnShutdown.h"
 #include "mozilla/EventListenerManager.h"
 #include "mozilla/dom/indexedDB/PIndexedDBPermissionRequestChild.h"
+#include "mozilla/dom/PaymentRequestChild.h"
 #include "mozilla/dom/TelemetryScrollProbe.h"
 #include "mozilla/IMEStateManager.h"
 #include "mozilla/ipc/DocumentRendererChild.h"
@@ -376,6 +377,7 @@ TabChild::TabChild(nsIContentChild* aManager,
   , mRemoteFrame(nullptr)
   , mManager(aManager)
   , mChromeFlags(aChromeFlags)
+  , mMaxTouchPoints(0)
   , mActiveSuppressDisplayport(0)
   , mLayersId(0)
   , mBeforeUnloadListeners(0)
@@ -746,7 +748,8 @@ TabChild::RemoteSizeShellTo(int32_t aWidth, int32_t aHeight,
 }
 
 NS_IMETHODIMP
-TabChild::RemoteDropLinks(uint32_t aLinksCount, nsIDroppedLinkItem** aLinks)
+TabChild::RemoteDropLinks(uint32_t aLinksCount,
+                          nsIDroppedLinkItem** aLinks)
 {
   nsTArray<nsString> linksArray;
   nsresult rv = NS_OK;
@@ -770,7 +773,6 @@ TabChild::RemoteDropLinks(uint32_t aLinksCount, nsIDroppedLinkItem** aLinks)
     }
     linksArray.AppendElement(tmp);
   }
-
   bool sent = SendDropLinks(linksArray);
 
   return sent ? NS_OK : NS_ERROR_FAILURE;
@@ -2706,13 +2708,6 @@ TabChild::GetWidgetRounding(int32_t* aRounding)
 }
 
 void
-TabChild::GetMaxTouchPoints(uint32_t* aTouchPoints)
-{
-  // Fallback to a sync call.
-  SendGetMaxTouchPoints(aTouchPoints);
-}
-
-void
 TabChild::NotifyPainted()
 {
     if (!mNotified) {
@@ -3163,6 +3158,25 @@ TabChild::StopAwaitingLargeAlloc()
   return awaiting;
 }
 
+mozilla::ipc::IPCResult
+TabChild::RecvSetWindowName(const nsString& aName)
+{
+  nsCOMPtr<nsIDocShellTreeItem> item = do_QueryInterface(WebNavigation());
+  if (item) {
+    item->SetName(aName);
+  }
+  return IPC_OK();
+}
+
+mozilla::ipc::IPCResult
+TabChild::RecvSetOriginAttributes(const OriginAttributes& aOriginAttributes)
+{
+  nsCOMPtr<nsIDocShell> docShell = do_GetInterface(WebNavigation());
+  nsDocShell::Cast(docShell)->SetOriginAttributes(aOriginAttributes);
+
+  return IPC_OK();
+}
+
 mozilla::plugins::PPluginWidgetChild*
 TabChild::AllocPPluginWidgetChild()
 {
@@ -3213,6 +3227,19 @@ TabChild::CreatePluginWidget(nsIWidget* aParent, nsIWidget** aOut)
   return rv;
 }
 #endif // XP_WIN
+
+PPaymentRequestChild*
+TabChild::AllocPPaymentRequestChild()
+{
+  MOZ_CRASH("We should never be manually allocating PPaymentRequestChild actors");
+  return nullptr;
+}
+
+bool
+TabChild::DeallocPPaymentRequestChild(PPaymentRequestChild* actor)
+{
+  return true;
+}
 
 ScreenIntSize
 TabChild::GetInnerSize()
