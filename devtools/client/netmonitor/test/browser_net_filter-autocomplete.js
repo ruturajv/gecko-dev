@@ -50,7 +50,7 @@ add_task(async function () {
     "scheme:");
 
   // Space separated tokens
-  EventUtils.synthesizeKey(" ", {});
+  EventUtils.synthesizeKey("https ", {});
   // Adding just a space should keep popup hidden
   ok(!document.querySelector(".devtools-autocomplete-popup"),
     "Autocomplete Popup still hidden");
