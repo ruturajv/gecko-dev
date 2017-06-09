@@ -46,8 +46,8 @@ add_task(async function () {
   // Tab selection should hide autocomplete
   ok(!document.querySelector(".devtools-autocomplete-popup"),
     "Autocomplete Popup Hidden");
-  ok(document.querySelector(".devtools-filterinput"),
-    "scheme:");
+  is(document.querySelector(".devtools-filterinput").value,
+    "scheme:", "Value correctly set after TAB");
 
   // Space separated tokens
   EventUtils.synthesizeKey("https ", {});
