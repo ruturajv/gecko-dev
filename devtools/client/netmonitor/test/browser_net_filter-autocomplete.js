@@ -7,7 +7,9 @@ function testAutocompleteContents(expected, document) {
   expected.forEach(function (item, i) {
     is(
       document
-        .querySelector(`.devtools-autocomplete-listbox .autocomplete-item:nth-child(${i + 1})`)
+        .querySelector(
+          `.devtools-autocomplete-listbox .autocomplete-item:nth-child(${i + 1})`
+        )
         .textContent,
       item,
       `${expected[i]} found`
