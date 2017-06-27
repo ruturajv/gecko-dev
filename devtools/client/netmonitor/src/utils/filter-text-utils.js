@@ -242,6 +242,47 @@ function isFreetextMatch(item, text) {
   return match;
 }
 
+function getUniqueDisplayRequestValues(flag, flagMatch, useDisplay, displayedRequests) {
+  // Iteration over requests
+  // let op = displayedRequests
+  //   .filter((item) => {
+  //     // Iterate over all keys to check for OR condition
+  //     let includeThisRequest = false;
+  //     for (key in flagMatch.keys())  {
+  //       // If an earlier key matches, just move to next request
+  //       if (includeThisRequest) {
+  //         break;
+  //       }
+  //       for (value in flagMatch[key]) {
+  //         includeThisRequest = flagMatch[key].includes(value);
+  //         if (includeThisRequest) {
+  //           break;
+  //         }
+  //       }
+  //     };
+  //     return includeThisRequest;
+  //   }).map((item) => {
+  //     return useDisplay ? `${flag}${useDisplay}` : `${flag}${item[flag]}`;
+  //   });
+    // console.log(displayedRequests instanceof List, op);
+
+    return uniqueFlagValueArray;
+}
+
+function getFilterFlagValues(flag, displayedRequests) {
+  let list = [];
+  switch (flag) {
+    case "status-code:":
+    case "-status-code:": return getUniqueDisplayRequestValues(
+        "status-code",
+        { status: [""] },
+        "",
+        displayedRequests);
+      break;
+    default: return [];
+  }
+}
+
 /**
  * Generates an autocomplete list for the search-box for network monitor
  *
@@ -254,7 +295,7 @@ function isFreetextMatch(item, text) {
  * `value` is used to update the search-box input box for given item
  * `displayValue` is used to render the autocomplete list
  */
-function autocompleteProvider(filter) {
+function autocompleteProvider(filter, displayedRequests) {
   if (!filter) {
     return [];
   }
@@ -273,11 +314,17 @@ function autocompleteProvider(filter) {
     return [];
   }
 
-  return baseList
+  let interimList = baseList
     .filter((item) => {
       return item.toLowerCase().startsWith(lastToken.toLowerCase())
         && item.toLowerCase() !== lastToken.toLowerCase();
-    })
+    });
+
+  let filledInFlags = interimList.length === 1 ?
+    getFilterFlagValues(interimList[0], displayedRequests) : [];
+  let finalList = filledInFlags.length > 0 ? filledInFlags : interimList;
+
+  return finalList
     .sort()
     .map(item => ({
       value: [...previousTokens, item].join(" "),

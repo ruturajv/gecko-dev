@@ -23,6 +23,7 @@ module.exports = createClass({
     placeholder: PropTypes.string,
     type: PropTypes.string,
     autocompleteProvider: PropTypes.func,
+    displayedRequests: PropTypes.object,
   },
 
   getInitialState() {

@@ -14,6 +14,7 @@ const { connect } = require("devtools/client/shared/vendor/react-redux");
 const Actions = require("../actions/index");
 const { FILTER_SEARCH_DELAY } = require("../constants");
 const {
+  getDisplayedRequests,
   getDisplayedRequestsSummary,
   getRequestFilterTypes,
   isNetworkDetailsToggleButtonDisabled,
@@ -65,6 +66,7 @@ const Toolbar = createClass({
       networkDetailsToggleDisabled,
       networkDetailsOpen,
       toggleNetworkDetails,
+      displayedRequests,
     } = this.props;
 
     let toggleButtonClassName = [
@@ -110,7 +112,7 @@ const Toolbar = createClass({
             placeholder: SEARCH_PLACE_HOLDER,
             type: "filter",
             onChange: setRequestFilterText,
-            autocompleteProvider,
+            autocompleteProvider: (filter) => autocompleteProvider(filter, displayedRequests);
           }),
           button({
             className: toggleButtonClassName.join(" "),
@@ -130,6 +132,7 @@ module.exports = connect(
     networkDetailsToggleDisabled: isNetworkDetailsToggleButtonDisabled(state),
     networkDetailsOpen: state.ui.networkDetailsOpen,
     requestFilterTypes: getRequestFilterTypes(state),
+    displayedRequests: getDisplayedRequests(state),
     summary: getDisplayedRequestsSummary(state),
   }),
   (dispatch) => ({
