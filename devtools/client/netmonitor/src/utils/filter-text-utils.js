@@ -242,43 +242,45 @@ function isFreetextMatch(item, text) {
   return match;
 }
 
-function getUniqueDisplayRequestValues(flag, flagMatch, useDisplay, displayedRequests) {
+function getUniqueDisplayRequestValues(filterFlag, flag, flagMatch, useDisplay, displayedRequests) {
+  let uniqueValues = new Set();
   // Iteration over requests
-  // let op = displayedRequests
-  //   .filter((item) => {
-  //     // Iterate over all keys to check for OR condition
-  //     let includeThisRequest = false;
-  //     for (key in flagMatch.keys())  {
-  //       // If an earlier key matches, just move to next request
-  //       if (includeThisRequest) {
-  //         break;
-  //       }
-  //       for (value in flagMatch[key]) {
-  //         includeThisRequest = flagMatch[key].includes(value);
-  //         if (includeThisRequest) {
-  //           break;
-  //         }
-  //       }
-  //     };
-  //     return includeThisRequest;
-  //   }).map((item) => {
-  //     return useDisplay ? `${flag}${useDisplay}` : `${flag}${item[flag]}`;
-  //   });
-    // console.log(displayedRequests instanceof List, op);
-
-    return uniqueFlagValueArray;
+  for (let request of displayedRequests) {
+    let includeThisRequest = false;
+    for (let key of Object.keys(flagMatch))  {
+      // debugger;
+      // If an earlier key matches, just move to next request
+      if (includeThisRequest) {
+        break;
+      }
+      if (flagMatch[key].length > 0) {
+        for (let value of flagMatch[key]) {
+          includeThisRequest = flagMatch[key].includes(value);
+          if (includeThisRequest) {
+            uniqueValues.add(value);
+            break;
+          }
+        }
+      } else {
+        uniqueValues.add(filterFlag + request.get(key));
+      }
+    };
+    // console.log(Array.from(uniqueValues));
+  }
+    return Array.from(uniqueValues);
 }
 
 function getFilterFlagValues(flag, displayedRequests) {
   let list = [];
   switch (flag) {
     case "status-code:":
-    case "-status-code:": return getUniqueDisplayRequestValues(
+    case "-status-code:":
+      return getUniqueDisplayRequestValues(
+        flag,
         "status-code",
-        { status: [""] },
+        { status: [] },
         "",
         displayedRequests);
-      break;
     default: return [];
   }
 }
@@ -296,6 +298,7 @@ function getFilterFlagValues(flag, displayedRequests) {
  * `displayValue` is used to render the autocomplete list
  */
 function autocompleteProvider(filter, displayedRequests) {
+  console.log(typeof displayedRequests);
   if (!filter) {
     return [];
   }
