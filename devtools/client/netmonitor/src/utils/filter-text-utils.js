@@ -193,7 +193,7 @@ function isFlagFilterMatch(item, { type, value, negative }) {
       }
       break;
     case "set-cookie-name":
-      match = responseCookies.findIndex(c => c.name.toLowerCase() === value) > -1;
+      match = value.length > 0 ? responseCookies.findIndex(c => c.name.toLowerCase() === value) > -1 : match;
       break;
     case "set-cookie-value":
       match = responseCookies.findIndex(c => c.value.toLowerCase() === value) > -1;
@@ -242,7 +242,49 @@ function isFreetextMatch(item, text) {
   return match;
 }
 
-function getUniqueDisplayRequestValues(filterFlag, flag, flagMatch, useDisplay, displayedRequests) {
+function getRequestFlagValue(flag, isUrlDetails, values, request) {
+  debugger;
+  let value;
+  if (isUrlDetails) {
+    value = request.urlDetails[flag];
+  } else {
+    switch (flag) {
+      case "cause":
+        value = request.get(flag).type;
+        break;
+      case "setCookieName":
+        value = request.responseCookies
+          .map(c => c.name);
+        break;
+      case "setCookieValue":
+        value = request.responseCookies
+          .map(c => c.value);
+        break;
+      case "setCookieDomain":
+        value = request.responseCookies
+          .map(c => c.hasOwnProperty("domain") ? c.domain : request.urlDetails.host);
+        break;
+      case "is":
+        if (request.fromCache || request.status === "304") {
+          value = "cached";
+        } else if (!request.status) {
+          value = "running";
+        }
+        break;
+      case "hasResponseHeader":
+        let headerNames = [];
+        value = request.responseHeaders.headers.map(h => h.name);
+        break;
+      default:
+        value = request.get(flag);
+    }
+  }
+  console.log(value);
+  return value;
+}
+
+function getUniqueDisplayRequestValues(filterFlag, flag, flagMatch,
+  useDisplay, displayedRequests) {
   let uniqueValues = new Set();
   // Iteration over requests
   for (let request of displayedRequests) {
@@ -262,12 +304,22 @@ function getUniqueDisplayRequestValues(filterFlag, flag, flagMatch, useDisplay, 
           }
         }
       } else {
-        uniqueValues.add(filterFlag + request.get(key));
+        let value = getRequestFlagValue(key,
+          flagMatch[key].urlDetails === 1, flagMatch[key].values, request);
+        if (value instanceof Array) {
+          for(let v of value) {
+            uniqueValues.add(v);
+          }
+        } else {
+          uniqueValues.add(value);
+        }
       }
     };
     // console.log(Array.from(uniqueValues));
   }
-    return Array.from(uniqueValues);
+  return Array.from(uniqueValues)
+    .filter(value => typeof value !== "undefined")
+    .map(value => `${filterFlag}${value}`);
 }
 
 function getFilterFlagValues(flag, displayedRequests) {
@@ -278,7 +330,103 @@ function getFilterFlagValues(flag, displayedRequests) {
       return getUniqueDisplayRequestValues(
         flag,
         "status-code",
-        { status: [] },
+        { status: { values: [] } },
+        "",
+        displayedRequests);
+    case "method:":
+    case "-method:":
+      return getUniqueDisplayRequestValues(
+        flag,
+        "method",
+        { method: { values: [] } },
+        "",
+        displayedRequests);
+    case "protocol:":
+    case "-protocol:":
+      return getUniqueDisplayRequestValues(
+        flag,
+        "protocol",
+        { protocol: { values: [] } },
+        "",
+        displayedRequests);
+    case "scheme:":
+    case "-scheme:":
+      return getUniqueDisplayRequestValues(
+        flag,
+        "scheme",
+        { scheme: { values: [], urlDetails: 1} },
+        "",
+        displayedRequests);
+    case "domain:":
+    case "-domain:":
+      return getUniqueDisplayRequestValues(
+        flag,
+        "domain",
+        { host: { values: [], urlDetails: 1} },
+        "",
+        displayedRequests);
+    case "remote-ip:":
+    case "-remote-ip:":
+      return getUniqueDisplayRequestValues(
+        flag,
+        "remote-ip",
+        { remoteAddress: { values: []} },
+        "",
+        displayedRequests);
+    case "cause:":
+    case "-cause:":
+      return getUniqueDisplayRequestValues(
+        flag,
+        "cause",
+        { cause: { values: []} },
+        "",
+        displayedRequests);
+    case "mime-type:":set-cookie-name
+    case "-mime-type:":
+      return getUniqueDisplayRequestValues(
+        flag,
+        "mime-type",
+        { mimeType: { values: []} },
+        "",
+        displayedRequests);
+    case "set-cookie-name:":
+    case "-set-cookie-name:":
+      return getUniqueDisplayRequestValues(
+        flag,
+        "set-cookie-name",
+        { setCookieName: { values: []} },
+        "",
+        displayedRequests);
+    case "set-cookie-value:":
+    case "-set-cookie-value:":
+      return getUniqueDisplayRequestValues(
+        flag,
+        "set-cookie-value",
+        { setCookieValue: { values: []} },
+        "",
+        displayedRequests);
+    case "set-cookie-domain:":
+    case "-set-cookie-domain:":
+      return getUniqueDisplayRequestValues(
+        flag,
+        "set-cookie-domain",
+        { setCookieDomain: { values: []} },
+        "",
+        displayedRequests);
+    case "is:":
+    case "-is:":
+      return getUniqueDisplayRequestValues(
+        flag,
+        "is",
+        { is: { values: []} },
+        "",
+        displayedRequests);
+    case "has-response-header:":
+    case "-has-response-header:":
+      return getUniqueDisplayRequestValues(
+        flag,
+        "has-response-header",
+        { hasResponseHeader: { values: []} },
         "",
         displayedRequests);
     default: return [];
@@ -292,13 +440,14 @@ function getFilterFlagValues(flag, displayedRequests) {
  * The string is then tokenized into "is:cached" and "pr"
  *
  * @param {string} filter - The entire search string of the search box
+ * @param {object} displayedRequests - Iteratable object of requests displayed
+ *
  * @return {Array} - The output is an array of objects as below
  * [{value: "is:cached protocol", displayValue: "protocol"}[, ...]]
  * `value` is used to update the search-box input box for given item
  * `displayValue` is used to render the autocomplete list
  */
 function autocompleteProvider(filter, displayedRequests) {
-  console.log(typeof displayedRequests);
   if (!filter) {
     return [];
   }

@@ -23,7 +23,6 @@ module.exports = createClass({
     placeholder: PropTypes.string,
     type: PropTypes.string,
     autocompleteProvider: PropTypes.func,
-    displayedRequests: PropTypes.object,
   },
 
   getInitialState() {
@@ -139,6 +138,7 @@ module.exports = createClass({
       type = "search",
       placeholder,
       autocompleteProvider,
+      displayedRequests,
     } = this.props;
     let { value } = this.state;
     let divClassList = ["devtools-searchbox", "has-clear-btn"];

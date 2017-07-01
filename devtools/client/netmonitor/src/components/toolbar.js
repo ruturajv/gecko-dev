@@ -112,7 +112,8 @@ const Toolbar = createClass({
             placeholder: SEARCH_PLACE_HOLDER,
             type: "filter",
             onChange: setRequestFilterText,
-            autocompleteProvider: (filter) => autocompleteProvider(filter, displayedRequests),
+            autocompleteProvider: (filter) =>
+              autocompleteProvider(filter, displayedRequests),
           }),
           button({
             className: toggleButtonClassName.join(" "),
