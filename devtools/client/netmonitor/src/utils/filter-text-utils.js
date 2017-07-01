@@ -193,10 +193,12 @@ function isFlagFilterMatch(item, { type, value, negative }) {
       }
       break;
     case "set-cookie-name":
-      match = value.length > 0 ? responseCookies.findIndex(c => c.name.toLowerCase() === value) > -1 : match;
+      match = value.length > 0 ?
+        responseCookies.findIndex(c => c.name.toLowerCase() === value) > -1 : match;
       break;
     case "set-cookie-value":
-      match = responseCookies.findIndex(c => c.value.toLowerCase() === value) > -1;
+      match = value.length > 0 ?
+        responseCookies.findIndex(c => c.value.toLowerCase() === value) > -1 : match;
       break;
   }
   if (negative) {
@@ -242,195 +244,73 @@ function isFreetextMatch(item, text) {
   return match;
 }
 
-function getRequestFlagValue(flag, isUrlDetails, values, request) {
-  debugger;
+function getRequestFlagValue(flag, request) {
   let value;
-  if (isUrlDetails) {
-    value = request.urlDetails[flag];
-  } else {
-    switch (flag) {
-      case "cause":
-        value = request.get(flag).type;
-        break;
-      case "setCookieName":
-        value = request.responseCookies
-          .map(c => c.name);
-        break;
-      case "setCookieValue":
-        value = request.responseCookies
-          .map(c => c.value);
-        break;
-      case "setCookieDomain":
-        value = request.responseCookies
-          .map(c => c.hasOwnProperty("domain") ? c.domain : request.urlDetails.host);
-        break;
-      case "is":
-        if (request.fromCache || request.status === "304") {
-          value = "cached";
-        } else if (!request.status) {
-          value = "running";
-        }
-        break;
-      case "hasResponseHeader":
-        let headerNames = [];
-        value = request.responseHeaders.headers.map(h => h.name);
-        break;
-      default:
-        value = request.get(flag);
-    }
+  switch (flag) {
+    case "status-code":
+      value = request.status;
+      break;
+    case "scheme":
+      value = request.urlDetails.scheme;
+      break;
+    case "domain":
+      value = request.urlDetails.host;
+      break;
+    case "remote-ip":
+      value = request.remoteAddress;
+      break;
+    case "cause":
+      value = request.cause.type;
+      break;
+    case "mime-type":
+      value = request.mimeType;
+      break;
+    case "set-cookie-name":
+      value = request.responseCookies.map(c => c.name);
+      break;
+    case "set-cookie-value":
+      value = request.responseCookies.map(c => c.value);
+      break;
+    case "set-cookie-domain":
+      value = request.responseCookies
+        .map(c => c.hasOwnProperty("domain") ? c.domain : request.urlDetails.host);
+      break;
+    case "is":
+      if (request.fromCache || request.status === "304") {
+        value = "cached";
+      } else if (!request.status) {
+        value = "running";
+      }
+      break;
+    case "has-response-header":
+      value = request.responseHeaders.headers.map(h => h.name);
+      break;
+    case "method":
+    case "protocol":
+    default:
+      value = request[flag];
   }
-  console.log(value);
+
   return value;
 }
 
-function getUniqueDisplayRequestValues(filterFlag, flag, flagMatch,
-  useDisplay, displayedRequests) {
+function getFilterFlagValues(filterFlag, displayedRequests) {
   let uniqueValues = new Set();
-  // Iteration over requests
   for (let request of displayedRequests) {
-    let includeThisRequest = false;
-    for (let key of Object.keys(flagMatch))  {
-      // debugger;
-      // If an earlier key matches, just move to next request
-      if (includeThisRequest) {
-        break;
+    // strip out "-" and ":" from flags ie. "-method:" and pass as flag
+    let value = getRequestFlagValue(filterFlag.replace(/^(-)?(.*?):$/, "$2"), request);
+    if (value instanceof Array) {
+      for (let v of value) {
+        uniqueValues.add(v);
       }
-      if (flagMatch[key].length > 0) {
-        for (let value of flagMatch[key]) {
-          includeThisRequest = flagMatch[key].includes(value);
-          if (includeThisRequest) {
-            uniqueValues.add(value);
-            break;
-          }
-        }
-      } else {
-        let value = getRequestFlagValue(key,
-          flagMatch[key].urlDetails === 1, flagMatch[key].values, request);
-        if (value instanceof Array) {
-          for(let v of value) {
-            uniqueValues.add(v);
-          }
-        } else {
-          uniqueValues.add(value);
-        }
-      }
-    };
-    // console.log(Array.from(uniqueValues));
+    } else {
+      uniqueValues.add(value);
+    }
   }
-  return Array.from(uniqueValues)
-    .filter(value => typeof value !== "undefined")
-    .map(value => `${filterFlag}${value}`);
-}
 
-function getFilterFlagValues(flag, displayedRequests) {
-  let list = [];
-  switch (flag) {
-    case "status-code:":
-    case "-status-code:":
-      return getUniqueDisplayRequestValues(
-        flag,
-        "status-code",
-        { status: { values: [] } },
-        "",
-        displayedRequests);
-    case "method:":
-    case "-method:":
-      return getUniqueDisplayRequestValues(
-        flag,
-        "method",
-        { method: { values: [] } },
-        "",
-        displayedRequests);
-    case "protocol:":
-    case "-protocol:":
-      return getUniqueDisplayRequestValues(
-        flag,
-        "protocol",
-        { protocol: { values: [] } },
-        "",
-        displayedRequests);
-    case "scheme:":
-    case "-scheme:":
-      return getUniqueDisplayRequestValues(
-        flag,
-        "scheme",
-        { scheme: { values: [], urlDetails: 1} },
-        "",
-        displayedRequests);
-    case "domain:":
-    case "-domain:":
-      return getUniqueDisplayRequestValues(
-        flag,
-        "domain",
-        { host: { values: [], urlDetails: 1} },
-        "",
-        displayedRequests);
-    case "remote-ip:":
-    case "-remote-ip:":
-      return getUniqueDisplayRequestValues(
-        flag,
-        "remote-ip",
-        { remoteAddress: { values: []} },
-        "",
-        displayedRequests);
-    case "cause:":
-    case "-cause:":
-      return getUniqueDisplayRequestValues(
-        flag,
-        "cause",
-        { cause: { values: []} },
-        "",
-        displayedRequests);
-    case "mime-type:":set-cookie-name
-    case "-mime-type:":
-      return getUniqueDisplayRequestValues(
-        flag,
-        "mime-type",
-        { mimeType: { values: []} },
-        "",
-        displayedRequests);
-    case "set-cookie-name:":
-    case "-set-cookie-name:":
-      return getUniqueDisplayRequestValues(
-        flag,
-        "set-cookie-name",
-        { setCookieName: { values: []} },
-        "",
-        displayedRequests);
-    case "set-cookie-value:":
-    case "-set-cookie-value:":
-      return getUniqueDisplayRequestValues(
-        flag,
-        "set-cookie-value",
-        { setCookieValue: { values: []} },
-        "",
-        displayedRequests);
-    case "set-cookie-domain:":
-    case "-set-cookie-domain:":
-      return getUniqueDisplayRequestValues(
-        flag,
-        "set-cookie-domain",
-        { setCookieDomain: { values: []} },
-        "",
-        displayedRequests);
-    case "is:":
-    case "-is:":
-      return getUniqueDisplayRequestValues(
-        flag,
-        "is",
-        { is: { values: []} },
-        "",
-        displayedRequests);
-    case "has-response-header:":
-    case "-has-response-header:":
-      return getUniqueDisplayRequestValues(
-        flag,
-        "has-response-header",
-        { hasResponseHeader: { values: []} },
-        "",
-        displayedRequests);
-    default: return [];
-  }
+  return Array.from(uniqueValues)
+    .filter(value => typeof value !== "undefined" && value !== "")
+    .map(value => `${filterFlag}${value}`);
 }
 
 /**
