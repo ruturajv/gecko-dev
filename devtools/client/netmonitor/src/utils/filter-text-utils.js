@@ -272,14 +272,19 @@ function getRequestFlagValue(flag, request) {
       value = request.mimeType;
       break;
     case "set-cookie-name":
-      value = request.responseCookies.map(c => c.name);
+      // Sometimes responseCookies is an object instead of an array
+      value = request.responseCookies instanceof Array ?
+        request.responseCookies.map(c => c.name) : "";
       break;
     case "set-cookie-value":
-      value = request.responseCookies.map(c => c.value);
+      value = request.responseCookies instanceof Array ?
+        request.responseCookies.map(c => c.value) : "";
       break;
     case "set-cookie-domain":
-      value = request.responseCookies
-        .map(c => c.hasOwnProperty("domain") ? c.domain : request.urlDetails.host);
+      value = request.responseCookies instanceof Array ?
+        request.responseCookies.map(c => c.hasOwnProperty("domain") ?
+          c.domain : request.urlDetails.host) :
+        "";
       break;
     case "is":
       if (request.fromCache || request.status === "304") {
@@ -362,8 +367,11 @@ function autocompleteProvider(filter, displayedRequests) {
         && item.toLowerCase() !== lastToken.toLowerCase();
     });
 
-  let filledInFlags = interimList.length === 1 ?
-    getFilterFlagValues(interimList[0], displayedRequests) : [];
+  let filledInFlags = [];
+  if (lastToken.endsWith(":")) {
+    // debugger;
+    filledInFlags = getFilterFlagValues(lastToken, displayedRequests);
+  }
   let finalList = filledInFlags.length > 0 ? filledInFlags : interimList;
 
   return finalList
