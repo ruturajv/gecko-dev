@@ -103,6 +103,11 @@ function processFlagFilter(type, value) {
 }
 
 function isFlagFilterMatch(item, { type, value, negative }) {
+  // Ensures just flags show all the requests
+  if (value.length < 1) {
+    return true;
+  }
+
   let match = true;
   let { responseCookies = { cookies: [] } } = item;
   responseCookies = responseCookies.cookies || responseCookies;
@@ -248,7 +253,8 @@ function getRequestFlagValue(flag, request) {
   let value;
   switch (flag) {
     case "status-code":
-      value = request.status;
+      // Sometimes status comes as Number
+      value = request.status + "";
       break;
     case "scheme":
       value = request.urlDetails.scheme;
@@ -283,7 +289,9 @@ function getRequestFlagValue(flag, request) {
       }
       break;
     case "has-response-header":
-      value = request.responseHeaders.headers.map(h => h.name);
+      // Some requests not having responseHeaders..?
+      value = request.responseHeaders &&
+        request.responseHeaders.headers.map(h => h.name);
       break;
     case "method":
     case "protocol":
@@ -298,7 +306,7 @@ function getFilterFlagValues(filterFlag, displayedRequests) {
   let uniqueValues = new Set();
   for (let request of displayedRequests) {
     // strip out "-" and ":" from flags ie. "-method:" and pass as flag
-    let value = getRequestFlagValue(filterFlag.replace(/^(-)?(.*?):$/, "$2"), request);
+    let value = getRequestFlagValue(filterFlag.replace(/^(:?-)?(.*?):$/, "$2"), request);
     if (value instanceof Array) {
       for (let v of value) {
         uniqueValues.add(v);
@@ -309,7 +317,9 @@ function getFilterFlagValues(filterFlag, displayedRequests) {
   }
 
   return Array.from(uniqueValues)
-    .filter(value => typeof value !== "undefined" && value !== "")
+    .filter(value => 
+      typeof value !== "undefined" && value !== "" && value !== "undefined")
+    .sort()
     .map(value => `${filterFlag}${value}`);
 }
 
