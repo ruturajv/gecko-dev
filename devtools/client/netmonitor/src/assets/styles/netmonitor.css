@@ -111,7 +111,6 @@ body,
   text-overflow: ellipsis;
   white-space: pre;
   overflow: hidden;
-  direction: rtl
 }
 
 /* Status bar */

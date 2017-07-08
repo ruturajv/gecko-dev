@@ -49,7 +49,7 @@ const Toolbar = createClass({
     networkDetailsOpen: PropTypes.bool.isRequired,
     toggleNetworkDetails: PropTypes.func.isRequired,
     toggleRequestFilterType: PropTypes.func.isRequired,
-    displayedRequests: PropTypes.object.isRequired,
+    filteredRequests: PropTypes.object.isRequired,
   },
 
   toggleRequestFilterType(evt) {
@@ -67,7 +67,7 @@ const Toolbar = createClass({
       networkDetailsToggleDisabled,
       networkDetailsOpen,
       toggleNetworkDetails,
-      displayedRequests,
+      filteredRequests,
     } = this.props;
 
     let toggleButtonClassName = [
@@ -114,7 +114,7 @@ const Toolbar = createClass({
             type: "filter",
             onChange: setRequestFilterText,
             autocompleteProvider: filter =>
-              autocompleteProvider(filter, displayedRequests),
+              autocompleteProvider(filter, filteredRequests),
           }),
           button({
             className: toggleButtonClassName.join(" "),
@@ -134,7 +134,7 @@ module.exports = connect(
     networkDetailsToggleDisabled: isNetworkDetailsToggleButtonDisabled(state),
     networkDetailsOpen: state.ui.networkDetailsOpen,
     requestFilterTypes: getRequestFilterTypes(state),
-    displayedRequests: getButtonFilteredRequests(state),
+    filteredRequests: getButtonFilteredRequests(state),
     summary: getDisplayedRequestsSummary(state),
   }),
   (dispatch) => ({
