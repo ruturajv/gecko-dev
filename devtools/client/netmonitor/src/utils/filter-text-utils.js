@@ -103,7 +103,7 @@ function processFlagFilter(type, value) {
 }
 
 function isFlagFilterMatch(item, { type, value, negative }) {
-  // Ensures just flags show all the requests
+  // Ensures when filter token is exactly a flag ie. "remote-ip:", all values are shown
   if (value.length < 1) {
     return true;
   }
@@ -190,7 +190,7 @@ function isFlagFilterMatch(item, { type, value, negative }) {
         let host = item.urlDetails.host;
         let i = responseCookies.findIndex(c => {
           let domain = c.hasOwnProperty("domain") ? c.domain : host;
-          return domain === value;
+          return domain.includes(value);
         });
         match = i > -1;
       } else {
@@ -198,12 +198,12 @@ function isFlagFilterMatch(item, { type, value, negative }) {
       }
       break;
     case "set-cookie-name":
-      match = value.length > 0 ?
-        responseCookies.findIndex(c => c.name.toLowerCase() === value) > -1 : match;
+      match = responseCookies.findIndex(c =>
+        c.name.toLowerCase().includes(value)) > -1;
       break;
     case "set-cookie-value":
-      match = value.length > 0 ?
-        responseCookies.findIndex(c => c.value.toLowerCase() === value) > -1 : match;
+      match = responseCookies.findIndex(c =>
+        c.value.toLowerCase().includes(value)) > -1;
       break;
   }
   if (negative) {
@@ -249,8 +249,21 @@ function isFreetextMatch(item, text) {
   return match;
 }
 
+/*
+ * Generates a value for the given filter
+ * ie. if flag = status-code, will generate "200" from the given request item.
+ * For flags related to cookies, it might generate an array based on the request
+ * ie. ["cookie-name-1", "cookie-name-2", ...]
+ *
+ * @param {string} flag - flag specified in filter, ie. "status-code"
+ * @param {object} request - Network request item
+ * @return {string|Array} - The output is a string or an array based on the request
+ */
 function getRequestFlagValue(flag, request) {
   let value;
+  let { responseCookies = { cookies: [] } } = request;
+  responseCookies = responseCookies.cookies || responseCookies;
+
   switch (flag) {
     case "status-code":
       // Sometimes status comes as Number
@@ -272,34 +285,27 @@ function getRequestFlagValue(flag, request) {
       value = request.mimeType;
       break;
     case "set-cookie-name":
-      // Sometimes responseCookies is an object instead of an array
-      value = request.responseCookies instanceof Array ?
-        request.responseCookies.map(c => c.name) : "";
+      value = responseCookies.map(c => c.name);
       break;
     case "set-cookie-value":
-      value = request.responseCookies instanceof Array ?
-        request.responseCookies.map(c => c.value) : "";
+      value = responseCookies.map(c => c.value);
       break;
     case "set-cookie-domain":
-      value = request.responseCookies instanceof Array ?
-        request.responseCookies.map(c => c.hasOwnProperty("domain") ?
-          c.domain : request.urlDetails.host) :
-        "";
+      value = responseCookies.map(c => c.hasOwnProperty("domain") ?
+          c.domain : request.urlDetails.host);
       break;
     case "is":
-      if (request.fromCache || request.status === "304") {
-        value = "cached";
-      } else if (!request.status) {
-        value = "running";
-      }
+      value = ["cached", "from-cache", "running"];
       break;
     case "has-response-header":
       // Some requests not having responseHeaders..?
       value = request.responseHeaders &&
         request.responseHeaders.headers.map(h => h.name);
       break;
-    case "method":
     case "protocol":
+      value = request.httpVersion;
+      break;
+    case "method":
     default:
       value = request[flag];
   }
@@ -307,12 +313,25 @@ function getRequestFlagValue(flag, request) {
   return value;
 }
 
-function getFilterFlagValues(filterFlag, displayedRequests) {
+/*
+ * For a given lastToken passed ie. "is:", returns an array of populated flag
+ * values for consumption in autocompleteProvider
+ * ie. ["is:cached", "is:running", "is:from-cache"]
+ *
+ * @param {string} lastToken - lastToken parsed from filter input, ie "is:"
+ * @param {object} requests - List of requests from which values are generated
+ * @return {Array} - array of autocomplete values
+ */
+function getLastTokenFlagValues(lastToken, requests) {
+  if (!lastToken.endsWith(":")) {
+    return [];
+  }
+
   let uniqueValues = new Set();
-  for (let request of displayedRequests) {
+  for (let request of requests) {
     // strip out "-" and ":" from flags ie. "-method:" and pass as flag
-    let value = getRequestFlagValue(filterFlag.replace(/^(:?-)?(.*?):$/, "$2"), request);
-    if (value instanceof Array) {
+    let value = getRequestFlagValue(lastToken.replace(/^-?(.*?):$/, "$1"), request);
+    if (Array.isArray(value)) {
       for (let v of value) {
         uniqueValues.add(v);
       }
@@ -325,7 +344,7 @@ function getFilterFlagValues(filterFlag, displayedRequests) {
     .filter(value =>
       typeof value !== "undefined" && value !== "" && value !== "undefined")
     .sort()
-    .map(value => `${filterFlag}${value}`);
+    .map(value => `${lastToken}${value}`);
 }
 
 /**
@@ -335,14 +354,13 @@ function getFilterFlagValues(filterFlag, displayedRequests) {
  * The string is then tokenized into "is:cached" and "pr"
  *
  * @param {string} filter - The entire search string of the search box
- * @param {object} displayedRequests - Iteratable object of requests displayed
- *
+ * @param {object} requests - Iteratable object of requests displayed
  * @return {Array} - The output is an array of objects as below
  * [{value: "is:cached protocol", displayValue: "protocol"}[, ...]]
  * `value` is used to update the search-box input box for given item
  * `displayValue` is used to render the autocomplete list
  */
-function autocompleteProvider(filter, displayedRequests) {
+function autocompleteProvider(filter, requests) {
   if (!filter) {
     return [];
   }
@@ -361,20 +379,19 @@ function autocompleteProvider(filter, displayedRequests) {
     return [];
   }
 
-  let interimList = baseList
-    .filter((item) => {
-      return item.toLowerCase().startsWith(lastToken.toLowerCase())
-        && item.toLowerCase() !== lastToken.toLowerCase();
-    });
-
-  let filledInFlags = [];
-  if (lastToken.endsWith(":")) {
-    // debugger;
-    filledInFlags = getFilterFlagValues(lastToken, displayedRequests);
+  let autocompleteList;
+  let filledInFlags = getLastTokenFlagValues(lastToken, requests);
+  if (filledInFlags.length > 0) {
+    autocompleteList = filledInFlags;
+  } else {
+    autocompleteList = baseList
+      .filter((item) => {
+        return item.toLowerCase().startsWith(lastToken.toLowerCase())
+          && item.toLowerCase() !== lastToken.toLowerCase();
+      });
   }
-  let finalList = filledInFlags.length > 0 ? filledInFlags : interimList;
 
-  return finalList
+  return autocompleteList
     .sort()
     .map(item => ({
       value: [...previousTokens, item].join(" "),
