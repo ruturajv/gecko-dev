@@ -51,6 +51,7 @@
 #if defined(MOZ_SANDBOX)
 #include "mozilla/Preferences.h"
 #include "mozilla/sandboxing/sandboxLogging.h"
+#include "WinUtils.h"
 #endif
 #endif
 
@@ -359,10 +360,13 @@ GeckoChildProcessHost::SyncLaunch(std::vector<std::string> aExtraOpts, int aTime
   MessageLoop* ioLoop = XRE_GetIOMessageLoop();
   NS_ASSERTION(MessageLoop::current() != ioLoop, "sync launch from the IO thread NYI");
 
-  ioLoop->PostTask(NewNonOwningRunnableMethod
-                   <std::vector<std::string>, base::ProcessArchitecture>
-                   (this, &GeckoChildProcessHost::RunPerformAsyncLaunch,
-                    aExtraOpts, arch));
+  ioLoop->PostTask(NewNonOwningRunnableMethod<std::vector<std::string>,
+                                              base::ProcessArchitecture>(
+    "ipc::GeckoChildProcessHost::RunPerformAsyncLaunch",
+    this,
+    &GeckoChildProcessHost::RunPerformAsyncLaunch,
+    aExtraOpts,
+    arch));
 
   return WaitUntilConnected(aTimeoutMs);
 }
@@ -375,10 +379,13 @@ GeckoChildProcessHost::AsyncLaunch(std::vector<std::string> aExtraOpts,
 
   MessageLoop* ioLoop = XRE_GetIOMessageLoop();
 
-  ioLoop->PostTask(NewNonOwningRunnableMethod
-                   <std::vector<std::string>, base::ProcessArchitecture>
-                   (this, &GeckoChildProcessHost::RunPerformAsyncLaunch,
-                    aExtraOpts, arch));
+  ioLoop->PostTask(NewNonOwningRunnableMethod<std::vector<std::string>,
+                                              base::ProcessArchitecture>(
+    "ipc::GeckoChildProcessHost::RunPerformAsyncLaunch",
+    this,
+    &GeckoChildProcessHost::RunPerformAsyncLaunch,
+    aExtraOpts,
+    arch));
 
   // This may look like the sync launch wait, but we only delay as
   // long as it takes to create the channel.
@@ -393,7 +400,7 @@ GeckoChildProcessHost::AsyncLaunch(std::vector<std::string> aExtraOpts,
 bool
 GeckoChildProcessHost::WaitUntilConnected(int32_t aTimeoutMs)
 {
-  PROFILER_LABEL_FUNC(js::ProfileEntry::Category::OTHER);
+  AUTO_PROFILER_LABEL("GeckoChildProcessHost::WaitUntilConnected", OTHER);
 
   // NB: this uses a different mechanism than the chromium parent
   // class.
@@ -434,10 +441,13 @@ GeckoChildProcessHost::LaunchAndWaitForProcessHandle(StringVector aExtraOpts)
   PrepareLaunch();
 
   MessageLoop* ioLoop = XRE_GetIOMessageLoop();
-  ioLoop->PostTask(NewNonOwningRunnableMethod
-                   <std::vector<std::string>, base::ProcessArchitecture>
-                   (this, &GeckoChildProcessHost::RunPerformAsyncLaunch,
-                    aExtraOpts, base::GetCurrentProcessArchitecture()));
+  ioLoop->PostTask(NewNonOwningRunnableMethod<std::vector<std::string>,
+                                              base::ProcessArchitecture>(
+    "ipc::GeckoChildProcessHost::RunPerformAsyncLaunch",
+    this,
+    &GeckoChildProcessHost::RunPerformAsyncLaunch,
+    aExtraOpts,
+    base::GetCurrentProcessArchitecture()));
 
   MonitorAutoLock lock(mMonitor);
   while (mProcessState < PROCESS_CREATED) {
@@ -501,7 +511,17 @@ GeckoChildProcessHost::SetChildLogName(const char* varName, const char* origLogN
   // the path against the sanboxing rules as passed to fopen (left relative).
   char absPath[MAX_PATH + 2];
   if (_fullpath(absPath, origLogName, sizeof(absPath))) {
-    buffer.Append(absPath);
+#ifdef MOZ_SANDBOX
+    // We need to make sure the child log name doesn't contain any junction
+    // points or symlinks or the sandbox will reject rules to allow writing.
+    std::wstring resolvedPath(NS_ConvertUTF8toUTF16(absPath).get());
+    if (widget::WinUtils::ResolveJunctionPointsAndSymLinks(resolvedPath)) {
+      AppendUTF16toUTF8(resolvedPath.c_str(), buffer);
+    } else
+#endif
+    {
+      buffer.Append(absPath);
+    }
   } else
 #endif
   {

@@ -6,30 +6,36 @@
 
 use cssparser::{BasicParseError, Parser, Token};
 use parser::{Parse, ParserContext};
-use style_traits::ParseError;
+use style_traits::{ParseError, StyleParseError};
 #[cfg(not(feature = "gecko"))]
-use style_traits::StyleParseError;
+use values::Impossible;
 use values::computed::{Context, Number as ComputedNumber, ToComputedValue};
-use values::computed::effects::DropShadow as ComputedDropShadow;
+use values::computed::effects::BoxShadow as ComputedBoxShadow;
+use values::computed::effects::SimpleShadow as ComputedSimpleShadow;
+use values::generics::effects::BoxShadow as GenericBoxShadow;
 use values::generics::effects::Filter as GenericFilter;
-use values::generics::effects::FilterList as GenericFilterList;
+use values::generics::effects::SimpleShadow as GenericSimpleShadow;
 use values::specified::{Angle, Percentage};
-#[cfg(feature = "gecko")]
 use values::specified::color::Color;
 use values::specified::length::Length;
 #[cfg(feature = "gecko")]
 use values::specified::url::SpecifiedUrl;
 
-/// A specified value for the `filter` property.
-pub type FilterList = GenericFilterList<Filter>;
+/// A specified value for a single shadow of the `box-shadow` property.
+pub type BoxShadow = GenericBoxShadow<Option<Color>, Length, Option<Length>>;
 
 /// A specified value for a single `filter`.
-pub type Filter = GenericFilter<Angle, Factor, Length, DropShadow>;
+#[cfg(feature = "gecko")]
+pub type Filter = GenericFilter<Angle, Factor, Length, SimpleShadow>;
+
+/// A specified value for a single `filter`.
+#[cfg(not(feature = "gecko"))]
+pub type Filter = GenericFilter<Angle, Factor, Length, Impossible>;
 
 /// A value for the `<factor>` parts in `Filter`.
 ///
 /// FIXME: Should be `NumberOrPercentage`, but Gecko doesn't support that yet.
-#[cfg_attr(feature = "servo", derive(Deserialize, HeapSizeOf, Serialize))]
+#[cfg_attr(feature = "servo", derive(HeapSizeOf))]
 #[derive(Clone, Debug, HasViewportPercentage, PartialEq, ToCss)]
 pub enum Factor {
     /// Literal number.
@@ -39,44 +45,84 @@ pub enum Factor {
 }
 
 /// A specified value for the `drop-shadow()` filter.
-///
-/// Currently unsupported outside of Gecko.
-#[cfg(not(feature = "gecko"))]
-#[cfg_attr(feature = "servo", derive(Deserialize, HeapSizeOf, Serialize))]
-#[derive(Clone, Debug, HasViewportPercentage, PartialEq, ToCss)]
-pub enum DropShadow {}
+pub type SimpleShadow = GenericSimpleShadow<Option<Color>, Length, Option<Length>>;
 
-/// A specified value for the `drop-shadow()` filter.
-///
-/// Contrary to the canonical order from the spec, the color is serialised
-/// first, like in Gecko's computed values and in all Webkit's values.
-#[cfg(feature = "gecko")]
-#[derive(Clone, Debug, HasViewportPercentage, PartialEq, ToCss)]
-pub struct DropShadow {
-    /// Color.
-    pub color: Option<Color>,
-    /// Horizontal radius.
-    pub horizontal: Length,
-    /// Vertical radius.
-    pub vertical: Length,
-    /// Blur radius.
-    pub blur: Option<Length>,
-}
-
-impl Parse for FilterList {
-    #[inline]
+impl Parse for BoxShadow {
     fn parse<'i, 't>(
         context: &ParserContext,
-        input: &mut Parser<'i, 't>
+        input: &mut Parser<'i, 't>,
     ) -> Result<Self, ParseError<'i>> {
-        let mut filters = vec![];
-        while let Ok(filter) = input.try(|i| Filter::parse(context, i)) {
-            filters.push(filter);
+        let mut lengths = None;
+        let mut color = None;
+        let mut inset = false;
+
+        loop {
+            if !inset {
+                if input.try(|input| input.expect_ident_matching("inset")).is_ok() {
+                    inset = true;
+                    continue;
+                }
+            }
+            if lengths.is_none() {
+                let value = input.try::<_, _, ParseError>(|i| {
+                    let horizontal = Length::parse(context, i)?;
+                    let vertical = Length::parse(context, i)?;
+                    let (blur, spread) = match i.try::<_, _, ParseError>(|i| Length::parse_non_negative(context, i)) {
+                        Ok(blur) => {
+                            let spread = i.try(|i| Length::parse(context, i)).ok();
+                            (Some(blur), spread)
+                        },
+                        Err(_) => (None, None),
+                    };
+                    Ok((horizontal, vertical, blur, spread))
+                });
+                if let Ok(value) = value {
+                    lengths = Some(value);
+                    continue;
+                }
+            }
+            if color.is_none() {
+                if let Ok(value) = input.try(|i| Color::parse(context, i)) {
+                    color = Some(value);
+                    continue;
+                }
+            }
+            break;
         }
-        if filters.is_empty() {
-            input.expect_ident_matching("none")?;
+
+        let lengths = lengths.ok_or(StyleParseError::UnspecifiedError)?;
+        Ok(BoxShadow {
+            base: SimpleShadow {
+                color: color,
+                horizontal: lengths.0,
+                vertical: lengths.1,
+                blur: lengths.2,
+            },
+            spread: lengths.3,
+            inset: inset,
+        })
+    }
+}
+
+impl ToComputedValue for BoxShadow {
+    type ComputedValue = ComputedBoxShadow;
+
+    #[inline]
+    fn to_computed_value(&self, context: &Context) -> Self::ComputedValue {
+        ComputedBoxShadow {
+            base: self.base.to_computed_value(context),
+            spread: self.spread.as_ref().unwrap_or(&Length::zero()).to_computed_value(context),
+            inset: self.inset,
         }
-        Ok(GenericFilterList(filters.into_boxed_slice()))
+    }
+
+    #[inline]
+    fn from_computed_value(computed: &ComputedBoxShadow) -> Self {
+        BoxShadow {
+            base: ToComputedValue::from_computed_value(&computed.base),
+            spread: Some(ToComputedValue::from_computed_value(&computed.spread)),
+            inset: computed.inset,
+        }
     }
 }
 
@@ -104,7 +150,7 @@ impl Parse for Filter {
                 "opacity" => Ok(GenericFilter::Opacity(Factor::parse(context, i)?)),
                 "saturate" => Ok(GenericFilter::Saturate(Factor::parse(context, i)?)),
                 "sepia" => Ok(GenericFilter::Sepia(Factor::parse(context, i)?)),
-                "drop-shadow" => Ok(GenericFilter::DropShadow(DropShadow::parse(context, i)?)),
+                "drop-shadow" => Ok(GenericFilter::DropShadow(Parse::parse(context, i)?)),
             }
         })
     }
@@ -130,7 +176,7 @@ impl Parse for Factor {
 
 impl ToComputedValue for Factor {
     /// This should actually be `ComputedNumberOrPercentage`, but layout uses
-    /// `computed::effects::FilterList` directly in `StackingContext`.
+    /// `computed::effects::Filter` directly in `StackingContext`.
     type ComputedValue = ComputedNumber;
 
     #[inline]
@@ -147,17 +193,7 @@ impl ToComputedValue for Factor {
     }
 }
 
-impl Parse for DropShadow {
-    #[cfg(not(feature = "gecko"))]
-    #[inline]
-    fn parse<'i, 't>(
-        _context: &ParserContext,
-        _input: &mut Parser<'i, 't>
-    ) -> Result<Self, ParseError<'i>> {
-        Err(StyleParseError::UnspecifiedError.into())
-    }
-
-    #[cfg(feature = "gecko")]
+impl Parse for SimpleShadow {
     #[inline]
     fn parse<'i, 't>(
         context: &ParserContext,
@@ -168,7 +204,7 @@ impl Parse for DropShadow {
         let vertical = Length::parse(context, input)?;
         let blur = input.try(|i| Length::parse_non_negative(context, i)).ok();
         let color = color.or_else(|| input.try(|i| Color::parse(context, i)).ok());
-        Ok(DropShadow {
+        Ok(SimpleShadow {
             color: color,
             horizontal: horizontal,
             vertical: vertical,
@@ -177,19 +213,12 @@ impl Parse for DropShadow {
     }
 }
 
-impl ToComputedValue for DropShadow {
-    type ComputedValue = ComputedDropShadow;
+impl ToComputedValue for SimpleShadow {
+    type ComputedValue = ComputedSimpleShadow;
 
-    #[cfg(not(feature = "gecko"))]
-    #[inline]
-    fn to_computed_value(&self, _context: &Context) -> Self::ComputedValue {
-        match *self {}
-    }
-
-    #[cfg(feature = "gecko")]
     #[inline]
     fn to_computed_value(&self, context: &Context) -> Self::ComputedValue {
-        ComputedDropShadow {
+        ComputedSimpleShadow {
             color:
                 self.color.as_ref().unwrap_or(&Color::CurrentColor).to_computed_value(context),
             horizontal: self.horizontal.to_computed_value(context),
@@ -199,16 +228,9 @@ impl ToComputedValue for DropShadow {
         }
     }
 
-    #[cfg(not(feature = "gecko"))]
     #[inline]
     fn from_computed_value(computed: &Self::ComputedValue) -> Self {
-        match *computed {}
-    }
-
-    #[cfg(feature = "gecko")]
-    #[inline]
-    fn from_computed_value(computed: &Self::ComputedValue) -> Self {
-        DropShadow {
+        SimpleShadow {
             color: Some(ToComputedValue::from_computed_value(&computed.color)),
             horizontal: ToComputedValue::from_computed_value(&computed.horizontal),
             vertical: ToComputedValue::from_computed_value(&computed.vertical),

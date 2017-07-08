@@ -31,7 +31,6 @@
 #include "nsISupports.h"
 #include "nsITimer.h"
 
-class nsIStreamListener;
 class nsIPrincipal;
 
 namespace mozilla {
@@ -42,6 +41,7 @@ class HTMLMediaElement;
 
 class AbstractThread;
 class VideoFrameContainer;
+class MediaDecoderReader;
 class MediaDecoderStateMachine;
 
 enum class MediaEventType : int8_t;
@@ -53,7 +53,7 @@ enum class Visibility : uint8_t;
 #undef GetCurrentTime
 #endif
 
-struct MediaDecoderInit
+struct MOZ_STACK_CLASS MediaDecoderInit
 {
   MediaDecoderOwner* const mOwner;
   const dom::AudioChannel mAudioChannel;
@@ -63,6 +63,7 @@ struct MediaDecoderInit
   const bool mMinimizePreroll;
   const bool mHasSuspendTaint;
   const bool mLooping;
+  const MediaContainerType mContainerType;
 
   MediaDecoderInit(MediaDecoderOwner* aOwner,
                    dom::AudioChannel aAudioChannel,
@@ -71,7 +72,8 @@ struct MediaDecoderInit
                    double aPlaybackRate,
                    bool aMinimizePreroll,
                    bool aHasSuspendTaint,
-                   bool aLooping)
+                   bool aLooping,
+                   const MediaContainerType& aContainerType)
     : mOwner(aOwner)
     , mAudioChannel(aAudioChannel)
     , mVolume(aVolume)
@@ -80,6 +82,7 @@ struct MediaDecoderInit
     , mMinimizePreroll(aMinimizePreroll)
     , mHasSuspendTaint(aHasSuspendTaint)
     , mLooping(aLooping)
+    , mContainerType(aContainerType)
   {
   }
 };
@@ -109,6 +112,10 @@ public:
 
   explicit MediaDecoder(MediaDecoderInit& aInit);
 
+  // Returns the container content type of the resource.
+  // Safe to call from any thread.
+  const MediaContainerType& ContainerType() const { return mContainerType; }
+
   // Create a new state machine to run this decoder.
   // Subclasses must implement this.
   virtual MediaDecoderStateMachine* CreateStateMachine() = 0;
@@ -122,34 +129,17 @@ public:
   // to prevent further calls into the decoder.
   void NotifyXPCOMShutdown();
 
-  // Start downloading the media. Decode the downloaded data up to the
-  // point of the first frame of data.
-  // This is called at most once per decoder, after Init().
-  virtual nsresult Load(nsIStreamListener** aListener);
-
-  // Called in |Load| to open mResource.
-  nsresult OpenResource(nsIStreamListener** aStreamListener);
-
   // Called if the media file encounters a network error.
   void NetworkError();
 
-  // Get the current MediaResource being used. Its URI will be returned
-  // by currentSrc. Returns what was passed to Load(), if Load() has been called.
+  // Get the current MediaResource being used.
   // Note: The MediaResource is refcounted, but it outlives the MediaDecoder,
   // so it's OK to use the reference returned by this function without
   // refcounting, *unless* you need to store and use the reference after the
   // MediaDecoder has been destroyed. You might need to do this if you're
   // wrapping the MediaResource in some kind of byte stream interface to be
   // passed to a platform decoder.
-  MediaResource* GetResource() const final override
-  {
-    return mResource;
-  }
-  void SetResource(MediaResource* aResource)
-  {
-    MOZ_ASSERT(NS_IsMainThread());
-    mResource = aResource;
-  }
+  MediaResource* GetResource() const { return mResource; }
 
   // Return the principal of the current URI being played or downloaded.
   virtual already_AddRefed<nsIPrincipal> GetCurrentPrincipal();
@@ -532,6 +522,8 @@ protected:
   // Media data resource.
   RefPtr<MediaResource> mResource;
 
+  RefPtr<MediaDecoderReader> mReader;
+
   // Amount of buffered data ahead of current time required to consider that
   // the next frame is available.
   // An arbitrary value of 250ms is used.
@@ -546,9 +538,6 @@ private:
   void MetadataLoaded(UniquePtr<MediaInfo> aInfo,
                       UniquePtr<MetadataTags> aTags,
                       MediaDecoderEventVisibility aEventVisibility);
-
-  MediaEventSource<void>*
-  DataArrivedEvent() override { return &mDataArrivedEvent; }
 
   // Called when the owner's activity changed.
   void NotifyCompositor();
@@ -571,7 +560,6 @@ private:
   void ConnectMirrors(MediaDecoderStateMachine* aObject);
   void DisconnectMirrors();
 
-  MediaEventProducer<void> mDataArrivedEvent;
   MediaEventProducer<RefPtr<layers::KnowsCompositor>> mCompositorUpdatedEvent;
 
   // The state machine object for handling the decoding. It is safe to
@@ -842,6 +830,7 @@ private:
   // Used to debug how mOwner becomes a dangling pointer in bug 1326294.
   bool mIsMediaElement;
   WeakPtr<dom::HTMLMediaElement> mElement;
+  const MediaContainerType mContainerType;
 };
 
 } // namespace mozilla

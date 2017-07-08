@@ -82,7 +82,7 @@ public:
         rv = db::DeleteCacheId(aConn, orphanedCacheIdList[i], deletedBodyIdList);
         if (NS_WARN_IF(NS_FAILED(rv))) { return rv; }
 
-        rv = BodyDeleteFiles(aDBDir, deletedBodyIdList);
+        rv = BodyDeleteFiles(aQuotaInfo, aDBDir, deletedBodyIdList);
         if (NS_WARN_IF(NS_FAILED(rv))) { return rv; }
       }
 
@@ -90,7 +90,7 @@ public:
       AutoTArray<nsID, 64> knownBodyIdList;
       rv = db::GetKnownBodyIds(aConn, knownBodyIdList);
 
-      rv = BodyDeleteOrphanedFiles(aDBDir, knownBodyIdList);
+      rv = BodyDeleteOrphanedFiles(aQuotaInfo, aDBDir, knownBodyIdList);
       if (NS_WARN_IF(NS_FAILED(rv))) { return rv; }
     }
 
@@ -136,7 +136,7 @@ public:
       return;
     }
 
-    rv = BodyDeleteFiles(dbDir, mDeletedBodyIdList);
+    rv = BodyDeleteFiles(aQuotaInfo, dbDir, mDeletedBodyIdList);
     Unused << NS_WARN_IF(NS_FAILED(rv));
 
     aResolver->Resolve(rv);
@@ -661,6 +661,7 @@ private:
     mResolver = aResolver;
     mDBDir = aDBDir;
     mConn = aConn;
+    mQuotaInfo.emplace(aQuotaInfo);
 
     // File bodies are streamed to disk via asynchronous copying.  Start
     // this copying now.  Each copy will eventually result in a call
@@ -912,7 +913,10 @@ private:
     // here since we are guaranteed the Action will survive until
     // CompleteOnInitiatingThread is called.
     nsCOMPtr<nsIRunnable> runnable = NewNonOwningRunnableMethod<nsresult>(
-      this, &CachePutAllAction::OnAsyncCopyComplete, aRv);
+      "dom::cache::Manager::CachePutAllAction::OnAsyncCopyComplete",
+      this,
+      &CachePutAllAction::OnAsyncCopyComplete,
+      aRv);
     MOZ_ALWAYS_SUCCEEDS(
       mTarget->Dispatch(runnable.forget(), nsIThread::DISPATCH_NORMAL));
   }
@@ -932,7 +936,7 @@ private:
 
     // Clean up any files we might have written before hitting the error.
     if (NS_FAILED(aRv)) {
-      BodyDeleteFiles(mDBDir, mBodyIdWrittenList);
+      BodyDeleteFiles(mQuotaInfo.ref(), mDBDir, mBodyIdWrittenList);
     }
 
     // Must be released on the target thread where it was opened.
@@ -974,6 +978,8 @@ private:
   // accessed from any thread while mMutex locked
   Mutex mMutex;
   nsTArray<nsCOMPtr<nsISupports>> mCopyContextList;
+
+  Maybe<QuotaInfo> mQuotaInfo;
 };
 
 // ----------------------------------------------------------------------------
@@ -1766,7 +1772,8 @@ Manager::~Manager()
 
   // Don't spin the event loop in the destructor waiting for the thread to
   // shutdown.  Defer this to the main thread, instead.
-  MOZ_ALWAYS_SUCCEEDS(NS_DispatchToMainThread(NewRunnableMethod(ioThread, &nsIThread::Shutdown)));
+  MOZ_ALWAYS_SUCCEEDS(NS_DispatchToMainThread(NewRunnableMethod("nsIThread::Shutdown",
+                                                                ioThread, &nsIThread::Shutdown)));
 }
 
 void

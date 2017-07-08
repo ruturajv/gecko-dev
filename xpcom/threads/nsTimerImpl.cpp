@@ -253,16 +253,6 @@ nsTimerImpl::InitWithFuncCallbackCommon(nsTimerCallbackFunc aFunc,
 }
 
 nsresult
-nsTimerImpl::InitWithFuncCallback(nsTimerCallbackFunc aFunc,
-                                  void* aClosure,
-                                  uint32_t aDelay,
-                                  uint32_t aType)
-{
-  Callback::Name name(Callback::Nothing);
-  return InitWithFuncCallbackCommon(aFunc, aClosure, aDelay, aType, name);
-}
-
-nsresult
 nsTimerImpl::InitWithNamedFuncCallback(nsTimerCallbackFunc aFunc,
                                        void* aClosure,
                                        uint32_t aDelay,
@@ -491,8 +481,7 @@ nsTimerImpl::Fire(int32_t aGeneration)
     kungFuDeathGrip = mITimer;
   }
 
-  PROFILER_LABEL("Timer", "Fire",
-                 js::ProfileEntry::Category::OTHER);
+  AUTO_PROFILER_LABEL("nsTimerImpl::Fire", OTHER);
 
   TimeStamp now = TimeStamp::Now();
   if (MOZ_LOG_TEST(GetTimerLog(), LogLevel::Debug)) {

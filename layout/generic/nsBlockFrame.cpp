@@ -5625,6 +5625,50 @@ nsBlockInFlowLineIterator::nsBlockInFlowLineIterator(nsBlockFrame* aFrame,
   *aFoundValidLine = FindValidLine();
 }
 
+void
+nsBlockFrame::UpdateFirstLetterStyle(ServoRestyleState& aRestyleState)
+{
+  nsIFrame* letterFrame = GetFirstLetter();
+  if (!letterFrame) {
+    return;
+  }
+
+  // Figure out what the right style parent is.  This needs to match
+  // nsCSSFrameConstructor::CreateLetterFrame.
+  nsIFrame* inFlowFrame = letterFrame;
+  if (inFlowFrame->GetStateBits() & NS_FRAME_OUT_OF_FLOW) {
+    inFlowFrame = inFlowFrame->GetPlaceholderFrame();
+  }
+  nsIFrame* styleParent =
+    CorrectStyleParentFrame(inFlowFrame->GetParent(),
+                            nsCSSPseudoElements::firstLetter);
+  nsStyleContext* parentStyle = styleParent->StyleContext();
+  RefPtr<nsStyleContext> firstLetterStyle =
+    aRestyleState.StyleSet()
+                 .ResolvePseudoElementStyle(mContent->AsElement(),
+                                            CSSPseudoElementType::firstLetter,
+                                            parentStyle,
+                                            nullptr);
+  // Note that we don't need to worry about changehints for the continuation
+  // styles: those will be handled by the styleParent already.
+  RefPtr<nsStyleContext> continuationStyle =
+    aRestyleState.StyleSet().ResolveStyleForFirstLetterContinuation(parentStyle);
+  UpdateStyleOfOwnedChildFrame(letterFrame, firstLetterStyle, aRestyleState,
+                               Some(continuationStyle.get()));
+
+  // We also want to update the style on the textframe inside the first-letter.
+  // We don't need to compute a changehint for this, though, since any changes
+  // to it are handled by the first-letter anyway.
+  nsIFrame* textFrame = letterFrame->PrincipalChildList().FirstChild();
+  RefPtr<nsStyleContext> firstTextStyle =
+    aRestyleState.StyleSet().ResolveStyleForText(textFrame->GetContent(),
+                                                 firstLetterStyle);
+  textFrame->SetStyleContext(firstTextStyle);
+
+  // We don't need to update style for textFrame's continuations: it's already
+  // set up to inherit from parentStyle, which is what we want.
+}
+
 static nsIFrame*
 FindChildContaining(nsBlockFrame* aFrame, nsIFrame* aFindFrame)
 {
@@ -7537,6 +7581,17 @@ nsBlockFrame::ResolveBulletStyle(CSSPseudoElementType aType,
 
   return aStyleSet->ResolvePseudoElementStyle(mContent->AsElement(), aType,
                                               parentStyle, nullptr);
+}
+
+nsIFrame*
+nsBlockFrame::GetFirstLetter() const
+{
+  if (!(GetStateBits() & NS_BLOCK_HAS_FIRST_LETTER_STYLE)) {
+    // Certainly no first-letter frame.
+    return nullptr;
+  }
+
+  return GetProperty(FirstLetterProperty());
 }
 
 #ifdef DEBUG

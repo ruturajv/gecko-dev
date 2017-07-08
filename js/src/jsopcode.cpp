@@ -1615,7 +1615,8 @@ Disassemble1(JSContext* cx, HandleScript script, jsbytecode* pc,
     if (!dumpStack())
         return 0;
 
-    sp->put("\n");
+    if (!sp->put("\n"))
+        return 0;
     return len;
 }
 
@@ -1886,9 +1887,32 @@ ExpressionDecompiler::decompilePC(jsbytecode* pc, uint8_t defIndex)
                write("(...)");
       case JSOP_NEWARRAY:
         return write("[]");
-      case JSOP_REGEXP:
-      case JSOP_OBJECT:
+      case JSOP_REGEXP: {
+        RootedObject obj(cx, script->getObject(GET_UINT32_INDEX(pc)));
+        JSString* str = obj->as<RegExpObject>().toString(cx);
+        if (!str)
+            return false;
+        return write(str);
+      }
       case JSOP_NEWARRAY_COPYONWRITE: {
+        RootedObject obj(cx, script->getObject(GET_UINT32_INDEX(pc)));
+        Handle<ArrayObject*> aobj = obj.as<ArrayObject>();
+        if (!write("["))
+            return false;
+        for (size_t i = 0; i < aobj->getDenseInitializedLength(); i++) {
+            if (i > 0 && !write(", "))
+                return false;
+
+            RootedValue v(cx, aobj->getDenseElement(i));
+            MOZ_RELEASE_ASSERT(v.isPrimitive() && !v.isMagic());
+
+            JSString* str = ValueToSource(cx, v);
+            if (!str || !write(str))
+                return false;
+        }
+        return write("]");
+      }
+      case JSOP_OBJECT: {
         JSObject* obj = script->getObject(GET_UINT32_INDEX(pc));
         RootedValue objv(cx, ObjectValue(*obj));
         JSString* str = ValueToSource(cx, objv);
@@ -2942,7 +2966,6 @@ GenerateLcovInfo(JSContext* cx, JSCompartment* comp, GenericPrinter& out)
     coverage::LCovCompartment compCover;
     for (JSScript* topLevel: topScripts) {
         RootedScript topScript(cx, topLevel);
-        compCover.collectSourceFile(comp, &topScript->scriptSourceUnwrap());
 
         // We found the top-level script, visit all the functions reachable
         // from the top-level function, and delazify them.
@@ -2954,7 +2977,8 @@ GenerateLcovInfo(JSContext* cx, JSCompartment* comp, GenericPrinter& out)
         RootedFunction fun(cx);
         do {
             script = queue.popCopy();
-            compCover.collectCodeCoverageInfo(comp, script->sourceObject(), script);
+            if (script->filename())
+                compCover.collectCodeCoverageInfo(comp, script, script->filename());
 
             // Iterate from the last to the first object in order to have
             // the functions them visited in the opposite order when popping

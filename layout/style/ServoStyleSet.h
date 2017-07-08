@@ -33,6 +33,7 @@ class ServoRestyleManager;
 class ServoStyleSheet;
 struct Keyframe;
 class ServoElementSnapshotTable;
+class ServoStyleContext;
 class ServoStyleRuleMap;
 } // namespace mozilla
 class nsCSSCounterStyleRule;
@@ -121,7 +122,7 @@ public:
   ServoStyleSet();
   ~ServoStyleSet();
 
-  void Init(nsPresContext* aPresContext);
+  void Init(nsPresContext* aPresContext, nsBindingManager* aBindingManager);
   void BeginShutdown();
   void Shutdown();
 
@@ -226,7 +227,7 @@ public:
   // Get a style context for an anonymous box.  aPseudoTag is the pseudo-tag to
   // use and must be non-null.  It must be an anon box, and must be one that
   // inherits style from the given aParentContext.
-  already_AddRefed<nsStyleContext>
+  already_AddRefed<ServoStyleContext>
   ResolveInheritingAnonymousBoxStyle(nsIAtom* aPseudoTag,
                                      nsStyleContext* aParentContext);
 
@@ -254,6 +255,8 @@ public:
   int32_t SheetCount(SheetType aType) const;
   ServoStyleSheet* StyleSheetAt(SheetType aType, int32_t aIndex) const;
 
+  void AppendAllXBLStyleSheets(nsTArray<StyleSheet*>& aArray) const;
+
   template<typename Func>
   void EnumerateStyleSheetArrays(Func aCallback) const {
     for (const auto& sheetArray : mSheets) {
@@ -268,8 +271,7 @@ public:
   already_AddRefed<nsStyleContext>
   ProbePseudoElementStyle(dom::Element* aOriginatingElement,
                           mozilla::CSSPseudoElementType aType,
-                          nsStyleContext* aParentContext,
-                          dom::Element* aPseudoElement = nullptr);
+                          nsStyleContext* aParentContext);
 
   // Test if style is dependent on content state
   nsRestyleHint HasStateDependentStyle(dom::Element* aElement,
@@ -456,7 +458,8 @@ public:
    * the modified attribute doesn't appear in an attribute selector in
    * a style sheet.
    */
-  bool MightHaveAttributeDependency(nsIAtom* aAttribute);
+  bool MightHaveAttributeDependency(const dom::Element& aElement,
+                                    nsIAtom* aAttribute) const;
 
   /**
    * Returns true if a change in event state on an element might require
@@ -466,7 +469,8 @@ public:
    * the changed state isn't depended upon by any pseudo-class selectors
    * in a style sheet.
    */
-  bool HasStateDependency(EventStates aState);
+  bool HasStateDependency(const dom::Element& aElement,
+                          EventStates aState) const;
 
 private:
   // On construction, sets sInServoTraversal to the given ServoStyleSet.
@@ -493,17 +497,17 @@ private:
     ServoStyleSet* mSet;
   };
 
-  already_AddRefed<nsStyleContext> GetContext(already_AddRefed<ServoComputedValues>,
-                                              nsStyleContext* aParentContext,
-                                              nsIAtom* aPseudoTag,
-                                              CSSPseudoElementType aPseudoType,
-                                              dom::Element* aElementForAnimation);
+  already_AddRefed<ServoStyleContext> GetContext(already_AddRefed<ServoComputedValues>,
+                                                 nsStyleContext* aParentContext,
+                                                 nsIAtom* aPseudoTag,
+                                                 CSSPseudoElementType aPseudoType,
+                                                 dom::Element* aElementForAnimation);
 
-  already_AddRefed<nsStyleContext> GetContext(nsIContent* aContent,
-                                              nsStyleContext* aParentContext,
-                                              nsIAtom* aPseudoTag,
-                                              CSSPseudoElementType aPseudoType,
-                                              LazyComputeBehavior aMayCompute);
+  already_AddRefed<ServoStyleContext> GetContext(nsIContent* aContent,
+                                                 nsStyleContext* aParentContext,
+                                                 nsIAtom* aPseudoTag,
+                                                 CSSPseudoElementType aPseudoType,
+                                                 LazyComputeBehavior aMayCompute);
 
   /**
    * Rebuild the style data. This will force a stylesheet flush, and also
@@ -622,6 +626,9 @@ private:
   // Map from raw Servo style rule to Gecko's wrapper object.
   // Constructed lazily when requested by devtools.
   RefPtr<ServoStyleRuleMap> mStyleRuleMap;
+
+  // This can be null if we are used to hold XBL style sheets.
+  RefPtr<nsBindingManager> mBindingManager;
 
   static ServoStyleSet* sInServoTraversal;
 };

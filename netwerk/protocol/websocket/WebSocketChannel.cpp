@@ -709,11 +709,13 @@ NS_IMPL_ISUPPORTS(CallOnServerClose, nsIRunnable)
 class CallAcknowledge final : public CancelableRunnable
 {
 public:
-  CallAcknowledge(WebSocketChannel* aChannel,
-                  uint32_t aSize)
-    : mChannel(aChannel),
-      mListenerMT(mChannel->mListenerMT),
-      mSize(aSize) {}
+  CallAcknowledge(WebSocketChannel* aChannel, uint32_t aSize)
+    : CancelableRunnable("net::CallAcknowledge")
+    , mChannel(aChannel)
+    , mListenerMT(mChannel->mListenerMT)
+    , mSize(aSize)
+  {
+  }
 
   NS_IMETHOD Run() override
   {
@@ -1263,7 +1265,9 @@ WebSocketChannel::Observe(nsISupports *subject,
         // Next we check mDataStarted, which we need to do on mTargetThread.
         if (!IsOnTargetThread()) {
           mTargetThread->Dispatch(
-            NewRunnableMethod(this, &WebSocketChannel::OnNetworkChanged),
+            NewRunnableMethod("net::WebSocketChannel::OnNetworkChanged",
+                              this,
+                              &WebSocketChannel::OnNetworkChanged),
             NS_DISPATCH_NORMAL);
         } else {
           nsresult rv = OnNetworkChanged();
@@ -1291,7 +1295,9 @@ WebSocketChannel::OnNetworkChanged()
     }
 
     return mSocketThread->Dispatch(
-      NewRunnableMethod(this, &WebSocketChannel::OnNetworkChanged),
+      NewRunnableMethod("net::WebSocketChannel::OnNetworkChanged",
+                        this,
+                        &WebSocketChannel::OnNetworkChanged),
       NS_DISPATCH_NORMAL);
   }
 
@@ -1378,8 +1384,10 @@ WebSocketChannel::BeginOpen(bool aCalledFromAdmissionManager)
     // When called from nsWSAdmissionManager post an event to avoid potential
     // re-entering of nsWSAdmissionManager and its lock.
     NS_DispatchToMainThread(
-      NewRunnableMethod(this, &WebSocketChannel::BeginOpenInternal),
-                           NS_DISPATCH_NORMAL);
+      NewRunnableMethod("net::WebSocketChannel::BeginOpenInternal",
+                        this,
+                        &WebSocketChannel::BeginOpenInternal),
+      NS_DISPATCH_NORMAL);
   } else {
     BeginOpenInternal();
   }
@@ -1463,7 +1471,7 @@ WebSocketChannel::UpdateReadBuffer(uint8_t *buffer, uint32_t count,
   if (mBuffered + count <= mBufferSize) {
     // append to existing buffer
     LOG(("WebSocketChannel: update read buffer absorbed %u\n", count));
-  } else if (mBuffered + count - 
+  } else if (mBuffered + count -
              (mFramePtr - accumulatedFragments - mBuffer) <= mBufferSize) {
     // make room in existing buffer by shifting unused data to start
     mBuffered -= (mFramePtr - mBuffer - accumulatedFragments);
@@ -1962,7 +1970,7 @@ WebSocketChannel::ApplyMask(uint32_t mask, uint8_t *data, uint64_t len)
   len  = len % 4;
 
   // There maybe up to 3 trailing bytes that need to be dealt with
-  // individually 
+  // individually
 
   while (len) {
     *data ^= mask >> 24;
@@ -2296,7 +2304,8 @@ class RemoveObserverRunnable : public Runnable
 
 public:
   explicit RemoveObserverRunnable(WebSocketChannel* aChannel)
-    : mChannel(aChannel)
+    : Runnable("net::RemoveObserverRunnable")
+    , mChannel(aChannel)
   {}
 
   NS_IMETHOD Run() override
@@ -2860,7 +2869,7 @@ WebSocketChannel::SetupRequest()
   if (!b64)
     return NS_ERROR_OUT_OF_MEMORY;
   secKeyString.Assign(b64);
-  PR_Free(b64);
+  PR_Free(b64); // PL_Base64Encode() uses PR_Malloc.
   rv = mHttpChannel->SetRequestHeader(NS_LITERAL_CSTRING("Sec-WebSocket-Key"),
                                       secKeyString, false);
   MOZ_ASSERT(NS_SUCCEEDED(rv));
@@ -2923,7 +2932,7 @@ WebSocketChannel::ApplyForAdmission()
   rv = pps->AsyncResolve(mHttpChannel,
                          nsIProtocolProxyService::RESOLVE_PREFER_HTTPS_PROXY |
                          nsIProtocolProxyService::RESOLVE_ALWAYS_TUNNEL,
-                         this, getter_AddRefs(mCancelable));
+                         this, nullptr, getter_AddRefs(mCancelable));
   NS_ASSERTION(NS_FAILED(rv) || mCancelable,
                "nsIProtocolProxyService::AsyncResolve succeeded but didn't "
                "return a cancelable object!");
@@ -2940,7 +2949,9 @@ WebSocketChannel::StartWebsocketData()
 
   if (!IsOnTargetThread()) {
     return mTargetThread->Dispatch(
-      NewRunnableMethod(this, &WebSocketChannel::StartWebsocketData),
+      NewRunnableMethod("net::WebSocketChannel::StartWebsocketData",
+                        this,
+                        &WebSocketChannel::StartWebsocketData),
       NS_DISPATCH_NORMAL);
   }
 
@@ -2953,7 +2964,8 @@ WebSocketChannel::StartWebsocketData()
     LOG(("WebSocketChannel::StartWebsocketData mSocketIn->AsyncWait() failed "
          "with error 0x%08" PRIx32, static_cast<uint32_t>(rv)));
     return mSocketThread->Dispatch(
-      NewRunnableMethod<nsresult>(this,
+      NewRunnableMethod<nsresult>("net::WebSocketChannel::AbortSession",
+                                  this,
                                   &WebSocketChannel::AbortSession,
                                   rv),
       NS_DISPATCH_NORMAL);
@@ -2961,7 +2973,9 @@ WebSocketChannel::StartWebsocketData()
 
   if (mPingInterval) {
     rv = mSocketThread->Dispatch(
-      NewRunnableMethod(this, &WebSocketChannel::StartPinging),
+      NewRunnableMethod("net::WebSocketChannel::StartPinging",
+                        this,
+                        &WebSocketChannel::StartPinging),
       NS_DISPATCH_NORMAL);
     if (NS_FAILED(rv)) {
       LOG(("WebSocketChannel::StartWebsocketData Could not start pinging, "
@@ -3009,7 +3023,7 @@ WebSocketChannel::StartPinging()
 
 void
 WebSocketChannel::ReportConnectionTelemetry()
-{ 
+{
   // 3 bits are used. high bit is for wss, middle bit for failed,
   // and low bit for proxy..
   // 0 - 7 : ws-ok-plain, ws-ok-proxy, ws-failed-plain, ws-failed-proxy,
@@ -3029,7 +3043,7 @@ WebSocketChannel::ReportConnectionTelemetry()
       didProxy = true;
   }
 
-  uint8_t value = (mEncrypted ? (1 << 2) : 0) | 
+  uint8_t value = (mEncrypted ? (1 << 2) : 0) |
     (!mGotUpgradeOK ? (1 << 1) : 0) |
     (didProxy ? (1 << 0) : 0);
 
@@ -3356,7 +3370,7 @@ WebSocketChannel::AsyncOpen(nsIURI *aURI,
   if (prefService) {
     int32_t intpref;
     bool boolpref;
-    rv = prefService->GetIntPref("network.websocket.max-message-size", 
+    rv = prefService->GetIntPref("network.websocket.max-message-size",
                                  &intpref);
     if (NS_SUCCEEDED(rv)) {
       mMaxMessageSize = clamped(intpref, 1024, INT32_MAX);
@@ -3853,7 +3867,7 @@ WebSocketChannel::OnStartRequest(nsIRequest *aRequest,
   if (!mProtocol.IsEmpty()) {
     nsAutoCString respProtocol;
     rv = mHttpChannel->GetResponseHeader(
-                         NS_LITERAL_CSTRING("Sec-WebSocket-Protocol"), 
+                         NS_LITERAL_CSTRING("Sec-WebSocket-Protocol"),
                          respProtocol);
     if (NS_SUCCEEDED(rv)) {
       rv = NS_ERROR_ILLEGAL_VALUE;

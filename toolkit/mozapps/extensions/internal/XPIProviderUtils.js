@@ -7,7 +7,7 @@
 // These are injected from XPIProvider.jsm
 /* globals ADDON_SIGNING, SIGNED_TYPES, BOOTSTRAP_REASONS, DB_SCHEMA,
           AddonInternal, XPIProvider, XPIStates, syncLoadManifestFromFile,
-          isUsableAddon, recordAddonTelemetry, applyBlocklistChanges,
+          isUsableAddon, recordAddonTelemetry,
           flushChromeCaches, descriptorToPath */
 
 var Cc = Components.classes;
@@ -27,8 +27,6 @@ XPCOMUtils.defineLazyModuleGetter(this, "FileUtils",
                                   "resource://gre/modules/FileUtils.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "DeferredSave",
                                   "resource://gre/modules/DeferredSave.jsm");
-XPCOMUtils.defineLazyModuleGetter(this, "Promise",
-                                  "resource://gre/modules/Promise.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "OS",
                                   "resource://gre/modules/osfile.jsm");
 XPCOMUtils.defineLazyServiceGetter(this, "Blocklist",
@@ -78,7 +76,8 @@ const PROP_JSON_FIELDS = ["id", "syncGUID", "location", "version", "type",
                           "strictCompatibility", "locales", "targetApplications",
                           "targetPlatforms", "multiprocessCompatible", "signedState",
                           "seen", "dependencies", "hasEmbeddedWebExtension", "mpcOptedOut",
-                          "userPermissions", "icons", "iconURL", "icon64URL"];
+                          "userPermissions", "icons", "iconURL", "icon64URL",
+                          "blocklistState", "blocklistURL"];
 
 // Time to wait before async save of XPI JSON database, in milliseconds
 const ASYNC_SAVE_DELAY_MS = 20;
@@ -1326,13 +1325,14 @@ this.XPIDatabaseReconcile = {
       if (!aNewAddon) {
         let file = new nsIFile(aAddonState.path);
         aNewAddon = syncLoadManifestFromFile(file, aInstallLocation);
-        applyBlocklistChanges(aOldAddon, aNewAddon);
 
         // Carry over any pendingUninstall state to add-ons modified directly
         // in the profile. This is important when the attempt to remove the
         // add-on in processPendingFileChanges failed and caused an mtime
         // change to the add-ons files.
         aNewAddon.pendingUninstall = aOldAddon.pendingUninstall;
+
+        aNewAddon.updateBlocklistState({oldAddon: aOldAddon});
       }
 
       // The ID in the manifest that was loaded must match the ID of the old
@@ -1432,9 +1432,7 @@ this.XPIDatabaseReconcile = {
       copyProperties(manifest, props, aOldAddon);
     }
 
-    // This updates the addon's JSON cached data in place
-    applyBlocklistChanges(aOldAddon, aOldAddon, aOldAppVersion,
-                          aOldPlatformVersion);
+    aOldAddon.updateBlocklistState({updateDatabase: false});
     aOldAddon.appDisabled = !isUsableAddon(aOldAddon);
 
     return aOldAddon;

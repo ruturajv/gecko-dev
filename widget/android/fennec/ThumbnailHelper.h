@@ -159,7 +159,7 @@ class ThumbnailHelper final
         RefPtr<gfxContext> context = gfxContext::CreateOrNull(dt);
         MOZ_ASSERT(context); // checked the draw target above
 
-        context->SetMatrix(context->CurrentMatrix().Scale(
+        context->SetMatrix(context->CurrentMatrix().PreScale(
                 aZoomFactor * float(aThumbWidth) / aPageRect.width,
                 aZoomFactor * float(aThumbHeight) / aPageRect.height));
 
@@ -206,7 +206,7 @@ public:
             void Run() override
             {
                 MessageLoop::current()->PostIdleTask(
-                        NS_NewRunnableFunction(Move(Base::lambda)));
+                    NS_NewRunnableFunction("OnNativeCall", Move(Base::lambda)));
             }
         };
 

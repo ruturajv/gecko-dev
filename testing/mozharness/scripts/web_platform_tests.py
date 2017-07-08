@@ -164,8 +164,11 @@ class WebPlatformTest(TestingMixin, MercurialScript, BlobUploadMixin, CodeCovera
                 "--stackfix-dir=%s" % os.path.join(dirs["abs_test_install_dir"], "bin"),
                 "--run-by-dir=3"]
 
-        for test_type in c.get("test_type", []):
-            cmd.append("--test-type=%s" % test_type)
+        # Let wptrunner determine the test type when --try-test-paths is used
+        wpt_test_paths = self.try_test_paths.get("web-platform-tests")
+        if not wpt_test_paths:
+            for test_type in c.get("test_type", []):
+                cmd.append("--test-type=%s" % test_type)
 
         if not c["e10s"]:
             cmd.append("--disable-e10s")
@@ -178,7 +181,7 @@ class WebPlatformTest(TestingMixin, MercurialScript, BlobUploadMixin, CodeCovera
             if val:
                 cmd.append("--%s=%s" % (opt.replace("_", "-"), val))
 
-        if "wdspec" in c.get("test_type", []):
+        if wpt_test_paths or "wdspec" in c.get("test_type", []):
             geckodriver_path = os.path.join(dirs["abs_test_bin_dir"], "geckodriver")
             if not os.path.isfile(geckodriver_path):
                 self.fatal("Unable to find geckodriver binary "
@@ -216,9 +219,26 @@ class WebPlatformTest(TestingMixin, MercurialScript, BlobUploadMixin, CodeCovera
                           "web-platform/*"],
             suite_categories=["web-platform"])
 
+    def _install_fonts(self):
+        # Ensure the Ahem font is available
+        dirs = self.query_abs_dirs()
+
+        if not sys.platform.startswith("darwin"):
+            font_path = os.path.join(os.path.dirname(self.binary_path), "fonts")
+        else:
+            font_path = os.path.join(os.path.dirname(self.binary_path), os.pardir, "Resources", "res", "fonts")
+        if not os.path.exists(font_path):
+            os.makedirs(font_path)
+        ahem_src = os.path.join(dirs["abs_wpttest_dir"], "tests", "fonts", "Ahem.ttf")
+        ahem_dest = os.path.join(font_path, "Ahem.ttf")
+        with open(ahem_src) as src, open(ahem_dest, "w") as dest:
+            dest.write(src.read())
+
     def run_tests(self):
         dirs = self.query_abs_dirs()
         cmd = self._query_cmd()
+
+        self._install_fonts()
 
         parser = StructuredOutputParser(config=self.config,
                                         log_obj=self.log_obj,

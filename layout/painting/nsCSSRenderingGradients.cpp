@@ -287,13 +287,13 @@ RectIsBeyondLinearGradientEdge(const gfxRect& aRect,
                                Color* aOutEdgeColor)
 {
   gfxFloat topLeft = LinearGradientStopPositionForPoint(
-    aGradientStart, aGradientEnd, aPatternMatrix.Transform(aRect.TopLeft()));
+    aGradientStart, aGradientEnd, aPatternMatrix.TransformPoint(aRect.TopLeft()));
   gfxFloat topRight = LinearGradientStopPositionForPoint(
-    aGradientStart, aGradientEnd, aPatternMatrix.Transform(aRect.TopRight()));
+    aGradientStart, aGradientEnd, aPatternMatrix.TransformPoint(aRect.TopRight()));
   gfxFloat bottomLeft = LinearGradientStopPositionForPoint(
-    aGradientStart, aGradientEnd, aPatternMatrix.Transform(aRect.BottomLeft()));
+    aGradientStart, aGradientEnd, aPatternMatrix.TransformPoint(aRect.BottomLeft()));
   gfxFloat bottomRight = LinearGradientStopPositionForPoint(
-    aGradientStart, aGradientEnd, aPatternMatrix.Transform(aRect.BottomRight()));
+    aGradientStart, aGradientEnd, aPatternMatrix.TransformPoint(aRect.BottomRight()));
 
   const ColorStop& firstStop = aStops[0];
   if (topLeft < firstStop.mPosition && topRight < firstStop.mPosition &&
@@ -660,8 +660,7 @@ nsCSSGradientRenderer::Paint(gfxContext& aContext,
                              const nsRect& aDirtyRect,
                              float aOpacity)
 {
-  PROFILER_LABEL("nsCSSRendering", "PaintGradient",
-    js::ProfileEntry::Category::GRAPHICS);
+  AUTO_PROFILER_LABEL("nsCSSGradientRenderer::Paint", GRAPHICS);
   Telemetry::AutoTimer<Telemetry::GRADIENT_DURATION, Telemetry::Microsecond> gradientTimer;
 
   if (aDest.IsEmpty() || aFillArea.IsEmpty()) {
@@ -695,7 +694,7 @@ nsCSSGradientRenderer::Paint(gfxContext& aContext,
     // right way up.
     if (mLineStart.x > mLineEnd.x || mLineStart.y > mLineEnd.y) {
       std::swap(mLineStart, mLineEnd);
-      matrix.Scale(-1, -1);
+      matrix.PreScale(-1, -1);
     }
 
     // Fit the gradient line exactly into the source rect.
@@ -868,16 +867,16 @@ nsCSSGradientRenderer::Paint(gfxContext& aContext,
       // Recall that this is the transform from user space to pattern space.
       // So to stretch the ellipse by factor of P vertically, we scale
       // user coordinates by 1/P.
-      matrix.Translate(mLineStart);
-      matrix.Scale(1.0, mRadiusX/mRadiusY);
-      matrix.Translate(-mLineStart);
+      matrix.PreTranslate(mLineStart);
+      matrix.PreScale(1.0, mRadiusX/mRadiusY);
+      matrix.PreTranslate(-mLineStart);
     }
   }
   // Use a pattern transform to take account of source and dest rects
-  matrix.Translate(gfxPoint(mPresContext->CSSPixelsToDevPixels(aSrc.x),
-                            mPresContext->CSSPixelsToDevPixels(aSrc.y)));
-  matrix.Scale(gfxFloat(mPresContext->CSSPixelsToAppUnits(aSrc.width))/aDest.width,
-               gfxFloat(mPresContext->CSSPixelsToAppUnits(aSrc.height))/aDest.height);
+  matrix.PreTranslate(gfxPoint(mPresContext->CSSPixelsToDevPixels(aSrc.x),
+                               mPresContext->CSSPixelsToDevPixels(aSrc.y)));
+  matrix.PreScale(gfxFloat(mPresContext->CSSPixelsToAppUnits(aSrc.width))/aDest.width,
+                  gfxFloat(mPresContext->CSSPixelsToAppUnits(aSrc.height))/aDest.height);
   gradientPattern->SetMatrix(matrix);
 
   if (stopDelta == 0.0) {
@@ -991,7 +990,7 @@ nsCSSGradientRenderer::Paint(gfxContext& aContext,
         aContext.SetColor(edgeColor);
       } else {
         aContext.SetMatrix(
-          aContext.CurrentMatrix().Copy().Translate(tileRect.TopLeft()));
+          aContext.CurrentMatrix().Copy().PreTranslate(tileRect.TopLeft()));
         aContext.SetPattern(gradientPattern);
       }
       aContext.Fill();
@@ -1085,7 +1084,7 @@ nsCSSGradientRenderer::BuildWebRenderDisplayItems(wr::DisplayListBuilder& aBuild
 
     aBuilder.PushLinearGradient(
       wrGradientBounds,
-      aBuilder.PushClipRegion(wrClipBounds),
+      wrClipBounds,
       mozilla::wr::ToWrPoint(lineStart),
       mozilla::wr::ToWrPoint(lineEnd),
       stops,
@@ -1098,7 +1097,7 @@ nsCSSGradientRenderer::BuildWebRenderDisplayItems(wr::DisplayListBuilder& aBuild
 
     aBuilder.PushRadialGradient(
       wrGradientBounds,
-      aBuilder.PushClipRegion(wrClipBounds),
+      wrClipBounds,
       mozilla::wr::ToWrPoint(lineStart),
       mozilla::wr::ToWrSize(gradientRadius),
       stops,

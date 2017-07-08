@@ -82,12 +82,12 @@ public:
 
   void OnInitialized(bool aHasAudio, bool aHasVideo)
   {
-    HLS_DEBUG("HLSDemuxerCallbacksSupport",
-              "OnInitialized");
+    HLS_DEBUG("HLSDemuxerCallbacksSupport", "OnInitialized");
     MutexAutoLock lock(mMutex);
     if (!mDemuxer) { return; }
     RefPtr<HLSDemuxerCallbacksSupport> self = this;
     mDemuxer->GetTaskQueue()->Dispatch(NS_NewRunnableFunction(
+     "HLSDemuxer::HLSDemuxerCallbacksSupport::OnInitialized",
      [=] () {
        MutexAutoLock lock(self->mMutex);
        if (self->mDemuxer) {
@@ -96,14 +96,22 @@ public:
      }));
   }
 
-  // TODO: Handle the unexpected error signal from the java implementation
-  // in bug 1368904.
   void OnError(int aErrorCode)
   {
-    HLS_DEBUG("HLSDemuxerCallbacksSupport",
-              "Got error(%d) from java side",
-              aErrorCode);
+    HLS_DEBUG("HLSDemuxerCallbacksSupport", "Got error(%d) from java side", aErrorCode);
+    MutexAutoLock lock(mMutex);
+    if (!mDemuxer) { return; }
+    RefPtr<HLSDemuxerCallbacksSupport> self = this;
+    mDemuxer->GetTaskQueue()->Dispatch(NS_NewRunnableFunction(
+     "HLSDemuxer::HLSDemuxerCallbacksSupport::OnError",
+     [=] () {
+       MutexAutoLock lock(self->mMutex);
+       if (self->mDemuxer) {
+         self->mDemuxer->OnError(aErrorCode);
+       }
+     }));
   }
+
   void Detach()
   {
     MutexAutoLock lock(mMutex);
@@ -148,6 +156,13 @@ HLSDemuxer::OnInitialized(bool aHasAudio, bool aHasVideo)
   }
 
   mInitPromise.ResolveIfExists(NS_OK, __func__);
+}
+
+void
+HLSDemuxer::OnError(int aErrorCode)
+{
+  MOZ_ASSERT(OnTaskQueue());
+  mInitPromise.RejectIfExists(NS_ERROR_DOM_MEDIA_CANCELED, __func__);
 }
 
 RefPtr<HLSDemuxer::InitPromise>
@@ -638,7 +653,8 @@ HLSTrackDemuxer::BreakCycles()
 {
   RefPtr<HLSTrackDemuxer> self = this;
   nsCOMPtr<nsIRunnable> task =
-    NS_NewRunnableFunction([self]() {
+    NS_NewRunnableFunction("HLSTrackDemuxer::BreakCycles",
+    [self]() {
       self->mParent = nullptr;
     } );
   mParent->GetTaskQueue()->Dispatch(task.forget());

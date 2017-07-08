@@ -26,6 +26,7 @@ namespace mozilla {
 class CDMProxy;
 class MediaDecoderReader;
 class TaskQueue;
+class VideoFrameContainer;
 
 struct WaitForDataRejectValue
 {
@@ -59,6 +60,18 @@ struct MetadataHolder
 {
   UniquePtr<MediaInfo> mInfo;
   UniquePtr<MetadataTags> mTags;
+};
+
+struct MOZ_STACK_CLASS MediaDecoderReaderInit
+{
+  AbstractMediaDecoder* const mDecoder;
+  MediaResource* mResource = nullptr;
+  VideoFrameContainer* mVideoFrameContainer = nullptr;
+
+  explicit MediaDecoderReaderInit(AbstractMediaDecoder* aDecoder)
+    : mDecoder(aDecoder)
+  {
+  }
 };
 
 // Encapsulates the decoding and reading of media data. Reading can either
@@ -97,7 +110,7 @@ public:
 
   // The caller must ensure that Shutdown() is called before aDecoder is
   // destroyed.
-  explicit MediaDecoderReader(AbstractMediaDecoder* aDecoder);
+  explicit MediaDecoderReader(const MediaDecoderReaderInit& aInit);
 
   // Initializes the reader, returns NS_OK on success, or NS_ERROR_FAILURE
   // on failure.
@@ -321,6 +334,8 @@ protected:
   // Notify if we are waiting for a decryption key.
   MediaEventProducer<TrackInfo::TrackType> mOnTrackWaitingForKey;
 
+  RefPtr<MediaResource> mResource;
+
 private:
   virtual nsresult InitInternal() { return NS_OK; }
 
@@ -375,8 +390,6 @@ private:
   // of Request{Audio,Video}Data.
   MozPromiseHolder<AudioDataPromise> mBaseAudioPromise;
   MozPromiseHolder<VideoDataPromise> mBaseVideoPromise;
-
-  MediaEventListener mDataArrivedListener;
 };
 
 } // namespace mozilla

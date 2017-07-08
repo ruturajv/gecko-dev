@@ -145,7 +145,11 @@ NS_IMPL_ISUPPORTS(nsXHRParseEndListener, nsIDOMEventListener)
 class nsResumeTimeoutsEvent : public Runnable
 {
 public:
-  explicit nsResumeTimeoutsEvent(nsPIDOMWindowInner* aWindow) : mWindow(aWindow) {}
+  explicit nsResumeTimeoutsEvent(nsPIDOMWindowInner* aWindow)
+    : Runnable("dom::nsResumeTimeoutsEvent")
+    , mWindow(aWindow)
+  {
+  }
 
   NS_IMETHOD Run() override
   {
@@ -178,6 +182,7 @@ XMLHttpRequestMainThread::sDontWarnAboutSyncXHR = false;
 
 XMLHttpRequestMainThread::XMLHttpRequestMainThread()
   : mResponseBodyDecodedPos(0),
+    mResponseCharset(nullptr),
     mResponseType(XMLHttpRequestResponseType::_empty),
     mRequestObserver(nullptr),
     mState(State::unsent),
@@ -312,7 +317,6 @@ XMLHttpRequestMainThread::ResetResponse()
   mResultArrayBuffer = nullptr;
   mArrayBufferBuilder.reset();
   mResultJSON.setUndefined();
-  mDataAvailable = 0;
   mLoadTransferred = 0;
   mResponseBodyDecodedPos = 0;
 }
@@ -492,7 +496,7 @@ XMLHttpRequestMainThread::GetResponseXML(ErrorResult& aRv)
 nsresult
 XMLHttpRequestMainThread::DetectCharset()
 {
-  mResponseCharset.Truncate();
+  mResponseCharset = nullptr;
   mDecoder = nullptr;
 
   if (mResponseType != XMLHttpRequestResponseType::_empty &&
@@ -519,7 +523,7 @@ XMLHttpRequestMainThread::DetectCharset()
     encoding = UTF_8_ENCODING;
   }
 
-  encoding->Name(mResponseCharset);
+  mResponseCharset = encoding;
   mDecoder = encoding->NewDecoderWithBOMRemoval();
 
   return NS_OK;
@@ -1102,10 +1106,12 @@ XMLHttpRequestMainThread::RequestErrorSteps(const ProgressEventType aEventType,
   FireReadystatechangeEvent();
 
   // Step 6
-  if (mUpload && !mUploadComplete) {
+  if (mUpload) {
 
     // Step 6-1
-    mUploadComplete = true;
+    if (!mUploadComplete) {
+      mUploadComplete = true;
+    }
 
     // Step 6-2
     if (mFlagHadUploadListenersOnSend) {
@@ -1718,8 +1724,13 @@ XMLHttpRequestMainThread::StreamReaderFunc(nsIInputStream* in,
     if (xmlHttpRequest->mArrayBufferBuilder.capacity() == 0)
       xmlHttpRequest->mArrayBufferBuilder.setCapacity(std::max(count, XML_HTTP_REQUEST_ARRAYBUFFER_MIN_SIZE));
 
-    xmlHttpRequest->mArrayBufferBuilder.append(reinterpret_cast<const uint8_t*>(fromRawSegment), count,
-                                               XML_HTTP_REQUEST_ARRAYBUFFER_MAX_GROWTH);
+    if (NS_WARN_IF(!xmlHttpRequest->mArrayBufferBuilder.append(
+                      reinterpret_cast<const uint8_t*>(fromRawSegment),
+                      count,
+                      XML_HTTP_REQUEST_ARRAYBUFFER_MAX_GROWTH))) {
+      return NS_ERROR_OUT_OF_MEMORY;
+    }
+
   } else if (xmlHttpRequest->mResponseType == XMLHttpRequestResponseType::_empty &&
              xmlHttpRequest->mResponseXML) {
     // Copy for our own use
@@ -1732,7 +1743,10 @@ XMLHttpRequestMainThread::StreamReaderFunc(nsIInputStream* in,
              xmlHttpRequest->mResponseType == XMLHttpRequestResponseType::Moz_chunked_text) {
     NS_ASSERTION(!xmlHttpRequest->mResponseXML,
                  "We shouldn't be parsing a doc here");
-    xmlHttpRequest->AppendToResponseText(fromRawSegment, count);
+    rv = xmlHttpRequest->AppendToResponseText(fromRawSegment, count);
+    if (NS_WARN_IF(NS_FAILED(rv))) {
+      return rv;
+    }
   }
 
   if (xmlHttpRequest->mFlagParseBody) {
@@ -1900,13 +1914,6 @@ XMLHttpRequestMainThread::OnDataAvailable(nsIRequest *request,
       mBlobSet = nullptr;
       NS_ASSERTION(mResponseBody.IsEmpty(), "mResponseBody should be empty");
 
-      // We don't have to read from the local file for the blob response
-      int64_t fileSize;
-      rv = localFile->GetFileSize(&fileSize);
-      NS_ENSURE_SUCCESS(rv, rv);
-
-      mDataAvailable = fileSize;
-
       // The nsIStreamListener contract mandates us to read from the stream
       // before returning.
       uint32_t totalRead;
@@ -1928,8 +1935,6 @@ XMLHttpRequestMainThread::OnDataAvailable(nsIRequest *request,
                            (void*)this, count, &totalRead);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  mDataAvailable += totalRead;
-
   // Fire the first progress event/loading state change
   if (mState != State::loading) {
     ChangeState(State::loading);
@@ -1950,8 +1955,7 @@ XMLHttpRequestMainThread::OnDataAvailable(nsIRequest *request,
 NS_IMETHODIMP
 XMLHttpRequestMainThread::OnStartRequest(nsIRequest *request, nsISupports *ctxt)
 {
-  PROFILER_LABEL("XMLHttpRequestMainThread", "OnStartRequest",
-    js::ProfileEntry::Category::NETWORK);
+  AUTO_PROFILER_LABEL("XMLHttpRequestMainThread::OnStartRequest", NETWORK);
 
   nsresult rv = NS_OK;
   if (!mFirstStartRequestSeen && mRequestObserver) {
@@ -2226,8 +2230,7 @@ XMLHttpRequestMainThread::OnStartRequest(nsIRequest *request, nsISupports *ctxt)
 NS_IMETHODIMP
 XMLHttpRequestMainThread::OnStopRequest(nsIRequest *request, nsISupports *ctxt, nsresult status)
 {
-  PROFILER_LABEL("XMLHttpRequestMainThread", "OnStopRequest",
-    js::ProfileEntry::Category::NETWORK);
+  AUTO_PROFILER_LABEL("XMLHttpRequestMainThread::OnStopRequest", NETWORK);
 
   if (request != mChannel) {
     // Can this still happen?
@@ -2433,7 +2436,7 @@ XMLHttpRequestMainThread::MatchCharsetAndDecoderToResponseDocument()
     mResponseCharset = mResponseXML->GetDocumentCharacterSet();
     TruncateResponseText();
     mResponseBodyDecodedPos = 0;
-    mDecoder = Encoding::ForName(mResponseCharset)->NewDecoderWithBOMRemoval();
+    mDecoder = mResponseCharset->NewDecoderWithBOMRemoval();
   }
 }
 
@@ -3123,9 +3126,11 @@ XMLHttpRequestMainThread::SendInternal(const BodyExtractorBase* aBody)
     } else {
       // Defer the actual sending of async events just in case listeners
       // are attached after the send() method is called.
-      return DispatchToMainThread(NewRunnableMethod<ProgressEventType>(this,
-                 &XMLHttpRequestMainThread::CloseRequestWithError,
-                 ProgressEventType::error));
+      return DispatchToMainThread(NewRunnableMethod<ProgressEventType>(
+        "dom::XMLHttpRequestMainThread::CloseRequestWithError",
+        this,
+        &XMLHttpRequestMainThread::CloseRequestWithError,
+        ProgressEventType::error));
     }
   }
 

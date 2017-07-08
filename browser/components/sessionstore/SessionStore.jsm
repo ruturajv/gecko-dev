@@ -153,7 +153,6 @@ const RESTORE_TAB_CONTENT_REASON = {
 };
 
 Cu.import("resource://gre/modules/PrivateBrowsingUtils.jsm", this);
-Cu.import("resource://gre/modules/Promise.jsm", this);
 Cu.import("resource://gre/modules/Services.jsm", this);
 Cu.import("resource://gre/modules/TelemetryStopwatch.jsm", this);
 Cu.import("resource://gre/modules/TelemetryTimestamps.jsm", this);
@@ -3597,6 +3596,10 @@ var SessionStoreInternal = {
 
     if (!!tabData.muted != browser.audioMuted) {
       tab.toggleMuteAudio(tabData.muteReason);
+    }
+
+    if (!tabData.mediaBlocked) {
+      browser.resumeMedia();
     }
 
     if (tabData.lastAccessed) {

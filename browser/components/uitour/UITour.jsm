@@ -12,7 +12,6 @@ Cu.import("resource://gre/modules/AppConstants.jsm");
 Cu.import("resource://gre/modules/Services.jsm");
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 Cu.import("resource://gre/modules/Preferences.jsm");
-Cu.import("resource://gre/modules/Promise.jsm");
 Cu.import("resource://gre/modules/TelemetryController.jsm");
 Cu.import("resource://gre/modules/Timer.jsm");
 
@@ -30,6 +29,8 @@ XPCOMUtils.defineLazyModuleGetter(this, "BrowserUITelemetry",
   "resource:///modules/BrowserUITelemetry.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "PrivateBrowsingUtils",
   "resource://gre/modules/PrivateBrowsingUtils.jsm");
+XPCOMUtils.defineLazyModuleGetter(this, "ProfileAge",
+  "resource://gre/modules/ProfileAge.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "ReaderParent",
   "resource:///modules/ReaderParent.jsm");
 
@@ -941,47 +942,45 @@ this.UITour = {
 
   getTarget(aWindow, aTargetName, aSticky = false) {
     log.debug("getTarget:", aTargetName);
-    let deferred = Promise.defer();
     if (typeof aTargetName != "string" || !aTargetName) {
       log.warn("getTarget: Invalid target name specified");
-      deferred.reject("Invalid target name specified");
-      return deferred.promise;
+      return Promise.reject("Invalid target name specified");
     }
 
     let targetObject = this.targets.get(aTargetName);
     if (!targetObject) {
       log.warn("getTarget: The specified target name is not in the allowed set");
-      deferred.reject("The specified target name is not in the allowed set");
-      return deferred.promise;
+      return Promise.reject("The specified target name is not in the allowed set");
     }
 
-    let targetQuery = targetObject.query;
-    aWindow.PanelUI.ensureReady().then(() => {
-      let node;
-      if (typeof targetQuery == "function") {
-        try {
-          node = targetQuery(aWindow.document);
-        } catch (ex) {
-          log.warn("getTarget: Error running target query:", ex);
-          node = null;
+    return new Promise(resolve => {
+      let targetQuery = targetObject.query;
+      aWindow.PanelUI.ensureReady().then(() => {
+        let node;
+        if (typeof targetQuery == "function") {
+          try {
+            node = targetQuery(aWindow.document);
+          } catch (ex) {
+            log.warn("getTarget: Error running target query:", ex);
+            node = null;
+          }
+        } else {
+          node = aWindow.document.querySelector(targetQuery);
         }
-      } else {
-        node = aWindow.document.querySelector(targetQuery);
-      }
 
-      deferred.resolve({
-        addTargetListener: targetObject.addTargetListener,
-        infoPanelOffsetX: targetObject.infoPanelOffsetX,
-        infoPanelOffsetY: targetObject.infoPanelOffsetY,
-        infoPanelPosition: targetObject.infoPanelPosition,
-        node,
-        removeTargetListener: targetObject.removeTargetListener,
-        targetName: aTargetName,
-        widgetName: targetObject.widgetName,
-        allowAdd: targetObject.allowAdd,
-      });
-    }).catch(log.error);
-    return deferred.promise;
+        resolve({
+          addTargetListener: targetObject.addTargetListener,
+          infoPanelOffsetX: targetObject.infoPanelOffsetX,
+          infoPanelOffsetY: targetObject.infoPanelOffsetY,
+          infoPanelPosition: targetObject.infoPanelPosition,
+          node,
+          removeTargetListener: targetObject.removeTargetListener,
+          targetName: aTargetName,
+          widgetName: targetObject.widgetName,
+          allowAdd: targetObject.allowAdd,
+        });
+      }).catch(log.error);
+    });
   },
 
   targetIsInAppMenu(aTarget) {
@@ -1486,43 +1485,7 @@ this.UITour = {
   getConfiguration(aMessageManager, aWindow, aConfiguration, aCallbackID) {
     switch (aConfiguration) {
       case "appinfo":
-        let props = ["defaultUpdateChannel", "version"];
-        let appinfo = {};
-        props.forEach(property => appinfo[property] = Services.appinfo[property]);
-
-        // Identifier of the partner repack, as stored in preference "distribution.id"
-        // and included in Firefox and other update pings. Note this is not the same as
-        // Services.appinfo.distributionID (value of MOZ_DISTRIBUTION_ID is set at build time).
-        let distribution =
-          Services.prefs.getDefaultBranch("distribution.").getCharPref("id", "default");
-        appinfo["distribution"] = distribution;
-
-        let isDefaultBrowser = null;
-        try {
-          let shell = aWindow.getShellService();
-          if (shell) {
-            isDefaultBrowser = shell.isDefaultBrowser(false);
-          }
-        } catch (e) {}
-        appinfo["defaultBrowser"] = isDefaultBrowser;
-
-        let canSetDefaultBrowserInBackground = true;
-        if (AppConstants.isPlatformAndVersionAtLeast("win", "6.2") ||
-            AppConstants.isPlatformAndVersionAtLeast("macosx", "10.10")) {
-          canSetDefaultBrowserInBackground = false;
-        } else if (AppConstants.platform == "linux") {
-          // The ShellService may not exist on some versions of Linux.
-          try {
-            aWindow.getShellService();
-          } catch (e) {
-            canSetDefaultBrowserInBackground = null;
-          }
-        }
-
-        appinfo["canSetDefaultBrowserInBackground"] =
-          canSetDefaultBrowserInBackground;
-
-        this.sendPageCallback(aMessageManager, aCallbackID, appinfo);
+        this.getAppInfo(aMessageManager, aWindow, aCallbackID);
         break;
       case "availableTargets":
         this.getAvailableTargets(aMessageManager, aWindow, aCallbackID);
@@ -1577,6 +1540,64 @@ this.UITour = {
         log.error("setConfiguration: Unknown configuration requested: " + aConfiguration);
         break;
     }
+  },
+
+  getAppInfo(aMessageManager, aWindow, aCallbackID) {
+    (async() => {
+      let props = ["defaultUpdateChannel", "version"];
+      let appinfo = {};
+      props.forEach(property => appinfo[property] = Services.appinfo[property]);
+
+      // Identifier of the partner repack, as stored in preference "distribution.id"
+      // and included in Firefox and other update pings. Note this is not the same as
+      // Services.appinfo.distributionID (value of MOZ_DISTRIBUTION_ID is set at build time).
+      let distribution =
+          Services.prefs.getDefaultBranch("distribution.").getCharPref("id", "default");
+      appinfo["distribution"] = distribution;
+
+      let isDefaultBrowser = null;
+      try {
+        let shell = aWindow.getShellService();
+        if (shell) {
+          isDefaultBrowser = shell.isDefaultBrowser(false);
+        }
+      } catch (e) {}
+      appinfo["defaultBrowser"] = isDefaultBrowser;
+
+      let canSetDefaultBrowserInBackground = true;
+      if (AppConstants.isPlatformAndVersionAtLeast("win", "6.2") ||
+          AppConstants.isPlatformAndVersionAtLeast("macosx", "10.10")) {
+        canSetDefaultBrowserInBackground = false;
+      } else if (AppConstants.platform == "linux") {
+        // The ShellService may not exist on some versions of Linux.
+        try {
+          aWindow.getShellService();
+        } catch (e) {
+          canSetDefaultBrowserInBackground = null;
+        }
+      }
+
+      appinfo["canSetDefaultBrowserInBackground"] =
+        canSetDefaultBrowserInBackground;
+
+      // Expose Profile creation and last reset dates in weeks.
+      const ONE_WEEK = 7 * 24 * 60 * 60 * 1000;
+      let profileAge = new ProfileAge(null, null);
+      let createdDate = await profileAge.created;
+      let resetDate = await profileAge.reset;
+      let createdWeeksAgo = Math.floor((Date.now() - createdDate) / ONE_WEEK);
+      let resetWeeksAgo = null;
+      if (resetDate) {
+        resetWeeksAgo = Math.floor((Date.now() - resetDate) / ONE_WEEK);
+      }
+      appinfo["profileCreatedWeeksAgo"] = createdWeeksAgo;
+      appinfo["profileResetWeeksAgo"] = resetWeeksAgo;
+
+      this.sendPageCallback(aMessageManager, aCallbackID, appinfo);
+    })().catch(err => {
+      log.error(err);
+      this.sendPageCallback(aMessageManager, aCallbackID, {});
+    })
   },
 
   getAvailableTargets(aMessageManager, aChromeWindow, aCallbackID) {

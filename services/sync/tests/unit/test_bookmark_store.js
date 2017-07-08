@@ -103,7 +103,7 @@ add_test(function test_bookmark_create() {
     do_check_eq(PlacesUtils.bookmarks.getItemType(id),
                 PlacesUtils.bookmarks.TYPE_BOOKMARK);
     do_check_true(PlacesUtils.bookmarks.getBookmarkURI(id).equals(tburi));
-    do_check_eq(PlacesUtils.bookmarks.getItemTitle(id), null);
+    do_check_eq(PlacesUtils.bookmarks.getItemTitle(id), "");
     let error;
     try {
       PlacesUtils.annotations.getItemAnnotation(id, "bookmarkProperties/description");
@@ -147,7 +147,7 @@ add_test(function test_bookmark_update() {
       PlacesUtils.annotations.getItemAnnotation(
         bmk1_id, "bookmarkProperties/description");
     }, Cr.NS_ERROR_NOT_AVAILABLE);
-    do_check_eq(PlacesUtils.bookmarks.getItemTitle(bmk1_id), null);
+    do_check_eq(PlacesUtils.bookmarks.getItemTitle(bmk1_id), "");
     do_check_eq(PlacesUtils.bookmarks.getKeywordForBookmark(bmk1_id), null);
   } finally {
     _("Clean up.");
@@ -303,7 +303,7 @@ add_test(function test_move_folder() {
   }
 });
 
-add_test(function test_move_order() {
+add_task(async function test_move_order() {
   // Make sure the tracker is turned on.
   Svc.Obs.notify("weave:engine:start-tracking");
   try {
@@ -331,7 +331,7 @@ add_test(function test_move_order() {
     store.applyIncoming(toolbar);
     // Bookmarks engine does this at the end of _processIncoming
     tracker.ignoreAll = true;
-    store._orderChildren();
+    await store._orderChildren();
     tracker.ignoreAll = false;
     delete store._childrenToOrder;
 
@@ -343,7 +343,6 @@ add_test(function test_move_order() {
     Svc.Obs.notify("weave:engine:stop-tracking");
     _("Clean up.");
     store.wipe();
-    run_next_test();
   }
 });
 

@@ -21,7 +21,6 @@
 #include "nsIComponentManager.h"
 #include "prio.h"
 #include "private/pprio.h"  // To get PR_ImportFile
-#include "prmem.h"
 #include "nsHashKeys.h"
 
 #include "nsXPIDLString.h"
@@ -114,6 +113,7 @@ class AsyncLocalFileWinDone : public Runnable
 {
 public:
   AsyncLocalFileWinDone() :
+    Runnable("AsyncLocalFileWinDone"),
     mWorkerThread(do_GetCurrentThread())
   {
     // Objects of this type must only be created on worker threads
@@ -143,7 +143,8 @@ class AsyncRevealOperation : public Runnable
 {
 public:
   explicit AsyncRevealOperation(const nsAString& aResolvedPath)
-    : mResolvedPath(aResolvedPath)
+    : Runnable("AsyncRevealOperation"),
+      mResolvedPath(aResolvedPath)
   {
   }
 
@@ -1016,7 +1017,7 @@ nsLocalFile::ResolveAndStat()
     return NS_OK;
   }
 
-  PROFILER_LABEL_FUNC(js::ProfileEntry::Category::OTHER);
+  AUTO_PROFILER_LABEL("nsLocalFile::ResolveAndStat", OTHER);
   // we can't resolve/stat anything that isn't a valid NSPR addressable path
   if (mWorkingPath.IsEmpty()) {
     return NS_ERROR_FILE_INVALID_PATH;

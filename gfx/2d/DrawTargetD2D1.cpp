@@ -15,6 +15,7 @@
 #include "FilterNodeD2D1.h"
 #include "ExtendInputEffectD2D1.h"
 #include "Tools.h"
+#include "nsAppRunner.h"
 
 using namespace std;
 
@@ -99,29 +100,38 @@ DrawTargetD2D1::Snapshot()
   return snapshot.forget();
 }
 
-void
+bool
 DrawTargetD2D1::EnsureLuminanceEffect()
 {
   if (mLuminanceEffect.get()) {
-    return;
+    return true;
   }
 
   HRESULT hr = mDC->CreateEffect(CLSID_D2D1LuminanceToAlpha,
                                  getter_AddRefs(mLuminanceEffect));
   if (FAILED(hr)) {
-    gfxWarning() << "Failed to create luminance effect. Code: " << hexa(hr);
+    gfxCriticalError() << "Failed to create luminance effect. Code: " << hexa(hr);
+    return false;
   }
+
+  return true;
 }
 
 already_AddRefed<SourceSurface>
 DrawTargetD2D1::IntoLuminanceSource(LuminanceType aLuminanceType, float aOpacity)
 {
-  if (aLuminanceType != LuminanceType::LUMINANCE) {
+  if ((aLuminanceType != LuminanceType::LUMINANCE) ||
+      // See bug 1372577, some race condition where we get invalid
+      // results with D2D in the parent process. Fallback in that case.
+      XRE_IsParentProcess()) {
     return DrawTarget::IntoLuminanceSource(aLuminanceType, aOpacity);
   }
 
   // Create the luminance effect
-  EnsureLuminanceEffect();
+  if (!EnsureLuminanceEffect()) {
+    return DrawTarget::IntoLuminanceSource(aLuminanceType, aOpacity);
+  }
+
   mLuminanceEffect->SetInput(0, mBitmap);
 
   RefPtr<ID2D1Image> luminanceOutput;

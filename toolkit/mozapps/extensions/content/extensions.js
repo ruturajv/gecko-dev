@@ -1484,7 +1484,9 @@ var gViewController = {
       doCommand() {
         let mainWindow = getMainWindow();
         if ("switchToTabHavingURI" in mainWindow) {
-          mainWindow.switchToTabHavingURI("about:debugging#addons", true);
+          mainWindow.switchToTabHavingURI("about:debugging#addons", true, {
+            triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
+          });
         }
       },
     },
@@ -1664,7 +1666,9 @@ function hasInlineOptions(aAddon) {
 function openOptionsInTab(optionsURL) {
   let mainWindow = getMainWindow();
   if ("switchToTabHavingURI" in mainWindow) {
-    mainWindow.switchToTabHavingURI(optionsURL, true);
+    mainWindow.switchToTabHavingURI(optionsURL, true, {
+      triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
+    });
     return true;
   }
   return false;
@@ -2868,7 +2872,9 @@ var gLegacyView = {
     gViewController.notifyViewChanged();
   },
 
-  hide() {},
+  hide() {
+    doPendingUninstalls(this._listBox);
+  },
 
   getSelectedAddon() {
     var item = this._listBox.selectedItem;
@@ -3249,6 +3255,7 @@ var gDetailView = {
       // plugins without having bug 624602 fixed yet, and intentionally ignores
       // localisation.
       if (aAddon.isGMPlugin) {
+        // eslint-disable-next-line no-unsanitized/property
         fullDesc.innerHTML = aAddon.fullDescription;
       } else {
         fullDesc.textContent = aAddon.fullDescription;

@@ -8,7 +8,7 @@ XPCOMUtils.defineLazyModuleGetter(global, "EventEmitter",
 
 // This function is pretty tightly tied to Extension.jsm.
 // Its job is to fill in the |tab| property of the sender.
-function getSender(extension, target, sender) {
+const getSender = (extension, target, sender) => {
   let tabId;
   if ("tabId" in sender) {
     // The message came from a privileged extension page running in a tab. In
@@ -26,7 +26,7 @@ function getSender(extension, target, sender) {
       sender.tab = tab.convert();
     }
   }
-}
+};
 
 // Used by Extension.jsm
 global.tabGetSender = getSender;
@@ -65,7 +65,9 @@ global.openOptionsPage = (extension) => {
   }
 
   if (extension.manifest.options_ui.open_in_tab) {
-    window.switchToTabHavingURI(extension.manifest.options_ui.page, true);
+    window.switchToTabHavingURI(extension.manifest.options_ui.page, true, {
+      triggeringPrincipal: extension.principal,
+    });
     return Promise.resolve();
   }
 

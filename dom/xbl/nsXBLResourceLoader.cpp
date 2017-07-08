@@ -113,7 +113,7 @@ nsXBLResourceLoader::LoadResources(nsIContent* aBoundElement)
       continue;
 
     if (NS_FAILED(NS_NewURI(getter_AddRefs(url), curr->mSrc,
-                            doc->GetDocumentCharacterSet().get(), docURL)))
+                            doc->GetDocumentCharacterSet(), docURL)))
       continue;
 
     if (curr->mType == nsGkAtoms::image) {
@@ -268,6 +268,13 @@ nsXBLResourceLoader::NotifyBoundElements()
             }
 
             if (!sc) {
+              if (shell->StyleSet()->IsServo()) {
+                // Ensure the element has servo data so that
+                // nsChangeHint_ReconstructFrame posted by
+                // PostRecreateFramesFor() is recognized.
+                shell->StyleSet()->GetAsServo()->StyleNewlyBoundElement(
+                  content->AsElement());
+              }
               shell->PostRecreateFramesFor(content->AsElement());
             }
           }

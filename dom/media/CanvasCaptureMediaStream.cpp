@@ -144,7 +144,11 @@ public:
     if (!mTimer) {
       return;
     }
-    mTimer->InitWithFuncCallback(&TimerTick, this, int(1000 / mFPS), nsITimer::TYPE_REPEATING_SLACK);
+    mTimer->InitWithNamedFuncCallback(&TimerTick,
+                                      this,
+                                      int(1000 / mFPS),
+                                      nsITimer::TYPE_REPEATING_SLACK,
+                                      "dom::TimerDriver::TimerDriver");
   }
 
   static void TimerTick(nsITimer* aTimer, void* aClosure)
@@ -276,7 +280,8 @@ CanvasCaptureMediaStream::CreateSourceStream(nsPIDOMWindowInner* aWindow,
   RefPtr<CanvasCaptureMediaStream> stream = new CanvasCaptureMediaStream(aWindow, aCanvas);
   MediaStreamGraph* graph =
     MediaStreamGraph::GetInstance(MediaStreamGraph::SYSTEM_THREAD_DRIVER,
-                                  AudioChannel::Normal);
+                                  AudioChannel::Normal,
+                                  aWindow);
   stream->InitSourceStream(graph);
   return stream.forget();
 }

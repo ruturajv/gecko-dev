@@ -20,7 +20,6 @@ Cu.import("resource://gre/modules/TelemetryEnvironment.jsm", this);
 Cu.import("resource://gre/modules/TelemetrySend.jsm", this);
 Cu.import("resource://gre/modules/TelemetryUtils.jsm", this);
 Cu.import("resource://gre/modules/TelemetryReportingPolicy.jsm", this);
-Cu.import("resource://gre/modules/Promise.jsm", this);
 Cu.import("resource://gre/modules/Preferences.jsm");
 Cu.import("resource://gre/modules/osfile.jsm", this);
 
@@ -57,13 +56,6 @@ var gNumberOfThreadsLaunched = 0;
 
 const MS_IN_ONE_HOUR  = 60 * 60 * 1000;
 const MS_IN_ONE_DAY   = 24 * MS_IN_ONE_HOUR;
-
-const PREF_BRANCH = "toolkit.telemetry.";
-const PREF_SERVER = PREF_BRANCH + "server";
-const PREF_FHR_UPLOAD_ENABLED = "datareporting.healthreport.uploadEnabled";
-const PREF_BYPASS_NOTIFICATION = "datareporting.policy.dataSubmissionPolicyBypassNotification";
-const PREF_SHUTDOWN_PINGSENDER = "toolkit.telemetry.shutdownPingSender.enabled";
-const PREF_POLICY_FIRSTRUN = "toolkit.telemetry.reportingpolicy.firstRun";
 
 const DATAREPORTING_DIR = "datareporting";
 const ABORTED_PING_FILE_NAME = "aborted-session-ping";
@@ -455,7 +447,7 @@ function writeStringToFile(file, contents) {
   let ostream = Cc["@mozilla.org/network/safe-file-output-stream;1"]
                 .createInstance(Ci.nsIFileOutputStream);
   ostream.init(file, PR_WRONLY | PR_CREATE_FILE | PR_TRUNCATE,
-	       RW_OWNER, ostream.DEFER_OPEN);
+               RW_OWNER, ostream.DEFER_OPEN);
   ostream.write(contents, contents.length);
   ostream.QueryInterface(Ci.nsISafeOutputStream).finish();
   ostream.close();
@@ -484,8 +476,8 @@ add_task(async function test_setup() {
   // Make sure we don't generate unexpected pings due to pref changes.
   await setEmptyPrefWatchlist();
 
-  Services.prefs.setBoolPref(PREF_TELEMETRY_ENABLED, true);
-  Services.prefs.setBoolPref(PREF_FHR_UPLOAD_ENABLED, true);
+  Services.prefs.setBoolPref(TelemetryUtils.Preferences.TelemetryEnabled, true);
+  Services.prefs.setBoolPref(TelemetryUtils.Preferences.FhrUploadEnabled, true);
 
   // Make it look like we've previously failed to lock a profile a couple times.
   write_fake_failedprofilelocks_file();
@@ -551,7 +543,7 @@ add_task(async function test_noServerPing() {
 add_task(async function test_simplePing() {
   await TelemetryStorage.testClearPendingPings();
   PingServer.start();
-  Preferences.set(PREF_SERVER, "http://localhost:" + PingServer.port);
+  Preferences.set(TelemetryUtils.Preferences.Server, "http://localhost:" + PingServer.port);
 
   let now = new Date(2020, 1, 1, 12, 5, 6);
   let expectedDate = new Date(2020, 1, 1, 12, 0, 0);
@@ -1387,8 +1379,8 @@ add_task(async function test_sendShutdownPing() {
               "The OS shutdown scalar must be set to true.");
   };
 
-  Preferences.set(PREF_SHUTDOWN_PINGSENDER, true);
-  Preferences.set(PREF_POLICY_FIRSTRUN, false);
+  Preferences.set(TelemetryUtils.Preferences.ShutdownPingSender, true);
+  Preferences.set(TelemetryUtils.Preferences.FirstRun, false);
   // Make sure the reporting policy picks up the updated pref.
   TelemetryReportingPolicy.testUpdateFirstRun();
   PingServer.clearRequests();
@@ -1408,7 +1400,7 @@ add_task(async function test_sendShutdownPing() {
   // Try again, this time disable ping upload. The PingSender
   // should not be sending any ping!
   PingServer.registerPingHandler(() => Assert.ok(false, "Telemetry must not send pings if not allowed to."));
-  Preferences.set(PREF_FHR_UPLOAD_ENABLED, false);
+  Preferences.set(TelemetryUtils.Preferences.FhrUploadEnabled, false);
   await TelemetryController.testReset();
   await TelemetryController.testShutdown();
 
@@ -1417,7 +1409,7 @@ add_task(async function test_sendShutdownPing() {
 
   // Enable ping upload and signal an OS shutdown. The pingsender
   // will not be spawned and no ping will be sent.
-  Preferences.set(PREF_FHR_UPLOAD_ENABLED, true);
+  Preferences.set(TelemetryUtils.Preferences.FhrUploadEnabled, true);
   await TelemetryController.testReset();
   Services.obs.notifyObservers(null, "quit-application-forced");
   await TelemetryController.testShutdown();
@@ -1438,21 +1430,21 @@ add_task(async function test_sendShutdownPing() {
   await TelemetryStorage.testClearPendingPings();
 
   // Disable the "submission policy". The shutdown ping must not be sent.
-  Preferences.set(PREF_BYPASS_NOTIFICATION, false);
+  Preferences.set(TelemetryUtils.Preferences.BypassNotification, false);
   await TelemetryController.testReset();
   await TelemetryController.testShutdown();
 
   // Make sure we have no pending pings between the runs.
   await TelemetryStorage.testClearPendingPings();
 
-  // We cannot reset PREF_BYPASS_NOTIFICATION, as we need it to be
+  // We cannot reset the BypassNotification pref, as we need it to be
   // |true| in tests.
-  Preferences.set(PREF_BYPASS_NOTIFICATION, true);
+  Preferences.set(TelemetryUtils.Preferences.BypassNotification, true);
 
   // With both upload enabled and the policy shown, make sure we don't
   // send the shutdown ping using the pingsender on the first
   // subsession.
-  Preferences.set(PREF_POLICY_FIRSTRUN, true);
+  Preferences.set(TelemetryUtils.Preferences.FirstRun, true);
   // Make sure the reporting policy picks up the updated pref.
   TelemetryReportingPolicy.testUpdateFirstRun();
 
@@ -1460,8 +1452,8 @@ add_task(async function test_sendShutdownPing() {
   await TelemetryController.testShutdown();
 
   // Reset the pref and restart Telemetry.
-  Preferences.set(PREF_SHUTDOWN_PINGSENDER, false);
-  Preferences.reset(PREF_POLICY_FIRSTRUN);
+  Preferences.set(TelemetryUtils.Preferences.ShutdownPingSender, false);
+  Preferences.reset(TelemetryUtils.Preferences.FirstRun);
   PingServer.resetPingHandler();
   await TelemetryController.testReset();
 });
@@ -1870,9 +1862,10 @@ add_task(async function test_schedulerEnvironmentReschedules() {
     [PREF_TEST, {what: TelemetryEnvironment.RECORD_PREF_VALUE}],
   ]);
 
+  await TelemetryController.testReset();
+  await TelemetryController.testShutdown();
   await TelemetryStorage.testClearPendingPings();
   PingServer.clearRequests();
-  await TelemetryController.testReset();
 
   // Set a fake current date and start Telemetry.
   let nowDate = fakeNow(2060, 10, 18, 0, 0, 0);
@@ -2030,7 +2023,7 @@ add_task(async function test_schedulerUserIdle() {
   Assert.equal(schedulerTimeout, SCHEDULER_TICK_IDLE_INTERVAL_MS);
 
   // Send an "active" notification to the scheduler.
-  fakeIdleNotification("active");
+  await fakeIdleNotification("active");
 
   // When user is back active, the scheduler tick should be 5 minutes again.
   Assert.equal(schedulerTimeout, SCHEDULER_TICK_INTERVAL_MS);

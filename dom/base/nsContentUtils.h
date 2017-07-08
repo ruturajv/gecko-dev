@@ -195,6 +195,12 @@ struct EventNameMapping
 typedef bool (*CallOnRemoteChildFunction) (mozilla::dom::TabParent* aTabParent,
                                            void* aArg);
 
+namespace mozilla {
+// 16 seems to be the maximum number of manual NAC nodes that editor
+// creates for a given element.
+typedef AutoTArray<mozilla::dom::Element*,16> ManualNAC;
+}
+
 class nsContentUtils
 {
   friend class nsAutoScriptBlockerSuppressNodeRemoved;
@@ -1879,6 +1885,16 @@ public:
    */
   static void RunInMetastableState(already_AddRefed<nsIRunnable> aRunnable);
 
+  /**
+   * Returns a nsISerialEventTarget which will run any event dispatched to it
+   * once the event loop has reached a "stable state". Runnables dispatched to
+   * this event target must not cause any queued events to be processed (i.e.
+   * must not spin the event loop).
+   *
+   * See RunInStableState for more information about stable states
+   */
+  static nsISerialEventTarget* GetStableStateEventTarget();
+
   // Call EnterMicroTask when you're entering JS execution.
   // Usually the best way to do this is to use nsAutoMicroTask.
   static void EnterMicroTask();
@@ -2279,6 +2295,14 @@ public:
 #else
     return sBypassCSSOMOriginCheck;
 #endif
+  }
+
+  /**
+   * Returns true if the <style scoped> enabling pref is true.
+   */
+  static bool IsScopedStylePrefEnabled()
+  {
+    return sIsScopedStyleEnabled;
   }
 
   /**
@@ -3030,6 +3054,15 @@ public:
   // if we want to lower the priority of the channel.
   static bool IsLowerNetworkPriority() { return sLowerNetworkPriority; }
 
+  // Check pref "dom.placeholder.show_on_focus" to see
+  // if we want to show the placeholder inside input elements
+  // when they have focus.
+  static bool ShowInputPlaceholderOnFocus() { return sShowInputPlaceholderOnFocus; }
+
+  // Check pref "browser.autofocus" to see if we want to enable autofocusing elements
+  // when the page requests it.
+  static bool AutoFocusEnabled() { return sAutoFocusEnabled; }
+
   // Check pref "dom.script_loader.bytecode_cache.enabled" to see
   // if we want to cache JS bytecode on the cache entry.
   static bool IsBytecodeCacheEnabled() { return sIsBytecodeCacheEnabled; }
@@ -3048,6 +3081,16 @@ public:
    * "_parent" and "_self".
    */
   static bool IsOverridingWindowName(const nsAString& aName);
+
+  /**
+   * If there is a SourceMap (higher precedence) or X-SourceMap (lower
+   * precedence) response header in |aChannel|, set |aResult| to the
+   * header's value and return true.  Otherwise, return false.
+   *
+   * @param aChannel The HTTP channel
+   * @param aResult The string result.
+   */
+  static bool GetSourceMapURL(nsIHttpChannel* aChannel, nsACString& aResult);
 
 private:
   static bool InitializeEventTable();
@@ -3189,9 +3232,12 @@ private:
   static bool sSkipCursorMoveForSameValueSet;
   static bool sRequestIdleCallbackEnabled;
   static bool sLowerNetworkPriority;
+  static bool sShowInputPlaceholderOnFocus;
+  static bool sAutoFocusEnabled;
 #ifndef RELEASE_OR_BETA
   static bool sBypassCSSOMOriginCheck;
 #endif
+  static bool sIsScopedStyleEnabled;
   static bool sIsBytecodeCacheEnabled;
   static int32_t sBytecodeCacheStrategy;
   static uint32_t sCookiesLifetimePolicy;
@@ -3211,6 +3257,8 @@ private:
    * True if there's a fragment parser activation on the stack.
    */
   static bool sFragmentParsingActive;
+
+  static nsISerialEventTarget* sStableStateEventTarget;
 
   static nsString* sShiftText;
   static nsString* sControlText;

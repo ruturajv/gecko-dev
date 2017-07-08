@@ -38,12 +38,8 @@ XPCOMUtils.defineLazyModuleGetter(this, "NetUtil",
                                   "resource://gre/modules/NetUtil.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "PermissionsUtils",
                                   "resource://gre/modules/PermissionsUtils.jsm");
-XPCOMUtils.defineLazyModuleGetter(this, "Promise",
-                                  "resource://gre/modules/Promise.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "OS",
                                   "resource://gre/modules/osfile.jsm");
-XPCOMUtils.defineLazyModuleGetter(this, "BrowserToolboxProcess",
-                                  "resource://devtools/client/framework/ToolboxProcess.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "ConsoleAPI",
                                   "resource://gre/modules/Console.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "ProductAddonChecker",
@@ -102,6 +98,7 @@ const nsIFile = Components.Constructor("@mozilla.org/file/local;1", "nsIFile",
 
 const PREF_DB_SCHEMA                  = "extensions.databaseSchema";
 const PREF_XPI_STATE                  = "extensions.xpiState";
+const PREF_BLOCKLIST_ITEM_URL         = "extensions.blocklist.itemURL";
 const PREF_BOOTSTRAP_ADDONS           = "extensions.bootstrappedAddons";
 const PREF_PENDING_OPERATIONS         = "extensions.pendingOperations";
 const PREF_SKIN_SWITCHPENDING         = "extensions.dss.switchPending";
@@ -193,11 +190,11 @@ const TOOLKIT_ID                      = "toolkit@mozilla.org";
 
 const XPI_SIGNATURE_CHECK_PERIOD      = 24 * 60 * 60;
 
-XPCOMUtils.defineConstant(this, "DB_SCHEMA", 21);
+XPCOMUtils.defineConstant(this, "DB_SCHEMA", 22);
 
 XPCOMUtils.defineLazyPreferenceGetter(this, "ALLOW_NON_MPC", PREF_ALLOW_NON_MPC);
 
-const NOTIFICATION_TOOLBOXPROCESS_LOADED      = "ToolboxProcessLoaded";
+const NOTIFICATION_TOOLBOX_CONNECTION_CHANGE      = "toolbox-connection-change";
 
 // Properties that exist in the install manifest
 const PROP_LOCALE_SINGLE = ["name", "description", "creator", "homepageURL"];
@@ -337,7 +334,6 @@ function loadLazyObjects() {
     syncLoadManifestFromFile,
     isUsableAddon,
     recordAddonTelemetry,
-    applyBlocklistChanges,
     flushChromeCaches,
     descriptorToPath,
   });
@@ -762,57 +758,6 @@ SafeInstallOperation.prototype = {
       recursiveRemove(this._createdDirs.pop());
   }
 };
-
-/**
- * Sets the userDisabled and softDisabled properties of an add-on based on what
- * values those properties had for a previous instance of the add-on. The
- * previous instance may be a previous install or in the case of an application
- * version change the same add-on.
- *
- * NOTE: this may modify aNewAddon in place; callers should save the database if
- * necessary
- *
- * @param  aOldAddon
- *         The previous instance of the add-on
- * @param  aNewAddon
- *         The new instance of the add-on
- * @param  aAppVersion
- *         The optional application version to use when checking the blocklist
- *         or undefined to use the current application
- * @param  aPlatformVersion
- *         The optional platform version to use when checking the blocklist or
- *         undefined to use the current platform
- */
-function applyBlocklistChanges(aOldAddon, aNewAddon, aOldAppVersion,
-                               aOldPlatformVersion) {
-  // Copy the properties by default
-  aNewAddon.userDisabled = aOldAddon.userDisabled;
-  aNewAddon.softDisabled = aOldAddon.softDisabled;
-
-  let oldBlocklistState = Blocklist.getAddonBlocklistState(aOldAddon.wrapper,
-                                                           aOldAppVersion,
-                                                           aOldPlatformVersion);
-  let newBlocklistState = Blocklist.getAddonBlocklistState(aNewAddon.wrapper);
-
-  // If the blocklist state hasn't changed then the properties don't need to
-  // change
-  if (newBlocklistState == oldBlocklistState)
-    return;
-
-  if (newBlocklistState == Blocklist.STATE_SOFTBLOCKED) {
-    if (aNewAddon.type != "theme") {
-      // The add-on has become softblocked, set softDisabled if it isn't already
-      // userDisabled
-      aNewAddon.softDisabled = !aNewAddon.userDisabled;
-    } else {
-      // Themes just get userDisabled to switch back to the default theme
-      aNewAddon.userDisabled = true;
-    }
-  } else {
-    // If the new add-on is not softblocked then it cannot be softDisabled
-    aNewAddon.softDisabled = false;
-  }
-}
 
 /**
  * Evaluates whether an add-on is allowed to run in safe mode.
@@ -1880,8 +1825,6 @@ this.XPIProvider = {
   _telemetryDetails: {},
   // A Map from an add-on install to its ID
   _addonFileMap: new Map(),
-  // Flag to know if ToolboxProcess.jsm has already been loaded by someone or not
-  _toolboxProcessLoaded: false,
   // Have we started shutting down bootstrap add-ons?
   _closing: false,
 
@@ -2223,21 +2166,7 @@ this.XPIProvider = {
       Services.prefs.addObserver(PREF_ALLOW_LEGACY, this);
       Services.prefs.addObserver(PREF_ALLOW_NON_MPC, this);
       Services.obs.addObserver(this, NOTIFICATION_FLUSH_PERMISSIONS);
-
-      // Cu.isModuleLoaded can fail here for external XUL apps where there is
-      // no chrome.manifest that defines resource://devtools.
-      if (ResProtocolHandler.hasSubstitution("devtools")) {
-        if (Cu.isModuleLoaded("resource://devtools/client/framework/ToolboxProcess.jsm")) {
-          // If BrowserToolboxProcess is already loaded, set the boolean to true
-          // and do whatever is needed
-          this._toolboxProcessLoaded = true;
-          BrowserToolboxProcess.on("connectionchange",
-                                   this.onDebugConnectionChange.bind(this));
-        } else {
-          // Else, wait for it to load
-          Services.obs.addObserver(this, NOTIFICATION_TOOLBOXPROCESS_LOADED);
-        }
-      }
+      Services.obs.addObserver(this, NOTIFICATION_TOOLBOX_CONNECTION_CHANGE);
 
 
       let flushCaches = this.checkForChanges(aAppChanged, aOldAppVersion,
@@ -3918,12 +3847,12 @@ this.XPIProvider = {
     }
   },
 
-  onDebugConnectionChange(aEvent, aWhat, aConnection) {
-    if (aWhat != "opened")
+  onDebugConnectionChange({what, connection}) {
+    if (what != "opened")
       return;
 
     for (let [id, val] of this.activeAddons) {
-      aConnection.setAddonOptions(
+      connection.setAddonOptions(
         id, { global: val.bootstrapScope });
     }
   },
@@ -3939,11 +3868,9 @@ this.XPIProvider = {
         this.importPermissions();
       }
       return;
-    } else if (aTopic == NOTIFICATION_TOOLBOXPROCESS_LOADED) {
-      Services.obs.removeObserver(this, NOTIFICATION_TOOLBOXPROCESS_LOADED);
-      this._toolboxProcessLoaded = true;
-      BrowserToolboxProcess.on("connectionchange",
-                               this.onDebugConnectionChange.bind(this));
+    } else if (aTopic == NOTIFICATION_TOOLBOX_CONNECTION_CHANGE) {
+      this.onDebugConnectionChange(aSubject.wrappedJSObject);
+      return;
     }
 
     if (aTopic == "nsPref:changed") {
@@ -4310,13 +4237,9 @@ this.XPIProvider = {
       logger.warn("Error loading bootstrap.js for " + aId, e);
     }
 
-    // Only access BrowserToolboxProcess if ToolboxProcess.jsm has been
-    // initialized as otherwise, when it will be initialized, all addons'
-    // globals will be added anyways
-    if (this._toolboxProcessLoaded) {
-      BrowserToolboxProcess.setAddonOptions(aId,
-        { global: activeAddon.bootstrapScope });
-    }
+    // Notify the BrowserToolboxProcess that a new addon has been loaded.
+    let wrappedJSObject = { id: aId, options: { global: activeAddon.bootstrapScope }};
+    Services.obs.notifyObservers({ wrappedJSObject }, "toolbox-update-addon-options");
   },
 
   /**
@@ -4335,11 +4258,9 @@ this.XPIProvider = {
     this.activeAddons.delete(aId);
     this.addAddonsToCrashReporter();
 
-    // Only access BrowserToolboxProcess if ToolboxProcess.jsm has been
-    // initialized as otherwise, there won't be any addon globals added to it
-    if (this._toolboxProcessLoaded) {
-      BrowserToolboxProcess.setAddonOptions(aId, { global: null });
-    }
+    // Notify the BrowserToolboxProcess that an addon has been unloaded.
+    let wrappedJSObject = { id: aId, options: { global: null }};
+    Services.obs.notifyObservers({ wrappedJSObject }, "toolbox-update-addon-options");
   },
 
   /**
@@ -4577,7 +4498,7 @@ this.XPIProvider = {
         XPIDatabase.updateAddonActive(aAddon, !isDisabled);
 
         if (isDisabled) {
-          if (aAddon.bootstrap) {
+          if (aAddon.bootstrap && this.activeAddons.has(aAddon.id)) {
             this.callBootstrapMethod(aAddon, aAddon._sourceBundle, "shutdown",
                                      BOOTSTRAP_REASONS.ADDON_DISABLE);
             this.unloadBootstrapScope(aAddon.id);
@@ -4847,6 +4768,8 @@ AddonInternal.prototype = {
   userDisabled: false,
   appDisabled: false,
   softDisabled: false,
+  blocklistState: Ci.nsIBlocklistService.STATE_NOT_BLOCKED,
+  blocklistURL: null,
   sourceURI: null,
   releaseNotesURI: null,
   foreignInstall: false,
@@ -5016,22 +4939,63 @@ AddonInternal.prototype = {
     return app;
   },
 
-  get blocklistState() {
-    let staticItem = findMatchingStaticBlocklistItem(this);
-    if (staticItem)
-      return staticItem.level;
-
-    return Blocklist.getAddonBlocklistState(this.wrapper);
-  },
-
-  get blocklistURL() {
+  findBlocklistEntry() {
     let staticItem = findMatchingStaticBlocklistItem(this);
     if (staticItem) {
-      let url = Services.urlFormatter.formatURLPref("extensions.blocklist.itemURL");
-      return url.replace(/%blockID%/g, staticItem.blockID);
+      let url = Services.urlFormatter.formatURLPref(PREF_BLOCKLIST_ITEM_URL);
+      return {
+        state: staticItem.level,
+        url: url.replace(/%blockID%/g, staticItem.blockID)
+      };
     }
 
-    return Blocklist.getAddonBlocklistURL(this.wrapper);
+    return Blocklist.getAddonBlocklistEntry(this.wrapper);
+  },
+
+  updateBlocklistState(options = {}) {
+    let {applySoftBlock = true, oldAddon = null, updateDatabase = true} = options;
+
+    if (oldAddon) {
+      this.userDisabled = oldAddon.userDisabled;
+      this.softDisabled = oldAddon.softDisabled;
+      this.blocklistState = oldAddon.blocklistState;
+    }
+    let oldState = this.blocklistState;
+
+    let entry = this.findBlocklistEntry();
+    let newState = entry ? entry.state : Blocklist.STATE_NOT_BLOCKED;
+
+    this.blocklistState = newState;
+    this.blocklistURL = entry && entry.url;
+
+    let userDisabled, softDisabled;
+    // After a blocklist update, the blocklist service manually applies
+    // new soft blocks after displaying a UI, in which cases we need to
+    // skip updating it here.
+    if (applySoftBlock && oldState != newState) {
+      if (newState == Blocklist.STATE_SOFTBLOCKED) {
+        if (this.type == "theme") {
+          userDisabled = true;
+        } else {
+          softDisabled = !this.userDisabled;
+        }
+      } else {
+        softDisabled = false;
+      }
+    }
+
+    if (this.inDatabase && updateDatabase) {
+      XPIProvider.updateAddonDisabledState(this, userDisabled, softDisabled);
+      XPIDatabase.saveChanges();
+    } else {
+      this.appDisabled = !isUsableAddon(this);
+      if (userDisabled !== undefined) {
+        this.userDisabled = userDisabled;
+      }
+      if (softDisabled !== undefined) {
+        this.softDisabled = softDisabled;
+      }
+    }
   },
 
   applyCompatibilityUpdate(aUpdate, aSyncCompatibility) {
@@ -5449,6 +5413,10 @@ AddonWrapper.prototype = {
     if (!Services.appinfo.inSafeMode)
       return true;
     return addon.bootstrap && canRunInSafeMode(addon);
+  },
+
+  updateBlocklistState(applySoftBlock = true) {
+    addonFor(this).updateBlocklistState({applySoftBlock});
   },
 
   get userDisabled() {
@@ -6873,7 +6841,6 @@ this.XPIInternal = {
   TEMPORARY_ADDON_SUFFIX,
   TOOLKIT_ID,
   XPIStates,
-  applyBlocklistChanges,
   getExternalType,
   isTheme,
   isUsableAddon,

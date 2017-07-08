@@ -171,6 +171,7 @@ ${helpers.single_keyword("position", "static absolute relative fixed",
                                   gecko_enum_prefix="StyleFloat"
                                   gecko_inexhaustive="True"
                                   gecko_ffi_name="mFloat"
+                                  gecko_pref_ident="float_"
                                   spec="https://drafts.csswg.org/css-box/#propdef-float">
     no_viewport_percentage!(SpecifiedValue);
     impl ToComputedValue for SpecifiedValue {
@@ -429,17 +430,19 @@ ${helpers.predefined_type("transition-timing-function",
                           extra_prefixes="moz webkit",
                           spec="https://drafts.csswg.org/css-transitions/#propdef-transition-timing-function")}
 
-${helpers.predefined_type("transition-property",
-                          "TransitionProperty",
-                          "computed::TransitionProperty::All",
-                          initial_specified_value="specified::TransitionProperty::All",
-                          vector=True,
-                          allow_empty=True,
-                          need_index=True,
-                          needs_context=False,
-                          animation_value_type="none",
-                          extra_prefixes="moz webkit",
-                          spec="https://drafts.csswg.org/css-transitions/#propdef-transition-property")}
+${helpers.predefined_type(
+    "transition-property",
+    "TransitionProperty",
+    "computed::TransitionProperty::All",
+    initial_specified_value="specified::TransitionProperty::All",
+    vector=True,
+    allow_empty="NotInitial",
+    need_index=True,
+    needs_context=False,
+    animation_value_type="none",
+    extra_prefixes="moz webkit",
+    spec="https://drafts.csswg.org/css-transitions/#propdef-transition-property",
+)}
 
 ${helpers.predefined_type("transition-delay",
                           "Time",
@@ -653,7 +656,7 @@ ${helpers.predefined_type("animation-delay",
         "scroll-snap-points-" + axis,
         "ScrollSnapPoint",
         "computed::ScrollSnapPoint::none()",
-        animation_value_type="none",
+        animation_value_type="discrete",
         products="gecko",
         disable_when_testing=True,
         spec="Nonstandard (https://www.w3.org/TR/2015/WD-css-snappoints-1-20150326/#scroll-snap-points)",
@@ -668,16 +671,16 @@ ${helpers.predefined_type("scroll-snap-destination",
                           spec="Nonstandard (https://developer.mozilla.org/en-US/docs/Web/CSS/scroll-snap-destination)",
                           animation_value_type="ComputedValue")}
 
-${helpers.predefined_type("scroll-snap-coordinate",
-                          "Position",
-                          "computed::Position::zero()",
-                          vector=True,
-                          products="gecko",
-                          spec="Nonstandard (https://developer.mozilla.org/en-US/docs/Web/CSS/scroll-snap-destination)",
-                          animation_value_type="ComputedValue",
-                          allow_empty=True,
-                          delegate_animate=True)}
-
+${helpers.predefined_type(
+    "scroll-snap-coordinate",
+    "Position",
+    "computed::Position::zero()",
+    vector=True,
+    products="gecko",
+    spec="Nonstandard (https://developer.mozilla.org/en-US/docs/Web/CSS/scroll-snap-destination)",
+    animation_value_type="ComputedValue",
+    allow_empty="NotInitial"
+)}
 
 <%helpers:longhand name="transform" extra_prefixes="webkit"
                    animation_value_type="ComputedValue"
@@ -1870,7 +1873,7 @@ ${helpers.single_keyword("-moz-orient",
                           gecko_inexhaustive="True",
                           animation_value_type="discrete")}
 
-<%helpers:longhand name="will-change" products="gecko" animation_value_type="none"
+<%helpers:longhand name="will-change" products="gecko" animation_value_type="discrete"
                    spec="https://drafts.csswg.org/css-will-change/#will-change">
     use std::fmt;
     use style_traits::ToCss;

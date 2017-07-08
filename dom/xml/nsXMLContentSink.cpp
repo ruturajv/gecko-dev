@@ -31,7 +31,6 @@
 #include "nsIContentViewer.h"
 #include "prtime.h"
 #include "mozilla/Logging.h"
-#include "prmem.h"
 #include "nsRect.h"
 #include "nsIWebNavigation.h"
 #include "nsIScriptElement.h"
@@ -731,14 +730,12 @@ nsXMLContentSink::ProcessStyleLink(nsIContent* aElement,
   return rv;
 }
 
-NS_IMETHODIMP
-nsXMLContentSink::SetDocumentCharset(nsACString& aCharset)
+void
+nsXMLContentSink::SetDocumentCharset(NotNull<const Encoding*> aEncoding)
 {
   if (mDocument) {
-    mDocument->SetDocumentCharacterSet(aCharset);
+    mDocument->SetDocumentCharacterSet(aEncoding);
   }
-
-  return NS_OK;
 }
 
 nsISupports *
@@ -1468,7 +1465,7 @@ nsXMLContentSink::FlushPendingNotifications(FlushType aType)
         FlushText(false);
       }
     }
-    if (aType >= FlushType::InterruptibleLayout) {
+    if (aType >= FlushType::EnsurePresShellInitAndFrames) {
       // Make sure that layout has started so that the reflow flush
       // will actually happen.
       MaybeStartLayout(true);
@@ -1583,8 +1580,10 @@ nsXMLContentSink::ContinueInterruptedParsingIfEnabled()
 void
 nsXMLContentSink::ContinueInterruptedParsingAsync()
 {
-  nsCOMPtr<nsIRunnable> ev = NewRunnableMethod(this,
-    &nsXMLContentSink::ContinueInterruptedParsingIfEnabled);
+  nsCOMPtr<nsIRunnable> ev =
+    NewRunnableMethod("nsXMLContentSink::ContinueInterruptedParsingIfEnabled",
+                      this,
+                      &nsXMLContentSink::ContinueInterruptedParsingIfEnabled);
 
   NS_DispatchToCurrentThread(ev);
 }

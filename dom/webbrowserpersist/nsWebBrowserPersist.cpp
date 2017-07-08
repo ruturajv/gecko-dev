@@ -426,7 +426,7 @@ NS_IMETHODIMP nsWebBrowserPersist::SaveURI(
 NS_IMETHODIMP nsWebBrowserPersist::SavePrivacyAwareURI(
     nsIURI *aURI, nsISupports *aCacheKey,
     nsIURI *aReferrer, uint32_t aReferrerPolicy,
-    nsIInputStream *aPostData, const char *aExtraHeaders, 
+    nsIInputStream *aPostData, const char *aExtraHeaders,
     nsISupports *aFile, bool aIsPrivate)
 {
     NS_ENSURE_TRUE(mFirstAndOnlyUse, NS_ERROR_FAILURE);
@@ -675,8 +675,10 @@ nsWebBrowserPersist::SerializeNextFile()
         // Finish and clean things up.  Defer this because the caller
         // may have been expecting to use the listeners that that
         // method will clear.
-        NS_DispatchToCurrentThread(NewRunnableMethod(this,
-            &nsWebBrowserPersist::FinishDownload));
+        NS_DispatchToCurrentThread(
+          NewRunnableMethod("nsWebBrowserPersist::FinishDownload",
+                            this,
+                            &nsWebBrowserPersist::FinishDownload));
         return;
     }
 
@@ -787,8 +789,10 @@ nsWebBrowserPersist::OnWrite::OnFinish(nsIWebBrowserPersistDocument* aDoc,
             return NS_OK;
         }
     }
-    NS_DispatchToCurrentThread(NewRunnableMethod(mParent,
-        &nsWebBrowserPersist::SerializeNextFile));
+    NS_DispatchToCurrentThread(
+      NewRunnableMethod("nsWebBrowserPersist::SerializeNextFile",
+                        mParent,
+                        &nsWebBrowserPersist::SerializeNextFile));
     return NS_OK;
 }
 
@@ -1790,9 +1794,11 @@ nsWebBrowserPersist::FinishSaveDocumentInternal(nsIURI* aFile,
         // Bounce this off the event loop to avoid stack overflow.
         typedef StoreCopyPassByRRef<decltype(toWalk)> WalkStorage;
         auto saveMethod = &nsWebBrowserPersist::SaveDocumentDeferred;
-        nsCOMPtr<nsIRunnable> saveLater =
-            NewRunnableMethod<WalkStorage>(this, saveMethod,
-                                           mozilla::Move(toWalk));
+        nsCOMPtr<nsIRunnable> saveLater = NewRunnableMethod<WalkStorage>(
+          "nsWebBrowserPersist::FinishSaveDocumentInternal",
+          this,
+          saveMethod,
+          mozilla::Move(toWalk));
         NS_DispatchToCurrentThread(saveLater);
     } else {
         // Done walking DOMs; on to the serialization phase.
@@ -2410,7 +2416,7 @@ nsWebBrowserPersist::FixRedirectedChannelEntry(nsIChannel *aNewChannel)
         // If a match was found, remove the data entry with the old channel
         // key and re-add it with the new channel key.
         nsAutoPtr<OutputData> outputData;
-        mOutputMap.RemoveAndForget(matchingKey, outputData);
+        mOutputMap.Remove(matchingKey, &outputData);
         NS_ENSURE_TRUE(outputData, NS_ERROR_FAILURE);
 
         // Store data again with new channel unless told to ignore redirects.
@@ -2545,33 +2551,33 @@ nsWebBrowserPersist::URIData::GetLocalURI(nsIURI *targetBaseURI, nsCString& aSpe
             if (!url) {
                 return NS_ERROR_FAILURE;
             }
-            
+
             nsAutoCString filename;
             url->GetFileName(filename);
-            
+
             nsAutoCString rawPathURL(mRelativePathToData);
             rawPathURL.Append(filename);
-            
+
             rv = NS_EscapeURL(rawPathURL, esc_FilePath, aSpecOut, fallible);
             NS_ENSURE_SUCCESS(rv, rv);
         } else {
             nsAutoCString rawPathURL;
-            
+
             nsCOMPtr<nsIFile> dataFile;
             rv = GetLocalFileFromURI(mFile, getter_AddRefs(dataFile));
             NS_ENSURE_SUCCESS(rv, rv);
-            
+
             nsCOMPtr<nsIFile> docFile;
             rv = GetLocalFileFromURI(targetBaseURI, getter_AddRefs(docFile));
             NS_ENSURE_SUCCESS(rv, rv);
-            
+
             nsCOMPtr<nsIFile> parentDir;
             rv = docFile->GetParent(getter_AddRefs(parentDir));
             NS_ENSURE_SUCCESS(rv, rv);
-            
+
             rv = dataFile->GetRelativePath(parentDir, rawPathURL);
             NS_ENSURE_SUCCESS(rv, rv);
-            
+
             rv = NS_EscapeURL(rawPathURL, esc_FilePath, aSpecOut, fallible);
             NS_ENSURE_SUCCESS(rv, rv);
         }

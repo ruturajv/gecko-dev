@@ -143,7 +143,6 @@ class DOMMediaStream::OwnedStreamListener : public MediaStreamListener {
 public:
   explicit OwnedStreamListener(DOMMediaStream* aStream)
     : mStream(aStream)
-    , mAbstractMainThread(aStream->mAbstractMainThread)
   {}
 
   void Forget() { mStream = nullptr; }
@@ -188,7 +187,10 @@ public:
     RefPtr<MediaStreamTrack> newTrack =
       mStream->CreateDOMTrack(aTrackID, aType, source);
     NS_DispatchToMainThread(NewRunnableMethod<RefPtr<MediaStreamTrack>>(
-        mStream, &DOMMediaStream::AddTrackInternal, newTrack));
+      "DOMMediaStream::AddTrackInternal",
+      mStream,
+      &DOMMediaStream::AddTrackInternal,
+      newTrack));
   }
 
   void DoNotifyTrackEnded(MediaStream* aInputStream, TrackID aInputTrackID,
@@ -206,8 +208,10 @@ public:
     if (track) {
       LOG(LogLevel::Debug, ("DOMMediaStream %p MediaStreamTrack %p ended at the source. Marking it ended.",
                             mStream, track.get()));
-      NS_DispatchToMainThread(NewRunnableMethod(
-        track, &MediaStreamTrack::OverrideEnded));
+      NS_DispatchToMainThread(
+        NewRunnableMethod("dom::MediaStreamTrack::OverrideEnded",
+                          track,
+                          &MediaStreamTrack::OverrideEnded));
     }
   }
 
@@ -219,24 +223,32 @@ public:
   {
     if (aTrackEvents & TrackEventCommand::TRACK_EVENT_CREATED) {
       aGraph->DispatchToMainThreadAfterStreamStateUpdate(
-        mAbstractMainThread,
-        NewRunnableMethod<TrackID, MediaSegment::Type, RefPtr<MediaStream>, TrackID>(
-          this, &OwnedStreamListener::DoNotifyTrackCreated,
-          aID, aQueuedMedia.GetType(), aInputStream, aInputTrackID));
+        NewRunnableMethod<TrackID,
+                          MediaSegment::Type,
+                          RefPtr<MediaStream>,
+                          TrackID>(
+          "DOMMediaStream::OwnedStreamListener::DoNotifyTrackCreated",
+          this,
+          &OwnedStreamListener::DoNotifyTrackCreated,
+          aID,
+          aQueuedMedia.GetType(),
+          aInputStream,
+          aInputTrackID));
     } else if (aTrackEvents & TrackEventCommand::TRACK_EVENT_ENDED) {
       aGraph->DispatchToMainThreadAfterStreamStateUpdate(
-        mAbstractMainThread,
         NewRunnableMethod<RefPtr<MediaStream>, TrackID, TrackID>(
-          this, &OwnedStreamListener::DoNotifyTrackEnded,
-          aInputStream, aInputTrackID, aID));
+          "DOMMediaStream::OwnedStreamListener::DoNotifyTrackEnded",
+          this,
+          &OwnedStreamListener::DoNotifyTrackEnded,
+          aInputStream,
+          aInputTrackID,
+          aID));
     }
   }
 
 private:
   // These fields may only be accessed on the main thread
   DOMMediaStream* mStream;
-
-  const RefPtr<AbstractThread> mAbstractMainThread;
 };
 
 /**
@@ -248,7 +260,6 @@ class DOMMediaStream::PlaybackStreamListener : public MediaStreamListener {
 public:
   explicit PlaybackStreamListener(DOMMediaStream* aStream)
     : mStream(aStream)
-    , mAbstractMainThread(aStream->mAbstractMainThread)
   {}
 
   void Forget()
@@ -269,7 +280,9 @@ public:
     // dispatch. We have to do the same to notify of created tracks to stay
     // in sync. (Or NotifyTracksCreated is called before tracks are added).
     NS_DispatchToMainThread(
-        NewRunnableMethod(mStream, &DOMMediaStream::NotifyTracksCreated));
+      NewRunnableMethod("DOMMediaStream::NotifyTracksCreated",
+                        mStream,
+                        &DOMMediaStream::NotifyTracksCreated));
   }
 
   void DoNotifyFinished()
@@ -280,8 +293,9 @@ public:
       return;
     }
 
-    NS_DispatchToMainThread(NewRunnableMethod(
-      mStream, &DOMMediaStream::NotifyFinished));
+    NS_DispatchToMainThread(NewRunnableMethod("DOMMediaStream::NotifyFinished",
+                                              mStream,
+                                              &DOMMediaStream::NotifyFinished));
   }
 
   // The methods below are called on the MediaStreamGraph thread.
@@ -289,8 +303,10 @@ public:
   void NotifyFinishedTrackCreation(MediaStreamGraph* aGraph) override
   {
     aGraph->DispatchToMainThreadAfterStreamStateUpdate(
-      mAbstractMainThread,
-      NewRunnableMethod(this, &PlaybackStreamListener::DoNotifyFinishedTrackCreation));
+      NewRunnableMethod(
+        "DOMMediaStream::PlaybackStreamListener::DoNotifyFinishedTrackCreation",
+        this,
+        &PlaybackStreamListener::DoNotifyFinishedTrackCreation));
   }
 
 
@@ -299,16 +315,16 @@ public:
   {
     if (event == MediaStreamGraphEvent::EVENT_FINISHED) {
       aGraph->DispatchToMainThreadAfterStreamStateUpdate(
-        mAbstractMainThread,
-        NewRunnableMethod(this, &PlaybackStreamListener::DoNotifyFinished));
+        NewRunnableMethod(
+          "DOMMediaStream::PlaybackStreamListener::DoNotifyFinished",
+          this,
+          &PlaybackStreamListener::DoNotifyFinished));
     }
   }
 
 private:
   // These fields may only be accessed on the main thread
   DOMMediaStream* mStream;
-
-  const RefPtr<AbstractThread> mAbstractMainThread;
 };
 
 class DOMMediaStream::PlaybackTrackListener : public MediaStreamTrackConsumer
@@ -410,8 +426,7 @@ DOMMediaStream::DOMMediaStream(nsPIDOMWindowInner* aWindow,
     mTracksPendingRemoval(0), mTrackSourceGetter(aTrackSourceGetter),
     mPlaybackTrackListener(MakeAndAddRef<PlaybackTrackListener>(this)),
     mTracksCreated(false), mNotifiedOfMediaStreamGraphShutdown(false),
-    mActive(false), mSetInactiveOnFinish(false),
-    mAbstractMainThread(aWindow->GetDocGroup()->AbstractMainThreadFor(TaskCategory::Other))
+    mActive(false), mSetInactiveOnFinish(false)
 {
   nsresult rv;
   nsCOMPtr<nsIUUIDGenerator> uuidgen =
@@ -544,7 +559,7 @@ DOMMediaStream::Constructor(const GlobalObject& aGlobal,
     MOZ_ASSERT(aTracks.IsEmpty());
     MediaStreamGraph* graph =
       MediaStreamGraph::GetInstance(MediaStreamGraph::SYSTEM_THREAD_DRIVER,
-                                    AudioChannel::Normal);
+                                    AudioChannel::Normal, ownerWindow);
     newStream->InitPlaybackStreamCommon(graph);
   }
 
@@ -855,7 +870,7 @@ DOMMediaStream::SetInactiveOnFinish()
 void
 DOMMediaStream::InitSourceStream(MediaStreamGraph* aGraph)
 {
-  InitInputStreamCommon(aGraph->CreateSourceStream(mAbstractMainThread), aGraph);
+  InitInputStreamCommon(aGraph->CreateSourceStream(), aGraph);
   InitOwnedStreamCommon(aGraph);
   InitPlaybackStreamCommon(aGraph);
 }
@@ -863,7 +878,7 @@ DOMMediaStream::InitSourceStream(MediaStreamGraph* aGraph)
 void
 DOMMediaStream::InitTrackUnionStream(MediaStreamGraph* aGraph)
 {
-  InitInputStreamCommon(aGraph->CreateTrackUnionStream(mAbstractMainThread), aGraph);
+  InitInputStreamCommon(aGraph->CreateTrackUnionStream(), aGraph);
   InitOwnedStreamCommon(aGraph);
   InitPlaybackStreamCommon(aGraph);
 }
@@ -877,7 +892,7 @@ DOMMediaStream::InitAudioCaptureStream(nsIPrincipal* aPrincipal, MediaStreamGrap
     new BasicTrackSource(aPrincipal, MediaSourceEnum::AudioCapture);
 
   AudioCaptureStream* audioCaptureStream =
-    static_cast<AudioCaptureStream*>(aGraph->CreateAudioCaptureStream(AUDIO_TRACK, mAbstractMainThread));
+    static_cast<AudioCaptureStream*>(aGraph->CreateAudioCaptureStream(AUDIO_TRACK));
   InitInputStreamCommon(audioCaptureStream, aGraph);
   InitOwnedStreamCommon(aGraph);
   InitPlaybackStreamCommon(aGraph);
@@ -903,7 +918,7 @@ DOMMediaStream::InitOwnedStreamCommon(MediaStreamGraph* aGraph)
 {
   MOZ_ASSERT(!mPlaybackStream, "Owned stream must be initialized before playback stream");
 
-  mOwnedStream = aGraph->CreateTrackUnionStream(mAbstractMainThread);
+  mOwnedStream = aGraph->CreateTrackUnionStream();
   mOwnedStream->SetAutofinish(true);
   mOwnedStream->RegisterUser();
   if (mInputStream) {
@@ -918,7 +933,7 @@ DOMMediaStream::InitOwnedStreamCommon(MediaStreamGraph* aGraph)
 void
 DOMMediaStream::InitPlaybackStreamCommon(MediaStreamGraph* aGraph)
 {
-  mPlaybackStream = aGraph->CreateTrackUnionStream(mAbstractMainThread);
+  mPlaybackStream = aGraph->CreateTrackUnionStream();
   mPlaybackStream->SetAutofinish(true);
   mPlaybackStream->RegisterUser();
   if (mOwnedStream) {
@@ -1545,7 +1560,7 @@ DOMHwMediaStream::CreateHwStream(nsPIDOMWindowInner* aWindow,
 
   MediaStreamGraph* graph =
     MediaStreamGraph::GetInstance(MediaStreamGraph::SYSTEM_THREAD_DRIVER,
-                                  AudioChannel::Normal);
+                                  AudioChannel::Normal, aWindow);
   stream->InitSourceStream(graph);
   stream->Init(stream->GetInputStream(), aImage);
 

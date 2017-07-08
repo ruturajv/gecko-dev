@@ -454,8 +454,9 @@ CustomElementRegistry::EnqueueLifecycleCallback(nsIDocument::ElementCallbackType
       // should be invoked prior to returning control back to script.
       // Create a script runner to process the top of the processing
       // stack as soon as it is safe to run script.
-      nsCOMPtr<nsIRunnable> runnable =
-        NS_NewRunnableFunction(&CustomElementRegistry::ProcessTopElementQueue);
+      nsCOMPtr<nsIRunnable> runnable = NS_NewRunnableFunction(
+        "dom::CustomElementRegistry::EnqueueLifecycleCallback",
+        &CustomElementRegistry::ProcessTopElementQueue);
       nsContentUtils::AddScriptRunner(runnable);
     }
   }
@@ -486,10 +487,8 @@ CustomElementRegistry::UpgradeCandidates(JSContext* aCx,
   }
 
   nsAutoPtr<nsTArray<nsWeakPtr>> candidates;
-  mCandidatesMap.RemoveAndForget(aKey, candidates);
-  if (candidates) {
-
-
+  if (mCandidatesMap.Remove(aKey, &candidates)) {
+    MOZ_ASSERT(candidates);
     CustomElementReactionsStack* reactionsStack =
       docGroup->CustomElementReactionsStack();
     for (size_t i = 0; i < candidates->Length(); ++i) {

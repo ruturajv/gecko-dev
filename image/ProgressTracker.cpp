@@ -204,7 +204,8 @@ class AsyncNotifyCurrentStateRunnable : public Runnable
   public:
     AsyncNotifyCurrentStateRunnable(ProgressTracker* aProgressTracker,
                                     IProgressObserver* aObserver)
-      : mProgressTracker(aProgressTracker)
+      : Runnable("image::AsyncNotifyCurrentStateRunnable")
+      , mProgressTracker(aProgressTracker)
       , mObserver(aObserver)
     {
       MOZ_ASSERT(NS_IsMainThread(), "Should be created on the main thread");
@@ -470,9 +471,7 @@ ProgressTracker::RemoveObserver(IProgressObserver* aObserver)
 
   // Remove the observer from the list.
   bool removed = mObservers.Write([=](ObserverTable* aTable) {
-    bool removed = aTable->Get(observer, nullptr);
-    aTable->Remove(observer);
-    return removed;
+    return aTable->Remove(observer);
   });
 
   // Observers can get confused if they don't get all the proper teardown

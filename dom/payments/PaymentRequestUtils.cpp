@@ -8,33 +8,38 @@
 #include "PaymentRequestUtils.h"
 #include "nsIMutableArray.h"
 #include "nsISupportsPrimitives.h"
+#include "nsIJSON.h"
 
 namespace mozilla {
 namespace dom {
 
 nsresult
-ConvertStringstoISupportsStrings(const nsTArray<nsString>& aStrings,
-                                 nsIArray** aIStrings)
-{
-  NS_ENSURE_ARG_POINTER(aIStrings);
-  *aIStrings = nullptr;
-  nsCOMPtr<nsIMutableArray> iStrings = do_CreateInstance(NS_ARRAY_CONTRACTID);
-  for (const nsString& string : aStrings) {
-    nsCOMPtr<nsISupportsString> iString =
-      do_CreateInstance(NS_SUPPORTS_STRING_CONTRACTID);
-    if (NS_WARN_IF(!iString)) {
-      return NS_ERROR_FAILURE;
-    }
-    nsresult rv = iString->SetData(string);
-    if (NS_WARN_IF(NS_FAILED(rv))) {
-      return rv;
-    }
-    rv = iStrings->AppendElement(iString, false);
-    if (NS_WARN_IF(NS_FAILED(rv))) {
-      return rv;
-    }
+SerializeFromJSObject(JSContext* aCx, JS::HandleObject aObject, nsAString& aSerializedObject) {
+  nsCOMPtr<nsIJSON> serializer = do_CreateInstance("@mozilla.org/dom/json;1");
+  if (NS_WARN_IF(!serializer)) {
+    return NS_ERROR_FAILURE;
   }
-  iStrings.forget(aIStrings);
+  JS::RootedValue value(aCx, JS::ObjectValue(*aObject));
+  return serializer->EncodeFromJSVal(value.address(), aCx, aSerializedObject);
+}
+
+nsresult
+DeserializeToJSObject(const nsAString& aSerializedObject, JSContext* aCx, JS::MutableHandleObject aObject) {
+  nsCOMPtr<nsIJSON> deserializer = do_CreateInstance("@mozilla.org/dom/json;1");
+  if (NS_WARN_IF(!deserializer)) {
+    return NS_ERROR_FAILURE;
+  }
+  JS::RootedValue value(aCx);
+  JS::MutableHandleValue handleVal(&value);
+  nsresult rv = deserializer->DecodeToJSVal(aSerializedObject, aCx, handleVal);
+  if (NS_WARN_IF(NS_FAILED(rv))) {
+    return rv;
+  }
+  if (value.isObject()) {
+    aObject.set(&value.toObject());
+  } else {
+    aObject.set(nullptr);
+  }
   return NS_OK;
 }
 

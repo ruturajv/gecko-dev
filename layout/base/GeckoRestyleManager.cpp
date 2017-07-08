@@ -203,6 +203,8 @@ void
 GeckoRestyleManager::ContentStateChanged(nsIContent* aContent,
                                          EventStates aStateMask)
 {
+  MOZ_ASSERT(!mInStyleRefresh);
+
   // XXXbz it would be good if this function only took Elements, but
   // we'd have to make ESM guarantee that usefully.
   if (!aContent->IsElement()) {
@@ -226,6 +228,8 @@ GeckoRestyleManager::AttributeWillChange(Element* aElement,
                                          int32_t aModType,
                                          const nsAttrValue* aNewValue)
 {
+  MOZ_ASSERT(!mInStyleRefresh);
+
   RestyleHintData rsdata;
   nsRestyleHint rshint =
     StyleSet()->HasAttributeDependentStyle(aElement,
@@ -974,7 +978,7 @@ GeckoRestyleManager::ReparentStyleContext(nsIFrame* aFrame)
       // Ensure the new context ends up resolving all the structs the old
       // context resolved.
       if (!copyFromContinuation) {
-        newContext->EnsureSameStructsCached(oldContext);
+        newContext->AsGecko()->EnsureSameStructsCached(oldContext);
       }
 
       aFrame->SetStyleContext(newContext);
@@ -1027,7 +1031,7 @@ GeckoRestyleManager::ReparentStyleContext(nsIFrame* aFrame)
           if (newExtraContext != oldExtraContext) {
             // Ensure the new context ends up resolving all the structs the old
             // context resolved.
-            newContext->EnsureSameStructsCached(oldContext);
+            newContext->AsGecko()->EnsureSameStructsCached(oldContext);
           }
 
           aFrame->SetAdditionalStyleContext(contextIndex, newExtraContext);
@@ -2996,8 +3000,7 @@ ElementRestyler::ComputeStyleChangeFor(nsIFrame*          aFrame,
                                        nsTArray<RefPtr<nsStyleContext>>&
                                          aSwappedStructOwners)
 {
-  PROFILER_LABEL("ElementRestyler", "ComputeStyleChangeFor",
-                 js::ProfileEntry::Category::CSS);
+  AUTO_PROFILER_LABEL("ElementRestyler::ComputeStyleChangeFor", CSS);
 
   nsIContent* content = aFrame->GetContent();
   if (aMinChange) {

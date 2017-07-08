@@ -343,7 +343,7 @@ nsInputStreamPump::AsyncRead(nsIStreamListener *listener, nsISupports *ctxt)
         // to a starting offset, then we must do so here.  in the non-async
         // stream case, the stream transport service will take care of seeking
         // for us.
-        // 
+        //
         if (mAsyncStream && (mStreamOffset != UINT64_MAX)) {
             nsCOMPtr<nsISeekableStream> seekable = do_QueryInterface(mStream);
             if (seekable)
@@ -408,14 +408,13 @@ nsInputStreamPump::OnInputStreamReady(nsIAsyncInputStream *stream)
 {
     LOG(("nsInputStreamPump::OnInputStreamReady [this=%p]\n", this));
 
-    PROFILER_LABEL("nsInputStreamPump", "OnInputStreamReady",
-        js::ProfileEntry::Category::NETWORK);
+    AUTO_PROFILER_LABEL("nsInputStreamPump::OnInputStreamReady", NETWORK);
 
     // this function has been called from a PLEvent, so we can safely call
     // any listener or progress sink methods directly from here.
 
     for (;;) {
-        // There should only be one iteration of this loop happening at a time. 
+        // There should only be one iteration of this loop happening at a time.
         // To prevent AsyncWait() (called during callbacks or on other threads)
         // from creating a parallel OnInputStreamReady(), we use:
         // -- a monitor; and
@@ -468,7 +467,7 @@ nsInputStreamPump::OnInputStreamReady(nsIAsyncInputStream *stream)
         }
 
         // Set mRetargeting so EnsureWaiting will be called. It ensures that
-        // OnStateStop is called on the main thread. 
+        // OnStateStop is called on the main thread.
         if (nextState == STATE_STOP && !NS_IsMainThread()) {
             mRetargeting = true;
         }
@@ -495,7 +494,7 @@ nsInputStreamPump::OnInputStreamReady(nsIAsyncInputStream *stream)
             nsresult rv = EnsureWaiting();
             if (NS_SUCCEEDED(rv))
                 break;
-            
+
             // Failure to start asynchronous wait: stop transfer.
             // Do not set mStatus if it was previously set to report a failure.
             if (NS_SUCCEEDED(mStatus)) {
@@ -514,8 +513,7 @@ nsInputStreamPump::OnStateStart()
 {
     mMonitor.AssertCurrentThreadIn();
 
-    PROFILER_LABEL("nsInputStreamPump", "OnStateStart",
-        js::ProfileEntry::Category::NETWORK);
+    AUTO_PROFILER_LABEL("nsInputStreamPump::OnStateStart", NETWORK);
 
     LOG(("  OnStateStart [this=%p]\n", this));
 
@@ -553,8 +551,7 @@ nsInputStreamPump::OnStateTransfer()
 {
     mMonitor.AssertCurrentThreadIn();
 
-    PROFILER_LABEL("nsInputStreamPump", "OnStateTransfer",
-        js::ProfileEntry::Category::NETWORK);
+    AUTO_PROFILER_LABEL("nsInputStreamPump::OnStateTransfer", NETWORK);
 
     LOG(("  OnStateTransfer [this=%p]\n", this));
 
@@ -697,13 +694,14 @@ nsInputStreamPump::OnStateStop()
         MOZ_ASSERT(NS_IsMainThread(),
                    "OnStateStop should only be called on the main thread.");
         nsresult rv = NS_DispatchToMainThread(
-            NewRunnableMethod(this, &nsInputStreamPump::CallOnStateStop));
+          NewRunnableMethod("nsInputStreamPump::CallOnStateStop",
+                            this,
+                            &nsInputStreamPump::CallOnStateStop));
         NS_ENSURE_SUCCESS(rv, STATE_IDLE);
         return STATE_IDLE;
     }
 
-    PROFILER_LABEL("nsInputStreamPump", "OnStateStop",
-        js::ProfileEntry::Category::NETWORK);
+    AUTO_PROFILER_LABEL("nsInputStreamPump::OnStateStop", NETWORK);
 
     LOG(("  OnStateStop [this=%p status=%" PRIx32 "]\n", this, static_cast<uint32_t>(mStatus)));
 

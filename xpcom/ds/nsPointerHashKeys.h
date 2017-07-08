@@ -35,7 +35,7 @@ public:
   static KeyTypePointer KeyToPointer(KeyType aKey) { return aKey; }
   static PLDHashNumber HashKey(KeyTypePointer aKey)
   {
-    return NS_PTR_TO_UINT32(aKey) >> 2;
+    return uintptr_t(aKey) >> 2;
   }
   enum { ALLOW_MEMMOVE = true };
 

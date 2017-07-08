@@ -121,7 +121,11 @@ using namespace mozilla::dom;
 class nsAutoFocusEvent : public Runnable
 {
 public:
-  explicit nsAutoFocusEvent(nsGenericHTMLFormElement* aElement) : mElement(aElement) {}
+  explicit nsAutoFocusEvent(nsGenericHTMLFormElement* aElement)
+    : mozilla::Runnable("nsAutoFocusEvent")
+    , mElement(aElement)
+  {
+  }
 
   NS_IMETHOD Run() override {
     nsFocusManager* fm = nsFocusManager::GetFocusManager();
@@ -529,7 +533,7 @@ nsGenericHTMLElement::UnbindFromTree(bool aDeep, bool aNullParent)
   if (IsInUncomposedDoc()) {
     UnregAccessKey();
   }
-  
+
   RemoveFromNameTable();
 
   if (GetContentEditableValue() == eTrue) {
@@ -611,7 +615,7 @@ nsGenericHTMLElement::CheckHandleEventForAnchorsPreconditions(
     // We need a pres context to do link stuff. Some events (e.g. mutation
     // events) don't have one.
     // XXX: ideally, shouldn't we be able to do what we need without one?
-    return false; 
+    return false;
   }
 
   //Need to check if we hit an imagemap area and if so see if we're handling
@@ -941,7 +945,7 @@ nsGenericHTMLElement::ParseAttribute(int32_t aNamespaceID,
     if (aAttribute == nsGkAtoms::dir) {
       return aResult.ParseEnumValue(aValue, kDirTable, false);
     }
-  
+
     if (aAttribute == nsGkAtoms::tabindex) {
       return aResult.ParseIntValue(aValue);
     }
@@ -1010,7 +1014,7 @@ nsGenericHTMLElement::IsAttributeMapped(const nsIAtom* aAttribute) const
   static const MappedAttributeEntry* const map[] = {
     sCommonAttributeMap
   };
-  
+
   return FindAttributeDependence(aAttribute, map);
 }
 
@@ -1515,7 +1519,7 @@ nsGenericHTMLElement::MapImageBorderAttributeInto(const nsMappedAttributes* aAtt
   const nsAttrValue* value = aAttributes->GetAttr(nsGkAtoms::border);
   if (!value)
     return;
-  
+
   nscoord val = 0;
   if (value->Type() == nsAttrValue::eInteger)
     val = value->GetIntegerValue();
@@ -1832,7 +1836,7 @@ nsGenericHTMLFormElement::ClearForm(bool aRemoveFromForm, bool aUnbindOrDelete)
   if (!mForm) {
     return;
   }
-  
+
   if (aRemoveFromForm) {
     nsAutoString nameVal, idVal;
     GetAttr(kNameSpaceID_None, nsGkAtoms::name, nameVal);
@@ -1906,7 +1910,7 @@ nsGenericHTMLFormElement::BindToTree(nsIDocument* aDocument,
   // the document should not be already loaded and the "browser.autofocus"
   // preference should be 'true'.
   if (IsAutofocusable() && HasAttr(kNameSpaceID_None, nsGkAtoms::autofocus) &&
-      Preferences::GetBool("browser.autofocus", true)) {
+      nsContentUtils::AutoFocusEnabled()) {
     nsCOMPtr<nsIRunnable> event = new nsAutoFocusEvent(this);
     rv = NS_DispatchToCurrentThread(event);
     NS_ENSURE_SUCCESS(rv, rv);
@@ -1934,7 +1938,7 @@ nsGenericHTMLFormElement::UnbindFromTree(bool aDeep, bool aNullParent)
 {
   // Save state before doing anything
   SaveState();
-  
+
   if (mForm) {
     // Might need to unset mForm
     if (aNullParent) {
@@ -2174,7 +2178,7 @@ nsGenericHTMLFormElement::IntrinsicState() const
       state |= NS_EVENT_STATE_ENABLED;
     }
   }
-  
+
   if (mForm && mForm->IsDefaultSubmitElement(this)) {
       NS_ASSERTION(IsSubmitControl(),
                    "Default submit element that isn't a submit control.");
@@ -2290,7 +2294,7 @@ nsGenericHTMLFormElement::FormIdUpdated(Element* aOldElement,
   return true;
 }
 
-bool 
+bool
 nsGenericHTMLFormElement::IsElementDisabledForEvents(EventMessage aMessage,
                                                      nsIFrame* aFrame)
 {
@@ -2921,7 +2925,7 @@ nsGenericHTMLElement::GetWidthHeightForImage(RefPtr<imgRequestProxy>& aImageRequ
 }
 
 bool
-nsGenericHTMLElement::IsEventAttributeName(nsIAtom *aName)
+nsGenericHTMLElement::IsEventAttributeNameInternal(nsIAtom *aName)
 {
   return nsContentUtils::IsEventAttributeName(aName, EventNameType_HTML);
 }

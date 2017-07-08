@@ -746,7 +746,8 @@ XPCJSRuntime::DoCycleCollectionCallback(JSContext* cx)
     // The GC has detected that a CC at this point would collect a tremendous
     // amount of garbage that is being revivified unnecessarily.
     NS_DispatchToCurrentThread(
-            NS_NewRunnableFunction([](){nsJSContext::CycleCollectNow(nullptr);}));
+      NS_NewRunnableFunction("XPCJSRuntime::DoCycleCollectionCallback",
+                             []() { nsJSContext::CycleCollectNow(nullptr); }));
 
     XPCJSRuntime* self = nsXPConnect::GetRuntimeInstance();
     if (!self)
@@ -962,9 +963,10 @@ class LargeAllocationFailureRunnable final : public Runnable
 
   public:
     LargeAllocationFailureRunnable()
-      : mMutex("LargeAllocationFailureRunnable::mMutex"),
-        mCondVar(mMutex, "LargeAllocationFailureRunnable::mCondVar"),
-        mWaiting(true)
+      : mozilla::Runnable("LargeAllocationFailureRunnable")
+      , mMutex("LargeAllocationFailureRunnable::mMutex")
+      , mCondVar(mMutex, "LargeAllocationFailureRunnable::mCondVar")
+      , mWaiting(true)
     {
         MOZ_ASSERT(!NS_IsMainThread());
     }
@@ -1398,6 +1400,10 @@ ReportZoneStats(const JS::ZoneStats& zStats,
         zStats.typePool,
         "Type sets and related data.");
 
+    ZCREPORT_BYTES(pathPrefix + NS_LITERAL_CSTRING("regexp-zone"),
+        zStats.regexpZone,
+        "The regexp zone and regexp data.");
+
     ZCREPORT_BYTES(pathPrefix + NS_LITERAL_CSTRING("jit-zone"),
         zStats.jitZone,
         "The JIT zone.");
@@ -1795,10 +1801,6 @@ ReportCompartmentStats(const JS::CompartmentStats& cStats,
     ZCREPORT_BYTES(cJSPathPrefix + NS_LITERAL_CSTRING("cross-compartment-wrapper-table"),
         cStats.crossCompartmentWrappersTable,
         "The cross-compartment wrapper table.");
-
-    ZCREPORT_BYTES(cJSPathPrefix + NS_LITERAL_CSTRING("regexp-compartment"),
-        cStats.regexpCompartment,
-        "The regexp compartment and regexp data.");
 
     ZCREPORT_BYTES(cJSPathPrefix + NS_LITERAL_CSTRING("saved-stacks-set"),
         cStats.savedStacksSet,

@@ -236,11 +236,8 @@ treecol {
   margin-left: 0;
 }
 
-/* This learn-more link is inserted at the end of a
-   xul:description element so it should behave like normal text. */
-#trackingProtectionLearnMore {
-  white-space: normal;
-  margin-inline-start: 0;
+#doNotTrackLearnMoreBox {
+  margin-top: 30px
 }
 
 #trackingProtectionAdvancedSettings {
@@ -626,16 +623,26 @@ groupbox {
   font-size: 1.25rem;
   position: absolute;
   padding: 0 10px;
-  bottom: 100%;
   background-color: #ffe900;
+  border: 1px solid #d7b600;
+  -moz-user-select: none;
 }
 
 .search-tooltip:hover,
 .search-tooltip:hover::before {
-  filter: opacity(10%);
+  opacity: .1;
 }
 
 .search-tooltip::before {
+  position: absolute;
+  content: "";
+  border: 7px solid transparent;
+  border-top-color: #d7b600;
+  top: 100%;
+  offset-inline-start: calc(50% - 7px);
+}
+
+.search-tooltip::after {
   position: absolute;
   content: "";
   border: 6px solid transparent;
@@ -650,14 +657,19 @@ groupbox {
 
 menulist[indicator=true] > menupopup menuitem:not([image]) > .menu-iconic-left {
   display: -moz-box;
-  width: 10px;
+  width: 8px;
   min-width: auto; /* Override the min-width defined in menu.css */
   height: 10px;
   margin-inline-end: 6px;
 }
 
-menulist[indicator=true] > menupopup menuitem[indicator=true]:not([image]) > .menu-iconic-left {
-  background-image: url(chrome://global/skin/icons/search-arrow-indicator.svg);
-  background-repeat: no-repeat;
-  background-size: 12px 10px;
+menulist[indicator=true] > menupopup menuitem[indicator=true]:not([image]) > .menu-iconic-left > .menu-iconic-icon {
+  list-style-image: url(chrome://browser/skin/preferences/in-content-new/search-arrow-indicator.svg);
+  width: 8px;
+  height: 10px;
+  margin: 0;
+}
+
+menulist[indicator=true] > menupopup menuitem[indicator=true]:not([image]) > .menu-iconic-left > .menu-iconic-icon:-moz-locale-dir(rtl) {
+  transform: scaleX(-1);
 }

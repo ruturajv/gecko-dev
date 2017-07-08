@@ -69,6 +69,10 @@
 #include "mozilla/StyleSetHandle.h"
 #include "mozilla/StyleSetHandleInlines.h"
 #include "mozilla/layers/LayersMessages.h"
+#include "mozilla/layers/WebRenderLayerManager.h"
+#include "mozilla/layers/WebRenderBridgeChild.h"
+#include "mozilla/webrender/WebRenderAPI.h"
+#include "mozilla/layers/StackingContextHelper.h"
 
 #include <algorithm>
 #include <limits>
@@ -1121,7 +1125,7 @@ public:
     }
 
     void Finish(gfxMissingFontRecorder* aMFR) {
-      MOZ_ASSERT(!(mTextRun->GetFlags2() & nsTextFrameUtils::Flags::TEXT_UNUSED_FLAG),
+      MOZ_ASSERT(!(mTextRun->GetFlags2() & nsTextFrameUtils::Flags::TEXT_UNUSED_FLAGS),
                    "Flag set that should never be set! (memory safety error?)");
       if (mTextRun->GetFlags2() & nsTextFrameUtils::Flags::TEXT_IS_TRANSFORMED) {
         nsTransformedTextRun* transformedTextRun =
@@ -4921,6 +4925,11 @@ public:
   virtual already_AddRefed<Layer> BuildLayer(nsDisplayListBuilder* aBuilder,
                                              LayerManager* aManager,
                                              const ContainerLayerParameters& aContainerParameters) override;
+  virtual bool CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
+                                       const StackingContextHelper& aSc,
+                                       nsTArray<WebRenderParentCommand>& aParentCommands,
+                                       WebRenderLayerManager* aManager,
+                                       nsDisplayListBuilder* aDisplayListBuilder) override;
   virtual void Paint(nsDisplayListBuilder* aBuilder,
                      gfxContext* aCtx) override;
   NS_DISPLAY_DECL_NAME("Text", TYPE_TEXT)
@@ -5128,8 +5137,7 @@ nsDisplayText::nsDisplayText(nsDisplayListBuilder* aBuilder, nsTextFrame* aFrame
     Color color;
     if (!capture->ContainsOnlyColoredGlyphs(mFont, color, glyphs)
         || !mFont
-        || !mFont->CanSerialize()
-        || XRE_IsParentProcess()) {
+        || !mFont->CanSerialize()) {
       mFont = nullptr;
       mGlyphs.Clear();
     } else {
@@ -5155,14 +5163,46 @@ nsDisplayText::GetLayerState(nsDisplayListBuilder* aBuilder,
 void
 nsDisplayText::Paint(nsDisplayListBuilder* aBuilder,
                      gfxContext* aCtx) {
-  PROFILER_LABEL("nsDisplayText", "Paint",
-    js::ProfileEntry::Category::GRAPHICS);
+  AUTO_PROFILER_LABEL("nsDisplayText::Paint", GRAPHICS);
 
   MOZ_ASSERT(mMergedFrames.IsEmpty());
 
   DrawTargetAutoDisableSubpixelAntialiasing disable(aCtx->GetDrawTarget(),
                                                     mDisableSubpixelAA);
   RenderToContext(aCtx, aBuilder);
+}
+
+bool
+nsDisplayText::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
+                                       const StackingContextHelper& aSc,
+                                       nsTArray<WebRenderParentCommand>& aParentCommands,
+                                       WebRenderLayerManager* aManager,
+                                       nsDisplayListBuilder* aDisplayListBuilder)
+{
+  if (aManager->IsLayersFreeTransaction()) {
+    ContainerLayerParameters parameter;
+    if (GetLayerState(aDisplayListBuilder, aManager, parameter) != LAYER_ACTIVE) {
+      return false;
+    }
+  }
+
+  if (mBounds.IsEmpty()) {
+    return true;
+  }
+
+  auto appUnitsPerDevPixel = mFrame->PresContext()->AppUnitsPerDevPixel();
+  LayoutDeviceRect rect = LayoutDeviceRect::FromAppUnits(
+      mBounds, appUnitsPerDevPixel);
+  LayoutDeviceRect clipRect = rect;
+  if (GetClip().HasClip()) {
+    clipRect = LayoutDeviceRect::FromAppUnits(
+                GetClip().GetClipRect(), appUnitsPerDevPixel);
+  }
+  aManager->WrBridge()->PushGlyphs(aBuilder, mGlyphs, mFont, aSc,
+                                   LayerRect::FromUnknownRect(rect.ToUnknownRect()),
+                                   LayerRect::FromUnknownRect(clipRect.ToUnknownRect()));
+
+  return true;
 }
 
 already_AddRefed<layers::Layer>
@@ -5232,7 +5272,7 @@ nsDisplayText::RenderToContext(gfxContext* aCtx, nsDisplayListBuilder* aBuilder,
       // compressed at the same time as text.
       gfxPoint pt = nsLayoutUtils::PointToGfxPoint(framePt, A2D);
       gfxMatrix mat = aCtx->CurrentMatrix()
-        .Translate(pt).Scale(scaleFactor, 1.0).Translate(-pt);
+        .PreTranslate(pt).PreScale(scaleFactor, 1.0).PreTranslate(-pt);
       aCtx->SetMatrix(mat);
     }
   }
@@ -6310,8 +6350,7 @@ nsTextFrame::PaintOneShadow(const PaintShadowParams& aParams,
                             nsCSSShadowItem* aShadowDetails,
                             gfxRect& aBoundingBox, uint32_t aBlurFlags)
 {
-  PROFILER_LABEL("nsTextFrame", "PaintOneShadow",
-    js::ProfileEntry::Category::GRAPHICS);
+  AUTO_PROFILER_LABEL("nsTextFrame::PaintOneShadow", GRAPHICS);
 
   gfxPoint shadowOffset(aShadowDetails->mXOffset, aShadowDetails->mYOffset);
   nscoord blurRadius = std::max(aShadowDetails->mRadius, 0);
@@ -7256,7 +7295,7 @@ nsTextFrame::DrawTextRunAndDecorations(Range aRange,
         scaledRestorer.SetContext(aParams.context);
         gfxMatrix unscaled = aParams.context->CurrentMatrix();
         gfxPoint pt(x / app, y / app);
-        unscaled.Translate(pt).Scale(1.0f / scaleFactor, 1.0f).Translate(-pt);
+        unscaled.PreTranslate(pt).PreScale(1.0f / scaleFactor, 1.0f).PreTranslate(-pt);
         aParams.context->SetMatrix(unscaled);
       }
     }
@@ -7986,15 +8025,18 @@ IsAcceptableCaretPosition(const gfxSkipCharsIterator& aIter,
 
 nsIFrame::FrameSearchResult
 nsTextFrame::PeekOffsetCharacter(bool aForward, int32_t* aOffset,
-                                 bool aRespectClusters)
+                                 PeekOffsetCharacterOptions aOptions)
 {
   int32_t contentLength = GetContentLength();
   NS_ASSERTION(aOffset && *aOffset <= contentLength, "aOffset out of range");
 
-  StyleUserSelect selectStyle;
-  IsSelectable(&selectStyle);
-  if (selectStyle == StyleUserSelect::All)
-    return CONTINUE_UNSELECTABLE;
+  if (!aOptions.mIgnoreUserStyleAll) {
+    StyleUserSelect selectStyle;
+    IsSelectable(&selectStyle);
+    if (selectStyle == StyleUserSelect::All) {
+      return CONTINUE_UNSELECTABLE;
+    }
+  }
 
   gfxSkipCharsIterator iter = EnsureTextRun(nsTextFrame::eInflated);
   if (!mTextRun)
@@ -8010,7 +8052,8 @@ nsTextFrame::PeekOffsetCharacter(bool aForward, int32_t* aOffset,
     for (int32_t i = std::min(trimmed.GetEnd(), startOffset) - 1;
          i >= trimmed.mStart; --i) {
       iter.SetOriginalOffset(i);
-      if (IsAcceptableCaretPosition(iter, aRespectClusters, mTextRun, this)) {
+      if (IsAcceptableCaretPosition(iter, aOptions.mRespectClusters, mTextRun,
+                                    this)) {
         *aOffset = i - mContentOffset;
         return FOUND;
       }
@@ -8027,7 +8070,8 @@ nsTextFrame::PeekOffsetCharacter(bool aForward, int32_t* aOffset,
       for (int32_t i = startOffset + 1; i <= trimmed.GetEnd(); ++i) {
         iter.SetOriginalOffset(i);
         if (i == trimmed.GetEnd() ||
-            IsAcceptableCaretPosition(iter, aRespectClusters, mTextRun, this)) {
+            IsAcceptableCaretPosition(iter, aOptions.mRespectClusters, mTextRun,
+                                      this)) {
           *aOffset = i - mContentOffset;
           return FOUND;
         }

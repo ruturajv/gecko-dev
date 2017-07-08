@@ -87,7 +87,7 @@ public:
 
   virtual nsSize GetXULMinSize(nsBoxLayoutState& aBoxLayoutState) override;
   virtual bool IsXULCollapsed() override;
-  
+
 #ifdef ACCESSIBILITY
   virtual mozilla::a11y::AccType AccessibleType() override;
 #endif
@@ -187,7 +187,7 @@ protected:
 
 public: //for methods who access nsTextControlFrame directly
   void SetValueChanged(bool aValueChanged);
-  
+
   // called by the focus listener
   nsresult MaybeBeginSecureKeyboardInput();
   void MaybeEndSecureKeyboardInput();
@@ -233,8 +233,11 @@ protected:
 
   class EditorInitializer : public mozilla::Runnable {
   public:
-    explicit EditorInitializer(nsTextControlFrame* aFrame) :
-      mFrame(aFrame) {}
+    explicit EditorInitializer(nsTextControlFrame* aFrame)
+      : mozilla::Runnable("nsTextControlFrame::EditorInitializer")
+      , mFrame(aFrame)
+    {
+    }
 
     NS_IMETHOD Run() override;
 
@@ -252,8 +255,11 @@ protected:
 
   class ScrollOnFocusEvent : public mozilla::Runnable {
   public:
-    explicit ScrollOnFocusEvent(nsTextControlFrame* aFrame) :
-      mFrame(aFrame) {}
+    explicit ScrollOnFocusEvent(nsTextControlFrame* aFrame)
+      : mozilla::Runnable("nsTextControlFrame::ScrollOnFocusEvent")
+      , mFrame(aFrame)
+    {
+    }
 
     NS_DECL_NSIRUNNABLE
 
@@ -334,7 +340,7 @@ private:
   // Reflow.
   nscoord mFirstBaseline;
 
-  // these packed bools could instead use the high order bits on mState, saving 4 bytes 
+  // these packed bools could instead use the high order bits on mState, saving 4 bytes
   bool mEditorHasBeenInitialized;
   bool mIsProcessing;
   // Keep track if we have asked a placeholder node creation.

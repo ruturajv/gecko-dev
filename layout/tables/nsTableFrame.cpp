@@ -39,6 +39,7 @@
 #include "nsFrameManager.h"
 #include "nsError.h"
 #include "nsCSSFrameConstructor.h"
+#include "mozilla/Range.h"
 #include "mozilla/ServoRestyleManager.h"
 #include "mozilla/ServoStyleSet.h"
 #include "mozilla/StyleSetHandle.h"
@@ -1276,10 +1277,11 @@ public:
   virtual already_AddRefed<layers::Layer> BuildLayer(nsDisplayListBuilder* aBuilder,
                                                      LayerManager* aManager,
                                                      const ContainerLayerParameters& aContainerParameters) override;
-  virtual void CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
+  virtual bool CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
                                        const StackingContextHelper& aSc,
                                        nsTArray<WebRenderParentCommand>& aParentCommands,
-                                       WebRenderDisplayItemLayer* aLayer) override;
+                                       mozilla::layers::WebRenderLayerManager* aManager,
+                                       nsDisplayListBuilder* aDisplayListBuilder) override;
   virtual LayerState GetLayerState(nsDisplayListBuilder* aBuilder,
                                    LayerManager* aManager,
                                    const ContainerLayerParameters& aParameters) override;
@@ -1313,17 +1315,25 @@ nsDisplayTableBorderCollapse::BuildLayer(nsDisplayListBuilder* aBuilder,
   return BuildDisplayItemLayer(aBuilder, aManager, aContainerParameters);
 }
 
-void
+bool
 nsDisplayTableBorderCollapse::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
                                                       const StackingContextHelper& aSc,
                                                       nsTArray<WebRenderParentCommand>& aParentCommands,
-                                                      WebRenderDisplayItemLayer* aLayer)
+                                                      mozilla::layers::WebRenderLayerManager* aManager,
+                                                      nsDisplayListBuilder* aDisplayListBuilder)
 {
-  static_cast<nsTableFrame*>(mFrame)->CreateWebRenderCommandsForBCBorders(aBuilder,
+  if (aManager->IsLayersFreeTransaction()) {
+    ContainerLayerParameters parameter;
+    if (GetLayerState(aDisplayListBuilder, aManager, parameter) != LAYER_ACTIVE) {
+      return false;
+    }
+  }
+
+  static_cast<nsTableFrame *>(mFrame)->CreateWebRenderCommandsForBCBorders(aBuilder,
                                                                           aSc,
                                                                           aParentCommands,
-                                                                          aLayer,
                                                                           ToReferenceFrame());
+  return true;
 }
 
 LayerState
@@ -5036,8 +5046,11 @@ GetPaintStyleInfo(const nsIFrame* aFrame,
 
 class nsDelayedCalcBCBorders : public Runnable {
 public:
-  explicit nsDelayedCalcBCBorders(nsIFrame* aFrame) :
-    mFrame(aFrame) {}
+  explicit nsDelayedCalcBCBorders(nsIFrame* aFrame)
+    : mozilla::Runnable("nsDelayedCalcBCBorders")
+    , mFrame(aFrame)
+  {
+  }
 
   NS_IMETHOD Run() override {
     if (mFrame) {
@@ -6472,7 +6485,6 @@ struct BCBlockDirSeg
                                wr::DisplayListBuilder& aBuilder,
                                const layers::StackingContextHelper& aSc,
                                nsTArray<layers::WebRenderParentCommand>& aParentCommands,
-                               layers::WebRenderDisplayItemLayer* aLayer,
                                const nsPoint& aPt);
   void AdvanceOffsetB();
   void IncludeCurrentBorder(BCPaintBorderIterator& aIter);
@@ -6528,7 +6540,6 @@ struct BCInlineDirSeg
                                wr::DisplayListBuilder& aBuilder,
                                const layers::StackingContextHelper& aSc,
                                nsTArray<layers::WebRenderParentCommand>& aParentCommands,
-                               layers::WebRenderDisplayItemLayer* aLayer,
                                const nsPoint& aPt);
 
   nscoord            mOffsetI;       // i-offset with respect to the table edge
@@ -6567,12 +6578,10 @@ struct BCCreateWebRenderCommandsData
   BCCreateWebRenderCommandsData(wr::DisplayListBuilder& aBuilder,
                                 const layers::StackingContextHelper& aSc,
                                 nsTArray<layers::WebRenderParentCommand>& aParentCommands,
-                                layers::WebRenderDisplayItemLayer* aLayer,
                                 const nsPoint& aOffsetToReferenceFrame)
     : mBuilder(aBuilder)
     , mSc(aSc)
     , mParentCommands(aParentCommands)
-    , mLayer(aLayer)
     , mOffsetToReferenceFrame(aOffsetToReferenceFrame)
   {
   }
@@ -6580,7 +6589,6 @@ struct BCCreateWebRenderCommandsData
   wr::DisplayListBuilder& mBuilder;
   const layers::StackingContextHelper& mSc;
   nsTArray<layers::WebRenderParentCommand>& mParentCommands;
-  layers::WebRenderDisplayItemLayer* mLayer;
   const nsPoint& mOffsetToReferenceFrame;
 };
 
@@ -6595,10 +6603,9 @@ struct BCPaintBorderAction
   BCPaintBorderAction(wr::DisplayListBuilder& aBuilder,
                       const layers::StackingContextHelper& aSc,
                       nsTArray<layers::WebRenderParentCommand>& aParentCommands,
-                      layers::WebRenderDisplayItemLayer* aLayer,
                       const nsPoint& aOffsetToReferenceFrame)
     : mMode(Mode::CREATE_WEBRENDER_COMMANDS)
-    , mCreateWebRenderCommandsData(aBuilder, aSc, aParentCommands, aLayer, aOffsetToReferenceFrame)
+    , mCreateWebRenderCommandsData(aBuilder, aSc, aParentCommands, aOffsetToReferenceFrame)
   {
     mMode = Mode::CREATE_WEBRENDER_COMMANDS;
   }
@@ -7405,7 +7412,6 @@ BCBlockDirSeg::CreateWebRenderCommands(BCPaintBorderIterator& aIter,
                                        wr::DisplayListBuilder& aBuilder,
                                        const layers::StackingContextHelper& aSc,
                                        nsTArray<layers::WebRenderParentCommand>& aParentCommands,
-                                       layers::WebRenderDisplayItemLayer* aLayer,
                                        const nsPoint& aOffset)
 {
   Maybe<BCBorderParameters> param = BuildBorderParameters(aIter, aInlineSegBSize);
@@ -7432,12 +7438,12 @@ BCBlockDirSeg::CreateWebRenderCommands(BCPaintBorderIterator& aIter,
                                                      transformedRect.width,
                                                      transformedRect.width,
                                                      transformedRect.width);
-  WrClipRegionToken clipRegion = aBuilder.PushClipRegion(transformedRect);
   transformedRect.width *= 2.0f;
+  Range<const WrBorderSide> wrsides(wrSide, 4);
   aBuilder.PushBorder(transformedRect,
-                      clipRegion,
+                      transformedRect,
                       borderWidths,
-                      wrSide[0], wrSide[1], wrSide[2], wrSide[3],
+                      wrsides,
                       borderRadii);
 }
 
@@ -7664,7 +7670,6 @@ BCInlineDirSeg::CreateWebRenderCommands(BCPaintBorderIterator& aIter,
                                         wr::DisplayListBuilder& aBuilder,
                                         const layers::StackingContextHelper& aSc,
                                         nsTArray<layers::WebRenderParentCommand>& aParentCommands,
-                                        layers::WebRenderDisplayItemLayer* aLayer,
                                         const nsPoint& aPt)
 {
   Maybe<BCBorderParameters> param = BuildBorderParameters(aIter);
@@ -7691,12 +7696,12 @@ BCInlineDirSeg::CreateWebRenderCommands(BCPaintBorderIterator& aIter,
                                                      transformedRect.height,
                                                      transformedRect.height,
                                                      transformedRect.height);
-  WrClipRegionToken clipRegion = aBuilder.PushClipRegion(transformedRect);
   transformedRect.height *= 2.0f;
+  Range<const WrBorderSide> wrsides(wrSide, 4);
   aBuilder.PushBorder(transformedRect,
-                      clipRegion,
+                      transformedRect,
                       borderWidths,
-                      wrSide[0], wrSide[1], wrSide[2], wrSide[3],
+                      wrsides,
                       borderRadii);
 }
 
@@ -7795,7 +7800,6 @@ BCPaintBorderIterator::AccumulateOrDoActionInlineDirSegment(BCPaintBorderAction&
                                              aAction.mCreateWebRenderCommandsData.mBuilder,
                                              aAction.mCreateWebRenderCommandsData.mSc,
                                              aAction.mCreateWebRenderCommandsData.mParentCommands,
-                                             aAction.mCreateWebRenderCommandsData.mLayer,
                                              aAction.mCreateWebRenderCommandsData.mOffsetToReferenceFrame);
         }
       }
@@ -7849,7 +7853,6 @@ BCPaintBorderIterator::AccumulateOrDoActionBlockDirSegment(BCPaintBorderAction& 
                                               aAction.mCreateWebRenderCommandsData.mBuilder,
                                               aAction.mCreateWebRenderCommandsData.mSc,
                                               aAction.mCreateWebRenderCommandsData.mParentCommands,
-                                              aAction.mCreateWebRenderCommandsData.mLayer,
                                               aAction.mCreateWebRenderCommandsData.mOffsetToReferenceFrame);
         }
       }
@@ -7925,10 +7928,9 @@ void
 nsTableFrame::CreateWebRenderCommandsForBCBorders(wr::DisplayListBuilder& aBuilder,
                                                   const mozilla::layers::StackingContextHelper& aSc,
                                                   nsTArray<layers::WebRenderParentCommand>& aParentCommands,
-                                                  layers::WebRenderDisplayItemLayer* aLayer,
                                                   const nsPoint& aOffsetToReferenceFrame)
 {
-  BCPaintBorderAction action(aBuilder, aSc, aParentCommands, aLayer, aOffsetToReferenceFrame);
+  BCPaintBorderAction action(aBuilder, aSc, aParentCommands, aOffsetToReferenceFrame);
   // We always draw whole table border for webrender. Passing the table rect as
   // dirty rect.
   IterateBCBorders(action, GetRect());
@@ -8030,14 +8032,20 @@ nsTableFrame::UpdateStyleOfOwnedAnonBoxesForTableWrapper(
   // this, even though all the wrapper's changes are due to properties it
   // inherits from us, because it's possible that no one ever asked us for those
   // style structs and hence changes to them aren't reflected in
-  // aHintForThisFrame at all.
+  // the handled changes at all.
+  //
+  // Also note that extensions can add/remove stylesheets that change the styles
+  // of anonymous boxes directly, so we need to handle that potential change
+  // here.
+  //
+  // NOTE(emilio): We can't use the ChangesHandledFor optimization (and we
+  // assert against that), because the table wrapper is up in the frame tree
+  // compared to the owner frame.
   uint32_t equalStructs, samePointerStructs; // Not used, actually.
   nsChangeHint wrapperHint = aWrapperFrame->StyleContext()->CalcStyleDifference(
     newContext,
     &equalStructs,
     &samePointerStructs);
-  wrapperHint =
-    NS_RemoveSubsumedHints(wrapperHint, aRestyleState.ChangesHandled());
   if (wrapperHint) {
     aRestyleState.ChangeList().AppendChange(
       aWrapperFrame, aWrapperFrame->GetContent(), wrapperHint);

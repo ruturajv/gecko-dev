@@ -76,7 +76,7 @@ txMozillaTextOutput::endDocument(nsresult aResult)
     NS_ENSURE_TRUE(mDocument && mTextParent, NS_ERROR_FAILURE);
 
     RefPtr<nsTextNode> text = new nsTextNode(mDocument->NodeInfoManager());
-    
+
     text->SetText(mText, false);
     nsresult rv = mTextParent->AppendChildTo(text, true);
     NS_ENSURE_SUCCESS(rv, rv);
@@ -163,9 +163,7 @@ txMozillaTextOutput::createResultDocument(nsIDOMDocument* aSourceDocument,
         const Encoding* encoding = Encoding::ForLabel(mOutputFormat.mEncoding);
         if (encoding) {
             mDocument->SetDocumentCharacterSetSource(kCharsetFromOtherComponent);
-            nsAutoCString canonicalCharset;
-            encoding->Name(canonicalCharset);
-            mDocument->SetDocumentCharacterSet(canonicalCharset);
+            mDocument->SetDocumentCharacterSet(WrapNotNull(encoding));
         }
     }
 

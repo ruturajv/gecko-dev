@@ -191,6 +191,7 @@
 #include "nsLayoutStylesheetCache.h"
 #include "mozilla/layers/InputAPZContext.h"
 #include "mozilla/layers/ScrollInputMethods.h"
+#include "mozilla/layers/FocusTarget.h"
 #include "nsStyleSet.h"
 #include "mozilla/StyleSetHandle.h"
 #include "mozilla/StyleSetHandleInlines.h"
@@ -542,7 +543,10 @@ class nsBeforeFirstPaintDispatcher : public Runnable
 {
 public:
   explicit nsBeforeFirstPaintDispatcher(nsIDocument* aDocument)
-  : mDocument(aDocument) {}
+    : mozilla::Runnable("nsBeforeFirstPaintDispatcher")
+    , mDocument(aDocument)
+  {
+  }
 
   // Fires the "before-first-paint" event so that interested parties (right now, the
   // mobile browser) are aware of it.
@@ -826,6 +830,7 @@ PresShell::PresShell()
   , mLastCallbackEventRequest(nullptr)
   , mLastReflowStart(0.0)
   , mLastAnchorScrollPositionY(0)
+  , mAPZFocusSequenceNumber(0)
   , mChangeNestCount(0)
   , mDocumentLoading(false)
   , mIgnoreFrameDestruction(false)
@@ -966,14 +971,7 @@ PresShell::Init(nsIDocument* aDocument,
   // calling Init, since various subroutines need to find the style set off
   // the PresContext during initialization.
   mStyleSet = aStyleSet;
-  mStyleSet->Init(aPresContext);
-
-  // Set up our style rule observer. We don't need to inform a ServoStyleSet
-  // of the binding manager because it gets XBL style sheets from bindings
-  // in a different way.
-  if (mStyleSet->IsGecko()) {
-    mStyleSet->AsGecko()->SetBindingManager(mDocument->BindingManager());
-  }
+  mStyleSet->Init(aPresContext, mDocument->BindingManager());
 
   // Notify our prescontext that it now has a compatibility mode.  Note that
   // this MUST happen after we set up our style set but before we create any
@@ -1703,6 +1701,25 @@ PresShell::EndObservingDocument()
 char* nsPresShell_ReflowStackPointerTop;
 #endif
 
+class XBLConstructorRunner : public Runnable
+{
+public:
+  explicit XBLConstructorRunner(nsIDocument* aDocument)
+    : Runnable("XBLConstructorRunner")
+    , mDocument(aDocument)
+  {
+  }
+
+  NS_IMETHOD Run() override
+  {
+    mDocument->BindingManager()->ProcessAttachedQueue();
+    return NS_OK;
+  }
+
+private:
+  nsCOMPtr<nsIDocument> mDocument;
+};
+
 nsresult
 PresShell::Initialize(nscoord aWidth, nscoord aHeight)
 {
@@ -1798,24 +1815,14 @@ PresShell::Initialize(nscoord aWidth, nscoord aHeight)
       mFrameConstructor->EndUpdate();
     }
 
-    // nsAutoScriptBlocker going out of scope may have killed us too
+    // nsAutoCauseReflowNotifier (which sets up a script blocker) going out of
+    // scope may have killed us too
     NS_ENSURE_STATE(!mHaveShutDown);
 
-    // Run the XBL binding constructors for any new frames we've constructed
-    mDocument->BindingManager()->ProcessAttachedQueue();
-
-    // Constructors may have killed us too
-    NS_ENSURE_STATE(!mHaveShutDown);
-
-    // Now flush out pending restyles before we actually reflow, in
-    // case XBL constructors changed styles somewhere.
-    {
-      nsAutoScriptBlocker scriptBlocker;
-      mPresContext->RestyleManager()->ProcessPendingRestyles();
-    }
-
-    // And that might have run _more_ XBL constructors
-    NS_ENSURE_STATE(!mHaveShutDown);
+    // Run the XBL binding constructors for any new frames we've constructed.
+    // (Do this in a script runner, since our caller might have a script
+    // blocker on the stack.)
+    nsContentUtils::AddScriptRunner(new XBLConstructorRunner(mDocument));
   }
 
   NS_ASSERTION(rootFrame, "How did that happen?");
@@ -2019,8 +2026,8 @@ PresShell::ResizeReflowIgnoreOverride(nscoord aWidth, nscoord aHeight, nscoord a
                                                           "AsyncResizeEventCallback");
       }
     } else {
-      RefPtr<nsRunnableMethod<PresShell>> event =
-        NewRunnableMethod(this, &PresShell::FireResizeEvent);
+      RefPtr<nsRunnableMethod<PresShell>> event = NewRunnableMethod(
+        "PresShell::FireResizeEvent", this, &PresShell::FireResizeEvent);
       nsresult rv = mDocument->Dispatch("PresShell::FireResizeEvent",
                                         TaskCategory::Other,
                                         do_AddRef(event));
@@ -2277,7 +2284,7 @@ NS_IMETHODIMP
 PresShell::PageMove(bool aForward, bool aExtend)
 {
   nsIScrollableFrame *scrollableFrame =
-    GetFrameToScrollAsScrollable(nsIPresShell::eVertical);
+    GetScrollableFrameToScroll(nsIPresShell::eVertical);
   if (!scrollableFrame)
     return NS_OK;
 
@@ -2297,7 +2304,7 @@ NS_IMETHODIMP
 PresShell::ScrollPage(bool aForward)
 {
   nsIScrollableFrame* scrollFrame =
-    GetFrameToScrollAsScrollable(nsIPresShell::eVertical);
+    GetScrollableFrameToScroll(nsIPresShell::eVertical);
   if (scrollFrame) {
     mozilla::Telemetry::Accumulate(mozilla::Telemetry::SCROLL_INPUT_METHODS,
         (uint32_t) ScrollInputMethod::MainThreadScrollPage);
@@ -2315,7 +2322,7 @@ NS_IMETHODIMP
 PresShell::ScrollLine(bool aForward)
 {
   nsIScrollableFrame* scrollFrame =
-    GetFrameToScrollAsScrollable(nsIPresShell::eVertical);
+    GetScrollableFrameToScroll(nsIPresShell::eVertical);
   if (scrollFrame) {
     mozilla::Telemetry::Accumulate(mozilla::Telemetry::SCROLL_INPUT_METHODS,
         (uint32_t) ScrollInputMethod::MainThreadScrollLine);
@@ -2336,7 +2343,7 @@ NS_IMETHODIMP
 PresShell::ScrollCharacter(bool aRight)
 {
   nsIScrollableFrame* scrollFrame =
-    GetFrameToScrollAsScrollable(nsIPresShell::eHorizontal);
+    GetScrollableFrameToScroll(nsIPresShell::eHorizontal);
   if (scrollFrame) {
     mozilla::Telemetry::Accumulate(mozilla::Telemetry::SCROLL_INPUT_METHODS,
         (uint32_t) ScrollInputMethod::MainThreadScrollCharacter);
@@ -2356,7 +2363,7 @@ NS_IMETHODIMP
 PresShell::CompleteScroll(bool aForward)
 {
   nsIScrollableFrame* scrollFrame =
-    GetFrameToScrollAsScrollable(nsIPresShell::eVertical);
+    GetScrollableFrameToScroll(nsIPresShell::eVertical);
   if (scrollFrame) {
     mozilla::Telemetry::Accumulate(mozilla::Telemetry::SCROLL_INPUT_METHODS,
         (uint32_t) ScrollInputMethod::MainThreadCompleteScroll);
@@ -2830,12 +2837,9 @@ PresShell::FrameNeedsToContinueReflow(nsIFrame *aFrame)
   mFramesToDirty.PutEntry(aFrame);
 }
 
-nsIScrollableFrame*
-nsIPresShell::GetFrameToScrollAsScrollable(
-                nsIPresShell::ScrollDirection aDirection)
+already_AddRefed<nsIContent>
+nsIPresShell::GetContentForScrolling() const
 {
-  nsIScrollableFrame* scrollFrame = nullptr;
-
   nsCOMPtr<nsIContent> focusedContent;
   nsIFocusManager* fm = nsFocusManager::GetFocusManager();
   if (fm && mDocument) {
@@ -2853,8 +2857,17 @@ nsIPresShell::GetFrameToScrollAsScrollable(
       focusedContent = do_QueryInterface(focusedNode);
     }
   }
-  if (focusedContent) {
-    nsIFrame* startFrame = focusedContent->GetPrimaryFrame();
+  return focusedContent.forget();
+}
+
+nsIScrollableFrame*
+nsIPresShell::GetScrollableFrameToScrollForContent(
+                nsIContent* aContent,
+                nsIPresShell::ScrollDirection aDirection)
+{
+  nsIScrollableFrame* scrollFrame = nullptr;
+  if (aContent) {
+    nsIFrame* startFrame = aContent->GetPrimaryFrame();
     if (startFrame) {
       scrollFrame = startFrame->GetScrollTargetFrame();
       if (scrollFrame) {
@@ -2875,6 +2888,13 @@ nsIPresShell::GetFrameToScrollAsScrollable(
     scrollFrame = GetRootScrollFrameAsScrollable();
   }
   return scrollFrame;
+}
+
+nsIScrollableFrame*
+nsIPresShell::GetScrollableFrameToScroll(nsIPresShell::ScrollDirection aDirection)
+{
+  nsCOMPtr<nsIContent> content = GetContentForScrolling();
+  return GetScrollableFrameToScrollForContent(content.get(), aDirection);
 }
 
 void
@@ -4070,14 +4090,17 @@ PresShell::DoFlushPendingNotifications(mozilla::ChangesToFlush aFlush)
     "",
     "Content",
     "ContentAndNotify",
+    // As far as the profiler is concerned, EnsurePresShellInitAndFrames and
+    // Frames are the same
+    "Style",
     "Style",
     "InterruptibleLayout",
     "Layout",
     "Display"
   };
 
-  PROFILER_LABEL_DYNAMIC("PresShell", "Flush",
-    js::ProfileEntry::Category::GRAPHICS, flushTypeNames[flushType]);
+  AUTO_PROFILER_LABEL_DYNAMIC("PresShell::DoFlushPendingNotifications",
+                              GRAPHICS, flushTypeNames[flushType]);
 
 #ifdef ACCESSIBILITY
 #ifdef DEBUG
@@ -4672,8 +4695,8 @@ PresShell::RenderDocument(const nsRect& aRect, uint32_t aFlags,
   // slight rounding errors here.  We use NudgeToIntegers() here to adjust
   // matrix components that are integers up to the accuracy of floats to be
   // those integers.
-  gfxMatrix newTM = aThebesContext->CurrentMatrix().Translate(offset).
-                                                    Scale(scale, scale).
+  gfxMatrix newTM = aThebesContext->CurrentMatrix().PreTranslate(offset).
+                                                    PreScale(scale, scale).
                                                     NudgeToIntegers();
   aThebesContext->SetMatrix(newTM);
 
@@ -5070,12 +5093,12 @@ PresShell::PaintRangePaintInfo(const nsTArray<UniquePtr<RangePaintInfo>>& aItems
   gfxMatrix initialTM = ctx->CurrentMatrix();
 
   if (resize)
-    initialTM.Scale(scale, scale);
+    initialTM.PreScale(scale, scale);
 
   // translate so that points are relative to the surface area
   gfxPoint surfaceOffset =
     nsLayoutUtils::PointToGfxPoint(-aArea.TopLeft(), pc->AppUnitsPerDevPixel());
-  initialTM.Translate(surfaceOffset);
+  initialTM.PreTranslate(surfaceOffset);
 
   // temporarily hide the selection so that text is drawn normally. If a
   // selection is being rendered, use that, otherwise use the presshell's
@@ -5097,7 +5120,7 @@ PresShell::PaintRangePaintInfo(const nsTArray<UniquePtr<RangePaintInfo>>& aItems
     gfxPoint rootOffset =
       nsLayoutUtils::PointToGfxPoint(rangeInfo->mRootOffset,
                                      pc->AppUnitsPerDevPixel());
-    ctx->SetMatrix(gfxMatrix(initialTM).Translate(rootOffset));
+    ctx->SetMatrix(gfxMatrix(initialTM).PreTranslate(rootOffset));
     aArea.MoveBy(-rangeInfo->mRootOffset.x, -rangeInfo->mRootOffset.y);
     nsRegion visible(aArea);
     RefPtr<LayerManager> layerManager =
@@ -6194,7 +6217,9 @@ PresShell::ScheduleApproximateFrameVisibilityUpdateNow()
   }
 
   RefPtr<nsRunnableMethod<PresShell>> event =
-    NewRunnableMethod(this, &PresShell::UpdateApproximateFrameVisibility);
+    NewRunnableMethod("PresShell::UpdateApproximateFrameVisibility",
+                      this,
+                      &PresShell::UpdateApproximateFrameVisibility);
   nsresult rv =
     mDocument->Dispatch("PresShell::UpdateApproximateFrameVisibility",
                         TaskCategory::Other,
@@ -6294,8 +6319,7 @@ PresShell::Paint(nsView*         aViewToPaint,
     uri = contentRoot->GetDocumentURI();
   }
   nsCString uriString = uri ? uri->GetSpecOrDefault() : NS_LITERAL_CSTRING("N/A");
-  PROFILER_LABEL_DYNAMIC("PresShell", "Paint",
-    js::ProfileEntry::Category::GRAPHICS, uriString.get());
+  AUTO_PROFILER_LABEL_DYNAMIC("PresShell::Paint", GRAPHICS, uriString.get());
 
   Maybe<js::AutoAssertNoContentJS> nojs;
 
@@ -6317,6 +6341,13 @@ PresShell::Paint(nsView*         aViewToPaint,
 
   if (!mIsActive) {
     return;
+  }
+
+  if (gfxPrefs::APZKeyboardEnabled()) {
+    // Update the focus target for async keyboard scrolling. This will be forwarded
+    // to APZ by nsDisplayList::PaintRoot. We need to to do this before we enter
+    // the paint phase because dispatching eVoid events can cause layout to happen.
+    mAPZFocusTarget = FocusTarget(this, mAPZFocusSequenceNumber);
   }
 
   nsPresContext* presContext = GetPresContext();
@@ -6343,6 +6374,10 @@ PresShell::Paint(nsView*         aViewToPaint,
   if (!layerManager->BeginTransaction()) {
     return;
   }
+
+  // Send an updated focus target with this transaction. Be sure to do this
+  // before we paint in the case this is an empty transaction.
+  layerManager->SetFocusTarget(mAPZFocusTarget);
 
   if (frame) {
     // Try to do an empty transaction, if the frame tree does not
@@ -6738,6 +6773,17 @@ PresShell::GetRootWindow()
   return parent->GetRootWindow();
 }
 
+already_AddRefed<nsPIDOMWindowOuter>
+PresShell::GetFocusedDOMWindowInOurWindow()
+{
+  nsCOMPtr<nsPIDOMWindowOuter> rootWindow = GetRootWindow();
+  NS_ENSURE_TRUE(rootWindow, nullptr);
+  nsCOMPtr<nsPIDOMWindowOuter> focusedWindow;
+  nsFocusManager::GetFocusedDescendant(rootWindow, true,
+                                       getter_AddRefs(focusedWindow));
+  return focusedWindow.forget();
+}
+
 already_AddRefed<nsIPresShell>
 PresShell::GetParentPresShellForEventHandling()
 {
@@ -6782,17 +6828,6 @@ void
 PresShell::DisableNonTestMouseEvents(bool aDisable)
 {
   sDisableNonTestMouseEvents = aDisable;
-}
-
-already_AddRefed<nsPIDOMWindowOuter>
-PresShell::GetFocusedDOMWindowInOurWindow()
-{
-  nsCOMPtr<nsPIDOMWindowOuter> rootWindow = GetRootWindow();
-  NS_ENSURE_TRUE(rootWindow, nullptr);
-  nsCOMPtr<nsPIDOMWindowOuter> focusedWindow;
-  nsFocusManager::GetFocusedDescendant(rootWindow, true,
-                                       getter_AddRefs(focusedWindow));
-  return focusedWindow.forget();
 }
 
 void
@@ -7130,6 +7165,11 @@ PresShell::HandleEvent(nsIFrame* aFrame,
 #endif
 
   NS_ASSERTION(aFrame, "aFrame should be not null");
+
+  // Update the latest focus sequence number with this new sequence number
+  if (mAPZFocusSequenceNumber < aEvent->mFocusSequenceNumber) {
+    mAPZFocusSequenceNumber = aEvent->mFocusSequenceNumber;
+  }
 
   if (sPointerEventEnabled) {
     AutoWeakFrame weakFrame(aFrame);
@@ -7917,7 +7957,8 @@ PresShell::HandleEventWithTarget(WidgetEvent* aEvent, nsIFrame* aFrame,
   if (aContent) {
     nsIDocument* doc = aContent->GetComposedDoc();
     NS_ASSERTION(doc, "event for content that isn't in a document");
-    NS_ASSERTION(!doc || doc->GetShell() == this, "wrong shell");
+    // NOTE: We don't require that the document still have a PresShell.
+    // See bug 1375940.
   }
 #endif
   NS_ENSURE_STATE(!aContent || aContent->GetComposedDoc() == mDocument);
@@ -9202,8 +9243,7 @@ PresShell::DoReflow(nsIFrame* target, bool aInterruptible)
 
   nsIURI* uri = mDocument->GetDocumentURI();
   nsCString uriString = uri ? uri->GetSpecOrDefault() : NS_LITERAL_CSTRING("N/A");
-  PROFILER_LABEL_DYNAMIC("PresShell", "DoReflow",
-    js::ProfileEntry::Category::GRAPHICS, uriString.get());
+  AUTO_PROFILER_LABEL_DYNAMIC("PresShell::DoReflow", GRAPHICS, uriString.get());
 
   nsDocShell* docShell = static_cast<nsDocShell*>(GetPresContext()->GetDocShell());
   RefPtr<TimelineConsumers> timelines = TimelineConsumers::Get();
@@ -10457,7 +10497,7 @@ void ReflowCountMgr::PaintCount(const char*     aName,
       gfxPoint devPixelOffset =
         nsLayoutUtils::PointToGfxPoint(aOffset, appUnitsPerDevPixel);
       aRenderingContext->SetMatrix(
-        aRenderingContext->CurrentMatrix().Translate(devPixelOffset));
+        aRenderingContext->CurrentMatrix().PreTranslate(devPixelOffset));
 
       // We don't care about the document language or user fonts here;
       // just get a default Latin font.

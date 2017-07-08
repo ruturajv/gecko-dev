@@ -10,7 +10,6 @@
 
 #include "jsapi.h"
 #include "jsfriendapi.h"
-#include "mozilla/CheckedInt.h"
 #include "mozilla/DOMEventTargetHelper.h"
 #include "mozilla/net/WebSocketChannel.h"
 #include "mozilla/dom/File.h"
@@ -246,6 +245,9 @@ public:
 
   RefPtr<WebSocketEventService> mService;
 
+  // For dispatching runnables to main thread.
+  nsCOMPtr<nsIEventTarget> mMainThreadEventTarget;
+
 private:
   ~WebSocketImpl()
   {
@@ -268,7 +270,8 @@ class CallDispatchConnectionCloseEvents final : public CancelableRunnable
 {
 public:
   explicit CallDispatchConnectionCloseEvents(WebSocketImpl* aWebSocketImpl)
-    : mWebSocketImpl(aWebSocketImpl)
+    : CancelableRunnable("dom::CallDispatchConnectionCloseEvents")
+    , mWebSocketImpl(aWebSocketImpl)
   {
     aWebSocketImpl->AssertIsOnTargetThread();
   }
@@ -404,9 +407,11 @@ namespace {
 class CancelWebSocketRunnable final : public Runnable
 {
 public:
-  CancelWebSocketRunnable(nsIWebSocketChannel* aChannel, uint16_t aReasonCode,
+  CancelWebSocketRunnable(nsIWebSocketChannel* aChannel,
+                          uint16_t aReasonCode,
                           const nsACString& aReasonString)
-    : mChannel(aChannel)
+    : Runnable("dom::CancelWebSocketRunnable")
+    , mChannel(aChannel)
     , mReasonCode(aReasonCode)
     , mReasonString(aReasonString)
   {}
@@ -458,7 +463,8 @@ public:
   CloseConnectionRunnable(WebSocketImpl* aImpl,
                           uint16_t aReasonCode,
                           const nsACString& aReasonString)
-    : mImpl(aImpl)
+    : Runnable("dom::CloseConnectionRunnable")
+    , mImpl(aImpl)
     , mReasonCode(aReasonCode)
     , mReasonString(aReasonString)
   {}
@@ -849,11 +855,16 @@ WebSocketImpl::OnAcknowledge(nsISupports *aContext, uint32_t aSize)
     return NS_OK;
   }
 
-  if (aSize > mWebSocket->mOutgoingBufferedAmount) {
+  MOZ_RELEASE_ASSERT(mWebSocket->mOutgoingBufferedAmount.isValid());
+  if (aSize > mWebSocket->mOutgoingBufferedAmount.value()) {
     return NS_ERROR_UNEXPECTED;
   }
 
   mWebSocket->mOutgoingBufferedAmount -= aSize;
+  if (!mWebSocket->mOutgoingBufferedAmount.isValid()) {
+    return NS_ERROR_UNEXPECTED;
+  }
+
   return NS_OK;
 }
 
@@ -1864,6 +1875,10 @@ WebSocketImpl::InitializeConnection(nsIPrincipal* aPrincipal)
 
   mChannel = wsChannel;
 
+  if (mIsMainThread && doc) {
+    mMainThreadEventTarget = doc->EventTargetFor(TaskCategory::Other);
+  }
+
   return NS_OK;
 }
 
@@ -2169,7 +2184,7 @@ WebSocket::UpdateMustKeepAlive()
         if (mListenerManager->HasListenersFor(MESSAGE_EVENT_STRING) ||
             mListenerManager->HasListenersFor(ERROR_EVENT_STRING) ||
             mListenerManager->HasListenersFor(CLOSE_EVENT_STRING) ||
-            mOutgoingBufferedAmount != 0) {
+            mOutgoingBufferedAmount.value() != 0) {
           shouldKeepAlive = true;
         }
       }
@@ -2351,7 +2366,8 @@ uint32_t
 WebSocket::BufferedAmount() const
 {
   AssertIsOnTargetThread();
-  return mOutgoingBufferedAmount;
+  MOZ_RELEASE_ASSERT(mOutgoingBufferedAmount.isValid());
+  return mOutgoingBufferedAmount.value();
 }
 
 // webIDL: attribute BinaryType binaryType;
@@ -2484,14 +2500,11 @@ WebSocket::Send(nsIInputStream* aMsgStream,
   }
 
   // Always increment outgoing buffer len, even if closed
-  CheckedUint32 size = mOutgoingBufferedAmount;
-  size += aMsgLength;
-  if (!size.isValid()) {
+  mOutgoingBufferedAmount += aMsgLength;
+  if (!mOutgoingBufferedAmount.isValid()) {
     aRv.Throw(NS_ERROR_OUT_OF_MEMORY);
     return;
   }
-
-  mOutgoingBufferedAmount = size.value();
 
   if (readyState == CLOSING ||
       readyState == CLOSED) {
@@ -2838,9 +2851,12 @@ NS_IMETHODIMP
 WebSocketImpl::Dispatch(already_AddRefed<nsIRunnable> aEvent, uint32_t aFlags)
 {
   nsCOMPtr<nsIRunnable> event_ref(aEvent);
-  // If the target is the main-thread we can just dispatch the runnable.
+  // If the target is the main-thread, we should try to dispatch the runnable
+  // to a labeled event target.
   if (mIsMainThread) {
-    return NS_DispatchToMainThread(event_ref.forget());
+    return mMainThreadEventTarget
+      ? mMainThreadEventTarget->Dispatch(event_ref.forget())
+      : GetMainThreadEventTarget()->Dispatch(event_ref.forget());
   }
 
   MutexAutoLock lock(mMutex);

@@ -130,7 +130,11 @@ private:
 class GlyphMetricsUpdater : public Runnable {
 public:
   NS_DECL_NSIRUNNABLE
-  explicit GlyphMetricsUpdater(SVGTextFrame* aFrame) : mFrame(aFrame) { }
+  explicit GlyphMetricsUpdater(SVGTextFrame* aFrame)
+    : Runnable("GlyphMetricsUpdater")
+    , mFrame(aFrame)
+  {
+  }
   static void Run(SVGTextFrame* aFrame);
   void Revoke() { mFrame = nullptr; }
 private:
@@ -256,7 +260,7 @@ public:
 
   // nsSVGContainerFrame methods:
   virtual gfxMatrix GetCanvasTM() override;
-  
+
   // SVG DOM text methods:
   uint32_t GetNumberOfChars(nsIContent* aContent);
   float GetComputedTextLength(nsIContent* aContent);

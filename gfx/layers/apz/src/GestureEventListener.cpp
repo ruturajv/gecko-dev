@@ -146,9 +146,6 @@ nsEventStatus GestureEventListener::HandleInputEvent(const MultiTouchInput& aEve
     mTouches.Clear();
     rv = HandleInputTouchCancel();
     break;
-  case MultiTouchInput::MULTITOUCH_SENTINEL:
-    MOZ_ASSERT_UNREACHABLE("Invalid MultTouchInput.");
-    break;
   }
 
   return rv;
@@ -595,8 +592,10 @@ void GestureEventListener::CancelLongTapTimeoutTask()
 
 void GestureEventListener::CreateLongTapTimeoutTask()
 {
-  RefPtr<CancelableRunnable> task =
-    NewCancelableRunnableMethod(this, &GestureEventListener::HandleInputTimeoutLongTap);
+  RefPtr<CancelableRunnable> task = NewCancelableRunnableMethod(
+    "layers::GestureEventListener::HandleInputTimeoutLongTap",
+    this,
+    &GestureEventListener::HandleInputTimeoutLongTap);
 
   mLongTapTimeoutTask = task;
   mAsyncPanZoomController->PostDelayedTask(
@@ -623,10 +622,11 @@ void GestureEventListener::CreateMaxTapTimeoutTask()
 
   TouchBlockState* block = mAsyncPanZoomController->GetInputQueue()->GetCurrentTouchBlock();
   MOZ_ASSERT(block);
-  RefPtr<CancelableRunnable> task =
-    NewCancelableRunnableMethod<bool>(this,
-                                      &GestureEventListener::HandleInputTimeoutMaxTap,
-                                      block->IsDuringFastFling());
+  RefPtr<CancelableRunnable> task = NewCancelableRunnableMethod<bool>(
+    "layers::GestureEventListener::HandleInputTimeoutMaxTap",
+    this,
+    &GestureEventListener::HandleInputTimeoutMaxTap,
+    block->IsDuringFastFling());
 
   mMaxTapTimeoutTask = task;
   mAsyncPanZoomController->PostDelayedTask(

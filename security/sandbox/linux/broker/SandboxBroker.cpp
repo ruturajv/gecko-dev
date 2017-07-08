@@ -92,8 +92,8 @@ SandboxBroker::~SandboxBroker() {
   // destructor can now return.
 }
 
-SandboxBroker::Policy::Policy() { }
-SandboxBroker::Policy::~Policy() { }
+SandboxBroker::Policy::Policy() = default;
+SandboxBroker::Policy::~Policy() = default;
 
 SandboxBroker::Policy::Policy(const Policy& aOther) {
   for (auto iter = aOther.mMap.ConstIter(); !iter.Done(); iter.Next()) {
@@ -393,6 +393,10 @@ AllowOpen(int aReqFlags, int aPerms)
   if (aReqFlags & O_CREAT) {
     needed |= SandboxBroker::MAY_CREATE;
   }
+  // Linux allows O_TRUNC even with O_RDONLY
+  if (aReqFlags & O_TRUNC) {
+    needed |= SandboxBroker::MAY_WRITE;
+  }
   return (aPerms & needed) == needed;
 }
 
@@ -421,9 +425,9 @@ DoLink(const char* aPath, const char* aPath2,
 size_t
 SandboxBroker::ConvertToRealPath(char* aPath, size_t aBufSize, size_t aPathLen)
 {
-  if (strstr(aPath, "..") != NULL) {
-    char* result = realpath(aPath, NULL);
-    if (result != NULL) {
+  if (strstr(aPath, "..") != nullptr) {
+    char* result = realpath(aPath, nullptr);
+    if (result != nullptr) {
       strncpy(aPath, result, aBufSize);
       aPath[aBufSize - 1] = '\0';
       free(result);

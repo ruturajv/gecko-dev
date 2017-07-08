@@ -64,8 +64,12 @@ using namespace mozilla::layers;
 class nsImageBoxFrameEvent : public Runnable
 {
 public:
-  nsImageBoxFrameEvent(nsIContent *content, EventMessage message)
-    : mContent(content), mMessage(message) {}
+  nsImageBoxFrameEvent(nsIContent* content, EventMessage message)
+    : mozilla::Runnable("nsImageBoxFrameEvent")
+    , mContent(content)
+    , mMessage(message)
+  {
+  }
 
   NS_IMETHOD Run() override;
 
@@ -497,7 +501,7 @@ nsDisplayXULImage::GetImage()
 
   nsCOMPtr<imgIContainer> imgCon;
   imageFrame->mImageRequest->GetImage(getter_AddRefs(imgCon));
-  
+
   return imgCon.forget();
 }
 
@@ -775,7 +779,7 @@ nsImageBoxFrame::OnFrameUpdate(imgIRequest* aRequest)
   if ((0 == mRect.width) || (0 == mRect.height)) {
     return NS_OK;
   }
- 
+
   InvalidateLayer(nsDisplayItem::TYPE_XUL_IMAGE);
 
   return NS_OK;

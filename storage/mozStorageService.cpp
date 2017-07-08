@@ -288,8 +288,7 @@ Service::~Service()
   if (rc != SQLITE_OK)
     NS_WARNING("sqlite3 did not shutdown cleanly.");
 
-  DebugOnly<bool> shutdownObserved = !sXPConnect;
-  NS_ASSERTION(shutdownObserved, "Shutdown was not observed!");
+  shutdown(); // To release sXPConnect.
 
   gService = nullptr;
   delete mSqliteVFS;
@@ -387,6 +386,7 @@ Service::minimizeMemory()
       // dispatch will fail and that's okay.
       nsCOMPtr<nsIRunnable> event =
         NewRunnableMethod<const nsCString>(
+          "Connection::ExecuteSimpleSQL",
           conn, &Connection::ExecuteSimpleSQL, shrinkPragma);
       Unused << conn->threadOpenedOn->Dispatch(event, NS_DISPATCH_NORMAL);
     }
@@ -677,7 +677,8 @@ public:
                     nsIFile* aStorageFile,
                     int32_t aGrowthIncrement,
                     mozIStorageCompletionCallback* aCallback)
-    : mConnection(aConnection)
+    : Runnable("storage::AsyncInitDatabase")
+    , mConnection(aConnection)
     , mStorageFile(aStorageFile)
     , mGrowthIncrement(aGrowthIncrement)
     , mCallback(aCallback)

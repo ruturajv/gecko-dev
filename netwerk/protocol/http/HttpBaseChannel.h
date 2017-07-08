@@ -499,7 +499,7 @@ protected:
   nsCString                         mEntityID;
   uint64_t                          mStartPos;
 
-  nsresult                          mStatus;
+  Atomic<nsresult, ReleaseAcquire>  mStatus;
   uint32_t                          mLoadFlags;
   uint32_t                          mCaps;
   uint32_t                          mClassOfService;
@@ -724,7 +724,8 @@ nsresult HttpAsyncAborter<T>::AsyncCall(void (T::*funcPtr)(),
 {
   nsresult rv;
 
-  RefPtr<nsRunnableMethod<T>> event = NewRunnableMethod(mThis, funcPtr);
+  RefPtr<nsRunnableMethod<T>> event =
+    NewRunnableMethod("net::HttpAsyncAborter::AsyncCall", mThis, funcPtr);
   rv = NS_DispatchToCurrentThread(event);
   if (NS_SUCCEEDED(rv) && retval) {
     *retval = event;

@@ -617,7 +617,7 @@ public:
   // register the RenderTextureHost into render thread.
   virtual void CreateRenderTexture(const wr::ExternalImageId& aExternalImageId)
   {
-    MOZ_ASSERT_UNREACHABLE("No CreateRenderTexture() implementation for this TextureHost type.");
+    MOZ_RELEASE_ASSERT(false, "No CreateRenderTexture() implementation for this TextureHost type.");
   }
 
   // Create all necessary image keys for this textureHost rendering.
@@ -644,7 +644,7 @@ public:
   // Put all necessary WR commands into DisplayListBuilder for this textureHost rendering.
   virtual void PushExternalImage(wr::DisplayListBuilder& aBuilder,
                                  const WrRect& aBounds,
-                                 const WrClipRegionToken aClip,
+                                 const WrRect& aClip,
                                  wr::ImageRendering aFilter,
                                  Range<const wr::ImageKey>& aKeys)
   {
@@ -750,7 +750,7 @@ public:
 
   virtual void PushExternalImage(wr::DisplayListBuilder& aBuilder,
                                  const WrRect& aBounds,
-                                 const WrClipRegionToken aClip,
+                                 const WrRect& aClip,
                                  wr::ImageRendering aFilter,
                                  Range<const wr::ImageKey>& aImageKeys) override;
 

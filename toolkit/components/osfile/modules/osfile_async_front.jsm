@@ -50,7 +50,8 @@ var Path = {};
 Cu.import("resource://gre/modules/osfile/ospath.jsm", Path);
 
 // The library of promises.
-Cu.import("resource://gre/modules/Promise.jsm", this);
+XPCOMUtils.defineLazyModuleGetter(this, "PromiseUtils",
+                                  "resource://gre/modules/PromiseUtils.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "Task",
                                   "resource://gre/modules/Task.jsm");
 
@@ -217,6 +218,12 @@ var Scheduler = this.Scheduler = {
   resetTimer: null,
 
   /**
+   * A flag indicating whether we had some activities when waiting the
+   * timer and if it's not we can shut down the worker.
+   */
+  hasRecentActivity: false,
+
+  /**
    * The worker to which to send requests.
    *
    * If the worker has never been created or has been reset, this is a
@@ -231,6 +238,20 @@ var Scheduler = this.Scheduler = {
       this._worker = new BasePromiseWorker("resource://gre/modules/osfile/osfile_async_worker.js");
       this._worker.log = LOG;
       this._worker.ExceptionHandlers["OS.File.Error"] = OSError.fromMsg;
+
+      let delay = Services.prefs.getIntPref("osfile.reset_worker_delay", 0);
+      if (delay) {
+        this.resetTimer = setInterval(
+          () => {
+            if (this.hasRecentActivity) {
+              this.hasRecentActivity = false;
+              return;
+            }
+            clearInterval(this.resetTimer);
+            Scheduler.kill({reset: true, shutdown: false});
+          },
+          delay);
+      }
     }
     return this._worker;
   },
@@ -238,23 +259,10 @@ var Scheduler = this.Scheduler = {
   _worker: null,
 
   /**
-   * Prepare to kill the OS.File worker after a few seconds.
+   * Restart the OS.File worker killer timer.
    */
   restartTimer: function(arg) {
-    let delay = Services.prefs.getIntPref("osfile.reset_worker_delay", 0);
-
-    if (!delay) {
-      // Don't auto-shutdown if we don't have a delay preference set.
-      return;
-    }
-
-    if (this.resetTimer) {
-      clearTimeout(this.resetTimer);
-    }
-    this.resetTimer = setTimeout(
-      () => Scheduler.kill({reset: true, shutdown: false}),
-      delay
-    );
+    this.hasRecentActivity = true;
   },
 
   /**
@@ -276,7 +284,7 @@ var Scheduler = this.Scheduler = {
     // to an obsolete worker (we reactivate it in the `finally`).
     // This needs to be done right now so that we maintain relative
     // ordering with calls to post(), etc.
-    let deferred = Promise.defer();
+    let deferred = PromiseUtils.defer();
     let savedQueue = this.queue;
     this.queue = deferred.promise;
 

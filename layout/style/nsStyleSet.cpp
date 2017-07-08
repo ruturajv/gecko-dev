@@ -282,7 +282,7 @@ nsStyleSet::SizeOfIncludingThis(MallocSizeOf aMallocSizeOf) const
 }
 
 void
-nsStyleSet::Init(nsPresContext *aPresContext)
+nsStyleSet::Init(nsPresContext* aPresContext, nsBindingManager* aBindingManager)
 {
   mFirstLineRule = new nsEmptyStyleRule;
   mFirstLetterRule = new nsEmptyStyleRule;
@@ -290,6 +290,7 @@ nsStyleSet::Init(nsPresContext *aPresContext)
   mDisableTextZoomStyleRule = new nsDisableTextZoomStyleRule;
 
   mRuleTree = nsRuleNode::CreateRootNode(aPresContext);
+  mBindingManager = aBindingManager;
 
   // Make an explicit GatherRuleProcessors call for the levels that
   // don't have style sheets.  The other levels will have their calls
@@ -744,19 +745,10 @@ nsStyleSet::AddDocStyleSheet(CSSStyleSheet* aSheet, nsIDocument* aDocument)
 }
 
 void
-nsStyleSet::AppendAllXBLStyleSheets(nsTArray<mozilla::CSSStyleSheet*>& aArray) const
+nsStyleSet::AppendAllXBLStyleSheets(nsTArray<StyleSheet*>& aArray) const
 {
   if (mBindingManager) {
-    // XXXheycam stylo: AppendAllSheets will need to be able to return either
-    // CSSStyleSheets or ServoStyleSheets, on request (and then here requesting
-    // CSSStyleSheets).
-    AutoTArray<StyleSheet*, 32> sheets;
-    mBindingManager->AppendAllSheets(sheets);
-    for (StyleSheet* handle : sheets) {
-      MOZ_ASSERT(handle->IsGecko(), "stylo: AppendAllSheets shouldn't give us "
-                                    "ServoStyleSheets yet");
-      aArray.AppendElement(handle->AsGecko());
-    }
+    mBindingManager->AppendAllSheets(aArray);
   }
 }
 
@@ -1101,8 +1093,7 @@ nsStyleSet::FileRules(nsIStyleRuleProcessor::EnumFunc aCollectorFunc,
                       RuleProcessorData* aData, Element* aElement,
                       nsRuleWalker* aRuleWalker)
 {
-  PROFILER_LABEL("nsStyleSet", "FileRules",
-    js::ProfileEntry::Category::CSS);
+  AUTO_PROFILER_LABEL("nsStyleSet::FileRules", CSS);
 
   NS_ASSERTION(mBatching == 0, "rule processors out of date");
 
@@ -2010,8 +2001,7 @@ already_AddRefed<nsStyleContext>
 nsStyleSet::ProbePseudoElementStyle(Element* aParentElement,
                                     CSSPseudoElementType aType,
                                     nsStyleContext* aParentContext,
-                                    TreeMatchContext& aTreeMatchContext,
-                                    Element* aPseudoElement)
+                                    TreeMatchContext& aTreeMatchContext)
 {
   NS_ENSURE_FALSE(mInShutdown, nullptr);
 
@@ -2024,7 +2014,7 @@ nsStyleSet::ProbePseudoElementStyle(Element* aParentElement,
   aTreeMatchContext.ResetForUnvisitedMatching();
   PseudoElementRuleProcessorData data(PresContext(), aParentElement,
                                       &ruleWalker, aType, aTreeMatchContext,
-                                      aPseudoElement);
+                                      /* aPseudoElement = */ nullptr);
   WalkRestrictionRule(aType, &ruleWalker);
   // not the root if there was a restriction rule
   nsRuleNode *adjustedRoot = ruleWalker.CurrentNode();

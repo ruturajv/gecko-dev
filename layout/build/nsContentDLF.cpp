@@ -3,8 +3,11 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-#include "nsCOMPtr.h"
 #include "nsContentDLF.h"
+
+#include "mozilla/Encoding.h"
+
+#include "nsCOMPtr.h"
 #include "nsDocShell.h"
 #include "nsGenericHTMLElement.h"
 #include "nsGkAtoms.h"
@@ -54,7 +57,7 @@ static const char* const gHTMLTypes[] = {
   APPLICATION_WAPXHTML_XML,
   0
 };
-  
+
 static const char* const gXMLTypes[] = {
   TEXT_XML,
   APPLICATION_XML,
@@ -327,8 +330,8 @@ nsContentDLF::CreateBlankDocument(nsILoadGroup *aLoadGroup,
   // add a nice bow
   if (NS_SUCCEEDED(rv)) {
     blankDoc->SetDocumentCharacterSetSource(kCharsetFromDocTypeDefault);
-    blankDoc->SetDocumentCharacterSet(NS_LITERAL_CSTRING("UTF-8"));
-    
+    blankDoc->SetDocumentCharacterSet(UTF_8_ENCODING);
+
     blankDoc.forget(aDocument);
   }
   return rv;
@@ -399,7 +402,7 @@ nsContentDLF::CreateXULDocument(const char* aCommand,
   rv = aChannel->GetURI(getter_AddRefs(aURL));
   if (NS_FAILED(rv)) return rv;
 
-  /* 
+  /*
    * Initialize the document to begin loading the data...
    *
    * An nsIStreamListener connected to the parser is returned in

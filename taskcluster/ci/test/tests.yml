@@ -21,6 +21,8 @@ awsy:
             by-test-platform:
                 windows.*/opt:
                     - awsy/taskcluster_windows_config.py
+                macosx.*/opt:
+                    - awsy/macosx_config.py
                 default:
                     - awsy/linux_config.py
 
@@ -390,7 +392,9 @@ marionette-headless:
                 no-read-buildbot-config: true
                 config:
                     by-test-platform:
-                        macosx.*: 
+                        windows.*:
+                            - marionette/windows_taskcluster_config.py
+                        macosx.*:
                             - marionette/prod_config.py
                         default:
                             - marionette/prod_config.py
@@ -1187,6 +1191,7 @@ talos-chrome:
     treeherder-symbol: tc-T(c)
     run-on-projects:
         by-test-platform:
+            linux64-stylo-sequential/.*: ['mozilla-central','try']
             linux64-stylo/.*: ['mozilla-central', 'try']
             default: ['mozilla-beta', 'mozilla-central', 'mozilla-inbound', 'autoland', 'try']
     max-run-time: 3600
@@ -1212,6 +1217,7 @@ talos-dromaeojs:
     treeherder-symbol: tc-T(d)
     run-on-projects:
         by-test-platform:
+            linux64-stylo-sequential/.*: ['mozilla-central','try']
             linux64-stylo/.*: ['mozilla-central', 'try']
             default: ['mozilla-beta', 'mozilla-central', 'mozilla-inbound', 'autoland', 'try']
     max-run-time: 3600
@@ -1237,6 +1243,7 @@ talos-g1:
     treeherder-symbol: tc-T(g1)
     run-on-projects:
         by-test-platform:
+            linux64-stylo-sequential/.*: ['mozilla-central','try']
             linux64-stylo/.*: ['mozilla-central', 'try']
             default: ['mozilla-beta', 'mozilla-central', 'mozilla-inbound', 'autoland', 'try']
     max-run-time: 7200
@@ -1263,8 +1270,8 @@ talos-g2:
     max-run-time: 7200
     run-on-projects:
         by-test-platform:
+            linux64-stylo-sequential/.*: ['mozilla-central','try']
             linux64-stylo/.*: ['mozilla-central', 'try']
-            linux64-stylo-sequential/.*: ['try']
             default: ['mozilla-beta', 'mozilla-central', 'mozilla-inbound', 'autoland', 'try']
     e10s: true
     mozharness:
@@ -1288,6 +1295,7 @@ talos-g3:
     treeherder-symbol: tc-T(g3)
     run-on-projects:
         by-test-platform:
+            linux64-stylo-sequential/.*: ['mozilla-central','try']
             linux64-stylo/.*: ['mozilla-central', 'try']
             default: ['mozilla-beta','mozilla-central', 'mozilla-inbound', 'autoland', 'try']
     max-run-time: 3600
@@ -1313,6 +1321,7 @@ talos-g4:
     treeherder-symbol: tc-T(g4)
     run-on-projects:
         by-test-platform:
+            linux64-stylo-sequential/.*: ['mozilla-central','try']
             linux64-stylo/.*: ['mozilla-central', 'try']
             default: ['mozilla-beta','mozilla-central', 'mozilla-inbound', 'autoland', 'try']
     max-run-time: 3600
@@ -1338,6 +1347,7 @@ talos-g5:
     treeherder-symbol: tc-T(g5)
     run-on-projects:
         by-test-platform:
+            linux64-stylo-sequential/.*: ['mozilla-central','try']
             linux64-stylo/.*: ['mozilla-central', 'try']
             default: ['mozilla-beta', 'mozilla-central', 'mozilla-inbound', 'autoland', 'try']
     max-run-time: 3600
@@ -1364,6 +1374,7 @@ talos-other:
     treeherder-symbol: tc-T(o)
     run-on-projects:
         by-test-platform:
+            linux64-stylo-sequential/.*: ['mozilla-central','try']
             linux64-stylo/.*: ['mozilla-central', 'try']
             default: ['mozilla-beta','mozilla-central', 'mozilla-inbound', 'autoland', 'try']
     max-run-time: 3600
@@ -1389,6 +1400,7 @@ talos-perf-reftest:
     treeherder-symbol: tc-T(p)
     run-on-projects:
         by-test-platform:
+            linux64-stylo-sequential/.*: ['mozilla-central', 'try']
             linux64-stylo/.*: ['mozilla-central', 'try']
             default: ['mozilla-central', 'mozilla-inbound', 'autoland', 'try']
     max-run-time: 3600
@@ -1410,6 +1422,7 @@ talos-svgr:
     treeherder-symbol: tc-T(s)
     run-on-projects:
         by-test-platform:
+            linux64-stylo-sequential/.*: ['mozilla-central','try']
             linux64-stylo/.*: ['mozilla-central', 'try']
             default: ['mozilla-beta', 'mozilla-central', 'mozilla-inbound', 'autoland', 'try']
     max-run-time: 3600
@@ -1435,6 +1448,7 @@ talos-tp5o:
     treeherder-symbol: tc-T(tp)
     run-on-projects:
         by-test-platform:
+            linux64-stylo-sequential/.*: ['mozilla-central','try']
             linux64-stylo/.*: ['mozilla-central', 'try']
             default: ['mozilla-beta', 'mozilla-central', 'mozilla-inbound', 'autoland', 'try']
     max-run-time: 3600

@@ -1,5 +1,5 @@
 import os
-from talos import filter, utils
+from talos import filter
 
 """
 test definitions for Talos
@@ -104,6 +104,10 @@ class TsBase(Test):
         'xperf_user_providers',
         'xperf_stackwalk',
         'tpmozafterpaint',
+        'firstpaint',
+        'userready',
+        'testeventmap',
+        'base_vs_ref',
         'extensions',
         'filters',
         'setup',
@@ -160,7 +164,7 @@ class sessionrestore(TsBase):
     extensions = \
         '${talos}/startup_test/sessionrestore/addon/sessionrestore-signed.xpi'
     cycles = 10
-    timeout = 1000000
+    timeout = 900
     gecko_profile_startup = True
     gecko_profile_entries = 10000000
     profile_path = '${talos}/startup_test/sessionrestore/profile'
@@ -186,21 +190,15 @@ class sessionrestore_no_auto_restore(sessionrestore):
 
 
 @register_test()
-class tpaint(TsBase):
+class sessionrestore_many_windows(sessionrestore):
     """
-    Tests the amount of time it takes the open a new window. This test does
-    not include startup time. Multiple test windows are opened in succession,
-    results reported are the average amount of time required to create and
-    display a window in the running instance of the browser.
-    (Measures ctrl-n performance.)
+    A start up test measuring the time it takes to load a sessionstore.js file.
+
+    1. Set up Firefox to restore automatically from sessionstore.js file.
+    2. Launch Firefox.
+    3. Measure the delta between firstPaint and sessionRestored.
     """
-    url = 'file://${talos}/startup_test/tpaint.html?auto=1'
-    timeout = 300
-    gecko_profile_interval = 1
-    gecko_profile_entries = 2000000
-    tpmozafterpaint = True
-    filters = filter.ignore_first.prepare(5) + filter.median.prepare()
-    unit = 'ms'
+    profile_path = '${talos}/startup_test/sessionrestore/profile-manywindows'
 
 
 @register_test()
@@ -235,12 +233,12 @@ class PageloaderTest(Test):
     cycles = None
     timeout = None
     keys = ['tpmanifest', 'tpcycles', 'tppagecycles', 'tprender', 'tpchrome',
-            'tpmozafterpaint', 'tploadnocache', 'rss', 'mainthread',
-            'resolution', 'cycles', 'gecko_profile', 'gecko_profile_interval',
-            'gecko_profile_entries', 'tptimeout', 'win_counters', 'w7_counters',
-            'linux_counters', 'mac_counters', 'tpscrolltest', 'xperf_counters',
-            'timeout', 'shutdown', 'responsiveness', 'profile_path',
-            'xperf_providers', 'xperf_user_providers', 'xperf_stackwalk',
+            'tpmozafterpaint', 'tploadnocache', 'firstpaint', 'userready',
+            'testeventmap', 'base_vs_ref', 'rss', 'mainthread', 'resolution', 'cycles',
+            'gecko_profile', 'gecko_profile_interval', 'gecko_profile_entries',
+            'tptimeout', 'win_counters', 'w7_counters', 'linux_counters', 'mac_counters',
+            'tpscrolltest', 'xperf_counters', 'timeout', 'shutdown', 'responsiveness',
+            'profile_path', 'xperf_providers', 'xperf_user_providers', 'xperf_stackwalk',
             'filters', 'preferences', 'extensions', 'setup', 'cleanup',
             'lower_is_better', 'alert_threshold', 'unit', 'webextensions']
 
@@ -256,6 +254,25 @@ class QuantumPageloadTest(PageloaderTest):
     filters = filter.ignore_first.prepare(5) + filter.median.prepare()
     unit = 'ms'
     lower_is_better = True
+
+
+@register_test()
+class tpaint(PageloaderTest):
+    """
+    Tests the amount of time it takes the open a new window. This test does
+    not include startup time. Multiple test windows are opened in succession,
+    results reported are the average amount of time required to create and
+    display a window in the running instance of the browser.
+    (Measures ctrl-n performance.)
+    """
+    tpmanifest = '${talos}/tests/tpaint/tpaint.manifest'
+    tppagecycles = 20
+    timeout = 300
+    gecko_profile_interval = 1
+    gecko_profile_entries = 2000000
+    tpmozafterpaint = True
+    filters = filter.ignore_first.prepare(5) + filter.median.prepare()
+    unit = 'ms'
 
 
 @register_test()
@@ -296,10 +313,7 @@ class tps(PageloaderTest):
                                                      'tests',
                                                      'tp5o.html'),
         'addon.test.tabswitch.webserver': '${webserver}',
-        # limit the page set number for winxp as we have issues.
-        # see https://bugzilla.mozilla.org/show_bug.cgi?id=1195288
-        'addon.test.tabswitch.maxurls':
-            45 if utils.PLATFORM_TYPE == 'win_' else -1,
+        'addon.test.tabswitch.maxurls': -1,
     }
     unit = 'ms'
 
@@ -420,6 +434,7 @@ class glterrain(PageloaderTest):
     tppagecycles = 25
     tploadnocache = True
     tpmozafterpaint = False
+    tpchrome = False
     gecko_profile_interval = 10
     gecko_profile_entries = 2000000
     win_counters = w7_counters = linux_counters = mac_counters = None
@@ -443,6 +458,7 @@ class glvideo(PageloaderTest):
     tppagecycles = 5
     tploadnocache = True
     tpmozafterpaint = False
+    tpchrome = False
     gecko_profile_interval = 2
     gecko_profile_entries = 2000000
     win_counters = w7_counters = linux_counters = mac_counters = None
@@ -597,6 +613,7 @@ class basic_compositor_video(PageloaderTest):
     tpmanifest = '${talos}/tests/video/video.manifest'
     tpcycles = 1
     tppagecycles = 12
+    tpchrome = False
     timeout = 10000
     gecko_profile_interval = 1
     gecko_profile_entries = 2000000
@@ -636,6 +653,7 @@ class dromaeo(PageloaderTest):
     filters = filter.dromaeo.prepare()
     lower_is_better = False
     alert_threshold = 5.0
+    tpchrome = False
 
 
 @register_test()
@@ -737,6 +755,7 @@ class tsvgr_opacity(PageloaderTest):
     tpcycles = 1
     tppagecycles = 25
     tpmozafterpaint = True
+    tpchrome = False
     gecko_profile_interval = 1
     gecko_profile_entries = 10000000
     filters = filter.ignore_first.prepare(5) + filter.median.prepare()
@@ -752,6 +771,7 @@ class tscrollx(PageloaderTest):
     tpcycles = 1
     tppagecycles = 25
     tpmozafterpaint = False
+    tpchrome = False
     gecko_profile_interval = 1
     gecko_profile_entries = 1000000
     """ ASAP mode """
@@ -774,6 +794,7 @@ class a11yr(PageloaderTest):
     tpcycles = 1
     tppagecycles = 25
     tpmozafterpaint = True
+    tpchrome = False
     preferences = {'dom.send_after_paint_to_content': False}
     unit = 'ms'
     alert_threshold = 5.0
@@ -782,25 +803,10 @@ class a11yr(PageloaderTest):
 @register_test()
 class bloom_basic(PageloaderTest):
     """
-    Stylo bloom_basic test
+    Stylo bloom_basic: runs bloom_basic and bloom_basic_ref and reports difference
     """
+    base_vs_ref = True  # compare the two test pages with eachother and report comparison
     tpmanifest = '${talos}/tests/perf-reftest/bloom_basic.manifest'
-    tpcycles = 1
-    tppagecycles = 25
-    gecko_profile_interval = 1
-    gecko_profile_entries = 2000000
-    filters = filter.ignore_first.prepare(5) + filter.median.prepare()
-    unit = 'ms'
-    lower_is_better = True
-    alert_threshold = 5.0
-
-
-@register_test()
-class bloom_basic_ref(PageloaderTest):
-    """
-    Stylo bloom_basic_ref test
-    """
-    tpmanifest = '${talos}/tests/perf-reftest/bloom_basic_ref.manifest'
     tpcycles = 1
     tppagecycles = 25
     gecko_profile_interval = 1

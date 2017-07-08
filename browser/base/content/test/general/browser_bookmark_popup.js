@@ -9,7 +9,7 @@
  */
 
 let bookmarkPanel = document.getElementById("editBookmarkPanel");
-let bookmarkStar = document.getElementById("bookmarks-menu-button");
+let bookmarkStar = AppConstants.MOZ_PHOTON_THEME ? BookmarkingUI.star : BookmarkingUI.button;
 let bookmarkPanelTitle = document.getElementById("editBookmarkPanelTitle");
 let editBookmarkPanelRemoveButtonRect;
 

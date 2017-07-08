@@ -719,7 +719,9 @@ JSDependentString::dumpRepresentation(FILE* fp, int indent) const
     dumpRepresentationHeader(fp, indent, "JSDependentString");
     indent += 2;
 
-    fprintf(fp, "%*soffset: %" PRIuSIZE "\n", indent, "", baseOffset());
+    if (mozilla::Maybe<size_t> offset = baseOffset())
+        fprintf(fp, "%*soffset: %" PRIuSIZE "\n", indent, "", *offset);
+
     fprintf(fp, "%*sbase: ", indent, "");
     base()->dumpRepresentation(fp, indent);
 }
@@ -1516,13 +1518,13 @@ JSFlatString::dumpRepresentation(FILE* fp, int indent) const
 #endif
 
 static void
-FinalizeRepresentativeExternalString(Zone* zone, const JSStringFinalizer* fin, char16_t* chars);
+FinalizeRepresentativeExternalString(const JSStringFinalizer* fin, char16_t* chars);
 
 static const JSStringFinalizer RepresentativeExternalStringFinalizer =
     { FinalizeRepresentativeExternalString };
 
 static void
-FinalizeRepresentativeExternalString(Zone* zone, const JSStringFinalizer* fin, char16_t* chars)
+FinalizeRepresentativeExternalString(const JSStringFinalizer* fin, char16_t* chars)
 {
     // Constant chars, nothing to free.
     MOZ_ASSERT(fin == &RepresentativeExternalStringFinalizer);

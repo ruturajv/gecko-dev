@@ -301,9 +301,12 @@ bool nsContentUtils::sGetBoxQuadsEnabled = false;
 bool nsContentUtils::sSkipCursorMoveForSameValueSet = false;
 bool nsContentUtils::sRequestIdleCallbackEnabled = false;
 bool nsContentUtils::sLowerNetworkPriority = false;
+bool nsContentUtils::sShowInputPlaceholderOnFocus = true;
+bool nsContentUtils::sAutoFocusEnabled = true;
 #ifndef RELEASE_OR_BETA
 bool nsContentUtils::sBypassCSSOMOriginCheck = false;
 #endif
+bool nsContentUtils::sIsScopedStyleEnabled = false;
 
 bool nsContentUtils::sIsBytecodeCacheEnabled = false;
 int32_t nsContentUtils::sBytecodeCacheStrategy = 0;
@@ -324,6 +327,7 @@ nsHtml5StringParser* nsContentUtils::sHTMLFragmentParser = nullptr;
 nsIParser* nsContentUtils::sXMLFragmentParser = nullptr;
 nsIFragmentContentSink* nsContentUtils::sXMLFragmentSink = nullptr;
 bool nsContentUtils::sFragmentParsingActive = false;
+nsISerialEventTarget* nsContentUtils::sStableStateEventTarget = nullptr;
 
 #if !(defined(DEBUG) || defined(MOZ_ENABLE_JS_DUMP))
 bool nsContentUtils::sDOMWindowDumpEnabled;
@@ -517,6 +521,52 @@ class SameOriginCheckerImpl final : public nsIChannelEventSink,
   NS_DECL_NSIINTERFACEREQUESTOR
 };
 
+class StableStateEventTarget final : public nsISerialEventTarget
+{
+public:
+  NS_DECL_THREADSAFE_ISUPPORTS
+  NS_DECL_NSIEVENTTARGET_FULL
+private:
+  ~StableStateEventTarget() {}
+};
+
+NS_IMPL_ISUPPORTS(StableStateEventTarget, nsISerialEventTarget);
+
+bool
+StableStateEventTarget::IsOnCurrentThreadInfallible()
+{
+  return true;
+}
+
+NS_IMETHODIMP
+StableStateEventTarget::IsOnCurrentThread(bool* aResult)
+{
+  *aResult = true;
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+StableStateEventTarget::Dispatch(already_AddRefed<nsIRunnable> aEvent, uint32_t aFlags)
+{
+  if (NS_WARN_IF(!CycleCollectedJSContext::Get())) {
+    return NS_ERROR_UNEXPECTED;
+  }
+  nsContentUtils::RunInStableState(Move(aEvent));
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+StableStateEventTarget::DispatchFromScript(nsIRunnable* aEvent, uint32_t aFlags)
+{
+  return Dispatch(nsCOMPtr<nsIRunnable>(aEvent).forget(), aFlags);
+}
+
+NS_IMETHODIMP
+StableStateEventTarget::DelayedDispatch(already_AddRefed<nsIRunnable> aEvent, uint32_t aDelay)
+{
+  return NS_ERROR_NOT_IMPLEMENTED;
+}
+
 } // namespace
 
 /**
@@ -537,7 +587,7 @@ public:
 
   void Init();
   void Shutdown();
-  virtual void AnnotateHang(HangMonitor::HangAnnotations& aAnnotations) override;
+  void AnnotateHang(HangMonitor::HangAnnotations& aAnnotations) override;
 
   static Atomic<bool> sUserActive;
 
@@ -706,8 +756,17 @@ nsContentUtils::Init()
   sBypassCSSOMOriginCheck = getenv("MOZ_BYPASS_CSSOM_ORIGIN_CHECK");
 #endif
 
+  Preferences::AddBoolVarCache(&sIsScopedStyleEnabled,
+                               "layout.css.scoped-style.enabled", false);
+
   Preferences::AddBoolVarCache(&sLowerNetworkPriority,
                                "privacy.trackingprotection.lower_network_priority", false);
+
+  Preferences::AddBoolVarCache(&sShowInputPlaceholderOnFocus,
+                               "dom.placeholder.show_on_focus", true);
+
+  Preferences::AddBoolVarCache(&sAutoFocusEnabled,
+                               "browser.autofocus", true);
 
   Preferences::AddBoolVarCache(&sIsBytecodeCacheEnabled,
                                "dom.script_loader.bytecode_cache.enabled", false);
@@ -721,6 +780,9 @@ nsContentUtils::Init()
   Element::InitCCCallbacks();
 
   Unused << nsRFPService::GetOrCreate();
+
+  RefPtr<StableStateEventTarget> stableStateEventTarget = new StableStateEventTarget();
+  stableStateEventTarget.forget(&sStableStateEventTarget);
 
   nsCOMPtr<nsIUUIDGenerator> uuidGenerator =
     do_GetService("@mozilla.org/uuid-generator;1", &rv);
@@ -2148,6 +2210,8 @@ nsContentUtils::Shutdown()
 
   NS_IF_RELEASE(sSameOriginChecker);
 
+  NS_IF_RELEASE(sStableStateEventTarget);
+
   if (sUserInteractionObserver) {
     sUserInteractionObserver->Shutdown();
     NS_RELEASE(sUserInteractionObserver);
@@ -3154,9 +3218,12 @@ nsContentUtils::NewURIWithDocumentCharset(nsIURI** aResult,
                                           nsIDocument* aDocument,
                                           nsIURI* aBaseURI)
 {
-  return NS_NewURI(aResult, aSpec,
-                   aDocument ? aDocument->GetDocumentCharacterSet().get() : nullptr,
-                   aBaseURI, sIOService);
+  if (aDocument) {
+    return NS_NewURI(aResult, aSpec,
+                     aDocument->GetDocumentCharacterSet(),
+                     aBaseURI, sIOService);
+  }
+  return NS_NewURI(aResult, aSpec, nullptr, aBaseURI, sIOService);
 }
 
 // static
@@ -5302,12 +5369,16 @@ nsContentUtils::IsInSameAnonymousTree(const nsINode* aNode,
 
 class AnonymousContentDestroyer : public Runnable {
 public:
-  explicit AnonymousContentDestroyer(nsCOMPtr<nsIContent>* aContent) {
+  explicit AnonymousContentDestroyer(nsCOMPtr<nsIContent>* aContent)
+    : mozilla::Runnable("AnonymousContentDestroyer")
+  {
     mContent.swap(*aContent);
     mParent = mContent->GetParent();
     mDoc = mContent->OwnerDoc();
   }
-  explicit AnonymousContentDestroyer(nsCOMPtr<Element>* aElement) {
+  explicit AnonymousContentDestroyer(nsCOMPtr<Element>* aElement)
+    : mozilla::Runnable("AnonymousContentDestroyer")
+  {
     mContent = aElement->forget();
     mParent = mContent->GetParent();
     mDoc = mContent->OwnerDoc();
@@ -5644,6 +5715,13 @@ nsContentUtils::RunInMetastableState(already_AddRefed<nsIRunnable> aRunnable)
 {
   MOZ_ASSERT(CycleCollectedJSContext::Get(), "Must be on a script thread!");
   CycleCollectedJSContext::Get()->RunInMetastableState(Move(aRunnable));
+}
+
+/* static */
+nsISerialEventTarget*
+nsContentUtils::GetStableStateEventTarget()
+{
+  return sStableStateEventTarget;
 }
 
 void
@@ -7196,7 +7274,7 @@ nsContentUtils::IsRequestFullScreenAllowed(CallerType aCallerType)
 
   if (EventStateManager::IsHandlingUserInput()) {
     TimeDuration timeout = HandlingUserInputTimeout();
-    return timeout <= TimeDuration(0) ||
+    return timeout <= TimeDuration(nullptr) ||
       (TimeStamp::Now() -
        EventStateManager::GetHandlingInputStart()) <= timeout;
   }
@@ -10240,16 +10318,24 @@ nsContentUtils::AppendNativeAnonymousChildren(
     nsTArray<nsIContent*>& aKids,
     uint32_t aFlags)
 {
-  if (nsIFrame* primaryFrame = aContent->GetPrimaryFrame()) {
-    // NAC created by the element's primary frame.
-    AppendNativeAnonymousChildrenFromFrame(primaryFrame, aKids, aFlags);
+  if (aContent->MayHaveAnonymousChildren()) {
+    if (nsIFrame* primaryFrame = aContent->GetPrimaryFrame()) {
+      // NAC created by the element's primary frame.
+      AppendNativeAnonymousChildrenFromFrame(primaryFrame, aKids, aFlags);
 
-    // NAC created by any other non-primary frames for the element.
-    AutoTArray<nsIFrame::OwnedAnonBox, 8> ownedAnonBoxes;
-    primaryFrame->AppendOwnedAnonBoxes(ownedAnonBoxes);
-    for (nsIFrame::OwnedAnonBox& box : ownedAnonBoxes) {
-      MOZ_ASSERT(box.mAnonBoxFrame->GetContent() == aContent);
-      AppendNativeAnonymousChildrenFromFrame(box.mAnonBoxFrame, aKids, aFlags);
+      // NAC created by any other non-primary frames for the element.
+      AutoTArray<nsIFrame::OwnedAnonBox, 8> ownedAnonBoxes;
+      primaryFrame->AppendOwnedAnonBoxes(ownedAnonBoxes);
+      for (nsIFrame::OwnedAnonBox& box : ownedAnonBoxes) {
+        MOZ_ASSERT(box.mAnonBoxFrame->GetContent() == aContent);
+        AppendNativeAnonymousChildrenFromFrame(box.mAnonBoxFrame, aKids, aFlags);
+      }
+    }
+
+    // Get manually created NAC (editor resize handles, etc.).
+    if (auto nac = static_cast<ManualNAC*>(
+          aContent->GetProperty(nsGkAtoms::manualNACProperty))) {
+      aKids.AppendElements(*nac);
     }
   }
 
@@ -10524,6 +10610,16 @@ nsContentUtils::GetUserIsInteracting()
   return UserInteractionObserver::sUserActive;
 }
 
+/* static */ bool
+nsContentUtils::GetSourceMapURL(nsIHttpChannel* aChannel, nsACString& aResult)
+{
+  nsresult rv = aChannel->GetResponseHeader(NS_LITERAL_CSTRING("SourceMap"), aResult);
+  if (NS_FAILED(rv)) {
+    rv = aChannel->GetResponseHeader(NS_LITERAL_CSTRING("X-SourceMap"), aResult);
+  }
+  return NS_SUCCEEDED(rv);
+}
+
 static const char* kUserInteractionInactive = "user-interaction-inactive";
 static const char* kUserInteractionActive = "user-interaction-active";
 
@@ -10540,9 +10636,9 @@ nsContentUtils::UserInteractionObserver::Init()
   // started yet. It will have started by the time we have the chance to spin
   // the event loop.
   RefPtr<UserInteractionObserver> self = this;
-  NS_DispatchToMainThread(NS_NewRunnableFunction([=] () {
-        HangMonitor::RegisterAnnotator(*self);
-      }));
+  NS_DispatchToMainThread(
+    NS_NewRunnableFunction("nsContentUtils::UserInteractionObserver::Init",
+                           [=]() { HangMonitor::RegisterAnnotator(*self); }));
 }
 
 void

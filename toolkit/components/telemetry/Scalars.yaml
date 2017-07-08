@@ -142,6 +142,19 @@ browser.engagement:
     record_in_processes:
       - 'main'
 
+  restored_pinned_tabs_count:
+    bug_numbers:
+      - 1373728
+    description: >
+      The count of the number of pinned tabs that were restored.
+    expires: '62'
+    kind: uint
+    notification_emails:
+      - chutten@mozilla.com
+    release_channel_collection: opt-out
+    record_in_processes:
+      - 'main'
+
 # The following section contains the browser engagement scalars.
 browser.engagement.navigation:
   urlbar:
@@ -313,6 +326,45 @@ security:
     keyed: true
     notification_emails:
       - seceng-telemetry@mozilla.com
+    release_channel_collection: opt-out
+    record_in_processes:
+      - main
+
+preferences:
+  created_new_user_prefs_file:
+    bug_numbers:
+      - 1367813
+    description: >-
+      A boolean indicating that profile/prefs.js was not found and it is being
+      created for the first time in this session.
+    expires: "62"
+    kind: boolean
+    notification_emails:
+      - bsmedberg@mozilla.com
+    release_channel_collection: opt-out
+    record_in_processes:
+      - main
+  prefs_file_was_invalid:
+    bug_numbers:
+      - 1367813
+    description: >-
+      Set to true if a failure occurred reading profile/prefs.js.
+    expires: "62"
+    kind: boolean
+    notification_emails:
+      - bsmedberg@mozilla.com
+    release_channel_collection: opt-out
+    record_in_processes:
+      - main
+  read_user_js:
+    bug_numbers:
+      - 1367813
+    description: >-
+      Set to true if user.js exists and was read.
+    expires: "62"
+    kind: boolean
+    notification_emails:
+      - bsmedberg@mozilla.com
     release_channel_collection: opt-out
     record_in_processes:
       - main
@@ -653,6 +705,24 @@ telemetry.discarded:
     release_channel_collection: opt-out
     record_in_processes:
       - 'all_childs'
+
+# The following section contains graphics-related scalars.
+gfx.advanced.layers:
+  failure_id:
+    bug_numbers:
+      - 1365879
+    description: >
+      Each key is a failure for initializing Advanced Layers, and each value
+      is the number of times that failure was recorded. The failure codes
+      are unique strings present in MLGDeviceD3D11::Initialize, such that
+      a failure can be traced back to a specific Direct3D API call.
+    keyed: true
+    kind: uint
+    expires: "61"
+    notification_emails:
+      - gfx-telemetry-alerts@mozilla.com
+    record_in_processes:
+      - 'main'
 
 # The following section is for probes testing the Telemetry system. They will not be
 # submitted in pings and are only used for testing.

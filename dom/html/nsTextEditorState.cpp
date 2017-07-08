@@ -12,7 +12,7 @@
 #include "nsCaret.h"
 #include "nsEditorCID.h"
 #include "nsLayoutCID.h"
-#include "nsITextControlFrame.h" 
+#include "nsITextControlFrame.h"
 #include "nsIDOMCharacterData.h"
 #include "nsIDOMDocument.h"
 #include "nsContentCreatorFunctions.h"
@@ -83,9 +83,10 @@ private:
 
 class RestoreSelectionState : public Runnable {
 public:
-  RestoreSelectionState(nsTextEditorState *aState, nsTextControlFrame *aFrame)
-    : mFrame(aFrame),
-      mTextEditorState(aState)
+  RestoreSelectionState(nsTextEditorState* aState, nsTextControlFrame* aFrame)
+    : mozilla::Runnable("RestoreSelectionState")
+    , mFrame(aFrame)
+    , mTextEditorState(aState)
   {
   }
 
@@ -384,7 +385,7 @@ nsTextInputSelectionImpl::SetDisplaySelection(int16_t aToggle)
 {
   if (!mFrameSelection)
     return NS_ERROR_NULL_POINTER;
-  
+
   mFrameSelection->SetDisplaySelection(aToggle);
   return NS_OK;
 }
@@ -409,7 +410,7 @@ NS_IMETHODIMP
 nsTextInputSelectionImpl::GetSelectionFlags(int16_t *aOutEnable)
 {
   *aOutEnable = nsISelectionDisplay::DISPLAY_TEXT;
-  return NS_OK; 
+  return NS_OK;
 }
 
 NS_IMETHODIMP
@@ -437,8 +438,8 @@ nsTextInputSelectionImpl::ScrollSelectionIntoView(
                             int16_t aRegion,
                             int16_t aFlags)
 {
-  if (!mFrameSelection) 
-    return NS_ERROR_FAILURE; 
+  if (!mFrameSelection)
+    return NS_ERROR_FAILURE;
 
   RefPtr<nsFrameSelection> frameSelection = mFrameSelection;
   return frameSelection->ScrollSelectionIntoView(
@@ -799,7 +800,7 @@ class nsTextInputListener : public nsISelectionListener,
 {
 public:
   /** the default constructor
-   */ 
+   */
   explicit nsTextInputListener(nsITextControlElement* aTxtCtrlElement);
 
   /** SetEditor gives an address to the editor that will be accessed
@@ -872,7 +873,7 @@ nsTextInputListener::nsTextInputListener(nsITextControlElement* aTxtCtrlElement)
 {
 }
 
-nsTextInputListener::~nsTextInputListener() 
+nsTextInputListener::~nsTextInputListener()
 {
 }
 
@@ -896,29 +897,29 @@ nsTextInputListener::NotifySelectionChanged(nsIDOMDocument* aDoc, nsISelection* 
   // Fire the select event
   // The specs don't exactly say when we should fire the select event.
   // IE: Whenever you add/remove a character to/from the selection. Also
-  //     each time for select all. Also if you get to the end of the text 
-  //     field you will get new event for each keypress or a continuous 
-  //     stream of events if you use the mouse. IE will fire select event 
+  //     each time for select all. Also if you get to the end of the text
+  //     field you will get new event for each keypress or a continuous
+  //     stream of events if you use the mouse. IE will fire select event
   //     when the selection collapses to nothing if you are holding down
   //     the shift or mouse button.
   // Mozilla: If we have non-empty selection we will fire a new event for each
   //          keypress (or mouseup) if the selection changed. Mozilla will also
   //          create the event each time select all is called, even if everything
   //          was previously selected, becase technically select all will first collapse
-  //          and then extend. Mozilla will never create an event if the selection 
+  //          and then extend. Mozilla will never create an event if the selection
   //          collapses to nothing.
-  if (!collapsed && (aReason & (nsISelectionListener::MOUSEUP_REASON | 
+  if (!collapsed && (aReason & (nsISelectionListener::MOUSEUP_REASON |
                                 nsISelectionListener::KEYPRESS_REASON |
                                 nsISelectionListener::SELECTALL_REASON)))
   {
     nsIContent* content = mFrame->GetContent();
-    if (content) 
+    if (content)
     {
       nsCOMPtr<nsIDocument> doc = content->GetComposedDoc();
-      if (doc) 
+      if (doc)
       {
         nsCOMPtr<nsIPresShell> presShell = doc->GetShell();
-        if (presShell) 
+        if (presShell)
         {
           nsEventStatus status = nsEventStatus_eIgnore;
           WidgetEvent event(true, eFormSelect);
@@ -1108,7 +1109,7 @@ nsTextInputListener::UpdateTextInputCommands(const nsAString& commandsToUpdate,
 {
   nsIContent* content = mFrame->GetContent();
   NS_ENSURE_TRUE(content, NS_ERROR_FAILURE);
-  
+
   nsCOMPtr<nsIDocument> doc = content->GetComposedDoc();
   NS_ENSURE_TRUE(doc, NS_ERROR_FAILURE);
 
@@ -1238,10 +1239,11 @@ nsTextEditorState::GetSelectionController() const
 // Helper class, used below in BindToFrame().
 class PrepareEditorEvent : public Runnable {
 public:
-  PrepareEditorEvent(nsTextEditorState &aState,
-                     nsIContent *aOwnerContent,
-                     const nsAString &aCurrentValue)
-    : mState(&aState)
+  PrepareEditorEvent(nsTextEditorState& aState,
+                     nsIContent* aOwnerContent,
+                     const nsAString& aCurrentValue)
+    : mozilla::Runnable("PrepareEditorEvent")
+    , mState(&aState)
     , mOwnerContent(aOwnerContent)
     , mCurrentValue(aCurrentValue)
   {
@@ -1538,7 +1540,7 @@ nsTextEditorState::PrepareEditor(const nsAString *aValue)
 
     // Check if the disabled attribute is set.
     // TODO: call IsDisabled() here!
-    if (content->HasAttr(kNameSpaceID_None, nsGkAtoms::disabled)) 
+    if (content->HasAttr(kNameSpaceID_None, nsGkAtoms::disabled))
       editorFlags |= nsIPlaintextEditor::eEditorDisabledMask;
 
     // Disable the selection if necessary.
@@ -2854,15 +2856,8 @@ nsTextEditorState::UpdateOverlayTextVisibility(bool aNotify)
   mPreviewVisibility = valueIsEmpty && !previewValue.IsEmpty();
   mPlaceholderVisibility = valueIsEmpty && previewValue.IsEmpty();
 
-  static bool sPrefCached = false;
-  static bool sPrefShowOnFocus = true;
-  if (!sPrefCached) {
-    sPrefCached = true;
-    Preferences::AddBoolVarCache(&sPrefShowOnFocus,
-                                 "dom.placeholder.show_on_focus", true);
-  }
-
-  if (mPlaceholderVisibility && !sPrefShowOnFocus) {
+  if (mPlaceholderVisibility &&
+      !nsContentUtils::ShowInputPlaceholderOnFocus()) {
     nsCOMPtr<nsIContent> content = do_QueryInterface(mTextCtrlElement);
     mPlaceholderVisibility = !nsContentUtils::IsFocusedContent(content);
   }

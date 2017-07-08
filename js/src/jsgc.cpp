@@ -346,11 +346,6 @@ static const FinalizePhase ForegroundObjectFinalizePhase = {
  */
 static const FinalizePhase IncrementalFinalizePhases[] = {
     {
-        gcstats::PhaseKind::SWEEP_STRING, {
-            AllocKind::EXTERNAL_STRING
-        }
-    },
-    {
         gcstats::PhaseKind::SWEEP_SCRIPT, {
             AllocKind::SCRIPT
         }
@@ -397,6 +392,7 @@ static const FinalizePhase BackgroundFinalizePhases[] = {
         gcstats::PhaseKind::SWEEP_STRING, {
             AllocKind::FAT_INLINE_STRING,
             AllocKind::STRING,
+            AllocKind::EXTERNAL_STRING,
             AllocKind::FAT_INLINE_ATOM,
             AllocKind::ATOM,
             AllocKind::SYMBOL
@@ -415,18 +411,33 @@ static const FinalizePhase BackgroundFinalizePhases[] = {
 // Incremental sweeping is controlled by a list of actions that describe what
 // happens and in what order. Due to the incremental nature of sweeping an
 // action does not necessarily run to completion so the current state is tracked
-// in the GCRuntime by the performSweepActions() method.
+// in the GCRuntime by the performSweepActions() method. We may yield to the
+// mutator after running part of any action.
 //
-// Actions are performed in phases run per sweep group, and each action is run
-// for every zone in the group, i.e. as if by the following pseudocode:
+// There are two types of action: per-sweep-group and per-zone.
+//
+// Per-sweep-group actions are run first. Per-zone actions are grouped into
+// phases, with each phase run once per sweep group, and each action in it run
+// for every zone in the group.
+//
+// This is illustrated by the following pseudocode:
 //
 //   for each sweep group:
-//     for each phase:
+//     for each per-sweep-group action:
+//       run part or all of action
+//       maybe yield to the mutator
+//     for each per-zone phase:
 //       for each zone in sweep group:
 //         for each action in phase:
-//           perform_action
+//           run part or all of action
+//           maybe yield to the mutator
+//
+// Progress through the loops is stored in GCRuntime, e.g. |sweepActionIndex|
+// for looping through the sweep actions.
 
-struct SweepAction
+using PerSweepGroupSweepAction = IncrementalProgress (*)(GCRuntime* gc, SliceBudget& budget);
+
+struct PerZoneSweepAction
 {
     using Func = IncrementalProgress (*)(GCRuntime* gc, FreeOp* fop, Zone* zone,
                                          SliceBudget& budget, AllocKind kind);
@@ -434,13 +445,15 @@ struct SweepAction
     Func func;
     AllocKind kind;
 
-    SweepAction(Func func, AllocKind kind) : func(func), kind(kind) {}
+    PerZoneSweepAction(Func func, AllocKind kind) : func(func), kind(kind) {}
 };
 
-using SweepActionVector = Vector<SweepAction, 0, SystemAllocPolicy>;
-using SweepPhaseVector = Vector<SweepActionVector, 0, SystemAllocPolicy>;
+using PerSweepGroupActionVector = Vector<PerSweepGroupSweepAction, 0, SystemAllocPolicy>;
+using PerZoneSweepActionVector = Vector<PerZoneSweepAction, 0, SystemAllocPolicy>;
+using PerZoneSweepPhaseVector = Vector<PerZoneSweepActionVector, 0, SystemAllocPolicy>;
 
-static SweepPhaseVector SweepPhases;
+static PerSweepGroupActionVector PerSweepGroupSweepActions;
+static PerZoneSweepPhaseVector PerZoneSweepPhases;
 
 bool
 js::gc::InitializeStaticData()
@@ -1180,10 +1193,10 @@ GCRuntime::init(uint32_t maxbytes, uint32_t maxNurseryBytes)
 void
 GCRuntime::finish()
 {
-    /* Wait for the nursery sweeping to end. */
-    for (ZoneGroupsIter group(rt); !group.done(); group.next()) {
-        if (group->nursery().isEnabled())
-            group->nursery().waitBackgroundFreeEnd();
+    /* Wait for nursery background free to end and disable it to release memory. */
+    if (nursery().isEnabled()) {
+        nursery().waitBackgroundFreeEnd();
+        nursery().disable();
     }
 
     /*
@@ -3017,7 +3030,7 @@ GCRuntime::maybeAllocTriggerZoneGC(Zone* zone, const AutoLockGC& lock)
          * The threshold has been surpassed, immediately trigger a GC,
          * which will be done non-incrementally.
          */
-        triggerZoneGC(zone, JS::gcreason::ALLOC_TRIGGER);
+        triggerZoneGC(zone, JS::gcreason::ALLOC_TRIGGER, usedBytes, thresholdBytes);
     } else {
         bool wouldInterruptCollection;
         size_t igcThresholdBytes;
@@ -3043,7 +3056,7 @@ GCRuntime::maybeAllocTriggerZoneGC(Zone* zone, const AutoLockGC& lock)
                 // to try to avoid performing non-incremental GCs on zones
                 // which allocate a lot of data, even when incremental slices
                 // can't be triggered via scheduling in the event loop.
-                triggerZoneGC(zone, JS::gcreason::ALLOC_TRIGGER);
+                triggerZoneGC(zone, JS::gcreason::ALLOC_TRIGGER, usedBytes, igcThresholdBytes);
 
                 // Delay the next slice until a certain amount of allocation
                 // has been performed.
@@ -3054,7 +3067,7 @@ GCRuntime::maybeAllocTriggerZoneGC(Zone* zone, const AutoLockGC& lock)
 }
 
 bool
-GCRuntime::triggerZoneGC(Zone* zone, JS::gcreason::Reason reason)
+GCRuntime::triggerZoneGC(Zone* zone, JS::gcreason::Reason reason, size_t used, size_t threshold)
 {
     MOZ_ASSERT(CurrentThreadCanAccessRuntime(rt));
 
@@ -3077,10 +3090,12 @@ GCRuntime::triggerZoneGC(Zone* zone, JS::gcreason::Reason reason)
             fullGCForAtomsRequested_ = true;
             return false;
         }
+        stats().recordTrigger(used, threshold);
         MOZ_RELEASE_ASSERT(triggerGC(reason));
         return true;
     }
 
+    stats().recordTrigger(used, threshold);
     PrepareZoneForGC(zone);
     requestMajorGC(reason);
     return true;
@@ -3102,11 +3117,12 @@ GCRuntime::maybeGC(Zone* zone)
     if (gcIfRequested())
         return;
 
-    if (zone->usage.gcBytes() > 1024 * 1024 &&
-        zone->usage.gcBytes() >= zone->threshold.allocTrigger(schedulingState.inHighFrequencyGCMode()) &&
-        !isIncrementalGCInProgress() &&
-        !isBackgroundSweeping())
+    double threshold = zone->threshold.allocTrigger(schedulingState.inHighFrequencyGCMode());
+    double usedBytes = zone->usage.gcBytes();
+    if (usedBytes > 1024 * 1024 && usedBytes >= threshold &&
+        !isIncrementalGCInProgress() && !isBackgroundSweeping())
     {
+        stats().recordTrigger(usedBytes, threshold);
         PrepareZoneForGC(zone);
         startGC(GC_NORMAL, JS::gcreason::EAGER_ALLOC_TRIGGER);
     }
@@ -5352,9 +5368,10 @@ GCRuntime::beginSweepingSweepGroup()
         zone->arenas.queueForegroundThingsForSweep(&fop);
     }
 
+    sweepActionList = PerSweepGroupActionList;
+    sweepActionIndex = 0;
     sweepPhaseIndex = 0;
     sweepZone = currentSweepGroup;
-    sweepActionIndex = 0;
 }
 
 void
@@ -5576,10 +5593,9 @@ GCRuntime::startSweepingAtomsTable()
 }
 
 /* static */ IncrementalProgress
-GCRuntime::sweepAtomsTable(GCRuntime* gc, FreeOp* fop, Zone* zone, SliceBudget& budget,
-                           AllocKind kind)
+GCRuntime::sweepAtomsTable(GCRuntime* gc, SliceBudget& budget)
 {
-    if (!zone->isAtomsZone())
+    if (!gc->atomsZone->isGCSweeping())
         return Finished;
 
     return gc->sweepAtomsTable(budget);
@@ -5664,17 +5680,24 @@ GCRuntime::sweepShapeTree(GCRuntime* gc, FreeOp* fop, Zone* zone, SliceBudget& b
 }
 
 static void
-AddSweepPhase(bool* ok)
+AddPerSweepGroupSweepAction(bool* ok, PerSweepGroupSweepAction action)
 {
     if (*ok)
-        *ok = SweepPhases.emplaceBack();
+        *ok = PerSweepGroupSweepActions.emplaceBack(action);
 }
 
 static void
-AddSweepAction(bool* ok, SweepAction::Func func, AllocKind kind = AllocKind::LIMIT)
+AddPerZoneSweepPhase(bool* ok)
 {
     if (*ok)
-        *ok = SweepPhases.back().emplaceBack(func, kind);
+        *ok = PerZoneSweepPhases.emplaceBack();
+}
+
+static void
+AddPerZoneSweepAction(bool* ok, PerZoneSweepAction::Func func, AllocKind kind = AllocKind::LIMIT)
+{
+    if (*ok)
+        *ok = PerZoneSweepPhases.back().emplaceBack(func, kind);
 }
 
 /* static */ bool
@@ -5682,25 +5705,33 @@ GCRuntime::initializeSweepActions()
 {
     bool ok = true;
 
-    AddSweepPhase(&ok);
-    AddSweepAction(&ok, GCRuntime::sweepAtomsTable);
-    for (auto kind : ForegroundObjectFinalizePhase.kinds)
-        AddSweepAction(&ok, GCRuntime::finalizeAllocKind, kind);
+    AddPerSweepGroupSweepAction(&ok, GCRuntime::sweepAtomsTable);
 
-    AddSweepPhase(&ok);
-    AddSweepAction(&ok, GCRuntime::sweepTypeInformation);
-    AddSweepAction(&ok, GCRuntime::mergeSweptObjectArenas);
+    AddPerZoneSweepPhase(&ok);
+    for (auto kind : ForegroundObjectFinalizePhase.kinds)
+        AddPerZoneSweepAction(&ok, GCRuntime::finalizeAllocKind, kind);
+
+    AddPerZoneSweepPhase(&ok);
+    AddPerZoneSweepAction(&ok, GCRuntime::sweepTypeInformation);
+    AddPerZoneSweepAction(&ok, GCRuntime::mergeSweptObjectArenas);
 
     for (const auto& finalizePhase : IncrementalFinalizePhases) {
-        AddSweepPhase(&ok);
+        AddPerZoneSweepPhase(&ok);
         for (auto kind : finalizePhase.kinds)
-            AddSweepAction(&ok, GCRuntime::finalizeAllocKind, kind);
+            AddPerZoneSweepAction(&ok, GCRuntime::finalizeAllocKind, kind);
     }
 
-    AddSweepPhase(&ok);
-    AddSweepAction(&ok, GCRuntime::sweepShapeTree);
+    AddPerZoneSweepPhase(&ok);
+    AddPerZoneSweepAction(&ok, GCRuntime::sweepShapeTree);
 
     return ok;
+}
+
+static inline SweepActionList
+NextSweepActionList(SweepActionList list)
+{
+    MOZ_ASSERT(list < SweepActionListCount);
+    return SweepActionList(unsigned(list) + 1);
 }
 
 IncrementalProgress
@@ -5715,19 +5746,42 @@ GCRuntime::performSweepActions(SliceBudget& budget, AutoLockForExclusiveAccess& 
         return NotFinished;
 
     for (;;) {
-        for (; sweepPhaseIndex < SweepPhases.length(); sweepPhaseIndex++) {
-            const auto& actions = SweepPhases[sweepPhaseIndex];
-            for (; sweepZone; sweepZone = sweepZone->nextNodeInGroup()) {
+        for (; sweepActionList < SweepActionListCount;
+             sweepActionList = NextSweepActionList(sweepActionList))
+        {
+            switch (sweepActionList) {
+              case PerSweepGroupActionList: {
+                const auto& actions = PerSweepGroupSweepActions;
                 for (; sweepActionIndex < actions.length(); sweepActionIndex++) {
-                    const auto& action = actions[sweepActionIndex];
-                    if (action.func(this, &fop, sweepZone, budget, action.kind) == NotFinished)
+                    auto action = actions[sweepActionIndex];
+                    if (action(this, budget) == NotFinished)
                         return NotFinished;
                 }
                 sweepActionIndex = 0;
+                break;
+              }
+
+              case PerZoneActionList:
+                for (; sweepPhaseIndex < PerZoneSweepPhases.length(); sweepPhaseIndex++) {
+                    const auto& actions = PerZoneSweepPhases[sweepPhaseIndex];
+                    for (; sweepZone; sweepZone = sweepZone->nextNodeInGroup()) {
+                        for (; sweepActionIndex < actions.length(); sweepActionIndex++) {
+                            const auto& action = actions[sweepActionIndex];
+                            if (action.func(this, &fop, sweepZone, budget, action.kind) == NotFinished)
+                                return NotFinished;
+                        }
+                        sweepActionIndex = 0;
+                    }
+                    sweepZone = currentSweepGroup;
+                }
+                sweepPhaseIndex = 0;
+                break;
+
+              default:
+                MOZ_CRASH("Unexpected sweepActionList value");
             }
-            sweepZone = currentSweepGroup;
         }
-        sweepPhaseIndex = 0;
+        sweepActionList = PerSweepGroupActionList;
 
         endSweepingSweepGroup();
         getNextSweepGroup();
@@ -7264,6 +7318,30 @@ gc::MergeCompartments(JSCompartment* source, JSCompartment* target)
 
     // Atoms which are marked in source's zone are now marked in target's zone.
     cx->atomMarking().adoptMarkedAtoms(target->zone(), source->zone());
+
+    // Merge script name maps in the target compartment's map.
+    if (cx->runtime()->lcovOutput().isEnabled() && source->scriptNameMap) {
+        AutoEnterOOMUnsafeRegion oomUnsafe;
+
+        if (!target->scriptNameMap) {
+            target->scriptNameMap = cx->new_<ScriptNameMap>();
+
+            if (!target->scriptNameMap)
+                oomUnsafe.crash("Failed to create a script name map.");
+
+            if (!target->scriptNameMap->init())
+                oomUnsafe.crash("Failed to initialize a script name map.");
+        }
+
+        for (ScriptNameMap::Range r = source->scriptNameMap->all(); !r.empty(); r.popFront()) {
+            JSScript* key = r.front().key();
+            const char* value = r.front().value();
+            if (!target->scriptNameMap->putNew(key, value))
+                oomUnsafe.crash("Failed to add an entry in the script name map.");
+        }
+
+        source->scriptNameMap->clear();
+    }
 }
 
 void

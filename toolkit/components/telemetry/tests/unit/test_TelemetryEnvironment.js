@@ -521,7 +521,7 @@ function checkSystemSection(data) {
 
   if (gIsWindows || gIsMac || gIsLinux) {
     let EXTRA_CPU_FIELDS = ["cores", "model", "family", "stepping",
-			    "l2cacheKB", "l3cacheKB", "speedMHz", "vendor"];
+                            "l2cacheKB", "l3cacheKB", "speedMHz", "vendor"];
 
     for (let f of EXTRA_CPU_FIELDS) {
       // Note this is testing TelemetryEnvironment.js only, not that the
@@ -539,18 +539,18 @@ function checkSystemSection(data) {
 
     // We insist these are available
     for (let f of ["cores"]) {
-	Assert.ok(!(f in data.system.cpu) ||
-		  Number.isFinite(data.system.cpu[f]),
-		  f + " must be a number if non null.");
+      Assert.ok(!(f in data.system.cpu) ||
+                Number.isFinite(data.system.cpu[f]),
+                f + " must be a number if non null.");
     }
 
     // These should be numbers if they are not null
     for (let f of ["model", "family", "stepping", "l2cacheKB",
-		   "l3cacheKB", "speedMHz"]) {
-	Assert.ok(!(f in data.system.cpu) ||
-		  data.system.cpu[f] === null ||
-		  Number.isFinite(data.system.cpu[f]),
-		  f + " must be a number if non null.");
+                   "l3cacheKB", "speedMHz"]) {
+      Assert.ok(!(f in data.system.cpu) ||
+                data.system.cpu[f] === null ||
+                Number.isFinite(data.system.cpu[f]),
+                f + " must be a number if non null.");
     }
   }
 
@@ -809,6 +809,9 @@ function checkExperimentsSection(data) {
     let experimentData = experiments[id];
     Assert.ok("branch" in experimentData, "The experiment must have branch data.")
     Assert.ok(checkString(experimentData.branch), "The experiment data must be valid.");
+    if ("type" in experimentData) {
+      Assert.ok(checkString(experimentData.type));
+    }
   }
 }
 
@@ -934,7 +937,7 @@ add_task(async function test_prefWatchPolicies() {
   Assert.ok(!(PREF_TEST_3 in userPrefs),
             "Do not report if preference not user set.");
   Assert.equal(userPrefs[PREF_TEST_5], expectedValue,
-	      "The pref value in the environment data should still be the same");
+               "The pref value in the environment data should still be the same");
 });
 
 add_task(async function test_prefWatch_prefReset() {
@@ -1666,7 +1669,7 @@ add_task(async function test_experimentsAPI() {
   const EXPERIMENT2 = "experiment-2";
   const EXPERIMENT2_BRANCH = "other-branch";
 
-  let checkExperiment = (id, branch, environmentData) => {
+  let checkExperiment = (environmentData, id, branch, type = null) => {
     Assert.ok("experiments" in environmentData,
               "The current environment must report the experiment annotations.");
     Assert.ok(id in environmentData.experiments,
@@ -1701,7 +1704,7 @@ add_task(async function test_experimentsAPI() {
   // Check that the current environment contains the right experiment.
   data = TelemetryEnvironment.currentEnvironment;
   checkEnvironmentData(data);
-  checkExperiment(EXPERIMENT1, EXPERIMENT1_BRANCH, data);
+  checkExperiment(data, EXPERIMENT1, EXPERIMENT1_BRANCH);
 
   TelemetryEnvironment.unregisterChangeListener("test_experimentsAPI");
 
@@ -1716,11 +1719,11 @@ add_task(async function test_experimentsAPI() {
   // Check that the current environment contains both the experiment.
   data = TelemetryEnvironment.currentEnvironment;
   checkEnvironmentData(data);
-  checkExperiment(EXPERIMENT1, EXPERIMENT1_BRANCH, data);
-  checkExperiment(EXPERIMENT2, EXPERIMENT2_BRANCH, data);
+  checkExperiment(data, EXPERIMENT1, EXPERIMENT1_BRANCH);
+  checkExperiment(data, EXPERIMENT2, EXPERIMENT2_BRANCH);
 
   // The previous environment should only contain the first experiment.
-  checkExperiment(EXPERIMENT1, EXPERIMENT1_BRANCH, eventEnvironmentData);
+  checkExperiment(eventEnvironmentData, EXPERIMENT1, EXPERIMENT1_BRANCH);
   Assert.ok(!(EXPERIMENT2 in eventEnvironmentData),
             "The old environment must not contain the new experiment annotation.");
 
@@ -1752,13 +1755,16 @@ add_task(async function test_experimentsAPI() {
   checkEnvironmentData(data);
   Assert.ok(!(EXPERIMENT1 in data),
             "The current environment must not contain the removed experiment annotation.");
-  checkExperiment(EXPERIMENT2, EXPERIMENT2_BRANCH, data);
+  checkExperiment(data, EXPERIMENT2, EXPERIMENT2_BRANCH);
 
   // The previous environment should contain both annotations.
-  checkExperiment(EXPERIMENT1, EXPERIMENT1_BRANCH, eventEnvironmentData);
-  checkExperiment(EXPERIMENT2, EXPERIMENT2_BRANCH, eventEnvironmentData);
+  checkExperiment(eventEnvironmentData, EXPERIMENT1, EXPERIMENT1_BRANCH);
+  checkExperiment(eventEnvironmentData, EXPERIMENT2, EXPERIMENT2_BRANCH);
 
-  TelemetryEnvironment.unregisterChangeListener("test_experimentsAPI5");
+  // Set an experiment with a type and check that it correctly shows up.
+  TelemetryEnvironment.setExperimentActive("typed-experiment", "random-branch", {type: "ab-test"});
+  data = TelemetryEnvironment.currentEnvironment;
+  checkExperiment(data, "typed-experiment", "random-branch", "ab-test");
 });
 
 add_task(async function test_experimentsAPI_limits() {
@@ -1800,6 +1806,12 @@ add_task(async function test_experimentsAPI_limits() {
             "The experiments must be reporting the truncated branch.");
 
   TelemetryEnvironment.unregisterChangeListener("test_experimentsAPI");
+
+  // Check that an overly long type is truncated.
+  const longType = "a0123456678901234567890123456789";
+  TelemetryEnvironment.setExperimentActive("exp", "some-branch", {type: longType});
+  data = TelemetryEnvironment.currentEnvironment;
+  Assert.equal(data.experiments["exp"].type, longType.substring(0, 20));
 });
 
 add_task(async function test_environmentShutdown() {

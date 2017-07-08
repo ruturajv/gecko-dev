@@ -55,12 +55,22 @@ nsDateTimeControlFrame::DestroyFrom(nsIFrame* aDestructRoot)
 }
 
 void
-nsDateTimeControlFrame::UpdateInputBoxValue()
+nsDateTimeControlFrame::OnValueChanged()
 {
   nsCOMPtr<nsIDateTimeInputArea> inputAreaContent =
     do_QueryInterface(mInputAreaContent);
   if (inputAreaContent) {
     inputAreaContent->NotifyInputElementValueChanged();
+  }
+}
+
+void
+nsDateTimeControlFrame::OnMinMaxStepAttrChanged()
+{
+  nsCOMPtr<nsIDateTimeInputArea> inputAreaContent =
+    do_QueryInterface(mInputAreaContent);
+  if (inputAreaContent) {
+    inputAreaContent->NotifyMinMaxStepAttrChanged();
   }
 }
 
@@ -403,7 +413,9 @@ nsDateTimeControlFrame::AttributeChanged(int32_t aNameSpaceID,
           do_QueryInterface(mInputAreaContent);
         if (aAttribute == nsGkAtoms::value) {
           if (inputAreaContent) {
-            nsContentUtils::AddScriptRunner(NewRunnableMethod(inputAreaContent,
+            nsContentUtils::AddScriptRunner(NewRunnableMethod(
+              "nsIDateTimeInputArea::NotifyInputElementValueChanged",
+              inputAreaContent,
               &nsIDateTimeInputArea::NotifyInputElementValueChanged));
           }
         } else {

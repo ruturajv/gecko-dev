@@ -272,6 +272,11 @@ public:
     return outside ? outside : GetInsideBullet();
   }
 
+  /**
+   * @return the first-letter frame or nullptr if we don't have one.
+   */
+  nsIFrame* GetFirstLetter() const;
+
   void MarkIntrinsicISizesDirty() override;
 private:
   void CheckIntrinsicCacheAgainstShrinkWrapState();
@@ -398,10 +403,14 @@ public:
   };
 
   /**
-   * Update the styles of our various pseudo-elements (bullets, first-letter,
-   * first-line, etc).
+   * Update the styles of our various pseudo-elements (bullets, first-line,
+   * etc, but _not_ first-letter).
    */
   void UpdatePseudoElementStyles(mozilla::ServoRestyleState& aRestyleState);
+
+  // Update our first-letter styles during stylo post-traversal.  This needs to
+  // be done at a slightly different time than our other pseudo-elements.
+  void UpdateFirstLetterStyle(mozilla::ServoRestyleState& aRestyleState);
 
 protected:
   explicit nsBlockFrame(nsStyleContext* aContext, ClassID aID = kClassID)

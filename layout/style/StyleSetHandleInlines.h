@@ -35,9 +35,10 @@ StyleSetHandle::Ptr::Delete()
 }
 
 void
-StyleSetHandle::Ptr::Init(nsPresContext* aPresContext)
+StyleSetHandle::Ptr::Init(nsPresContext* aPresContext,
+                          nsBindingManager* aBindingManager)
 {
-  FORWARD(Init, (aPresContext));
+  FORWARD(Init, (aPresContext, aBindingManager));
 }
 
 void
@@ -205,6 +206,12 @@ StyleSetHandle::Ptr::StyleSheetAt(SheetType aType, int32_t aIndex) const
   FORWARD(StyleSheetAt, (aType, aIndex));
 }
 
+void
+StyleSetHandle::Ptr::AppendAllXBLStyleSheets(nsTArray<StyleSheet*>& aArray) const
+{
+  FORWARD(AppendAllXBLStyleSheets, (aArray));
+}
+
 nsresult
 StyleSetHandle::Ptr::RemoveDocStyleSheet(StyleSheet* aSheet)
 {
@@ -263,17 +270,14 @@ already_AddRefed<nsStyleContext>
 StyleSetHandle::Ptr::ProbePseudoElementStyle(dom::Element* aParentElement,
                                              CSSPseudoElementType aType,
                                              nsStyleContext* aParentContext,
-                                             TreeMatchContext* aTreeMatchContext,
-                                             dom::Element* aPseudoElement)
+                                             TreeMatchContext* aTreeMatchContext)
 {
   if (IsGecko()) {
     MOZ_ASSERT(aTreeMatchContext);
     return AsGecko()->ProbePseudoElementStyle(aParentElement, aType, aParentContext,
-                                              *aTreeMatchContext, aPseudoElement);
-  } else {
-    return AsServo()->ProbePseudoElementStyle(aParentElement, aType, aParentContext,
-                                              aPseudoElement);
+                                              *aTreeMatchContext);
   }
+  return AsServo()->ProbePseudoElementStyle(aParentElement, aType, aParentContext);
 }
 
 nsRestyleHint

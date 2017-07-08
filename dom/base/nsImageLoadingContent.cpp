@@ -151,14 +151,21 @@ nsImageLoadingContent::Notify(imgIRequest* aRequest,
   }
 
   {
-    nsAutoScriptBlocker scriptBlocker;
-
+    // Calling Notify on observers can modify the list of observers so make
+    // a local copy.
+    AutoTArray<nsCOMPtr<imgINotificationObserver>, 2> observers;
     for (ImageObserver* observer = &mObserverList, *next; observer;
          observer = next) {
       next = observer->mNext;
       if (observer->mObserver) {
-        observer->mObserver->Notify(aRequest, aType, aData);
+        observers.AppendElement(observer->mObserver);
       }
+    }
+
+    nsAutoScriptBlocker scriptBlocker;
+
+    for (auto& observer : observers) {
+        observer->Notify(aRequest, aType, aData);
     }
   }
 
@@ -1128,12 +1135,12 @@ nsImageLoadingContent::StringToURI(const nsAString& aSpec,
   nsCOMPtr<nsIURI> baseURL = thisContent->GetBaseURI();
 
   // (2) Get the charset
-  const nsCString& charset = aDocument->GetDocumentCharacterSet();
+  auto encoding = aDocument->GetDocumentCharacterSet();
 
   // (3) Construct the silly thing
   return NS_NewURI(aURI,
                    aSpec,
-                   charset.IsEmpty() ? nullptr : charset.get(),
+                   encoding,
                    baseURL,
                    nsContentUtils::GetIOService());
 }

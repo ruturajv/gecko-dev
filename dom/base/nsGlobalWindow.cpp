@@ -23,6 +23,7 @@
 #include "mozilla/dom/Performance.h"
 #include "mozilla/dom/StorageEvent.h"
 #include "mozilla/dom/StorageEventBinding.h"
+#include "mozilla/dom/StorageNotifierService.h"
 #include "mozilla/dom/Timeout.h"
 #include "mozilla/dom/TimeoutHandler.h"
 #include "mozilla/dom/TimeoutManager.h"
@@ -464,8 +465,9 @@ static NS_DEFINE_CID(kXULControllersCID, NS_XULCONTROLLERS_CID);
  * An indirect observer object that means we don't have to implement nsIObserver
  * on nsGlobalWindow, where any script could see it.
  */
-class nsGlobalWindowObserver final : public nsIObserver,
-                                     public nsIInterfaceRequestor
+class nsGlobalWindowObserver final : public nsIObserver
+                                   , public nsIInterfaceRequestor
+                                   , public StorageNotificationObserver
 {
 public:
   explicit nsGlobalWindowObserver(nsGlobalWindow* aWindow) : mWindow(aWindow) {}
@@ -483,6 +485,23 @@ public:
       return mWindow->QueryInterface(aIID, aResult);
     }
     return NS_NOINTERFACE;
+  }
+
+  void
+  ObserveStorageNotification(StorageEvent* aEvent,
+                             const char16_t* aStorageType,
+                             bool aPrivateBrowsing) override
+  {
+    if (mWindow) {
+      mWindow->ObserveStorageNotification(aEvent, aStorageType,
+                                          aPrivateBrowsing);
+    }
+  }
+
+  virtual nsIEventTarget*
+  GetEventTarget() const override
+  {
+    return mWindow ? mWindow->EventTargetFor(TaskCategory::Other) : nullptr;
   }
 
 private:
@@ -547,7 +566,7 @@ public:
   nsresult Call() override;
 
 private:
-  ~IdleRequestExecutorTimeoutHandler() {}
+  ~IdleRequestExecutorTimeoutHandler() override {}
   RefPtr<IdleRequestExecutor> mExecutor;
 };
 
@@ -612,7 +631,7 @@ private:
 
   void DelayedDispatch(uint32_t aDelay);
 
-  ~IdleRequestExecutor() {}
+  ~IdleRequestExecutor() override {}
 
   bool mDispatched;
   TimeStamp mDeadline;
@@ -897,7 +916,7 @@ public:
   }
 
 private:
-  ~IdleRequestTimeoutHandler() {}
+  ~IdleRequestTimeoutHandler() override {}
 
   RefPtr<IdleRequest> mIdleRequest;
   nsCOMPtr<nsPIDOMWindowInner> mWindow;
@@ -1013,7 +1032,8 @@ nsPIDOMWindow<T>::nsPIDOMWindow(nsPIDOMWindowOuter *aOuterWindow)
   mWindowID(NextWindowID()), mHasNotifiedGlobalCreated(false),
   mMarkedCCGeneration(0), mServiceWorkersTestingEnabled(false),
   mLargeAllocStatus(LargeAllocStatus::NONE),
-  mShouldResumeOnFirstActiveMediaComponent(false)
+  mHasTriedToCacheTopInnerWindow(false),
+  mNumOfIndexedDBDatabases(0)
 {
   if (aOuterWindow) {
     mTimeoutManager =
@@ -1086,8 +1106,7 @@ public:
                               bool* isOrdinary,
                               JS::MutableHandle<JSObject*> protop) const override;
 
-  bool enumerate(JSContext *cx, JS::Handle<JSObject*> proxy,
-                 JS::MutableHandle<JSObject*> vp) const override;
+  JSObject* enumerate(JSContext *cx, JS::Handle<JSObject*> proxy) const override;
   bool preventExtensions(JSContext* cx,
                          JS::Handle<JSObject*> proxy,
                          JS::ObjectOpResult& result) const override;
@@ -1416,13 +1435,12 @@ nsOuterWindowProxy::getOwnEnumerablePropertyKeys(JSContext *cx, JS::Handle<JSObj
   return js::AppendUnique(cx, props, innerProps);
 }
 
-bool
-nsOuterWindowProxy::enumerate(JSContext *cx, JS::Handle<JSObject*> proxy,
-                              JS::MutableHandle<JSObject*> objp) const
+JSObject*
+nsOuterWindowProxy::enumerate(JSContext *cx, JS::Handle<JSObject*> proxy) const
 {
   // BaseProxyHandler::enumerate seems to do what we want here: fall
   // back on the property names returned from js::GetPropertyKeys()
-  return js::BaseProxyHandler::enumerate(cx, proxy, objp);
+  return js::BaseProxyHandler::enumerate(cx, proxy);
 }
 
 bool
@@ -1632,14 +1650,16 @@ nsGlobalWindow::nsGlobalWindow(nsGlobalWindow *aOuterWindow)
         // a strong reference.
         os->AddObserver(mObserver, NS_IOSERVICE_OFFLINE_STATUS_TOPIC,
                         false);
-
-        // Watch for dom-storage2-changed and dom-private-storage2-changed so we
-        // can fire storage events. Use a strong reference.
-        os->AddObserver(mObserver, "dom-storage2-changed", false);
-        os->AddObserver(mObserver, "dom-private-storage2-changed", false);
       }
 
       Preferences::AddStrongObserver(mObserver, "intl.accept_languages");
+
+      // Watch for storage notifications so we can fire storage events.
+      RefPtr<StorageNotifierService> sns =
+        StorageNotifierService::GetOrCreate();
+      if (sns) {
+        sns->Register(mObserver);
+      }
     }
   } else {
     // |this| is an outer window. Outer windows start out frozen and
@@ -1935,8 +1955,11 @@ nsGlobalWindow::CleanUp()
     nsCOMPtr<nsIObserverService> os = mozilla::services::GetObserverService();
     if (os) {
       os->RemoveObserver(mObserver, NS_IOSERVICE_OFFLINE_STATUS_TOPIC);
-      os->RemoveObserver(mObserver, "dom-storage2-changed");
-      os->RemoveObserver(mObserver, "dom-private-storage2-changed");
+    }
+
+    RefPtr<StorageNotifierService> sns = StorageNotifierService::GetOrCreate();
+    if (sns) {
+     sns->Unregister(mObserver);
     }
 
 #ifdef MOZ_B2G
@@ -2297,6 +2320,8 @@ NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN_INTERNAL(nsGlobalWindow)
 
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mOuterWindow)
 
+  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mTopInnerWindow)
+
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mListenerManager)
 
   if (tmp->mTimeoutManager) {
@@ -2386,6 +2411,8 @@ NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN(nsGlobalWindow)
     tmp->mListenerManager->Disconnect();
     NS_IMPL_CYCLE_COLLECTION_UNLINK(mListenerManager)
   }
+
+  NS_IMPL_CYCLE_COLLECTION_UNLINK(mTopInnerWindow)
 
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mLocation)
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mHistory)
@@ -3035,8 +3062,8 @@ nsGlobalWindow::SetNewDocument(nsIDocument* aDocument,
      happens, setting status isn't a big requirement, so don't. (Doesn't happen
      under normal circumstances, but bug 49615 describes a case.) */
 
-  nsContentUtils::AddScriptRunner(
-    NewRunnableMethod(this, &nsGlobalWindow::ClearStatus));
+  nsContentUtils::AddScriptRunner(NewRunnableMethod(
+    "nsGlobalWindow::ClearStatus", this, &nsGlobalWindow::ClearStatus));
 
   // Sometimes, WouldReuseInnerWindow() returns true even if there's no inner
   // window (see bug 776497). Be safe.
@@ -3185,6 +3212,8 @@ nsGlobalWindow::SetNewDocument(nsIDocument* aDocument,
     }
 
     mInnerWindow = newInnerWindow->AsInner();
+    MOZ_ASSERT(mInnerWindow);
+    mInnerWindow->TryToCacheTopInnerWindow();
 
     if (!GetWrapperPreserveColor()) {
       JS::Rooted<JSObject*> outer(cx,
@@ -3346,7 +3375,8 @@ nsGlobalWindow::SetNewDocument(nsIDocument* aDocument,
   // up with the outer. See bug 969156.
   if (createdInnerWindow) {
     nsContentUtils::AddScriptRunner(
-      NewRunnableMethod(newInnerWindow,
+      NewRunnableMethod("nsGlobalWindow::FireOnNewGlobalObject",
+                        newInnerWindow,
                         &nsGlobalWindow::FireOnNewGlobalObject));
   }
 
@@ -3360,7 +3390,9 @@ nsGlobalWindow::SetNewDocument(nsIDocument* aDocument,
         nsContentUtils::IsSystemPrincipal(mDoc->NodePrincipal())) {
       newInnerWindow->mHasNotifiedGlobalCreated = true;
       nsContentUtils::AddScriptRunner(
-        NewRunnableMethod(this, &nsGlobalWindow::DispatchDOMWindowCreated));
+        NewRunnableMethod("nsGlobalWindow::DispatchDOMWindowCreated",
+                          this,
+                          &nsGlobalWindow::DispatchDOMWindowCreated));
     }
   }
 
@@ -3941,7 +3973,7 @@ nsGlobalWindow::PostHandleEvent(EventChainPostVisitor& aVisitor)
     // will receive a vrdisplayactive event to indicate that it should
     // immediately begin vr presentation. This should occur when navigating
     // forwards, navigating backwards, and on page reload.
-    for (auto display : mVRDisplays) {
+    for (const auto& display : mVRDisplays) {
       if (display->IsPresenting()) {
         // Save this VR display ID to trigger vrdisplayactivate event
         // after the next load event.
@@ -4422,17 +4454,64 @@ nsPIDOMWindowInner::IsRunningTimeout()
 }
 
 void
-nsPIDOMWindowOuter::NotifyCreatedNewMediaComponent()
+nsPIDOMWindowInner::TryToCacheTopInnerWindow()
 {
-  // We would only active media component when there is any alive one.
-  mShouldResumeOnFirstActiveMediaComponent = true;
+  if (mHasTriedToCacheTopInnerWindow) {
+    return;
+  }
 
-  // If the document is already on the foreground but the suspend state is still
-  // suspend-block, that means the media component was created after calling
-  // MaybeActiveMediaComponents, so the window's suspend state doesn't be
-  // changed yet. Therefore, we need to call it again, because the state is only
-  // changed after there exists alive media within the window.
-  MaybeActiveMediaComponents();
+  MOZ_ASSERT(!mInnerObjectsFreed);
+
+  mHasTriedToCacheTopInnerWindow = true;
+
+  nsGlobalWindow* window = nsGlobalWindow::Cast(AsInner());
+
+  MOZ_ASSERT(window);
+
+  if (nsCOMPtr<nsPIDOMWindowOuter> topOutter = window->GetScriptableTop()) {
+    mTopInnerWindow = topOutter->GetCurrentInnerWindow();
+  }
+}
+
+void
+nsPIDOMWindowInner::UpdateActiveIndexedDBTransactionCount(int32_t aDelta)
+{
+  MOZ_ASSERT(NS_IsMainThread());
+
+  if (aDelta == 0) {
+    return;
+  }
+
+  TabGroup()->IndexedDBTransactionCounter() += aDelta;
+}
+
+void
+nsPIDOMWindowInner::UpdateActiveIndexedDBDatabaseCount(int32_t aDelta)
+{
+  MOZ_ASSERT(NS_IsMainThread());
+
+  if (aDelta == 0) {
+    return;
+  }
+
+  // We count databases but not transactions because only active databases
+  // could block throttling.
+  uint32_t& counter = mTopInnerWindow ?
+    mTopInnerWindow->mNumOfIndexedDBDatabases : mNumOfIndexedDBDatabases;
+
+  counter+= aDelta;
+
+  TabGroup()->IndexedDBDatabaseCounter() += aDelta;
+}
+
+bool
+nsPIDOMWindowInner::HasActiveIndexedDBDatabases()
+{
+  MOZ_ASSERT(NS_IsMainThread());
+
+  return mTopInnerWindow ?
+    mTopInnerWindow->mNumOfIndexedDBDatabases > 0 :
+    mNumOfIndexedDBDatabases > 0;
 }
 
 void
@@ -4442,21 +4521,7 @@ nsPIDOMWindowOuter::MaybeActiveMediaComponents()
     return mOuterWindow->MaybeActiveMediaComponents();
   }
 
-  // Resume the media when the tab was blocked and the tab already has
-  // alive media components.
-  if (!mShouldResumeOnFirstActiveMediaComponent ||
-      mMediaSuspend != nsISuspendedTypes::SUSPENDED_BLOCK) {
-    return;
-  }
-
-  nsCOMPtr<nsPIDOMWindowInner> inner = GetCurrentInnerWindow();
-  if (!inner) {
-    return;
-  }
-
-  // If the document is not visible, don't need to resume it.
-  nsCOMPtr<nsIDocument> doc = inner->GetExtantDoc();
-  if (!doc || doc->Hidden()) {
+  if (mMediaSuspend != nsISuspendedTypes::SUSPENDED_BLOCK) {
     return;
   }
 
@@ -6871,10 +6936,13 @@ class FullscreenTransitionTask : public Runnable
 {
 public:
   FullscreenTransitionTask(const FullscreenTransitionDuration& aDuration,
-                           nsGlobalWindow* aWindow, bool aFullscreen,
-                           nsIWidget* aWidget, nsIScreen* aScreen,
+                           nsGlobalWindow* aWindow,
+                           bool aFullscreen,
+                           nsIWidget* aWidget,
+                           nsIScreen* aScreen,
                            nsISupports* aTransitionData)
-    : mWindow(aWindow)
+    : mozilla::Runnable("FullscreenTransitionTask")
+    , mWindow(aWindow)
     , mWidget(aWidget)
     , mScreen(aScreen)
     , mTransitionData(aTransitionData)
@@ -8825,7 +8893,7 @@ nsGlobalWindow::FireAbuseEvents(const nsAString &aPopupURL,
   // use the base URI to build what would have been the popup's URI
   nsCOMPtr<nsIIOService> ios(do_GetService(NS_IOSERVICE_CONTRACTID));
   if (ios)
-    ios->NewURI(NS_ConvertUTF16toUTF8(aPopupURL), 0, baseURL,
+    ios->NewURI(NS_ConvertUTF16toUTF8(aPopupURL), nullptr, baseURL,
                 getter_AddRefs(popupURI));
 
   // fire an event chock full of informative URIs
@@ -9210,8 +9278,9 @@ class nsCloseEvent : public Runnable {
   RefPtr<nsGlobalWindow> mWindow;
   bool mIndirect;
 
-  nsCloseEvent(nsGlobalWindow *aWindow, bool aIndirect)
-    : mWindow(aWindow)
+  nsCloseEvent(nsGlobalWindow* aWindow, bool aIndirect)
+    : mozilla::Runnable("nsCloseEvent")
+    , mWindow(aWindow)
     , mIndirect(aIndirect)
   {}
 
@@ -9640,11 +9709,11 @@ struct BrowserCompartmentMatcher : public js::CompartmentFilter {
 class WindowDestroyedEvent final : public Runnable
 {
 public:
-  WindowDestroyedEvent(nsIDOMWindow* aWindow, uint64_t aID,
-                       const char* aTopic) :
-    mID(aID),
-    mPhase(Phase::Destroying),
-    mTopic(aTopic)
+  WindowDestroyedEvent(nsIDOMWindow* aWindow, uint64_t aID, const char* aTopic)
+    : mozilla::Runnable("WindowDestroyedEvent")
+    , mID(aID)
+    , mPhase(Phase::Destroying)
+    , mTopic(aTopic)
   {
     mWindow = do_GetWeakReference(aWindow);
   }
@@ -9657,8 +9726,7 @@ public:
 
   NS_IMETHOD Run() override
   {
-    PROFILER_LABEL("WindowDestroyedEvent", "Run",
-                   js::ProfileEntry::Category::OTHER);
+    AUTO_PROFILER_LABEL("WindowDestroyedEvent::Run", OTHER);
 
     nsCOMPtr<nsIObserverService> observerService =
       services::GetObserverService();
@@ -10138,7 +10206,12 @@ public:
   ChildCommandDispatcher(nsGlobalWindow* aWindow,
                          nsITabChild* aTabChild,
                          const nsAString& aAction)
-  : mWindow(aWindow), mTabChild(aTabChild), mAction(aAction) {}
+    : mozilla::Runnable("ChildCommandDispatcher")
+    , mWindow(aWindow)
+    , mTabChild(aTabChild)
+    , mAction(aAction)
+  {
+  }
 
   NS_IMETHOD Run() override
   {
@@ -10167,7 +10240,11 @@ class CommandDispatcher : public Runnable
 public:
   CommandDispatcher(nsIDOMXULCommandDispatcher* aDispatcher,
                     const nsAString& aAction)
-  : mDispatcher(aDispatcher), mAction(aAction) {}
+    : mozilla::Runnable("CommandDispatcher")
+    , mDispatcher(aDispatcher)
+    , mAction(aAction)
+  {
+  }
 
   NS_IMETHOD Run() override
   {
@@ -10673,7 +10750,9 @@ void nsGlobalWindow::SetIsBackground(bool aIsBackground)
       inner->StopGamepadHaptics();
     }
     return;
-  } else if (inner) {
+  }
+
+  if (inner) {
     inner->SyncGamepadState();
   }
 }
@@ -10959,10 +11038,11 @@ nsGlobalWindow::PageHidden()
 class HashchangeCallback : public Runnable
 {
 public:
-  HashchangeCallback(const nsAString &aOldURL,
-                     const nsAString &aNewURL,
+  HashchangeCallback(const nsAString& aOldURL,
+                     const nsAString& aNewURL,
                      nsGlobalWindow* aWindow)
-    : mWindow(aWindow)
+    : mozilla::Runnable("HashchangeCallback")
+    , mWindow(aWindow)
   {
     MOZ_ASSERT(mWindow);
     MOZ_ASSERT(mWindow->IsInnerWindow());
@@ -11575,8 +11655,11 @@ public:
                              uint32_t aTimeInS,
                              bool aCallOnidle,
                              nsGlobalWindow* aIdleWindow)
-    : mIdleObserver(aIdleObserver), mTimeInS(aTimeInS), mIdleWindow(aIdleWindow),
-      mCallOnidle(aCallOnidle)
+    : mozilla::Runnable("NotifyIdleObserverRunnable")
+    , mIdleObserver(aIdleObserver)
+    , mTimeInS(aTimeInS)
+    , mIdleWindow(aIdleWindow)
+    , mCallOnidle(aCallOnidle)
   { }
 
   NS_IMETHOD Run() override
@@ -11684,10 +11767,12 @@ nsGlobalWindow::ScheduleNextIdleObserverCallback()
   }
 
   mIdleTimer->Cancel();
-  rv = mIdleTimer->InitWithFuncCallback(IdleObserverTimerCallback,
-                                        this,
-                                        callbackTimeMS,
-                                        nsITimer::TYPE_ONE_SHOT);
+  rv = mIdleTimer->InitWithNamedFuncCallback(
+    IdleObserverTimerCallback,
+    this,
+    callbackTimeMS,
+    nsITimer::TYPE_ONE_SHOT,
+    "nsGlobalWindow::ScheduleNextIdleObserverCallback");
   NS_ENSURE_SUCCESS(rv, rv);
 
   return NS_OK;
@@ -11729,10 +11814,12 @@ nsGlobalWindow::ScheduleActiveTimerCallback()
   mIdleTimer->Cancel();
 
   uint32_t fuzzFactorInMS = GetFuzzTimeMS();
-  nsresult rv = mIdleTimer->InitWithFuncCallback(IdleActiveTimerCallback,
-                                                 this,
-                                                 fuzzFactorInMS,
-                                                 nsITimer::TYPE_ONE_SHOT);
+  nsresult rv = mIdleTimer->InitWithNamedFuncCallback(
+    IdleActiveTimerCallback,
+    this,
+    fuzzFactorInMS,
+    nsITimer::TYPE_ONE_SHOT,
+    "nsGlobalWindow::ScheduleActiveTimerCallback");
   NS_ENSURE_SUCCESS(rv, rv);
   return NS_OK;
 }
@@ -12206,131 +12293,6 @@ nsGlobalWindow::Observe(nsISupports* aSubject, const char* aTopic,
     return NS_OK;
   }
 
-  // We need these for our private-browsing check below; so save them off.
-  // (And we can't do the private-browsing enforcement check as part of our
-  // outer conditional because otherwise we'll trigger an NS_WARNING if control
-  // flow reaches the bottom of this method.)
-  bool isNonPrivateLocalStorageChange =
-    !nsCRT::strcmp(aTopic, "dom-storage2-changed");
-  bool isPrivateLocalStorageChange =
-    !nsCRT::strcmp(aTopic, "dom-private-storage2-changed");
-  if (isNonPrivateLocalStorageChange || isPrivateLocalStorageChange) {
-    // Enforce that the source storage area's private browsing state matches
-    // this window's state.  These flag checks and their maintenance independent
-    // from the principal's OriginAttributes matter because chrome docshells
-    // that are part of private browsing windows can be private browsing without
-    // having their OriginAttributes set (because they have the system
-    // principal).
-    bool isPrivateBrowsing = IsPrivateBrowsing();
-    if ((isNonPrivateLocalStorageChange && isPrivateBrowsing) ||
-        (isPrivateLocalStorageChange && !isPrivateBrowsing)) {
-      return NS_OK;
-    }
-
-    // We require that aData be either u"SessionStorage" or u"localStorage".
-    // Assert under debug, but ignore the bogus event under non-debug.
-    MOZ_ASSERT(aData);
-    if (!aData) {
-      return NS_ERROR_INVALID_ARG;
-    }
-
-    // LocalStorage can only exist on an inner window, and we don't want to
-    // generate events on frozen or otherwise-navigated-away from windows.
-    // (Actually, this code used to try and buffer events for frozen windows,
-    // but it never worked, so we've removed it.  See bug 1285898.)
-    if (!IsInnerWindow() || !AsInner()->IsCurrentInnerWindow() || IsFrozen()) {
-      return NS_OK;
-    }
-
-    nsIPrincipal *principal = GetPrincipal();
-    if (!principal) {
-      return NS_OK;
-    }
-
-    RefPtr<StorageEvent> event = static_cast<StorageEvent*>(aSubject);
-    if (!event) {
-      return NS_ERROR_FAILURE;
-    }
-
-    bool fireMozStorageChanged = false;
-    nsAutoString eventType;
-    eventType.AssignLiteral("storage");
-
-    if (!NS_strcmp(aData, u"sessionStorage")) {
-      nsCOMPtr<nsIDOMStorage> changingStorage = event->GetStorageArea();
-      MOZ_ASSERT(changingStorage);
-
-      bool check = false;
-
-      nsCOMPtr<nsIDOMStorageManager> storageManager = do_QueryInterface(GetDocShell());
-      if (storageManager) {
-        nsresult rv = storageManager->CheckStorage(principal, changingStorage,
-                                                   &check);
-        if (NS_FAILED(rv)) {
-          return rv;
-        }
-      }
-
-      if (!check) {
-        // This storage event is not coming from our storage or is coming
-        // from a different docshell, i.e. it is a clone, ignore this event.
-        return NS_OK;
-      }
-
-      MOZ_LOG(gDOMLeakPRLog, LogLevel::Debug,
-              ("nsGlobalWindow %p with sessionStorage %p passing event from %p",
-               this, mSessionStorage.get(), changingStorage.get()));
-
-      fireMozStorageChanged = mSessionStorage == changingStorage;
-      if (fireMozStorageChanged) {
-        eventType.AssignLiteral("MozSessionStorageChanged");
-      }
-    }
-
-    else {
-      MOZ_ASSERT(!NS_strcmp(aData, u"localStorage"));
-      nsIPrincipal* storagePrincipal = event->GetPrincipal();
-      if (!storagePrincipal) {
-        return NS_OK;
-      }
-
-      bool equals = false;
-      nsresult rv = storagePrincipal->Equals(principal, &equals);
-      NS_ENSURE_SUCCESS(rv, rv);
-
-      if (!equals) {
-        return NS_OK;
-      }
-
-      fireMozStorageChanged = mLocalStorage == event->GetStorageArea();
-
-      if (fireMozStorageChanged) {
-        eventType.AssignLiteral("MozLocalStorageChanged");
-      }
-    }
-
-    // Clone the storage event included in the observer notification. We want
-    // to dispatch clones rather than the original event.
-    ErrorResult error;
-    RefPtr<StorageEvent> clonedEvent =
-      CloneStorageEvent(eventType, event, error);
-    if (error.Failed()) {
-      return error.StealNSResult();
-    }
-
-    clonedEvent->SetTrusted(true);
-
-    if (fireMozStorageChanged) {
-      WidgetEvent* internalEvent = clonedEvent->WidgetEventPtr();
-      internalEvent->mFlags.mOnlyChromeDispatch = true;
-    }
-
-    bool defaultActionEnabled;
-    DispatchEvent(clonedEvent, &defaultActionEnabled);
-
-    return NS_OK;
-  }
-
   if (!nsCRT::strcmp(aTopic, "offline-cache-update-added")) {
     if (mApplicationCache)
       return NS_OK;
@@ -12398,6 +12360,114 @@ nsGlobalWindow::Observe(nsISupports* aSubject, const char* aTopic,
 
   NS_WARNING("unrecognized topic in nsGlobalWindow::Observe");
   return NS_ERROR_FAILURE;
+}
+
+void
+nsGlobalWindow::ObserveStorageNotification(StorageEvent* aEvent,
+                                           const char16_t* aStorageType,
+                                           bool aPrivateBrowsing)
+{
+  MOZ_ASSERT(aEvent);
+
+  // Enforce that the source storage area's private browsing state matches
+  // this window's state.  These flag checks and their maintenance independent
+  // from the principal's OriginAttributes matter because chrome docshells
+  // that are part of private browsing windows can be private browsing without
+  // having their OriginAttributes set (because they have the system
+  // principal).
+  bool isPrivateBrowsing = IsPrivateBrowsing();
+  if (isPrivateBrowsing != aPrivateBrowsing) {
+    return;
+  }
+
+  // LocalStorage can only exist on an inner window, and we don't want to
+  // generate events on frozen or otherwise-navigated-away from windows.
+  // (Actually, this code used to try and buffer events for frozen windows,
+  // but it never worked, so we've removed it.  See bug 1285898.)
+  if (!IsInnerWindow() || !AsInner()->IsCurrentInnerWindow() || IsFrozen()) {
+    return;
+  }
+
+  nsIPrincipal *principal = GetPrincipal();
+  if (!principal) {
+    return;
+  }
+
+  bool fireMozStorageChanged = false;
+  nsAutoString eventType;
+  eventType.AssignLiteral("storage");
+
+  if (!NS_strcmp(aStorageType, u"sessionStorage")) {
+    nsCOMPtr<nsIDOMStorage> changingStorage = aEvent->GetStorageArea();
+    MOZ_ASSERT(changingStorage);
+
+    bool check = false;
+
+    nsCOMPtr<nsIDOMStorageManager> storageManager = do_QueryInterface(GetDocShell());
+    if (storageManager) {
+      nsresult rv = storageManager->CheckStorage(principal, changingStorage,
+                                                 &check);
+      if (NS_FAILED(rv)) {
+        return;
+      }
+    }
+
+    if (!check) {
+      // This storage event is not coming from our storage or is coming
+      // from a different docshell, i.e. it is a clone, ignore this event.
+      return;
+    }
+
+    MOZ_LOG(gDOMLeakPRLog, LogLevel::Debug,
+            ("nsGlobalWindow %p with sessionStorage %p passing event from %p",
+             this, mSessionStorage.get(), changingStorage.get()));
+
+    fireMozStorageChanged = mSessionStorage == changingStorage;
+    if (fireMozStorageChanged) {
+      eventType.AssignLiteral("MozSessionStorageChanged");
+    }
+  }
+
+  else {
+    MOZ_ASSERT(!NS_strcmp(aStorageType, u"localStorage"));
+    nsIPrincipal* storagePrincipal = aEvent->GetPrincipal();
+    if (!storagePrincipal) {
+      return;
+    }
+
+    bool equals = false;
+    nsresult rv = storagePrincipal->Equals(principal, &equals);
+    NS_ENSURE_SUCCESS_VOID(rv);
+
+    if (!equals) {
+      return;
+    }
+
+    fireMozStorageChanged = mLocalStorage == aEvent->GetStorageArea();
+
+    if (fireMozStorageChanged) {
+      eventType.AssignLiteral("MozLocalStorageChanged");
+    }
+  }
+
+  // Clone the storage event included in the observer notification. We want
+  // to dispatch clones rather than the original event.
+  IgnoredErrorResult error;
+  RefPtr<StorageEvent> clonedEvent =
+    CloneStorageEvent(eventType, aEvent, error);
+  if (error.Failed()) {
+    return;
+  }
+
+  clonedEvent->SetTrusted(true);
+
+  if (fireMozStorageChanged) {
+    WidgetEvent* internalEvent = clonedEvent->WidgetEventPtr();
+    internalEvent->mFlags.mOnlyChromeDispatch = true;
+  }
+
+  bool defaultActionEnabled;
+  DispatchEvent(clonedEvent, &defaultActionEnabled);
 }
 
 already_AddRefed<StorageEvent>
@@ -12821,7 +12891,8 @@ public:
   ~AutoUnblockScriptClosing()
   {
     void (nsGlobalWindow::*run)() = &nsGlobalWindow::UnblockScriptedClosing;
-    nsCOMPtr<nsIRunnable> caller = NewRunnableMethod(mWin, run);
+    nsCOMPtr<nsIRunnable> caller = NewRunnableMethod(
+      "AutoUnblockScriptClosing::~AutoUnblockScriptClosing", mWin, run);
     mWin->Dispatch("nsGlobalWindow::UnblockScriptedClosing",
                    TaskCategory::Other, caller.forget());
   }
@@ -13398,14 +13469,14 @@ nsGlobalWindow::SecurityCheckURL(const char *aURL)
   // used to actually kick off the load in nsWindowWatcher.cpp.
   nsCOMPtr<nsIDocument> doc = sourceWindow->GetDoc();
   nsIURI* baseURI = nullptr;
-  nsAutoCString charset(NS_LITERAL_CSTRING("UTF-8")); // default to utf-8
+  auto encoding = UTF_8_ENCODING; // default to utf-8
   if (doc) {
     baseURI = doc->GetDocBaseURI();
-    charset = doc->GetDocumentCharacterSet();
+    encoding = doc->GetDocumentCharacterSet();
   }
   nsCOMPtr<nsIURI> uri;
   nsresult rv = NS_NewURI(getter_AddRefs(uri), nsDependentCString(aURL),
-                          charset.get(), baseURI);
+                          encoding, baseURI);
   if (NS_WARN_IF(NS_FAILED(rv))) {
     return rv;
   }
@@ -13678,7 +13749,7 @@ nsGlobalWindow::IsVRContentDetected() const
 bool
 nsGlobalWindow::IsVRContentPresenting() const
 {
-  for (auto display : mVRDisplays) {
+  for (const auto& display : mVRDisplays) {
     if (display->IsAnyPresenting(gfx::kVRGroupAll)) {
       return true;
     }
@@ -13777,6 +13848,13 @@ nsGlobalWindow::GetGamepads(nsTArray<RefPtr<Gamepad> >& aGamepads)
 {
   MOZ_ASSERT(IsInnerWindow());
   aGamepads.Clear();
+
+  // navigator.getGamepads() always returns an empty array when
+  // privacy.resistFingerprinting is true.
+  if (nsContentUtils::ShouldResistFingerprinting()) {
+    return;
+  }
+
   // mGamepads.Count() may not be sufficient, but it's not harmful.
   aGamepads.SetCapacity(mGamepads.Count());
   for (auto iter = mGamepads.Iter(); !iter.Done(); iter.Next()) {
@@ -13877,7 +13955,7 @@ nsGlobalWindow::DispatchVRDisplayActivate(uint32_t aDisplayID,
 {
   // Search for the display identified with aDisplayID and fire the
   // event if found.
-  for (auto display : mVRDisplays) {
+  for (const auto& display : mVRDisplays) {
     if (display->DisplayId() == aDisplayID) {
       if (aReason != VRDisplayEventReason::Navigation &&
           display->IsAnyPresenting(gfx::kVRGroupContent)) {
@@ -13921,7 +13999,7 @@ nsGlobalWindow::DispatchVRDisplayDeactivate(uint32_t aDisplayID,
 {
   // Search for the display identified with aDisplayID and fire the
   // event if found.
-  for (auto display : mVRDisplays) {
+  for (const auto& display : mVRDisplays) {
     if (display->DisplayId() == aDisplayID && display->IsPresenting()) {
       // We only want to trigger this event to content that is presenting to
       // the display already.
@@ -13951,7 +14029,7 @@ nsGlobalWindow::DispatchVRDisplayConnect(uint32_t aDisplayID)
 {
   // Search for the display identified with aDisplayID and fire the
   // event if found.
-  for (auto display : mVRDisplays) {
+  for (const auto& display : mVRDisplays) {
     if (display->DisplayId() == aDisplayID) {
       // Fire event even if not presenting to the display.
       VRDisplayEventInit init;
@@ -13979,7 +14057,7 @@ nsGlobalWindow::DispatchVRDisplayDisconnect(uint32_t aDisplayID)
 {
   // Search for the display identified with aDisplayID and fire the
   // event if found.
-  for (auto display : mVRDisplays) {
+  for (const auto& display : mVRDisplays) {
     if (display->DisplayId() == aDisplayID) {
       // Fire event even if not presenting to the display.
       VRDisplayEventInit init;
@@ -14007,7 +14085,7 @@ nsGlobalWindow::DispatchVRDisplayPresentChange(uint32_t aDisplayID)
 {
   // Search for the display identified with aDisplayID and fire the
   // event if found.
-  for (auto display : mVRDisplays) {
+  for (const auto& display : mVRDisplays) {
     if (display->DisplayId() == aDisplayID) {
       // Fire event even if not presenting to the display.
       VRDisplayEventInit init;
@@ -14015,7 +14093,6 @@ nsGlobalWindow::DispatchVRDisplayPresentChange(uint32_t aDisplayID)
       init.mCancelable = false;
       init.mDisplay = display;
       // VRDisplayEvent.reason is not set for vrdisplaypresentchange
-
       RefPtr<VRDisplayEvent> event =
         VRDisplayEvent::Constructor(this,
                                     NS_LITERAL_STRING("vrdisplaypresentchange"),

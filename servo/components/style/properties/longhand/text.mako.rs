@@ -12,7 +12,7 @@
                                              Method("has_overline", "bool"),
                                              Method("has_line_through", "bool")]) %>
 
-<%helpers:longhand name="text-overflow" animation_value_type="none" boxed="True"
+<%helpers:longhand name="text-overflow" animation_value_type="discrete" boxed="True"
                    spec="https://drafts.csswg.org/css-ui/#propdef-text-overflow">
     use std::fmt;
     use style_traits::ToCss;
@@ -150,6 +150,7 @@ ${helpers.single_keyword("unicode-bidi",
 
 <%helpers:longhand name="text-decoration-line"
                    custom_cascade="${product == 'servo'}"
+                   need_clone=True
                    animation_value_type="discrete"
                    spec="https://drafts.csswg.org/css-text-decor/#propdef-text-decoration-line">
     use std::fmt;
@@ -262,7 +263,7 @@ ${helpers.single_keyword("unicode-bidi",
                                    context: &mut computed::Context,
                                    _cacheable: &mut bool,
                                    _error_reporter: &ParseErrorReporter) {
-                longhands::_servo_text_decorations_in_effect::derive_from_text_decoration(context);
+            longhands::_servo_text_decorations_in_effect::derive_from_text_decoration(context);
         }
     % endif
 

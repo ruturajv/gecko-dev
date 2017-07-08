@@ -613,7 +613,9 @@ Element::WrapObject(JSContext *aCx, JS::Handle<JSObject*> aGivenProto)
           binding->ExecuteAttachedHandler();
         } else {
           nsContentUtils::AddScriptRunner(
-            NewRunnableMethod(binding, &nsXBLBinding::ExecuteAttachedHandler));
+            NewRunnableMethod("nsXBLBinding::ExecuteAttachedHandler",
+                              binding,
+                              &nsXBLBinding::ExecuteAttachedHandler));
         }
       }
     }
@@ -1564,6 +1566,9 @@ Element::BindToTree(nsIDocument* aDocument, nsIContent* aParent,
     if (aParent->HasFlag(NODE_CHROME_ONLY_ACCESS)) {
       SetFlags(NODE_CHROME_ONLY_ACCESS);
     }
+    if (HasFlag(NODE_IS_ANONYMOUS_ROOT)) {
+      aParent->SetMayHaveAnonymousChildren();
+    }
     if (aParent->IsInShadowTree()) {
       ClearSubtreeRootPointer();
       SetFlags(NODE_IS_IN_SHADOW_TREE);
@@ -1788,10 +1793,14 @@ Element::BindToTree(nsIDocument* aDocument, nsIContent* aParent,
   return NS_OK;
 }
 
-RemoveFromBindingManagerRunnable::RemoveFromBindingManagerRunnable(nsBindingManager* aManager,
-                                                                   nsIContent* aContent,
-                                                                   nsIDocument* aDoc):
-  mManager(aManager), mContent(aContent), mDoc(aDoc)
+RemoveFromBindingManagerRunnable::RemoveFromBindingManagerRunnable(
+  nsBindingManager* aManager,
+  nsIContent* aContent,
+  nsIDocument* aDoc)
+  : mozilla::Runnable("dom::RemoveFromBindingManagerRunnable")
+  , mManager(aManager)
+  , mContent(aContent)
+  , mDoc(aDoc)
 {}
 
 RemoveFromBindingManagerRunnable::~RemoveFromBindingManagerRunnable() {}
@@ -3318,6 +3327,7 @@ static nsIAtom** sPropertiesToTraverseAndUnlink[] =
   {
     &nsGkAtoms::sandbox,
     &nsGkAtoms::sizes,
+    &nsGkAtoms::dirAutoSetBy,
     nullptr
   };
 

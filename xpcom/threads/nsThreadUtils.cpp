@@ -328,10 +328,28 @@ public:
     mTimer = do_CreateInstance(NS_TIMER_CONTRACTID);
     if (mTimer) {
       mTimer->SetTarget(aTarget);
-      mTimer->InitWithFuncCallback(TimedOut, this, aDelay,
-                                   nsITimer::TYPE_ONE_SHOT);
+      mTimer->InitWithNamedFuncCallback(TimedOut,
+                                        this,
+                                        aDelay,
+                                        nsITimer::TYPE_ONE_SHOT,
+                                        "IdleRunnableWrapper::SetTimer");
     }
   }
+
+  NS_IMETHOD GetName(nsACString& aName) override
+  {
+    aName.AssignLiteral("IdleRunnableWrapper");
+    if (nsCOMPtr<nsINamed> named = do_QueryInterface(mRunnable)) {
+      nsAutoCString name;
+      named->GetName(name);
+      if (!name.IsEmpty()) {
+        aName.AppendLiteral(" for ");
+        aName.Append(name);
+      }
+    }
+    return NS_OK;
+  }
+
 private:
   ~IdleRunnableWrapper()
   {

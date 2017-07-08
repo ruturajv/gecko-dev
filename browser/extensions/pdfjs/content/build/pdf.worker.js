@@ -1128,7 +1128,8 @@ MessageHandler.prototype = {
         let startCapability = createPromiseCapability();
         this.streamControllers[streamId] = {
           controller,
-          startCall: startCapability
+          startCall: startCapability,
+          isClosed: false
         };
         this.postMessage({
           sourceName,
@@ -1155,6 +1156,7 @@ MessageHandler.prototype = {
       cancel: reason => {
         let cancelCapability = createPromiseCapability();
         this.streamControllers[streamId].cancelCall = cancelCapability;
+        this.streamControllers[streamId].isClosed = true;
         this.postMessage({
           sourceName,
           targetName,
@@ -1284,9 +1286,15 @@ MessageHandler.prototype = {
         });
         break;
       case 'enqueue':
-        this.streamControllers[data.streamId].controller.enqueue(data.chunk);
+        if (!this.streamControllers[data.streamId].isClosed) {
+          this.streamControllers[data.streamId].controller.enqueue(data.chunk);
+        }
         break;
       case 'close':
+        if (this.streamControllers[data.streamId].isClosed) {
+          break;
+        }
+        this.streamControllers[data.streamId].isClosed = true;
         this.streamControllers[data.streamId].controller.close();
         deleteStreamController();
         break;
@@ -1299,6 +1307,9 @@ MessageHandler.prototype = {
         deleteStreamController();
         break;
       case 'cancel':
+        if (!this.streamSinks[data.streamId]) {
+          break;
+        }
         resolveCall(this.streamSinks[data.streamId].onCancel, [data.reason]).then(() => {
           sendStreamResponse({
             stream: 'cancel_complete',
@@ -4285,7 +4296,7 @@ exports.ColorSpace = ColorSpace;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-var ExpertEncoding = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 'space', 'exclamsmall', 'Hungarumlautsmall', '', 'dollaroldstyle', 'dollarsuperior', 'ampersandsmall', 'Acutesmall', 'parenleftsuperior', 'parenrightsuperior', 'twodotenleader', 'onedotenleader', 'comma', 'hyphen', 'period', 'fraction', 'zerooldstyle', 'oneoldstyle', 'twooldstyle', 'threeoldstyle', 'fouroldstyle', 'fiveoldstyle', 'sixoldstyle', 'sevenoldstyle', 'eightoldstyle', 'nineoldstyle', 'colon', 'semicolon', 'commasuperior', 'threequartersemdash', 'periodsuperior', 'questionsmall', '', 'asuperior', 'bsuperior', 'centsuperior', 'dsuperior', 'esuperior', '', '', 'isuperior', '', '', 'lsuperior', 'msuperior', 'nsuperior', 'osuperior', '', '', 'rsuperior', 'ssuperior', 'tsuperior', '', 'ff', 'fi', 'fl', 'ffi', 'ffl', 'parenleftinferior', '', 'parenrightinferior', 'Circumflexsmall', 'hyphensuperior', 'Gravesmall', 'Asmall', 'Bsmall', 'Csmall', 'Dsmall', 'Esmall', 'Fsmall', 'Gsmall', 'Hsmall', 'Ismall', 'Jsmall', 'Ksmall', 'Lsmall', 'Msmall', 'Nsmall', 'Osmall', 'Psmall', 'Qsmall', 'Rsmall', 'Ssmall', 'Tsmall', 'Usmall', 'Vsmall', 'Wsmall', 'Xsmall', 'Ysmall', 'Zsmall', 'colonmonetary', 'onefitted', 'rupiah', 'Tildesmall', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 'exclamdownsmall', 'centoldstyle', 'Lslashsmall', '', '', 'Scaronsmall', 'Zcaronsmall', 'Dieresissmall', 'Brevesmall', 'Caronsmall', '', 'Dotaccentsmall', '', '', 'Macronsmall', '', '', 'figuredash', 'hypheninferior', '', '', 'Ogoneksmall', 'Ringsmall', 'Cedillasmall', '', '', '', 'onequarter', 'onehalf', 'threequarters', 'questiondownsmall', 'oneeighth', 'threeeighths', 'fiveeighths', 'seveneighths', 'onethird', 'twothirds', '', '', 'zerosuperior', 'onesuperior', 'twosuperior', 'threesuperior', 'foursuperior', 'fivesuperior', 'sixsuperior', 'sevensuperior', 'eightsuperior', 'ninesuperior', 'zeroinferior', 'oneinferior', 'twoinferior', 'threeinferior', 'fourinferior', 'fiveinferior', 'sixinferior', 'seveninferior', 'eightinferior', 'nineinferior', 'centinferior', 'dollarinferior', 'periodinferior', 'commainferior', 'Agravesmall', 'Aacutesmall', 'Acircumflexsmall', 'Atildesmall', 'Adieresissmall', 'Aringsmall', 'AEsmall', 'Ccedillasmall', 'Egravesmall', 'Eacutesmall', 'Ecircumflexsmall', 'Edieresissmall', 'Igravesmall', 'Iacutesmall', 'Icircumflexsmall', 'Idieresissmall', 'Ethsmall', 'Ntildesmall', 'Ogravesmall', 'Oacutesmall', 'Ocircumflexsmall', 'Otildesmall', 'Odieresissmall', 'OEsmall', 'Oslashsmall', 'Ugravesmall', 'Uacutesmall', 'Ucircumflexsmall', 'Udieresissmall', 'Yacutesmall', 'Thornsmall', 'Ydieresissmall'];
+var ExpertEncoding = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 'space', 'exclamsmall', 'Hungarumlautsmall', '', 'dollaroldstyle', 'dollarsuperior', 'ampersandsmall', 'Acutesmall', 'parenleftsuperior', 'parenrightsuperior', 'twodotenleader', 'onedotenleader', 'comma', 'hyphen', 'period', 'fraction', 'zerooldstyle', 'oneoldstyle', 'twooldstyle', 'threeoldstyle', 'fouroldstyle', 'fiveoldstyle', 'sixoldstyle', 'sevenoldstyle', 'eightoldstyle', 'nineoldstyle', 'colon', 'semicolon', 'commasuperior', 'threequartersemdash', 'periodsuperior', 'questionsmall', '', 'asuperior', 'bsuperior', 'centsuperior', 'dsuperior', 'esuperior', '', '', '', 'isuperior', '', '', 'lsuperior', 'msuperior', 'nsuperior', 'osuperior', '', '', 'rsuperior', 'ssuperior', 'tsuperior', '', 'ff', 'fi', 'fl', 'ffi', 'ffl', 'parenleftinferior', '', 'parenrightinferior', 'Circumflexsmall', 'hyphensuperior', 'Gravesmall', 'Asmall', 'Bsmall', 'Csmall', 'Dsmall', 'Esmall', 'Fsmall', 'Gsmall', 'Hsmall', 'Ismall', 'Jsmall', 'Ksmall', 'Lsmall', 'Msmall', 'Nsmall', 'Osmall', 'Psmall', 'Qsmall', 'Rsmall', 'Ssmall', 'Tsmall', 'Usmall', 'Vsmall', 'Wsmall', 'Xsmall', 'Ysmall', 'Zsmall', 'colonmonetary', 'onefitted', 'rupiah', 'Tildesmall', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 'exclamdownsmall', 'centoldstyle', 'Lslashsmall', '', '', 'Scaronsmall', 'Zcaronsmall', 'Dieresissmall', 'Brevesmall', 'Caronsmall', '', 'Dotaccentsmall', '', '', 'Macronsmall', '', '', 'figuredash', 'hypheninferior', '', '', 'Ogoneksmall', 'Ringsmall', 'Cedillasmall', '', '', '', 'onequarter', 'onehalf', 'threequarters', 'questiondownsmall', 'oneeighth', 'threeeighths', 'fiveeighths', 'seveneighths', 'onethird', 'twothirds', '', '', 'zerosuperior', 'onesuperior', 'twosuperior', 'threesuperior', 'foursuperior', 'fivesuperior', 'sixsuperior', 'sevensuperior', 'eightsuperior', 'ninesuperior', 'zeroinferior', 'oneinferior', 'twoinferior', 'threeinferior', 'fourinferior', 'fiveinferior', 'sixinferior', 'seveninferior', 'eightinferior', 'nineinferior', 'centinferior', 'dollarinferior', 'periodinferior', 'commainferior', 'Agravesmall', 'Aacutesmall', 'Acircumflexsmall', 'Atildesmall', 'Adieresissmall', 'Aringsmall', 'AEsmall', 'Ccedillasmall', 'Egravesmall', 'Eacutesmall', 'Ecircumflexsmall', 'Edieresissmall', 'Igravesmall', 'Iacutesmall', 'Icircumflexsmall', 'Idieresissmall', 'Ethsmall', 'Ntildesmall', 'Ogravesmall', 'Oacutesmall', 'Ocircumflexsmall', 'Otildesmall', 'Odieresissmall', 'OEsmall', 'Oslashsmall', 'Ugravesmall', 'Uacutesmall', 'Ucircumflexsmall', 'Udieresissmall', 'Yacutesmall', 'Thornsmall', 'Ydieresissmall'];
 var MacExpertEncoding = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 'space', 'exclamsmall', 'Hungarumlautsmall', 'centoldstyle', 'dollaroldstyle', 'dollarsuperior', 'ampersandsmall', 'Acutesmall', 'parenleftsuperior', 'parenrightsuperior', 'twodotenleader', 'onedotenleader', 'comma', 'hyphen', 'period', 'fraction', 'zerooldstyle', 'oneoldstyle', 'twooldstyle', 'threeoldstyle', 'fouroldstyle', 'fiveoldstyle', 'sixoldstyle', 'sevenoldstyle', 'eightoldstyle', 'nineoldstyle', 'colon', 'semicolon', '', 'threequartersemdash', '', 'questionsmall', '', '', '', '', 'Ethsmall', '', '', 'onequarter', 'onehalf', 'threequarters', 'oneeighth', 'threeeighths', 'fiveeighths', 'seveneighths', 'onethird', 'twothirds', '', '', '', '', '', '', 'ff', 'fi', 'fl', 'ffi', 'ffl', 'parenleftinferior', '', 'parenrightinferior', 'Circumflexsmall', 'hypheninferior', 'Gravesmall', 'Asmall', 'Bsmall', 'Csmall', 'Dsmall', 'Esmall', 'Fsmall', 'Gsmall', 'Hsmall', 'Ismall', 'Jsmall', 'Ksmall', 'Lsmall', 'Msmall', 'Nsmall', 'Osmall', 'Psmall', 'Qsmall', 'Rsmall', 'Ssmall', 'Tsmall', 'Usmall', 'Vsmall', 'Wsmall', 'Xsmall', 'Ysmall', 'Zsmall', 'colonmonetary', 'onefitted', 'rupiah', 'Tildesmall', '', '', 'asuperior', 'centsuperior', '', '', '', '', 'Aacutesmall', 'Agravesmall', 'Acircumflexsmall', 'Adieresissmall', 'Atildesmall', 'Aringsmall', 'Ccedillasmall', 'Eacutesmall', 'Egravesmall', 'Ecircumflexsmall', 'Edieresissmall', 'Iacutesmall', 'Igravesmall', 'Icircumflexsmall', 'Idieresissmall', 'Ntildesmall', 'Oacutesmall', 'Ogravesmall', 'Ocircumflexsmall', 'Odieresissmall', 'Otildesmall', 'Uacutesmall', 'Ugravesmall', 'Ucircumflexsmall', 'Udieresissmall', '', 'eightsuperior', 'fourinferior', 'threeinferior', 'sixinferior', 'eightinferior', 'seveninferior', 'Scaronsmall', '', 'centinferior', 'twoinferior', '', 'Dieresissmall', '', 'Caronsmall', 'osuperior', 'fiveinferior', '', 'commainferior', 'periodinferior', 'Yacutesmall', '', 'dollarinferior', '', 'Thornsmall', '', 'nineinferior', 'zeroinferior', 'Zcaronsmall', 'AEsmall', 'Oslashsmall', 'questiondownsmall', 'oneinferior', 'Lslashsmall', '', '', '', '', '', '', 'Cedillasmall', '', '', '', '', '', 'OEsmall', 'figuredash', 'hyphensuperior', '', '', '', '', 'exclamdownsmall', '', 'Ydieresissmall', '', 'onesuperior', 'twosuperior', 'threesuperior', 'foursuperior', 'fivesuperior', 'sixsuperior', 'sevensuperior', 'ninesuperior', 'zerosuperior', '', 'esuperior', 'rsuperior', 'tsuperior', '', '', 'isuperior', 'ssuperior', 'dsuperior', '', '', '', '', '', 'lsuperior', 'Ogoneksmall', 'Brevesmall', 'Macronsmall', 'bsuperior', 'nsuperior', 'msuperior', 'commasuperior', 'periodsuperior', 'Dotaccentsmall', 'Ringsmall'];
 var MacRomanEncoding = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 'space', 'exclam', 'quotedbl', 'numbersign', 'dollar', 'percent', 'ampersand', 'quotesingle', 'parenleft', 'parenright', 'asterisk', 'plus', 'comma', 'hyphen', 'period', 'slash', 'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'colon', 'semicolon', 'less', 'equal', 'greater', 'question', 'at', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'bracketleft', 'backslash', 'bracketright', 'asciicircum', 'underscore', 'grave', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'braceleft', 'bar', 'braceright', 'asciitilde', '', 'Adieresis', 'Aring', 'Ccedilla', 'Eacute', 'Ntilde', 'Odieresis', 'Udieresis', 'aacute', 'agrave', 'acircumflex', 'adieresis', 'atilde', 'aring', 'ccedilla', 'eacute', 'egrave', 'ecircumflex', 'edieresis', 'iacute', 'igrave', 'icircumflex', 'idieresis', 'ntilde', 'oacute', 'ograve', 'ocircumflex', 'odieresis', 'otilde', 'uacute', 'ugrave', 'ucircumflex', 'udieresis', 'dagger', 'degree', 'cent', 'sterling', 'section', 'bullet', 'paragraph', 'germandbls', 'registered', 'copyright', 'trademark', 'acute', 'dieresis', 'notequal', 'AE', 'Oslash', 'infinity', 'plusminus', 'lessequal', 'greaterequal', 'yen', 'mu', 'partialdiff', 'summation', 'product', 'pi', 'integral', 'ordfeminine', 'ordmasculine', 'Omega', 'ae', 'oslash', 'questiondown', 'exclamdown', 'logicalnot', 'radical', 'florin', 'approxequal', 'Delta', 'guillemotleft', 'guillemotright', 'ellipsis', 'space', 'Agrave', 'Atilde', 'Otilde', 'OE', 'oe', 'endash', 'emdash', 'quotedblleft', 'quotedblright', 'quoteleft', 'quoteright', 'divide', 'lozenge', 'ydieresis', 'Ydieresis', 'fraction', 'currency', 'guilsinglleft', 'guilsinglright', 'fi', 'fl', 'daggerdbl', 'periodcentered', 'quotesinglbase', 'quotedblbase', 'perthousand', 'Acircumflex', 'Ecircumflex', 'Aacute', 'Edieresis', 'Egrave', 'Iacute', 'Icircumflex', 'Idieresis', 'Igrave', 'Oacute', 'Ocircumflex', 'apple', 'Ograve', 'Uacute', 'Ucircumflex', 'Ugrave', 'dotlessi', 'circumflex', 'tilde', 'macron', 'breve', 'dotaccent', 'ring', 'cedilla', 'hungarumlaut', 'ogonek', 'caron'];
 var StandardEncoding = ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 'space', 'exclam', 'quotedbl', 'numbersign', 'dollar', 'percent', 'ampersand', 'quoteright', 'parenleft', 'parenright', 'asterisk', 'plus', 'comma', 'hyphen', 'period', 'slash', 'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'colon', 'semicolon', 'less', 'equal', 'greater', 'question', 'at', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'bracketleft', 'backslash', 'bracketright', 'asciicircum', 'underscore', 'quoteleft', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'braceleft', 'bar', 'braceright', 'asciitilde', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 'exclamdown', 'cent', 'sterling', 'fraction', 'yen', 'florin', 'section', 'currency', 'quotesingle', 'quotedblleft', 'guillemotleft', 'guilsinglleft', 'guilsinglright', 'fi', 'fl', '', 'endash', 'dagger', 'daggerdbl', 'periodcentered', '', 'paragraph', 'bullet', 'quotesinglbase', 'quotedblbase', 'quotedblright', 'guillemotright', 'ellipsis', 'perthousand', '', 'questiondown', '', 'grave', 'acute', 'circumflex', 'tilde', 'macron', 'breve', 'dotaccent', 'dieresis', '', 'ring', 'cedilla', '', 'hungarumlaut', 'ogonek', 'caron', 'emdash', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 'AE', '', 'ordfeminine', '', '', '', '', 'Lslash', 'Oslash', 'OE', 'ordmasculine', '', '', '', '', '', 'ae', '', '', '', 'dotlessi', '', '', 'lslash', 'oslash', 'oe', 'germandbls'];
@@ -4645,7 +4656,7 @@ var Parser = function ParserClosure() {
           ii;
       if (filterName === 'DCTDecode' || filterName === 'DCT') {
         length = this.findDCTDecodeInlineStreamEnd(stream);
-      } else if (filterName === 'ASCII85Decide' || filterName === 'A85') {
+      } else if (filterName === 'ASCII85Decode' || filterName === 'A85') {
         length = this.findASCII85DecodeInlineStreamEnd(stream);
       } else if (filterName === 'ASCIIHexDecode' || filterName === 'AHx') {
         length = this.findASCIIHexDecodeInlineStreamEnd(stream);
@@ -17476,7 +17487,7 @@ var PartialEvaluator = function PartialEvaluatorClosure() {
         throw reason;
       });
     },
-    getTextContent({ stream, task, resources, stateManager = null, normalizeWhitespace = false, combineTextItems = false }) {
+    getTextContent({ stream, task, resources, stateManager = null, normalizeWhitespace = false, combineTextItems = false, sink, seenStyles = Object.create(null) }) {
       resources = resources || _primitives.Dict.empty;
       stateManager = stateManager || new StateManager(new TextState());
       var WhitespaceRegexp = /\s/g;
@@ -17507,7 +17518,7 @@ var PartialEvaluator = function PartialEvaluatorClosure() {
       var self = this;
       var xref = this.xref;
       var xobjs = null;
-      var xobjsCache = Object.create(null);
+      var skipEmptyXObjs = Object.create(null);
       var preprocessor = new EvaluatorPreprocessor(stream, xref, stateManager);
       var textState;
       function ensureTextContentItem() {
@@ -17515,7 +17526,8 @@ var PartialEvaluator = function PartialEvaluatorClosure() {
           return textContentItem;
         }
         var font = textState.font;
-        if (!(font.loadedName in textContent.styles)) {
+        if (!(font.loadedName in seenStyles)) {
+          seenStyles[font.loadedName] = true;
           textContent.styles[font.loadedName] = {
             fontFamily: font.fallbackName,
             ascent: font.ascent,
@@ -17670,10 +17682,19 @@ var PartialEvaluator = function PartialEvaluatorClosure() {
         textContentItem.initialized = false;
         textContentItem.str.length = 0;
       }
+      function enqueueChunk() {
+        let length = textContent.items.length;
+        if (length > 0) {
+          sink.enqueue(textContent, length);
+          textContent.items = [];
+          textContent.styles = Object.create(null);
+        }
+      }
       var timeSlotManager = new TimeSlotManager();
       return new Promise(function promiseBody(resolve, reject) {
-        var next = function (promise) {
-          promise.then(function () {
+        let next = function (promise) {
+          enqueueChunk();
+          Promise.all([promise, sink.ready]).then(function () {
             try {
               promiseBody(resolve, reject);
             } catch (ex) {
@@ -17828,11 +17849,7 @@ var PartialEvaluator = function PartialEvaluatorClosure() {
                 xobjs = resources.get('XObject') || _primitives.Dict.empty;
               }
               var name = args[0].name;
-              if (xobjsCache.key === name) {
-                if (xobjsCache.texts) {
-                  _util.Util.appendToArray(textContent.items, xobjsCache.texts.items);
-                  _util.Util.extendObj(textContent.styles, xobjsCache.texts.styles);
-                }
+              if (name in skipEmptyXObjs) {
                 break;
               }
               var xobj = xobjs.get(name);
@@ -17843,8 +17860,7 @@ var PartialEvaluator = function PartialEvaluatorClosure() {
               var type = xobj.dict.get('Subtype');
               (0, _util.assert)((0, _primitives.isName)(type), 'XObject should have a Name subtype');
               if (type.name !== 'Form') {
-                xobjsCache.key = name;
-                xobjsCache.texts = null;
+                skipEmptyXObjs[name] = true;
                 break;
               }
               var currentState = stateManager.state.clone();
@@ -17853,18 +17869,33 @@ var PartialEvaluator = function PartialEvaluatorClosure() {
               if ((0, _util.isArray)(matrix) && matrix.length === 6) {
                 xObjStateManager.transform(matrix);
               }
+              enqueueChunk();
+              let sinkWrapper = {
+                enqueueInvoked: false,
+                enqueue(chunk, size) {
+                  this.enqueueInvoked = true;
+                  sink.enqueue(chunk, size);
+                },
+                get desiredSize() {
+                  return sink.desiredSize;
+                },
+                get ready() {
+                  return sink.ready;
+                }
+              };
               next(self.getTextContent({
                 stream: xobj,
                 task,
                 resources: xobj.dict.get('Resources') || resources,
                 stateManager: xObjStateManager,
                 normalizeWhitespace,
-                combineTextItems
-              }).then(function (formTextContent) {
-                _util.Util.appendToArray(textContent.items, formTextContent.items);
-                _util.Util.extendObj(textContent.styles, formTextContent.styles);
-                xobjsCache.key = name;
-                xobjsCache.texts = formTextContent;
+                combineTextItems,
+                sink: sinkWrapper,
+                seenStyles
+              }).then(function () {
+                if (!sinkWrapper.enqueueInvoked) {
+                  skipEmptyXObjs[name] = true;
+                }
               }));
               return;
             case _util.OPS.setGState:
@@ -17887,18 +17918,24 @@ var PartialEvaluator = function PartialEvaluatorClosure() {
               }
               break;
           }
+          if (textContent.items.length >= sink.desiredSize) {
+            stop = true;
+            break;
+          }
         }
         if (stop) {
           next(deferred);
           return;
         }
         flushTextContentItem();
-        resolve(textContent);
+        enqueueChunk();
+        resolve();
       }).catch(reason => {
         if (this.options.ignoreErrors) {
           (0, _util.warn)('getTextContent - ignoring errors during task: ' + task.name);
           flushTextContentItem();
-          return textContent;
+          enqueueChunk();
+          return;
         }
         throw reason;
       });
@@ -23967,6 +24004,7 @@ var WorkerMessageHandler = {
         handler.send('GetDoc', { pdfInfo: doc });
       }
       function onFailure(e) {
+        ensureNotTerminated();
         if (e instanceof _util.PasswordException) {
           var task = new WorkerTask('PasswordException: response ' + e.code);
           startWorkerTask(task);
@@ -24126,27 +24164,31 @@ var WorkerMessageHandler = {
         });
       });
     }, this);
-    handler.on('GetTextContent', function wphExtractText(data) {
+    handler.on('GetTextContent', function wphExtractText(data, sink) {
       var pageIndex = data.pageIndex;
-      return pdfManager.getPage(pageIndex).then(function (page) {
+      sink.onPull = function (desiredSize) {};
+      sink.onCancel = function (reason) {};
+      pdfManager.getPage(pageIndex).then(function (page) {
         var task = new WorkerTask('GetTextContent: page ' + pageIndex);
         startWorkerTask(task);
         var pageNum = pageIndex + 1;
         var start = Date.now();
-        return page.extractTextContent({
+        page.extractTextContent({
           handler,
           task,
+          sink,
           normalizeWhitespace: data.normalizeWhitespace,
           combineTextItems: data.combineTextItems
-        }).then(function (textContent) {
+        }).then(function () {
           finishWorkerTask(task);
           (0, _util.info)('text indexing: page=' + pageNum + ' - time=' + (Date.now() - start) + 'ms');
-          return textContent;
+          sink.close();
         }, function (reason) {
           finishWorkerTask(task);
           if (task.terminated) {
             return;
           }
+          sink.error(reason);
           throw reason;
         });
       });
@@ -29061,7 +29103,7 @@ var Page = function PageClosure() {
         });
       });
     },
-    extractTextContent({ handler, task, normalizeWhitespace, combineTextItems }) {
+    extractTextContent({ handler, task, normalizeWhitespace, sink, combineTextItems }) {
       var contentStreamPromise = this.pdfManager.ensure(this, 'getContentStream');
       var resourcesPromise = this.loadResources(['ExtGState', 'XObject', 'Font']);
       var dataPromises = Promise.all([contentStreamPromise, resourcesPromise]);
@@ -29081,7 +29123,8 @@ var Page = function PageClosure() {
           task,
           resources: this.resources,
           normalizeWhitespace,
-          combineTextItems
+          combineTextItems,
+          sink
         });
       });
     },
@@ -30512,23 +30555,23 @@ var Font = function FontClosure() {
           type = 'Type1';
         }
       } else if (isOpenTypeFile(file)) {
-        type = subtype = 'OpenType';
+        subtype = 'OpenType';
       }
     }
     if (subtype === 'CIDFontType0C' && type !== 'CIDFontType0') {
       type = 'CIDFontType0';
     }
-    if (subtype === 'OpenType') {
-      type = 'OpenType';
-    }
     if (type === 'CIDFontType0') {
       if (isType1File(file)) {
         subtype = 'CIDFontType0';
       } else if (isOpenTypeFile(file)) {
-        type = subtype = 'OpenType';
+        subtype = 'OpenType';
       } else {
         subtype = 'CIDFontType0C';
       }
+    }
+    if (subtype === 'OpenType' && type !== 'OpenType') {
+      type = 'OpenType';
     }
     var data;
     switch (type) {
@@ -30636,7 +30679,7 @@ var Font = function FontClosure() {
     }
     return !(i & 1);
   }
-  function adjustMapping(charCodeToGlyphId, properties) {
+  function adjustMapping(charCodeToGlyphId, properties, missingGlyphs) {
     var toUnicode = properties.toUnicode;
     var isSymbolic = !!(properties.flags & FontFlags.Symbolic);
     var isIdentityUnicode = properties.toUnicode instanceof IdentityToUnicodeMap;
@@ -30656,7 +30699,7 @@ var Font = function FontClosure() {
           fontCharCode = unicode.charCodeAt(0);
         }
       }
-      if ((usedFontCharCodes[fontCharCode] !== undefined || isProblematicUnicodeLocation(fontCharCode) || isSymbolic && !hasUnicodeValue) && nextAvailableFontCharCode <= PRIVATE_USE_OFFSET_END) {
+      if (!missingGlyphs[glyphId] && (usedFontCharCodes[fontCharCode] !== undefined || isProblematicUnicodeLocation(fontCharCode) || isSymbolic && !hasUnicodeValue) && nextAvailableFontCharCode <= PRIVATE_USE_OFFSET_END) {
         do {
           fontCharCode = nextAvailableFontCharCode++;
           if (SKIP_PRIVATE_USE_RANGE_F000_TO_F01F && fontCharCode === 0xF000) {
@@ -31259,22 +31302,22 @@ var Font = function FontClosure() {
         var startOffset = itemDecode(locaData, 0);
         var writeOffset = 0;
         var missingGlyphData = Object.create(null);
+        missingGlyphData[0] = true;
         itemEncode(locaData, 0, writeOffset);
         var i, j;
-        for (i = 0, j = itemSize; i < numGlyphs; i++, j += itemSize) {
+        var locaCount = dupFirstEntry ? numGlyphs - 1 : numGlyphs;
+        for (i = 0, j = itemSize; i < locaCount; i++, j += itemSize) {
           var endOffset = itemDecode(locaData, j);
           if (endOffset > oldGlyfDataLength && (oldGlyfDataLength + 3 & ~3) === endOffset) {
             endOffset = oldGlyfDataLength;
           }
           if (endOffset > oldGlyfDataLength) {
-            itemEncode(locaData, j, writeOffset);
             startOffset = endOffset;
-            continue;
-          }
-          if (startOffset === endOffset) {
-            missingGlyphData[i] = true;
           }
           var newLength = sanitizeGlyph(oldGlyfData, startOffset, endOffset, newGlyfData, writeOffset, hintsValid);
+          if (newLength === 0) {
+            missingGlyphData[i] = true;
+          }
           writeOffset += newLength;
           itemEncode(locaData, j, writeOffset);
           startOffset = endOffset;
@@ -31672,7 +31715,7 @@ var Font = function FontClosure() {
       }
       var isTrueType = !tables['CFF '];
       if (!isTrueType) {
-        if (header.version === 'OTTO' && !properties.composite || !tables['head'] || !tables['hhea'] || !tables['maxp'] || !tables['post']) {
+        if (header.version === 'OTTO' && !(properties.composite && properties.cidToGidMap) || !tables['head'] || !tables['hhea'] || !tables['maxp'] || !tables['post']) {
           cffFile = new _stream.Stream(tables['CFF '].data);
           cff = new CFFFont(cffFile, properties);
           adjustWidths(properties);
@@ -31761,20 +31804,8 @@ var Font = function FontClosure() {
       }
       var charCodeToGlyphId = [],
           charCode;
-      var toUnicode = properties.toUnicode,
-          widths = properties.widths;
-      var skipToUnicode = toUnicode instanceof IdentityToUnicodeMap || toUnicode.length === 0x10000;
-      function hasGlyph(glyphId, charCode, widthCode) {
-        if (!missingGlyphs[glyphId]) {
-          return true;
-        }
-        if (!skipToUnicode && charCode >= 0 && toUnicode.has(charCode)) {
-          return true;
-        }
-        if (widths && widthCode >= 0 && (0, _util.isNum)(widths[widthCode])) {
-          return true;
-        }
-        return false;
+      function hasGlyph(glyphId) {
+        return !missingGlyphs[glyphId];
       }
       if (properties.composite) {
         var cidToGidMap = properties.cidToGidMap || [];
@@ -31787,7 +31818,7 @@ var Font = function FontClosure() {
           } else if (cidToGidMap[cid] !== undefined) {
             glyphId = cidToGidMap[cid];
           }
-          if (glyphId >= 0 && glyphId < numGlyphs && hasGlyph(glyphId, charCode, cid)) {
+          if (glyphId >= 0 && glyphId < numGlyphs && hasGlyph(glyphId)) {
             charCodeToGlyphId[charCode] = glyphId;
           }
         });
@@ -31819,11 +31850,9 @@ var Font = function FontClosure() {
               continue;
             }
             standardGlyphName = recoverGlyphName(glyphName, glyphsUnicodeMap);
-            var unicodeOrCharCode,
-                isUnicode = false;
+            var unicodeOrCharCode;
             if (cmapPlatformId === 3 && cmapEncodingId === 1) {
               unicodeOrCharCode = glyphsUnicodeMap[standardGlyphName];
-              isUnicode = true;
             } else if (cmapPlatformId === 1 && cmapEncodingId === 0) {
               unicodeOrCharCode = _encodings.MacRomanEncoding.indexOf(standardGlyphName);
             }
@@ -31832,8 +31861,7 @@ var Font = function FontClosure() {
               if (cmapMappings[i].charCode !== unicodeOrCharCode) {
                 continue;
               }
-              var code = isUnicode ? charCode : unicodeOrCharCode;
-              if (hasGlyph(cmapMappings[i].glyphId, code, -1)) {
+              if (hasGlyph(cmapMappings[i].glyphId)) {
                 charCodeToGlyphId[charCode] = cmapMappings[i].glyphId;
                 found = true;
                 break;
@@ -31844,7 +31872,7 @@ var Font = function FontClosure() {
               if (glyphId === -1 && standardGlyphName !== glyphName) {
                 glyphId = properties.glyphNames.indexOf(standardGlyphName);
               }
-              if (glyphId > 0 && hasGlyph(glyphId, -1, -1)) {
+              if (glyphId > 0 && hasGlyph(glyphId)) {
                 charCodeToGlyphId[charCode] = glyphId;
                 found = true;
               }
@@ -31859,7 +31887,10 @@ var Font = function FontClosure() {
           }
         } else {
           for (i = 0; i < cmapMappingsLength; ++i) {
-            charCode = cmapMappings[i].charCode & 0xFF;
+            charCode = cmapMappings[i].charCode;
+            if (cmapPlatformId === 3 && charCode >= 0xF000 && charCode <= 0xF0FF) {
+              charCode &= 0xFF;
+            }
             charCodeToGlyphId[charCode] = cmapMappings[i].glyphId;
           }
         }
@@ -31867,7 +31898,7 @@ var Font = function FontClosure() {
       if (charCodeToGlyphId.length === 0) {
         charCodeToGlyphId[0] = 0;
       }
-      var newMapping = adjustMapping(charCodeToGlyphId, properties);
+      var newMapping = adjustMapping(charCodeToGlyphId, properties, missingGlyphs);
       this.toFontChar = newMapping.toFontChar;
       tables['cmap'] = {
         tag: 'cmap',
@@ -31917,7 +31948,7 @@ var Font = function FontClosure() {
         adjustToUnicode(properties, properties.builtInEncoding);
       }
       var mapping = font.getGlyphMapping(properties);
-      var newMapping = adjustMapping(mapping, properties);
+      var newMapping = adjustMapping(mapping, properties, Object.create(null));
       this.toFontChar = newMapping.toFontChar;
       var numGlyphs = font.numGlyphs;
       function getCharCodes(charCodeToGlyphId, glyphId) {
@@ -39776,8 +39807,8 @@ exports.Type1Parser = Type1Parser;
 "use strict";
 
 
-var pdfjsVersion = '1.8.480';
-var pdfjsBuild = '2f2e539b';
+var pdfjsVersion = '1.8.522';
+var pdfjsBuild = 'ac980280';
 var pdfjsCoreWorker = __w_pdfjs_require__(17);
 ;
 exports.WorkerMessageHandler = pdfjsCoreWorker.WorkerMessageHandler;

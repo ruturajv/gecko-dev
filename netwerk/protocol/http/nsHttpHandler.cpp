@@ -770,14 +770,19 @@ nsHttpHandler::NotifyObservers(nsIHttpChannel *chan, const char *event)
 }
 
 nsresult
-nsHttpHandler::AsyncOnChannelRedirect(nsIChannel* oldChan, nsIChannel* newChan,
-                                 uint32_t flags)
+nsHttpHandler::AsyncOnChannelRedirect(nsIChannel* oldChan,
+                                      nsIChannel* newChan,
+                                      uint32_t flags,
+                                      nsIEventTarget* mainThreadEventTarget)
 {
     // TODO E10S This helper has to be initialized on the other process
     RefPtr<nsAsyncRedirectVerifyHelper> redirectCallbackHelper =
         new nsAsyncRedirectVerifyHelper();
 
-    return redirectCallbackHelper->Init(oldChan, newChan, flags);
+    return redirectCallbackHelper->Init(oldChan,
+                                        newChan,
+                                        flags,
+                                        mainThreadEventTarget);
 }
 
 /* static */ nsresult
@@ -2309,10 +2314,11 @@ nsHttpHandler::Observe(nsISupports *subject,
     } else if (!strcmp(topic, "browser:purge-session-history")) {
         if (mConnMgr) {
             if (gSocketTransportService) {
-                nsCOMPtr<nsIRunnable> event =
-                    NewRunnableMethod(mConnMgr,
-                                      &nsHttpConnectionMgr::ClearConnectionHistory);
-                gSocketTransportService->Dispatch(event, NS_DISPATCH_NORMAL);
+              nsCOMPtr<nsIRunnable> event = NewRunnableMethod(
+                "net::nsHttpConnectionMgr::ClearConnectionHistory",
+                mConnMgr,
+                &nsHttpConnectionMgr::ClearConnectionHistory);
+              gSocketTransportService->Dispatch(event, NS_DISPATCH_NORMAL);
             }
             mConnMgr->ClearAltServiceMappings();
         }

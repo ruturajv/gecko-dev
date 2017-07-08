@@ -33,9 +33,7 @@
 
 #include "EventListenerService.h"
 #include "GeckoProfiler.h"
-#ifdef MOZ_GECKO_PROFILER
 #include "ProfilerMarkerPayload.h"
-#endif
 #include "nsCOMArray.h"
 #include "nsCOMPtr.h"
 #include "nsContentUtils.h"
@@ -520,6 +518,7 @@ EventListenerManager::EnableDevice(EventMessage aEventMessage)
       // Falls back to SENSOR_ROTATION_VECTOR and SENSOR_ORIENTATION if
       // unavailable on device.
       window->EnableDeviceSensor(SENSOR_GAME_ROTATION_VECTOR);
+      window->EnableDeviceSensor(SENSOR_ROTATION_VECTOR);
 #else
       window->EnableDeviceSensor(SENSOR_ORIENTATION);
 #endif
@@ -1287,7 +1286,6 @@ EventListenerManager::HandleEventInternal(nsPresContext* aPresContext,
 
             nsresult rv = NS_OK;
             if (profiler_is_active()) {
-#ifdef MOZ_GECKO_PROFILER
               // Add a profiler label and a profiler marker for the actual
               // dispatch of the event.
               // This is a very hot code path, so we need to make sure not to
@@ -1295,9 +1293,9 @@ EventListenerManager::HandleEventInternal(nsPresContext* aPresContext,
               nsAutoString typeStr;
               (*aDOMEvent)->GetType(typeStr);
               NS_LossyConvertUTF16toASCII typeCStr(typeStr);
-              PROFILER_LABEL_DYNAMIC("EventListenerManager", "HandleEventInternal",
-                                     js::ProfileEntry::Category::EVENTS,
-                                     typeCStr.get());
+              AUTO_PROFILER_LABEL_DYNAMIC(
+                "EventListenerManager::HandleEventInternal", EVENTS,
+                typeCStr.get());
               TimeStamp startTime = TimeStamp::Now();
 
               rv = HandleEventSubType(listener, *aDOMEvent, aCurrentTarget);
@@ -1309,7 +1307,6 @@ EventListenerManager::HandleEventInternal(nsPresContext* aPresContext,
                 "DOMEvent",
                 MakeUnique<DOMEventMarkerPayload>(typeStr, phase,
                                                   startTime, endTime));
-#endif
             } else {
               rv = HandleEventSubType(listener, *aDOMEvent, aCurrentTarget);
             }
@@ -1765,6 +1762,23 @@ EventListenerManager::TraceListeners(JSTracer* aTrc)
     // We might have eWrappedJSListener, but that is the legacy type for
     // JS implemented event listeners, and trickier to handle here.
   }
+}
+
+bool
+EventListenerManager::HasUntrustedOrNonSystemGroupKeyEventListeners()
+{
+  uint32_t count = mListeners.Length();
+  for (uint32_t i = 0; i < count; ++i) {
+    Listener* listener = &mListeners.ElementAt(i);
+    if (!listener->mFlags.mInSystemGroup &&
+        listener->mFlags.mAllowUntrustedEvents &&
+        (listener->mTypeAtom == nsGkAtoms::onkeydown ||
+         listener->mTypeAtom == nsGkAtoms::onkeypress ||
+         listener->mTypeAtom == nsGkAtoms::onkeyup)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool

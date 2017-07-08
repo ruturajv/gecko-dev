@@ -88,6 +88,10 @@ using namespace mozilla::media;
 // constants directly, so we put them in a namespace.
 namespace detail {
 
+// Resume a suspended video decoder to the current playback position plus this
+// time premium for compensating the seeking delay.
+static constexpr auto RESUME_VIDEO_PREMIUM = TimeUnit::FromMicroseconds(125000);
+
 // If audio queue has less than this much decoded audio, we won't risk
 // trying to decode the video, we'll skip decoding video up to the next
 // keyframe. We may increase this value for an individual decoder if we
@@ -957,6 +961,7 @@ public:
                                           EventVisibility aVisibility)
   {
     mSeekJob = Move(aSeekJob);
+    mVisibility = aVisibility;
 
     // Always switch off the blank decoder otherwise we might become visible
     // in the middle of seeking and won't have a valid video frame to show
@@ -967,23 +972,17 @@ public:
       Reader()->SetVideoBlankDecode(false);
     }
 
-    // Dispatch a mozvideoonlyseekbegin event to indicate UI for corresponding
-    // changes.
-    if (mSeekJob.mTarget->IsVideoOnly()) {
-      mMaster->mOnPlaybackEvent.Notify(MediaEventType::VideoOnlySeekBegin);
-    }
-
-    // Don't stop playback for a video-only seek since audio is playing.
-    if (!mSeekJob.mTarget->IsVideoOnly()) {
+    // Suppressed visibility comes from two cases: (1) leaving dormant state,
+    // and (2) resuming suspended video decoder. We want both cases to be
+    // transparent to the user. So we only notify the change when the seek
+    // request is from the user.
+    if (mVisibility == EventVisibility::Observable) {
+      // Don't stop playback for a video-only seek since we want to keep playing
+      // audio and we don't need to stop playback while leaving dormant for the
+      // playback should has been stopped.
       mMaster->StopPlayback();
-    }
-
-    mMaster->UpdatePlaybackPositionInternal(mSeekJob.mTarget->GetTime());
-
-    if (aVisibility == EventVisibility::Observable) {
+      mMaster->UpdatePlaybackPositionInternal(mSeekJob.mTarget->GetTime());
       mMaster->mOnPlaybackEvent.Notify(MediaEventType::SeekStarted);
-      // We want dormant actions to be transparent to the user.
-      // So we only notify the change when the seek request is from the user.
       mMaster->UpdateNextFrameStatus(
         MediaDecoderOwner::NEXT_FRAME_UNAVAILABLE_SEEKING);
     }
@@ -1021,6 +1020,7 @@ public:
 
 protected:
   SeekJob mSeekJob;
+  EventVisibility mVisibility;
 
   virtual void DoSeek() = 0;
   // Transition to the next state (defined by the subclass) when seek is completed.
@@ -1045,15 +1045,6 @@ public:
 
   void Exit() override
   {
-    if (mSeekJob.Exists() &&
-        mSeekJob.mTarget.isSome() &&
-        mSeekJob.mTarget->IsVideoOnly()) {
-      // We are discarding this video-only seek operation now, and we still need
-      // to dispatch an event so that the UI can change in response to the end
-      // of video-only seek.
-      mMaster->mOnPlaybackEvent.Notify(MediaEventType::VideoOnlySeekCompleted);
-    }
-
     // Disconnect MediaDecoder.
     mSeekJob.RejectIfExists(__func__);
 
@@ -1068,15 +1059,6 @@ public:
     MOZ_ASSERT(!mDoneAudioSeeking || !mDoneVideoSeeking,
                "Seek shouldn't be finished");
     MOZ_ASSERT(aAudio);
-
-    // Video-only seek doesn't reset audio decoder. There might be pending audio
-    // requests when AccurateSeekTask::Seek() begins. We will just store the
-    // data without checking |mDiscontinuity| or calling
-    // DropAudioUpToSeekTarget().
-    if (mSeekJob.mTarget->IsVideoOnly()) {
-      mMaster->PushAudio(aAudio);
-      return;
-    }
 
     AdjustFastSeekIfNeeded(aAudio);
 
@@ -1128,28 +1110,22 @@ public:
 
   void HandleWaitingForAudio() override
   {
-    if (!mSeekJob.mTarget->IsVideoOnly()) {
-      MOZ_ASSERT(!mDoneAudioSeeking);
-      mMaster->WaitForData(MediaData::AUDIO_DATA);
-    }
+    MOZ_ASSERT(!mDoneAudioSeeking);
+    mMaster->WaitForData(MediaData::AUDIO_DATA);
   }
 
   void HandleAudioCanceled() override
   {
-    if (!mSeekJob.mTarget->IsVideoOnly()) {
-      MOZ_ASSERT(!mDoneAudioSeeking);
-      RequestAudioData();
-    }
+    MOZ_ASSERT(!mDoneAudioSeeking);
+    RequestAudioData();
   }
 
   void HandleEndOfAudio() override
   {
-    if (!mSeekJob.mTarget->IsVideoOnly()) {
-      MOZ_ASSERT(!mDoneAudioSeeking);
-      AudioQueue().Finish();
-      mDoneAudioSeeking = true;
-      MaybeFinishSeek();
-    }
+    MOZ_ASSERT(!mDoneAudioSeeking);
+    AudioQueue().Finish();
+    mDoneAudioSeeking = true;
+    MaybeFinishSeek();
   }
 
   void HandleWaitingForVideo() override
@@ -1182,10 +1158,6 @@ public:
     MOZ_ASSERT(!mDoneAudioSeeking || !mDoneVideoSeeking,
                "Seek shouldn't be finished");
 
-    // Ignore pending requests from video-only seek.
-    if (mSeekJob.mTarget->IsVideoOnly()) {
-      return;
-    }
     RequestAudioData();
   }
 
@@ -1199,15 +1171,11 @@ public:
 
   void DoSeek() override
   {
-    mDoneAudioSeeking = !Info().HasAudio() || mSeekJob.mTarget->IsVideoOnly();
+    mDoneAudioSeeking = !Info().HasAudio();
     mDoneVideoSeeking = !Info().HasVideo();
 
-    if (mSeekJob.mTarget->IsVideoOnly()) {
-      mMaster->ResetDecode(TrackInfo::kVideoTrack);
-    } else {
-      mMaster->ResetDecode();
-      mMaster->StopMediaSink();
-    }
+    mMaster->ResetDecode();
+    mMaster->StopMediaSink();
 
     DemuxerSeek();
   }
@@ -1249,7 +1217,7 @@ public:
     return TimeUnit::Zero();
   }
 
-private:
+protected:
   void DemuxerSeek()
   {
     // Request the demuxer to perform seek.
@@ -1663,7 +1631,9 @@ private:
   {
   public:
     explicit AysncNextFrameSeekTask(NextFrameSeekingState* aStateObject)
-      : mStateObj(aStateObject)
+      : Runnable("MediaDecoderStateMachine::NextFrameSeekingState::"
+                 "AysncNextFrameSeekTask")
+      , mStateObj(aStateObject)
     {
     }
 
@@ -1761,6 +1731,77 @@ private:
   {
     SetState<NextFrameSeekingState>(Move(mFutureSeekJob),
                                     EventVisibility::Observable);
+  }
+};
+
+class MediaDecoderStateMachine::VideoOnlySeekingState
+  : public MediaDecoderStateMachine::AccurateSeekingState
+{
+public:
+  explicit VideoOnlySeekingState(Master* aPtr) : AccurateSeekingState(aPtr) { }
+
+  RefPtr<MediaDecoder::SeekPromise> Enter(SeekJob&& aSeekJob,
+                                          EventVisibility aVisibility)
+  {
+    MOZ_ASSERT(aSeekJob.mTarget->IsVideoOnly());
+    MOZ_ASSERT(aVisibility == EventVisibility::Suppressed);
+
+    RefPtr<MediaDecoder::SeekPromise> p =
+      AccurateSeekingState::Enter(Move(aSeekJob), aVisibility);
+
+    // Dispatch a mozvideoonlyseekbegin event to indicate UI for corresponding
+    // changes.
+    mMaster->mOnPlaybackEvent.Notify(MediaEventType::VideoOnlySeekBegin);
+
+    return p.forget();
+  }
+
+  void Exit() override
+  {
+    // We are completing or discarding this video-only seek operation now,
+    // dispatch an event so that the UI can change in response to the end
+    // of video-only seek.
+    mMaster->mOnPlaybackEvent.Notify(MediaEventType::VideoOnlySeekCompleted);
+
+    AccurateSeekingState::Exit();
+  }
+
+  void HandleAudioDecoded(AudioData* aAudio) override
+  {
+    MOZ_ASSERT(mDoneAudioSeeking && !mDoneVideoSeeking,
+               "Seek shouldn't be finished");
+    MOZ_ASSERT(aAudio);
+
+    // Video-only seek doesn't reset audio decoder. There might be pending audio
+    // requests when AccurateSeekTask::Seek() begins. We will just store the
+    // data without checking |mDiscontinuity| or calling
+    // DropAudioUpToSeekTarget().
+    mMaster->PushAudio(aAudio);
+  }
+
+  void HandleWaitingForAudio() override { }
+
+  void HandleAudioCanceled() override { }
+
+  void HandleEndOfAudio() override { }
+
+  void HandleAudioWaited(MediaData::Type aType) override
+  {
+    MOZ_ASSERT(!mDoneAudioSeeking || !mDoneVideoSeeking,
+               "Seek shouldn't be finished");
+
+    // Ignore pending requests from video-only seek.
+  }
+
+  void DoSeek() override
+  {
+    // TODO: keep decoding audio.
+    mDoneAudioSeeking = true;
+    mDoneVideoSeeking = !Info().HasVideo();
+
+    mMaster->ResetDecode(TrackInfo::kVideoTrack);
+
+    DemuxerSeek();
   }
 };
 
@@ -2158,6 +2199,9 @@ MediaDecoderStateMachine::
 StateObject::SetSeekingState(SeekJob&& aSeekJob, EventVisibility aVisibility)
 {
   if (aSeekJob.mTarget->IsAccurate() || aSeekJob.mTarget->IsFast()) {
+    if (aSeekJob.mTarget->IsVideoOnly()) {
+      return SetState<VideoOnlySeekingState>(Move(aSeekJob), aVisibility);
+    }
     return SetState<AccurateSeekingState>(Move(aSeekJob), aVisibility);
   }
 
@@ -2458,11 +2502,10 @@ SeekingState::SeekCompleted()
     mMaster->mAudioDataRequest.DisconnectIfExists();
   }
 
-  // Cache mTarget for mSeekJob.Resolve() below will reset it.
-  SeekTarget target = mSeekJob.mTarget.ref();
-
   // We want to resolve the seek request prior finishing the first frame
   // to ensure that the seeked event is fired prior loadeded.
+  // Note: SeekJob.Resolve() resets SeekJob.mTarget. Don't use mSeekJob anymore
+  //       hereafter.
   mSeekJob.Resolve(__func__);
 
   // Notify FirstFrameLoaded now if we haven't since we've decoded some data
@@ -2472,17 +2515,15 @@ SeekingState::SeekCompleted()
   }
 
   // Ensure timestamps are up to date.
-  if (!target.IsVideoOnly()) {
+  // Suppressed visibility comes from two cases: (1) leaving dormant state,
+  // and (2) resuming suspended video decoder. We want both cases to be
+  // transparent to the user. So we only notify the change when the seek
+  // request is from the user.
+  if (mVisibility == EventVisibility::Observable) {
     // Don't update playback position for video-only seek.
     // Otherwise we might have |newCurrentTime > mMediaSink->GetPosition()|
     // and fail the assertion in GetClock() since we didn't stop MediaSink.
     mMaster->UpdatePlaybackPositionInternal(newCurrentTime);
-  }
-
-  // Dispatch an event so that the UI can change in response to the end of
-  // video-only seek
-  if (target.IsVideoOnly()) {
-    mMaster->mOnPlaybackEvent.Notify(MediaEventType::VideoOnlySeekCompleted);
   }
 
   // Try to decode another frame to detect if we're at the end...
@@ -2893,7 +2934,10 @@ nsresult MediaDecoderStateMachine::Init(MediaDecoder* aDecoder)
 
   // Dispatch initialization that needs to happen on that task queue.
   nsCOMPtr<nsIRunnable> r = NewRunnableMethod<RefPtr<MediaDecoder>>(
-    this, &MediaDecoderStateMachine::InitializationTask, aDecoder);
+    "MediaDecoderStateMachine::InitializationTask",
+    this,
+    &MediaDecoderStateMachine::InitializationTask,
+    aDecoder);
   mTaskQueue->DispatchStateChange(r.forget());
 
   mAudioQueueListener = AudioQueue().PopEvent().Connect(
@@ -3100,10 +3144,11 @@ void MediaDecoderStateMachine::PlayStateChanged()
 
 void MediaDecoderStateMachine::SetVideoDecodeMode(VideoDecodeMode aMode)
 {
-  nsCOMPtr<nsIRunnable> r =
-    NewRunnableMethod<VideoDecodeMode>(this,
-                                       &MediaDecoderStateMachine::SetVideoDecodeModeInternal,
-                                       aMode);
+  nsCOMPtr<nsIRunnable> r = NewRunnableMethod<VideoDecodeMode>(
+    "MediaDecoderStateMachine::SetVideoDecodeModeInternal",
+    this,
+    &MediaDecoderStateMachine::SetVideoDecodeModeInternal,
+    aMode);
   OwnerThread()->DispatchStateChange(r.forget());
 }
 
@@ -3144,7 +3189,8 @@ void MediaDecoderStateMachine::SetVideoDecodeModeInternal(VideoDecodeMode aMode)
   CancelSuspendTimer();
 
   if (mVideoDecodeSuspended) {
-    mStateObj->HandleResumeVideoDecoding(GetMediaTime());
+    const auto target = mMediaSink->IsStarted() ? GetClock() : GetMediaTime();
+    mStateObj->HandleResumeVideoDecoding(target + detail::RESUME_VIDEO_PREMIUM);
   }
 }
 
@@ -3652,7 +3698,9 @@ MediaDecoderStateMachine::ScheduleStateMachine()
   mDispatchedStateMachine = true;
 
   OwnerThread()->Dispatch(
-    NewRunnableMethod(this, &MediaDecoderStateMachine::RunStateMachine));
+    NewRunnableMethod("MediaDecoderStateMachine::RunStateMachine",
+                      this,
+                      &MediaDecoderStateMachine::RunStateMachine));
 }
 
 void
@@ -3887,9 +3935,12 @@ MediaDecoderStateMachine::RequestDebugInfo()
   using PromiseType = MediaDecoder::DebugInfoPromise;
   RefPtr<PromiseType::Private> p = new PromiseType::Private(__func__);
   RefPtr<MediaDecoderStateMachine> self = this;
-  OwnerThread()->Dispatch(NS_NewRunnableFunction([self, p] () {
-    p->Resolve(self->GetDebugInfo(), __func__);
-  }), AbstractThread::AssertDispatchSuccess, AbstractThread::TailDispatch);
+  OwnerThread()->Dispatch(
+    NS_NewRunnableFunction(
+      "MediaDecoderStateMachine::RequestDebugInfo",
+      [self, p]() { p->Resolve(self->GetDebugInfo(), __func__); }),
+    AbstractThread::AssertDispatchSuccess,
+    AbstractThread::TailDispatch);
   return p.forget();
 }
 
@@ -3899,8 +3950,11 @@ void MediaDecoderStateMachine::AddOutputStream(ProcessedMediaStream* aStream,
   MOZ_ASSERT(NS_IsMainThread());
   LOG("AddOutputStream aStream=%p!", aStream);
   mOutputStreamManager->Add(aStream, aFinishWhenEnded);
-  nsCOMPtr<nsIRunnable> r = NewRunnableMethod<bool>(
-    this, &MediaDecoderStateMachine::SetAudioCaptured, true);
+  nsCOMPtr<nsIRunnable> r =
+    NewRunnableMethod<bool>("MediaDecoderStateMachine::SetAudioCaptured",
+                            this,
+                            &MediaDecoderStateMachine::SetAudioCaptured,
+                            true);
   OwnerThread()->Dispatch(r.forget());
 }
 
@@ -3910,8 +3964,11 @@ void MediaDecoderStateMachine::RemoveOutputStream(MediaStream* aStream)
   LOG("RemoveOutputStream=%p!", aStream);
   mOutputStreamManager->Remove(aStream);
   if (mOutputStreamManager->IsEmpty()) {
-    nsCOMPtr<nsIRunnable> r = NewRunnableMethod<bool>(
-      this, &MediaDecoderStateMachine::SetAudioCaptured, false);
+    nsCOMPtr<nsIRunnable> r =
+      NewRunnableMethod<bool>("MediaDecoderStateMachine::SetAudioCaptured",
+                              this,
+                              &MediaDecoderStateMachine::SetAudioCaptured,
+                              false);
     OwnerThread()->Dispatch(r.forget());
   }
 }

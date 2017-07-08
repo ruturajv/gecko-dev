@@ -636,8 +636,7 @@ nsCSSRendering::PaintBorder(nsPresContext* aPresContext,
                             PaintBorderFlags aFlags,
                             Sides aSkipSides)
 {
-  PROFILER_LABEL("nsCSSRendering", "PaintBorder",
-    js::ProfileEntry::Category::GRAPHICS);
+  AUTO_PROFILER_LABEL("nsCSSRendering::PaintBorder", GRAPHICS);
 
   nsStyleContext *styleIfVisited = aStyleContext->GetStyleIfVisited();
   const nsStyleBorder *styleBorder = aStyleContext->StyleBorder();
@@ -1575,7 +1574,7 @@ nsCSSRendering::PaintBoxShadowOuter(nsPresContext* aPresContext,
                                                shadowItem->mYOffset),
                                        aPresContext->AppUnitsPerDevPixel());
       shadowContext->SetMatrix(
-        shadowContext->CurrentMatrix().Translate(devPixelOffset));
+        shadowContext->CurrentMatrix().PreTranslate(devPixelOffset));
 
       nsRect nativeRect = aDirtyRect;
       nativeRect.MoveBy(-nsPoint(shadowItem->mXOffset, shadowItem->mYOffset));
@@ -1911,11 +1910,10 @@ DrawResult
 nsCSSRendering::PaintStyleImageLayer(const PaintBGParams& aParams,
                                      gfxContext& aRenderingCtx)
 {
-  PROFILER_LABEL("nsCSSRendering", "PaintBackground",
-    js::ProfileEntry::Category::GRAPHICS);
+  AUTO_PROFILER_LABEL("nsCSSRendering::PaintStyleImageLayer", GRAPHICS);
 
   NS_PRECONDITION(aParams.frame,
-                  "Frame is expected to be provided to PaintBackground");
+                  "Frame is expected to be provided to PaintStyleImageLayer");
 
   nsStyleContext *sc;
   if (!FindBackground(aParams.frame, &sc)) {
@@ -1998,7 +1996,9 @@ nsCSSRendering::BuildWebRenderDisplayItemsForStyleImageLayer(const PaintBGParams
                                                              mozilla::wr::DisplayListBuilder& aBuilder,
                                                              const mozilla::layers::StackingContextHelper& aSc,
                                                              nsTArray<WebRenderParentCommand>& aParentCommands,
-                                                             mozilla::layers::WebRenderDisplayItemLayer* aLayer)
+                                                             mozilla::layers::WebRenderDisplayItemLayer* aLayer,
+                                                             mozilla::layers::WebRenderLayerManager* aManager,
+                                                             nsDisplayItem* aItem)
 {
   NS_PRECONDITION(aParams.frame,
                   "Frame is expected to be provided to BuildWebRenderDisplayItemsForStyleImageLayer");
@@ -2021,8 +2021,8 @@ nsCSSRendering::BuildWebRenderDisplayItemsForStyleImageLayer(const PaintBGParams
 
     sc = aParams.frame->StyleContext();
   }
-
-  return BuildWebRenderDisplayItemsForStyleImageLayerWithSC(aParams, aBuilder, aSc, aParentCommands, aLayer,
+  return BuildWebRenderDisplayItemsForStyleImageLayerWithSC(aParams, aBuilder, aSc, aParentCommands,
+                                                            aLayer, aManager, aItem,
                                                             sc, *aParams.frame->StyleBorder());
 }
 
@@ -2334,7 +2334,7 @@ SetupImageLayerClip(nsCSSRendering::ImageLayerClipState& aClipState,
     gfxRect bgAreaGfx = nsLayoutUtils::RectToGfxRect(
       aClipState.mAdditionalBGClipArea, aAppUnitsPerPixel);
     bgAreaGfx.Round();
-    bgAreaGfx.Condition();
+    gfxUtils::ConditionRect(bgAreaGfx);
 
     aAutoSR->EnsureSaved(aCtx);
     aCtx->NewPath();
@@ -2408,7 +2408,7 @@ DrawBackgroundColor(nsCSSRendering::ImageLayerClipState& aClipState,
     gfxRect bgAdditionalAreaGfx = nsLayoutUtils::RectToGfxRect(
       aClipState.mAdditionalBGClipArea, aAppUnitsPerPixel);
     bgAdditionalAreaGfx.Round();
-    bgAdditionalAreaGfx.Condition();
+    gfxUtils::ConditionRect(bgAdditionalAreaGfx);
     aCtx->NewPath();
     aCtx->Rectangle(bgAdditionalAreaGfx, true);
     aCtx->Clip();
@@ -2507,7 +2507,7 @@ nsCSSRendering::PaintStyleImageLayerWithSC(const PaintBGParams& aParams,
                                            const nsStyleBorder& aBorder)
 {
   NS_PRECONDITION(aParams.frame,
-                  "Frame is expected to be provided to PaintBackground");
+                  "Frame is expected to be provided to PaintStyleImageLayerWithSC");
 
   // If we're drawing all layers, aCompositonOp is ignored, so make sure that
   // it was left at its default value.
@@ -2745,15 +2745,11 @@ nsCSSRendering::BuildWebRenderDisplayItemsForStyleImageLayerWithSC(const PaintBG
                                                                    const mozilla::layers::StackingContextHelper& aSc,
                                                                    nsTArray<WebRenderParentCommand>& aParentCommands,
                                                                    mozilla::layers::WebRenderDisplayItemLayer* aLayer,
+                                                                   mozilla::layers::WebRenderLayerManager* aManager,
+                                                                   nsDisplayItem* aItem,
                                                                    nsStyleContext *aBackgroundSC,
                                                                    const nsStyleBorder& aBorder)
 {
-  MOZ_ASSERT(CanBuildWebRenderDisplayItemsForStyleImageLayer(aLayer->WrManager(),
-                                                             aParams.presCtx,
-                                                             aParams.frame,
-                                                             aBackgroundSC->StyleBackground(),
-                                                             aParams.layer));
-
   MOZ_ASSERT(!(aParams.paintFlags & PAINTBG_MASK_IMAGE));
 
   nscoord appUnitsPerPixel = aParams.presCtx.AppUnitsPerDevPixel();
@@ -2790,7 +2786,8 @@ nsCSSRendering::BuildWebRenderDisplayItemsForStyleImageLayerWithSC(const PaintBG
   result &= state.mImageRenderer.PrepareResult();
   if (!state.mFillArea.IsEmpty()) {
     return state.mImageRenderer.BuildWebRenderDisplayItemsForLayer(&aParams.presCtx,
-                                     aBuilder, aSc, aParentCommands, aLayer,
+                                     aBuilder, aSc, aParentCommands,
+                                     aLayer, aManager, aItem,
                                      state.mDestArea, state.mFillArea,
                                      state.mAnchor + paintBorderArea.TopLeft(),
                                      clipState.mDirtyRectInAppUnits,

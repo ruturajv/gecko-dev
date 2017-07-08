@@ -242,7 +242,6 @@ Layer::ClearAnimations()
 
   MOZ_LAYERS_LOG_IF_SHADOWABLE(this, ("Layer::Mutated(%p) ClearAnimations", this));
   mAnimations.Clear();
-  mCompositorAnimationsId = 0;
   mAnimationData.Clear();
   Mutated();
 }
@@ -2100,6 +2099,15 @@ Layer::RemoveUserData(void* aKey)
 {
   UniquePtr<LayerUserData> d(static_cast<LayerUserData*>(mUserData.Remove(static_cast<gfx::UserDataKey*>(aKey))));
   return d;
+}
+
+void
+Layer::SetManager(LayerManager* aManager, HostLayer* aSelf)
+{
+  // No one should be calling this for weird reasons.
+  MOZ_ASSERT(aSelf);
+  MOZ_ASSERT(aSelf->GetLayer() == this);
+  mManager = aManager;
 }
 
 void

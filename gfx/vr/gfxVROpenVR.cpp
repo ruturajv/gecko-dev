@@ -6,7 +6,6 @@
 #include <math.h>
 
 #include "prlink.h"
-#include "prmem.h"
 #include "prenv.h"
 #include "gfxPrefs.h"
 #include "nsString.h"
@@ -459,7 +458,8 @@ VRControllerOpenVR::UpdateVibrateHaptic(::vr::IVRSystem* aVRSystem,
 
     RefPtr<Runnable> runnable =
       NewRunnableMethod<::vr::IVRSystem*, uint32_t, double, double, uint64_t, uint32_t>
-        (this, &VRControllerOpenVR::UpdateVibrateHaptic, aVRSystem,
+        ("VRControllerOpenVR::UpdateVibrateHaptic",
+         this, &VRControllerOpenVR::UpdateVibrateHaptic, aVRSystem,
          aHapticIndex, aIntensity, duration - kVibrateRate, aVibrateIndex, aPromiseID);
     NS_DelayedDispatchToCurrentThread(runnable.forget(), kVibrateRate);
   } else {
@@ -474,7 +474,8 @@ VRControllerOpenVR::VibrateHapticComplete(uint32_t aPromiseID)
   VRManager *vm = VRManager::Get();
 
   CompositorThreadHolder::Loop()->PostTask(NewRunnableMethod<uint32_t>
-    (vm, &VRManager::NotifyVibrateHapticCompleted, aPromiseID));
+    ("VRManager::NotifyVibrateHapticCompleted",
+     vm, &VRManager::NotifyVibrateHapticCompleted, aPromiseID));
 }
 
 void
@@ -498,7 +499,8 @@ VRControllerOpenVR::VibrateHaptic(::vr::IVRSystem* aVRSystem,
 
   RefPtr<Runnable> runnable =
       NewRunnableMethod<::vr::IVRSystem*, uint32_t, double, double, uint64_t, uint32_t>
-        (this, &VRControllerOpenVR::UpdateVibrateHaptic, aVRSystem,
+        ("VRControllerOpenVR::UpdateVibrateHaptic",
+         this, &VRControllerOpenVR::UpdateVibrateHaptic, aVRSystem,
          aHapticIndex, aIntensity, aDuration, mVibrateIndex, aPromiseID);
   mVibrateThread->Dispatch(runnable.forget(), NS_DISPATCH_NORMAL);
 }

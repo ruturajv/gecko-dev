@@ -392,8 +392,9 @@ class InvokeAsyncOpen : public Runnable
 public:
   InvokeAsyncOpen(const nsMainThreadPtrHandle<nsIInterfaceRequestor>& aChannel,
                   nsresult aStatus)
-  : mChannel(aChannel)
-  , mStatus(aStatus)
+    : Runnable("net::InvokeAsyncOpen")
+    , mChannel(aChannel)
+    , mStatus(aStatus)
   {
   }
 
@@ -1753,6 +1754,8 @@ HttpChannelParent::StartRedirect(uint32_t registrarId,
                                  uint32_t redirectFlags,
                                  nsIAsyncVerifyRedirectCallback* callback)
 {
+  nsresult rv;
+
   LOG(("HttpChannelParent::StartRedirect [this=%p, registrarId=%" PRIu32 " "
        "newChannel=%p callback=%p]\n", this, registrarId, newChannel,
        callback));
@@ -1760,11 +1763,16 @@ HttpChannelParent::StartRedirect(uint32_t registrarId,
   if (mIPCClosed)
     return NS_BINDING_ABORTED;
 
-  nsCOMPtr<nsIURI> newURI;
-  newChannel->GetURI(getter_AddRefs(newURI));
+  // Sending down the original URI, because that is the URI we have
+  // to construct the channel from - this is the URI we've been actually
+  // redirected to.  URI of the channel may be an inner channel URI.
+  // URI of the channel will be reconstructed by the protocol handler
+  // on the child process, no need to send it then.
+  nsCOMPtr<nsIURI> newOriginalURI;
+  newChannel->GetOriginalURI(getter_AddRefs(newOriginalURI));
 
   URIParams uriParams;
-  SerializeURI(newURI, uriParams);
+  SerializeURI(newOriginalURI, uriParams);
 
   nsCString secInfoSerialization;
   UpdateAndSerializeSecurityInfo(secInfoSerialization);
@@ -1775,7 +1783,7 @@ HttpChannelParent::StartRedirect(uint32_t registrarId,
   uint64_t channelId;
   nsCOMPtr<nsIHttpChannel> httpChannel = do_QueryInterface(newChannel);
   if (httpChannel) {
-    nsresult rv = httpChannel->GetChannelId(&channelId);
+    rv = httpChannel->GetChannelId(&channelId);
     NS_ENSURE_SUCCESS(rv, NS_BINDING_ABORTED);
   }
 
@@ -1964,7 +1972,9 @@ HttpChannelParent::DivertTo(nsIStreamListener *aListener)
   // Call OnStartRequest and SendDivertMessages asynchronously to avoid
   // reentering client context.
   NS_DispatchToCurrentThread(
-    NewRunnableMethod(this, &HttpChannelParent::StartDiversion));
+    NewRunnableMethod("net::HttpChannelParent::StartDiversion",
+                      this,
+                      &HttpChannelParent::StartDiversion));
   return;
 }
 
@@ -2028,7 +2038,8 @@ class HTTPFailDiversionEvent : public Runnable
 public:
   HTTPFailDiversionEvent(HttpChannelParent *aChannelParent,
                          nsresult aErrorCode)
-    : mChannelParent(aChannelParent)
+    : Runnable("net::HTTPFailDiversionEvent")
+    , mChannelParent(aChannelParent)
     , mErrorCode(aErrorCode)
   {
     MOZ_RELEASE_ASSERT(aChannelParent);

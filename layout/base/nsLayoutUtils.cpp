@@ -865,6 +865,25 @@ nsLayoutUtils::FindScrollableFrameFor(ViewID aId)
   return scrollFrame ? scrollFrame->GetScrollTargetFrame() : nullptr;
 }
 
+ViewID
+nsLayoutUtils::FindIDForScrollableFrame(nsIScrollableFrame* aScrollable)
+{
+  if (!aScrollable) {
+    return FrameMetrics::NULL_SCROLL_ID;
+  }
+
+  nsIFrame* scrollFrame = do_QueryFrame(aScrollable);
+  nsIContent* scrollContent = scrollFrame->GetContent();
+
+  FrameMetrics::ViewID scrollId;
+  if (scrollContent &&
+      nsLayoutUtils::FindIDFor(scrollContent, &scrollId)) {
+    return scrollId;
+  }
+
+  return FrameMetrics::NULL_SCROLL_ID;
+}
+
 static nsRect
 ApplyRectMultiplier(nsRect aRect, float aMultiplier)
 {
@@ -1564,6 +1583,9 @@ GetPseudo(const nsIContent* aContent, nsIAtom* aPseudoProperty)
 {
   MOZ_ASSERT(aPseudoProperty == nsGkAtoms::beforePseudoProperty ||
              aPseudoProperty == nsGkAtoms::afterPseudoProperty);
+  if (!aContent->MayHaveAnonymousChildren()) {
+    return nullptr;
+  }
   return static_cast<Element*>(aContent->GetProperty(aPseudoProperty));
 }
 
@@ -2622,7 +2644,7 @@ nsLayoutUtils::MatrixTransformPoint(const nsPoint &aPoint,
 {
   gfxPoint image = gfxPoint(NSAppUnitsToFloatPixels(aPoint.x, aFactor),
                             NSAppUnitsToFloatPixels(aPoint.y, aFactor));
-  image.Transform(aMatrix);
+  image = aMatrix.TransformPoint(image);
   return nsPoint(NSFloatPixelsToAppUnits(float(image.x), aFactor),
                  NSFloatPixelsToAppUnits(float(image.y), aFactor));
 }
@@ -3176,8 +3198,7 @@ struct AutoNestedPaintCount {
 nsIFrame*
 nsLayoutUtils::GetFrameForPoint(nsIFrame* aFrame, nsPoint aPt, uint32_t aFlags)
 {
-  PROFILER_LABEL("nsLayoutUtils", "GetFrameForPoint",
-    js::ProfileEntry::Category::GRAPHICS);
+  AUTO_PROFILER_LABEL("nsLayoutUtils::GetFrameForPoint", GRAPHICS);
 
   nsresult rv;
   AutoTArray<nsIFrame*,8> outFrames;
@@ -3191,8 +3212,7 @@ nsLayoutUtils::GetFramesForArea(nsIFrame* aFrame, const nsRect& aRect,
                                 nsTArray<nsIFrame*> &aOutFrames,
                                 uint32_t aFlags)
 {
-  PROFILER_LABEL("nsLayoutUtils", "GetFramesForArea",
-    js::ProfileEntry::Category::GRAPHICS);
+  AUTO_PROFILER_LABEL("nsLayoutUtils::GetFramesForArea", GRAPHICS);
 
   nsDisplayListBuilder builder(aFrame,
                                nsDisplayListBuilderMode::EVENT_DELIVERY,
@@ -3425,8 +3445,7 @@ nsLayoutUtils::PaintFrame(gfxContext* aRenderingContext, nsIFrame* aFrame,
                           nsDisplayListBuilderMode aBuilderMode,
                           PaintFrameFlags aFlags)
 {
-  PROFILER_LABEL("nsLayoutUtils", "PaintFrame",
-    js::ProfileEntry::Category::GRAPHICS);
+  AUTO_PROFILER_LABEL("nsLayoutUtils::PaintFrame", GRAPHICS);
 
 #ifdef MOZ_DUMP_PAINTING
   if (!gPaintCountStack) {
@@ -3519,7 +3538,7 @@ nsLayoutUtils::PaintFrame(gfxContext* aRenderingContext, nsIFrame* aFrame,
           nsLayoutUtils::PointToGfxPoint(pos,
                                          presContext->AppUnitsPerDevPixel());
         aRenderingContext->SetMatrix(
-          aRenderingContext->CurrentMatrix().Translate(devPixelOffset));
+          aRenderingContext->CurrentMatrix().PreTranslate(devPixelOffset));
       }
     }
     builder.SetIgnoreScrollFrame(rootScrollFrame);
@@ -3537,8 +3556,8 @@ nsLayoutUtils::PaintFrame(gfxContext* aRenderingContext, nsIFrame* aFrame,
   nsRect dirtyRect = visibleRegion.GetBounds();
 
   {
-    PROFILER_LABEL("nsLayoutUtils", "PaintFrame::BuildDisplayList",
-      js::ProfileEntry::Category::GRAPHICS);
+    AUTO_PROFILER_LABEL("nsLayoutUtils::PaintFrame:BuildDisplayList",
+                        GRAPHICS);
     AutoProfilerTracing tracing("Paint", "DisplayList");
 
     PaintTelemetry::AutoRecord record(PaintTelemetry::Metric::DisplayList);
@@ -4500,15 +4519,12 @@ nsLayoutUtils::GetNextContinuationOrIBSplitSibling(nsIFrame *aFrame)
 }
 
 nsIFrame*
-nsLayoutUtils::FirstContinuationOrIBSplitSibling(nsIFrame *aFrame)
+nsLayoutUtils::FirstContinuationOrIBSplitSibling(const nsIFrame* aFrame)
 {
-  nsIFrame *result = aFrame->FirstContinuation();
+  nsIFrame* result = aFrame->FirstContinuation();
+
   if (result->GetStateBits() & NS_FRAME_PART_OF_IBSPLIT) {
-    while (true) {
-      nsIFrame* f =
-        result->GetProperty(nsIFrame::IBSplitPrevSibling());
-      if (!f)
-        break;
+    while (auto* f = result->GetProperty(nsIFrame::IBSplitPrevSibling())) {
       result = f;
     }
   }
@@ -4517,22 +4533,17 @@ nsLayoutUtils::FirstContinuationOrIBSplitSibling(nsIFrame *aFrame)
 }
 
 nsIFrame*
-nsLayoutUtils::LastContinuationOrIBSplitSibling(nsIFrame *aFrame)
+nsLayoutUtils::LastContinuationOrIBSplitSibling(const nsIFrame* aFrame)
 {
-  nsIFrame *result = aFrame->FirstContinuation();
+  nsIFrame* result = aFrame->FirstContinuation();
+
   if (result->GetStateBits() & NS_FRAME_PART_OF_IBSPLIT) {
-    while (true) {
-      nsIFrame* f = result->GetProperty(nsIFrame::IBSplitSibling());
-      if (!f) {
-        break;
-      }
+    while (auto* f = result->GetProperty(nsIFrame::IBSplitSibling())) {
       result = f;
     }
   }
 
-  result = result->LastContinuation();
-
-  return result;
+  return result->LastContinuation();
 }
 
 bool
@@ -6536,7 +6547,7 @@ ComputeSnappedImageDrawingParameters(gfxContext*     aCtx,
       imageSpaceAnchorPoint = StableRound(imageSpaceAnchorPoint);
       anchorPoint = imageSpaceAnchorPoint;
       anchorPoint = MapToFloatUserPixels(imageSize, devPixelDest, anchorPoint);
-      anchorPoint = currentMatrix.Transform(anchorPoint);
+      anchorPoint = currentMatrix.TransformPoint(anchorPoint);
       anchorPoint = StableRound(anchorPoint);
     }
 
@@ -6576,14 +6587,14 @@ ComputeSnappedImageDrawingParameters(gfxContext*     aCtx,
   if (didSnap && !invTransform.HasNonIntegerTranslation()) {
     // This form of Transform is safe to call since non-axis-aligned
     // transforms wouldn't be snapped.
-    devPixelDirty = currentMatrix.Transform(devPixelDirty);
+    devPixelDirty = currentMatrix.TransformRect(devPixelDirty);
     devPixelDirty.RoundOut();
     fill = fill.Intersect(devPixelDirty);
   }
   if (fill.IsEmpty())
     return SnappedImageDrawingParameters();
 
-  gfxRect imageSpaceFill(didSnap ? invTransform.Transform(fill)
+  gfxRect imageSpaceFill(didSnap ? invTransform.TransformRect(fill)
                                  : invTransform.TransformBounds(fill));
 
   // If we didn't snap, we need to post-multiply the matrix on the context to
@@ -6850,8 +6861,7 @@ nsLayoutUtils::DrawBackgroundImage(gfxContext&         aContext,
                                    ExtendMode          aExtendMode,
                                    float               aOpacity)
 {
-  PROFILER_LABEL("layout", "nsLayoutUtils::DrawBackgroundImage",
-                 js::ProfileEntry::Category::GRAPHICS);
+  AUTO_PROFILER_LABEL("nsLayoutUtils::DrawBackgroundImage", GRAPHICS);
 
   Maybe<SVGImageContext> svgContext(Some(SVGImageContext(Some(aImageSize))));
   SVGImageContext::MaybeStoreContextPaint(svgContext, aForFrame, aImage);
@@ -7931,19 +7941,23 @@ nsLayoutUtils::PostRestyleEvent(Element* aElement,
   }
 }
 
-nsSetAttrRunnable::nsSetAttrRunnable(nsIContent* aContent, nsIAtom* aAttrName,
+nsSetAttrRunnable::nsSetAttrRunnable(nsIContent* aContent,
+                                     nsIAtom* aAttrName,
                                      const nsAString& aValue)
-  : mContent(aContent),
-    mAttrName(aAttrName),
-    mValue(aValue)
+  : mozilla::Runnable("nsSetAttrRunnable")
+  , mContent(aContent)
+  , mAttrName(aAttrName)
+  , mValue(aValue)
 {
   NS_ASSERTION(aContent && aAttrName, "Missing stuff, prepare to crash");
 }
 
-nsSetAttrRunnable::nsSetAttrRunnable(nsIContent* aContent, nsIAtom* aAttrName,
+nsSetAttrRunnable::nsSetAttrRunnable(nsIContent* aContent,
+                                     nsIAtom* aAttrName,
                                      int32_t aValue)
-  : mContent(aContent),
-    mAttrName(aAttrName)
+  : mozilla::Runnable("nsSetAttrRunnable")
+  , mContent(aContent)
+  , mAttrName(aAttrName)
 {
   NS_ASSERTION(aContent && aAttrName, "Missing stuff, prepare to crash");
   mValue.AppendInt(aValue);
@@ -7957,8 +7971,9 @@ nsSetAttrRunnable::Run()
 
 nsUnsetAttrRunnable::nsUnsetAttrRunnable(nsIContent* aContent,
                                          nsIAtom* aAttrName)
-  : mContent(aContent),
-    mAttrName(aAttrName)
+  : mozilla::Runnable("nsUnsetAttrRunnable")
+  , mContent(aContent)
+  , mAttrName(aAttrName)
 {
   NS_ASSERTION(aContent && aAttrName, "Missing stuff, prepare to crash");
 }
@@ -8474,6 +8489,7 @@ nsLayoutUtils::DoLogTestDataForPaint(LayerManager* aManager,
                                      const std::string& aKey,
                                      const std::string& aValue)
 {
+  MOZ_ASSERT(nsLayoutUtils::IsAPZTestLoggingEnabled(), "don't call me");
   if (ClientLayerManager* mgr = aManager->AsClientLayerManager()) {
     mgr->LogTestDataForCurrentPaint(aScrollId, aKey, aValue);
   } else if (WebRenderLayerManager* wrlm = aManager->AsWebRenderLayerManager()) {
@@ -8784,13 +8800,17 @@ nsLayoutUtils::ComputeScrollMetadata(nsIFrame* aForFrame,
     nsRect dp;
     if (nsLayoutUtils::GetDisplayPort(aContent, &dp)) {
       metrics.SetDisplayPort(CSSRect::FromAppUnits(dp));
-      nsLayoutUtils::LogTestDataForPaint(aLayer->Manager(), scrollId, "displayport",
-          metrics.GetDisplayPort());
+      if (IsAPZTestLoggingEnabled()) {
+        LogTestDataForPaint(aLayer->Manager(), scrollId, "displayport",
+                            metrics.GetDisplayPort());
+      }
     }
     if (nsLayoutUtils::GetCriticalDisplayPort(aContent, &dp)) {
       metrics.SetCriticalDisplayPort(CSSRect::FromAppUnits(dp));
-      nsLayoutUtils::LogTestDataForPaint(aLayer->Manager(), scrollId,
-          "criticalDisplayport", metrics.GetCriticalDisplayPort());
+      if (IsAPZTestLoggingEnabled()) {
+        LogTestDataForPaint(aLayer->Manager(), scrollId, "criticalDisplayport",
+                            metrics.GetCriticalDisplayPort());
+      }
     }
     DisplayPortMarginsPropertyData* marginsData =
         static_cast<DisplayPortMarginsPropertyData*>(aContent->GetProperty(nsGkAtoms::DisplayPortMargins));
@@ -8951,8 +8971,10 @@ nsLayoutUtils::ComputeScrollMetadata(nsIFrame* aForFrame,
       nsAutoString contentDescription;
       content->Describe(contentDescription);
       metadata.SetContentDescription(NS_LossyConvertUTF16toASCII(contentDescription));
-      nsLayoutUtils::LogTestDataForPaint(aLayer->Manager(), scrollId, "contentDescription",
-          metadata.GetContentDescription().get());
+      if (IsAPZTestLoggingEnabled()) {
+        LogTestDataForPaint(aLayer->Manager(), scrollId, "contentDescription",
+                            metadata.GetContentDescription().get());
+      }
     }
   }
 

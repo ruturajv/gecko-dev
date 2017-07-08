@@ -105,6 +105,8 @@ RendererOGL::Render()
 {
   if (!mGL->MakeCurrent()) {
     gfxCriticalNote << "Failed to make render context current, can't draw.";
+    // XXX This could cause oom in webrender since pending_texture_updates is not handled.
+    // It needs to be addressed.
     return false;
   }
 
@@ -118,17 +120,16 @@ RendererOGL::Render()
 #endif
 
   if (!mWidget->PreRender(&widgetContext)) {
+    // XXX This could cause oom in webrender since pending_texture_updates is not handled.
+    // It needs to be addressed.
     return false;
   }
   // XXX set clear color if MOZ_WIDGET_ANDROID is defined.
-  // XXX pass the actual render bounds instead of an empty rect.
-  mWidget->DrawWindowUnderlay(&widgetContext, LayoutDeviceIntRect());
 
   auto size = mWidget->GetClientSize();
   wr_renderer_render(mWrRenderer, size.width, size.height);
 
   mGL->SwapBuffers();
-  mWidget->DrawWindowOverlay(&widgetContext, LayoutDeviceIntRect());
   mWidget->PostRender(&widgetContext);
 
   // TODO: Flush pending actions such as texture deletions/unlocks and

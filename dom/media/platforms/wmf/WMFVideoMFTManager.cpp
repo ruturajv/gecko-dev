@@ -153,7 +153,8 @@ WMFVideoMFTManager::~WMFVideoMFTManager()
         ? 2
         : mGotValidOutputAfterNullOutput ? 3 : 4;
 
-  nsCOMPtr<nsIRunnable> task = NS_NewRunnableFunction([=]() -> void {
+  nsCOMPtr<nsIRunnable> task = NS_NewRunnableFunction("WMFVideoMFTManager::~WMFVideoMFTManager",
+                                                      [=]() -> void {
     LOG(nsPrintfCString("Reporting telemetry VIDEO_MFT_OUTPUT_NULL_SAMPLES=%d",
                         telemetry)
         .get());
@@ -390,7 +391,8 @@ class CreateDXVAManagerEvent : public Runnable
 public:
   CreateDXVAManagerEvent(layers::KnowsCompositor* aKnowsCompositor,
                          nsCString& aFailureReason)
-    : mBackend(LayersBackend::LAYERS_D3D11)
+    : Runnable("CreateDXVAManagerEvent")
+    , mBackend(LayersBackend::LAYERS_D3D11)
     , mKnowsCompositor(aKnowsCompositor)
     , mFailureReason(aFailureReason)
   {
@@ -571,11 +573,6 @@ WMFVideoMFTManager::InitInternal()
     Telemetry::Accumulate(Telemetry::MEDIA_DECODER_BACKEND_USED,
                           uint32_t(media::MediaDecoderBackend::WMFSoftware));
   }
-  // We only allow intel VP9 decoder at this stage.
-  if ((mStreamType == VP9 || mStreamType == VP8) &&
-      (mDXVA2Manager->GetVendorId() != 0x8086 && !gfxPrefs::PDMWMFForceVP9())) {
-    return false;
-  }
 
   mDecoder = decoder;
   hr = SetDecoderMediaTypes();
@@ -709,7 +706,8 @@ public:
   SupportsConfigEvent(DXVA2Manager* aDXVA2Manager,
                       IMFMediaType* aMediaType,
                       float aFramerate)
-    : mDXVA2Manager(aDXVA2Manager)
+    : Runnable("SupportsConfigEvent")
+    , mDXVA2Manager(aDXVA2Manager)
     , mMediaType(aMediaType)
     , mFramerate(aFramerate)
     , mSupportsConfig(false)

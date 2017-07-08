@@ -69,7 +69,11 @@ public:
       return;
     }
 
-    static nsAutoHandle event(::CreateEventW(nullptr, FALSE, FALSE, nullptr));
+    // Note that we might reenter the EnsureMTA constructor while we wait on
+    // this event due to APC dispatch, therefore we need a unique event object
+    // for each entry. If perf becomes an issue then we will want to maintain
+    // an array of events where the Nth event is unique to the Nth reentry.
+    nsAutoHandle event(::CreateEventW(nullptr, FALSE, FALSE, nullptr));
     if (!event) {
       return;
     }
@@ -82,7 +86,7 @@ public:
     };
 
     nsresult rv =
-      thread->Dispatch(NS_NewRunnableFunction(eventSetter), NS_DISPATCH_NORMAL);
+      thread->Dispatch(NS_NewRunnableFunction("EnsureMTA", eventSetter), NS_DISPATCH_NORMAL);
     MOZ_ASSERT(NS_SUCCEEDED(rv));
     if (NS_FAILED(rv)) {
       return;
@@ -117,7 +121,8 @@ private:
     }
 
     DebugOnly<nsresult> rv = thread->Dispatch(
-        NS_NewRunnableFunction(aClosure), NS_DISPATCH_NORMAL);
+      NS_NewRunnableFunction("mscom::EnsureMTA::AsyncOperation",
+                             aClosure), NS_DISPATCH_NORMAL);
     MOZ_ASSERT(NS_SUCCEEDED(rv));
   }
 

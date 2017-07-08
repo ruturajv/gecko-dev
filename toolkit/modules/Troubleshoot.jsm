@@ -66,6 +66,7 @@ const PREFS_WHITELIST = [
   "keyword.",
   "layers.",
   "layout.css.dpi",
+  "layout.css.servo.enabled",
   "media.",
   "mousewheel.",
   "network.",
@@ -222,6 +223,11 @@ var dataProviders = {
       data.autoStartStatus = -1;
     }
 
+    data.styloBuild = AppConstants.MOZ_STYLO;
+    data.styloDefault = Services.prefs.getDefaultBranch(null)
+                                .getBoolPref("layout.css.servo.enabled", false);
+    data.styloResult = Services.prefs.getBoolPref("layout.css.servo.enabled", false);
+
     const keyGoogle = Services.urlFormatter.formatURL("%GOOGLE_API_KEY%").trim();
     data.keyGoogleFound = keyGoogle != "no-google-api-key" && keyGoogle.length > 0;
 
@@ -365,6 +371,7 @@ var dataProviders = {
         data.numTotalWindows++;
         data.windowLayerManagerType = winUtils.layerManagerType;
         data.windowLayerManagerRemote = winUtils.layerManagerRemote;
+        data.windowUsingAdvancedLayers = winUtils.usingAdvancedLayers;
       } catch (e) {
         continue;
       }

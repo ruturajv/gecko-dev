@@ -10,6 +10,9 @@
 #include "MediaDecoder.h"
 #include "MediaResourceCallback.h"
 
+class nsIChannel;
+class nsIStreamListener;
+
 namespace mozilla {
 
 class ChannelMediaDecoder : public MediaDecoder
@@ -49,23 +52,25 @@ class ChannelMediaDecoder : public MediaDecoder
     const RefPtr<AbstractThread> mAbstractMainThread;
   };
 
+protected:
   RefPtr<ResourceCallback> mResourceCallback;
 
 public:
   explicit ChannelMediaDecoder(MediaDecoderInit& aInit);
-
-  // Return a callback object used to register with MediaResource to receive
-  // notifications.
-  MediaResourceCallback* GetResourceCallback() const
-  {
-    return mResourceCallback;
-  }
 
   void Shutdown() override;
 
   // Create a new decoder of the same type as this one.
   // Subclasses must implement this.
   virtual ChannelMediaDecoder* Clone(MediaDecoderInit& aInit) = 0;
+
+  virtual nsresult Load(nsIChannel* aChannel,
+                        bool aIsPrivateBrowsing,
+                        nsIStreamListener** aStreamListener);
+  virtual nsresult Load(MediaResource* aOriginal);
+
+private:
+  nsresult OpenResource(nsIStreamListener** aStreamListener);
 };
 
 } // namespace mozilla

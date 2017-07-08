@@ -193,6 +193,17 @@ public:
   }
 
   /**
+   * "Early Runner" runnables will be called as the first step when refresh
+   * driver tick is triggered. Runners shouldn't keep other objects alive,
+   * since it isn't guaranteed they will ever get called.
+   */
+  void AddEarlyRunner(nsIRunnable* aRunnable)
+  {
+    mEarlyRunners.AppendElement(aRunnable);
+    EnsureTimerStarted();
+  }
+
+  /**
    * Remember whether our presshell's view manager needs a flush
    */
   void ScheduleViewManagerFlush();
@@ -450,6 +461,7 @@ private:
   ObserverArray mObservers[3];
   RequestTable mRequests;
   ImageStartTable mStartTable;
+  AutoTArray<nsCOMPtr<nsIRunnable>, 16> mEarlyRunners;
 
   struct PendingEvent {
     nsCOMPtr<nsINode> mTarget;

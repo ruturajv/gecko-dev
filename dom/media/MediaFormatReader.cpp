@@ -121,10 +121,9 @@ GlobalAllocPolicy::GlobalAllocPolicy()
   SystemGroup::Dispatch(
     "GlobalAllocPolicy::ClearOnShutdown",
     TaskCategory::Other,
-    NS_NewRunnableFunction([this] () {
+    NS_NewRunnableFunction("GlobalAllocPolicy::GlobalAllocPolicy", [this]() {
       ClearOnShutdown(this, ShutdownPhase::ShutdownThreads);
-    })
-  );
+    }));
 }
 
 GlobalAllocPolicy::~GlobalAllocPolicy()
@@ -927,9 +926,9 @@ public:
   void Reset() override
   {
     RefPtr<Wrapper> self = this;
-    mTaskQueue->Dispatch(NS_NewRunnableFunction([self]() {
-      self->mTrackDemuxer->Reset();
-    }));
+    mTaskQueue->Dispatch(
+      NS_NewRunnableFunction("MediaFormatReader::DemuxerProxy::Wrapper::Reset",
+                             [self]() { self->mTrackDemuxer->Reset(); }));
   }
 
   nsresult GetNextRandomAccessPoint(TimeUnit* aTime) override
@@ -987,6 +986,7 @@ private:
   {
     RefPtr<MediaTrackDemuxer> trackDemuxer = mTrackDemuxer.forget();
     mTaskQueue->Dispatch(NS_NewRunnableFunction(
+      "MediaFormatReader::DemuxerProxy::Wrapper::~Wrapper",
       [trackDemuxer]() { trackDemuxer->BreakCycles(); }));
   }
 
@@ -1094,10 +1094,9 @@ MediaFormatReader::DemuxerProxy::NotifyDataArrived()
   });
 }
 
-MediaFormatReader::MediaFormatReader(AbstractMediaDecoder* aDecoder,
-                                     MediaDataDemuxer* aDemuxer,
-                                     VideoFrameContainer* aVideoFrameContainer)
-  : MediaDecoderReader(aDecoder)
+MediaFormatReader::MediaFormatReader(const MediaDecoderReaderInit& aInit,
+                                     MediaDataDemuxer* aDemuxer)
+  : MediaDecoderReader(aInit)
   , mAudio(this, MediaData::AUDIO_DATA,
            MediaPrefs::MaxAudioDecodeError())
   , mVideo(this, MediaData::VIDEO_DATA,
@@ -1110,17 +1109,17 @@ MediaFormatReader::MediaFormatReader(AbstractMediaDecoder* aDecoder,
   , mInitDone(false)
   , mTrackDemuxersMayBlock(false)
   , mSeekScheduled(false)
-  , mVideoFrameContainer(aVideoFrameContainer)
+  , mVideoFrameContainer(aInit.mVideoFrameContainer)
   , mDecoderFactory(new DecoderFactory(this))
   , mShutdownPromisePool(new ShutdownPromisePool())
 {
   MOZ_ASSERT(aDemuxer);
   MOZ_COUNT_CTOR(MediaFormatReader);
 
-  if (aDecoder && aDecoder->CompositorUpdatedEvent()) {
-    mCompositorUpdatedListener =
-      aDecoder->CompositorUpdatedEvent()->Connect(
-        mTaskQueue, this, &MediaFormatReader::NotifyCompositorUpdated);
+  AbstractMediaDecoder* decoder = aInit.mDecoder;
+  if (decoder && decoder->CompositorUpdatedEvent()) {
+    mCompositorUpdatedListener = decoder->CompositorUpdatedEvent()->Connect(
+      mTaskQueue, this, &MediaFormatReader::NotifyCompositorUpdated);
   }
   mOnTrackWaitingForKeyListener = OnTrackWaitingForKey().Connect(
     mTaskQueue, this, &MediaFormatReader::NotifyWaitingForKey);
@@ -1269,7 +1268,8 @@ public:
   DispatchKeyNeededEvent(AbstractMediaDecoder* aDecoder,
                          nsTArray<uint8_t>& aInitData,
                          const nsString& aInitDataType)
-    : mDecoder(aDecoder)
+    : Runnable("DispatchKeyNeededEvent")
+    , mDecoder(aDecoder)
     , mInitData(aInitData)
     , mInitDataType(aInitDataType)
   {
@@ -1296,10 +1296,11 @@ MediaFormatReader::SetCDMProxy(CDMProxy* aProxy)
 {
   RefPtr<CDMProxy> proxy = aProxy;
   RefPtr<MediaFormatReader> self = this;
-  nsCOMPtr<nsIRunnable> r = NS_NewRunnableFunction([=] () {
-    MOZ_ASSERT(self->OnTaskQueue());
-    self->mCDMProxy = proxy;
-  });
+  nsCOMPtr<nsIRunnable> r =
+    NS_NewRunnableFunction("MediaFormatReader::SetCDMProxy", [=]() {
+      MOZ_ASSERT(self->OnTaskQueue());
+      self->mCDMProxy = proxy;
+    });
   OwnerThread()->Dispatch(r.forget());
 }
 
@@ -1468,7 +1469,7 @@ MediaFormatReader::OnDemuxerInitDone(const MediaResult& aResult)
   if (aResult != NS_OK && mDecoder) {
     RefPtr<AbstractMediaDecoder> decoder = mDecoder;
     mDecoder->AbstractMainThread()->Dispatch(NS_NewRunnableFunction(
-      [decoder, aResult] () {
+      "MediaFormatReader::OnDemuxerInitDone", [decoder, aResult]() {
         if (decoder->GetOwner()) {
           decoder->GetOwner()->DecodeWarning(aResult);
         }
@@ -1855,8 +1856,8 @@ MediaFormatReader::ScheduleUpdate(TrackType aTrack)
   }
   LOGV("SchedulingUpdate(%s)", TrackTypeToStr(aTrack));
   decoder.mUpdateScheduled = true;
-  RefPtr<nsIRunnable> task(
-    NewRunnableMethod<TrackType>(this, &MediaFormatReader::Update, aTrack));
+  RefPtr<nsIRunnable> task(NewRunnableMethod<TrackType>(
+    "MediaFormatReader::Update", this, &MediaFormatReader::Update, aTrack));
   OwnerThread()->Dispatch(task.forget());
 }
 
@@ -2719,8 +2720,8 @@ MediaFormatReader::ScheduleSeek()
     return;
   }
   mSeekScheduled = true;
-  OwnerThread()->Dispatch(
-    NewRunnableMethod(this, &MediaFormatReader::AttemptSeek));
+  OwnerThread()->Dispatch(NewRunnableMethod(
+    "MediaFormatReader::AttemptSeek", this, &MediaFormatReader::AttemptSeek));
 }
 
 void

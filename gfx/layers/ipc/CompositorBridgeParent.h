@@ -30,6 +30,7 @@
 #include "mozilla/layers/CompositorController.h"
 #include "mozilla/layers/CompositorOptions.h"
 #include "mozilla/layers/CompositorVsyncSchedulerOwner.h"
+#include "mozilla/layers/FocusState.h"
 #include "mozilla/layers/GeckoContentController.h"
 #include "mozilla/layers/ISurfaceAllocator.h" // for ShmemAllocator
 #include "mozilla/layers/LayersMessages.h"  // for TargetConfig
@@ -106,9 +107,9 @@ public:
   virtual void NotifyClearCachedResources(LayerTransactionParent* aLayerTree) { }
 
   virtual void ForceComposite(LayerTransactionParent* aLayerTree) { }
-  virtual bool SetTestSampleTime(LayerTransactionParent* aLayerTree,
+  virtual bool SetTestSampleTime(const uint64_t& aId,
                                  const TimeStamp& aTime) { return true; }
-  virtual void LeaveTestMode(LayerTransactionParent* aLayerTree) { }
+  virtual void LeaveTestMode(const uint64_t& aId) { }
   virtual void ApplyAsyncProperties(LayerTransactionParent* aLayerTree) = 0;
   virtual CompositorAnimationStorage* GetAnimationStorage(const uint64_t& aId) { return nullptr; }
   virtual void FlushApzRepaints(const uint64_t& aLayersId) = 0;
@@ -128,6 +129,8 @@ public:
   mozilla::ipc::IPCResult Recv__delete__() override { return IPC_OK(); }
 
   virtual void ObserveLayerUpdate(uint64_t aLayersId, uint64_t aEpoch, bool aActive) = 0;
+
+  virtual void DidComposite(uint64_t aId, TimeStamp& aCompositeStart, TimeStamp& aCompositeEnd) {}
 
   virtual void NotifyDidCompositeToPipeline(const wr::PipelineId& aPipelineId, const wr::Epoch& aEpoch, TimeStamp& aCompositeStart, TimeStamp& aCompositeEnd) {}
 
@@ -230,9 +233,9 @@ public:
                                    const TransactionInfo& aInfo,
                                    bool aHitTestUpdate) override;
   virtual void ForceComposite(LayerTransactionParent* aLayerTree) override;
-  virtual bool SetTestSampleTime(LayerTransactionParent* aLayerTree,
+  virtual bool SetTestSampleTime(const uint64_t& aId,
                                  const TimeStamp& aTime) override;
-  virtual void LeaveTestMode(LayerTransactionParent* aLayerTree) override;
+  virtual void LeaveTestMode(const uint64_t& aId) override;
   virtual void ApplyAsyncProperties(LayerTransactionParent* aLayerTree)
                override;
   virtual CompositorAnimationStorage* GetAnimationStorage(const uint64_t& aId) override;
@@ -303,6 +306,7 @@ public:
 
   virtual void ScheduleComposition();
   void NotifyShadowTreeTransaction(uint64_t aId, bool aIsFirstPaint,
+      const FocusTarget& aFocusTarget,
       bool aScheduleComposite, uint32_t aPaintSequenceNumber,
       bool aIsRepeatTransaction, bool aHitTestUpdate);
 
@@ -457,6 +461,7 @@ public:
                                                       uint32_t* aIdNamespace) override;
   bool DeallocPWebRenderBridgeParent(PWebRenderBridgeParent* aActor) override;
   RefPtr<WebRenderBridgeParent> GetWebRenderBridgeParent() const;
+  Maybe<TimeStamp> GetTestingTimeStamp() const;
 
   static void SetWebRenderProfilerEnabled(bool aEnabled);
 
@@ -525,6 +530,8 @@ protected:
   void FinishPendingComposite() override;
   void CompositeToTarget(gfx::DrawTarget* aTarget, const gfx::IntRect* aRect = nullptr) override;
 
+  bool InitializeAdvancedLayers(const nsTArray<LayersBackend>& aBackendHints,
+                                TextureFactoryIdentifier* aOutIdentifier);
   RefPtr<Compositor> NewCompositor(const nsTArray<LayersBackend>& aBackendHints);
 
   /**
@@ -557,6 +564,7 @@ protected:
    */
   bool CanComposite();
 
+  using CompositorBridgeParentBase::DidComposite;
   void DidComposite(TimeStamp& aCompositeStart, TimeStamp& aCompositeEnd);
 
   virtual void NotifyDidCompositeToPipeline(const wr::PipelineId& aPipelineId, const wr::Epoch& aEpoch, TimeStamp& aCompositeStart, TimeStamp& aCompositeEnd) override;

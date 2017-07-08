@@ -39,6 +39,10 @@ DEFAULTS = dict(
         tpchrome=True,
         tpcycles=10,
         tpmozafterpaint=False,
+        firstpaint=False,
+        userready=False,
+        testeventmap=[],
+        base_vs_ref=False,
         tpdisable_e10s=False,
         tpnoisy=True,
         tppagecycles=1,
@@ -201,6 +205,8 @@ GLOBAL_OVERRIDES = (
     'tpmanifest',
     'tptimeout',
     'tpmozafterpaint',
+    'firstpaint',
+    'userready',
 )
 
 
@@ -305,9 +311,6 @@ def get_active_tests(config):
         raise ConfigurationError("No definition found for test(s): %s"
                                  % missing)
 
-    # disabled DAMP on winXP: frequent hangs, <3% of devtools users on winXP
-    if utils.PLATFORM_TYPE == 'win_':
-        activeTests = [i for i in activeTests if i != 'damp']
     return activeTests
 
 
@@ -354,6 +357,8 @@ def build_manifest(config, manifestName):
 
 def get_test(config, global_overrides, counters, test_instance):
     mozAfterPaint = getattr(test_instance, 'tpmozafterpaint', None)
+    firstPaint = getattr(test_instance, 'firstpaint', None)
+    userReady = getattr(test_instance, 'userready', None)
 
     test_instance.update(**global_overrides)
 
@@ -361,6 +366,10 @@ def get_test(config, global_overrides, counters, test_instance):
     # so check for None
     if mozAfterPaint is not None:
         test_instance.tpmozafterpaint = mozAfterPaint
+    if firstPaint is not None:
+        test_instance.firstpaint = firstPaint
+    if userReady is not None:
+        test_instance.userready = userReady
 
     # fix up url
     url = getattr(test_instance, 'url', None)
@@ -420,6 +429,7 @@ def get_browser_config(config):
                 'test_timeout': 1200,
                 'xperf_path': None,
                 'error_filename': None,
+                'no_upload_results': False,
                 }
     browser_config = dict(title=config['title'])
     browser_config.update(dict([(i, config[i]) for i in required]))

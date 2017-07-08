@@ -175,6 +175,7 @@ struct TextureFactoryIdentifier
   bool mSupportsPartialUploads;
   bool mSupportsComponentAlpha;
   bool mSupportsBackdropCopyForComponentAlpha;
+  bool mUsingAdvancedLayers;
   SyncHandle mSyncHandle;
 
   explicit TextureFactoryIdentifier(LayersBackend aLayersBackend = LayersBackend::LAYERS_NONE,
@@ -193,8 +194,21 @@ struct TextureFactoryIdentifier
     , mSupportsPartialUploads(aSupportsPartialUploads)
     , mSupportsComponentAlpha(aSupportsComponentAlpha)
     , mSupportsBackdropCopyForComponentAlpha(true)
+    , mUsingAdvancedLayers(false)
     , mSyncHandle(aSyncHandle)
   {}
+
+  bool operator==(const TextureFactoryIdentifier& aOther) const {
+    return
+      mParentBackend == aOther.mParentBackend &&
+      mParentProcessType == aOther.mParentProcessType &&
+      mMaxTextureSize == aOther.mMaxTextureSize &&
+      mCompositorUseANGLE == aOther.mCompositorUseANGLE &&
+      mSupportsTextureBlitting == aOther.mSupportsTextureBlitting &&
+      mSupportsPartialUploads == aOther.mSupportsPartialUploads &&
+      mSupportsComponentAlpha == aOther.mSupportsComponentAlpha &&
+      mSyncHandle == aOther.mSyncHandle;
+  }
 };
 
 /**

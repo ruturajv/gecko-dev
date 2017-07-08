@@ -280,24 +280,47 @@ FormAutofillParent.prototype = {
 
     if (address.guid) {
       if (!this.profileStorage.addresses.mergeIfPossible(address.guid, address.record)) {
-        // TODO: Show update doorhanger(bug 1303513) and set probe(bug 990200)
+        FormAutofillDoorhanger.show(target, "update").then((state) => {
+          let changedGUIDs = this.profileStorage.addresses.mergeToStorage(address.record);
+          switch (state) {
+            case "create":
+              if (!changedGUIDs.length) {
+                changedGUIDs.push(this.profileStorage.addresses.add(address.record));
+              }
+              break;
+            case "update":
+              if (!changedGUIDs.length) {
+                this.profileStorage.addresses.update(address.guid, address.record);
+                changedGUIDs.push(address.guid);
+              } else {
+                this.profileStorage.addresses.remove(address.guid);
+              }
+              break;
+          }
+          changedGUIDs.forEach(guid => this.profileStorage.addresses.notifyUsed(guid));
+        });
         return;
       }
       this.profileStorage.addresses.notifyUsed(address.guid);
     } else {
-      if (!Services.prefs.getBoolPref("extensions.formautofill.firstTimeUse")) {
-        let changedGUIDs = this.profileStorage.addresses.mergeToStorage(address.record);
-        if (!changedGUIDs.length) {
-          changedGUIDs.push(this.profileStorage.addresses.add(address.record));
-        }
-        changedGUIDs.forEach(guid => this.profileStorage.addresses.notifyUsed(guid));
-        return;
+      let changedGUIDs = this.profileStorage.addresses.mergeToStorage(address.record);
+      if (!changedGUIDs.length) {
+        changedGUIDs.push(this.profileStorage.addresses.add(address.record));
       }
+      changedGUIDs.forEach(guid => this.profileStorage.addresses.notifyUsed(guid));
 
-      let guid = this.profileStorage.addresses.add(address.record);
-      this.profileStorage.addresses.notifyUsed(guid);
-      Services.prefs.setBoolPref("extensions.formautofill.firstTimeUse", false);
-      FormAutofillDoorhanger.show(target, "firstTimeUse");
+      // Show first time use doorhanger
+      if (Services.prefs.getBoolPref("extensions.formautofill.firstTimeUse")) {
+        Services.prefs.setBoolPref("extensions.formautofill.firstTimeUse", false);
+        FormAutofillDoorhanger.show(target, "firstTimeUse").then((state) => {
+          if (state !== "open-pref") {
+            return;
+          }
+
+          target.ownerGlobal.openPreferences("panePrivacy",
+                                             {origin: "autofillDoorhanger"});
+        });
+      }
     }
   },
 };

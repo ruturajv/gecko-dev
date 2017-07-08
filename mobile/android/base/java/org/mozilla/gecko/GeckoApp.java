@@ -112,8 +112,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -122,8 +120,8 @@ import java.util.concurrent.TimeUnit;
 import static org.mozilla.gecko.Tabs.INTENT_EXTRA_SESSION_UUID;
 import static org.mozilla.gecko.Tabs.INTENT_EXTRA_TAB_ID;
 import static org.mozilla.gecko.Tabs.INVALID_TAB_ID;
-import static org.mozilla.gecko.mma.MmaDelegate.DOWNLOAD_VIDEOS_OR_ANY_OTHER_MEDIA;
-import static org.mozilla.gecko.mma.MmaDelegate.LOADS_ARTICLES;
+import static org.mozilla.gecko.mma.MmaDelegate.DOWNLOAD_MEDIA_SAVED_IMAGE;
+import static org.mozilla.gecko.mma.MmaDelegate.READER_AVAILABLE;
 
 public abstract class GeckoApp extends GeckoActivity
                                implements AnchoredPopup.OnVisibilityChangeListener,
@@ -146,6 +144,7 @@ public abstract class GeckoApp extends GeckoActivity
     public static final String ACTION_LOAD                 = "org.mozilla.gecko.LOAD";
     public static final String ACTION_INIT_PW              = "org.mozilla.gecko.INIT_PW";
     public static final String ACTION_SWITCH_TAB           = "org.mozilla.gecko.SWITCH_TAB";
+    public static final String ACTION_SHUTDOWN             = "org.mozilla.gecko.SHUTDOWN";
 
     public static final String INTENT_REGISTER_STUMBLER_LISTENER = "org.mozilla.gecko.STUMBLER_REGISTER_LOCAL_LISTENER";
 
@@ -868,10 +867,10 @@ public abstract class GeckoApp extends GeckoActivity
             prefs.edit().putInt(PREFS_FLASH_USAGE, ++count).apply();
 
         } else if ("Mma:reader_available".equals(event)) {
-            MmaDelegate.track(LOADS_ARTICLES);
+            MmaDelegate.track(READER_AVAILABLE);
 
         } else if ("Mma:web_save_media".equals(event) || "Mma:web_save_image".equals(event)) {
-            MmaDelegate.track(DOWNLOAD_VIDEOS_OR_ANY_OTHER_MEDIA);
+            MmaDelegate.track(DOWNLOAD_MEDIA_SAVED_IMAGE);
 
         }
 
@@ -2117,6 +2116,19 @@ public abstract class GeckoApp extends GeckoActivity
     protected void onNewIntent(Intent externalIntent) {
         final SafeIntent intent = new SafeIntent(externalIntent);
         final String action = intent.getAction();
+
+        if (ACTION_SHUTDOWN.equals(action)) {
+            PrefsHelper.getPref(GeckoPreferences.PREFS_SHUTDOWN_INTENT,
+                                new PrefsHelper.PrefHandlerBase() {
+                @Override public void prefValue(String pref, boolean value) {
+                    if (value) {
+                        mShutdownOnDestroy = true;
+                        GeckoThread.forceQuit();
+                    }
+                }
+            });
+            return;
+        }
 
         final boolean isFirstTab = !mWasFirstTabShownAfterActivityUnhidden;
         mWasFirstTabShownAfterActivityUnhidden = true; // Reset since we'll be loading a tab.

@@ -4,158 +4,191 @@
 
 //! Animated types for CSS values related to effects.
 
-use properties::animated_properties::Animatable;
-#[cfg(feature = "gecko")]
-use properties::animated_properties::IntermediateColor;
-use values::computed::{Angle, Number};
-use values::computed::effects::DropShadow as ComputedDropShadow;
-use values::computed::effects::Filter as ComputedFilter;
-use values::computed::effects::FilterList as ComputedFilterList;
-use values::computed::length::Length;
-use values::generics::effects::Filter as GenericFilter;
-use values::generics::effects::FilterList as GenericFilterList;
-
-/// An animated value for the `filter` property.
-pub type FilterList = GenericFilterList<Filter>;
-
-/// An animated value for a single `filter`.
-pub type Filter = GenericFilter<
-    Angle,
-    // FIXME: Should be `NumberOrPercentage`.
-    Number,
-    Length,
-    DropShadow
->;
-
-/// An animated value for the `drop-shadow()` filter.
-///
-/// Currently unsupported outside of Gecko.
+use properties::animated_properties::{Animatable, IntermediateColor};
+use properties::longhands::box_shadow::computed_value::T as ComputedBoxShadowList;
+use properties::longhands::filter::computed_value::T as ComputedFilterList;
+use properties::longhands::text_shadow::computed_value::T as ComputedTextShadowList;
+use std::cmp;
 #[cfg(not(feature = "gecko"))]
+use values::Impossible;
+use values::animated::ToAnimatedValue;
+use values::computed::{Angle, Number};
+use values::computed::length::Length;
+use values::generics::effects::BoxShadow as GenericBoxShadow;
+use values::generics::effects::Filter as GenericFilter;
+use values::generics::effects::SimpleShadow as GenericSimpleShadow;
+
+/// An animated value for the `box-shadow` property.
+pub type BoxShadowList = ShadowList<BoxShadow>;
+
+/// An animated value for the `text-shadow` property.
+pub type TextShadowList = ShadowList<SimpleShadow>;
+
+/// An animated value for shadow lists.
+///
+/// https://drafts.csswg.org/css-transitions/#animtype-shadow-list
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
 #[derive(Clone, Debug, PartialEq)]
-pub enum DropShadow {}
+pub struct ShadowList<Shadow>(Vec<Shadow>);
+
+/// An animated value for a single `box-shadow`.
+pub type BoxShadow = GenericBoxShadow<IntermediateColor, Length, Length>;
+
+/// An animated value for the `filter` property.
+#[cfg_attr(feature = "servo", derive(HeapSizeOf))]
+#[derive(Clone, Debug, PartialEq)]
+pub struct FilterList(pub Vec<Filter>);
+
+/// An animated value for a single `filter`.
+#[cfg(feature = "gecko")]
+pub type Filter = GenericFilter<Angle, Number, Length, SimpleShadow>;
+
+/// An animated value for a single `filter`.
+#[cfg(not(feature = "gecko"))]
+pub type Filter = GenericFilter<Angle, Number, Length, Impossible>;
 
 /// An animated value for the `drop-shadow()` filter.
-///
-/// Contrary to the canonical order from the spec, the color is serialised
-/// first, like in Gecko and Webkit.
-#[cfg(feature = "gecko")]
-#[derive(Clone, Debug, PartialEq)]
-pub struct DropShadow {
-    /// Color.
-    pub color: IntermediateColor,
-    /// Horizontal radius.
-    pub horizontal: Length,
-    /// Vertical radius.
-    pub vertical: Length,
-    /// Blur radius.
-    pub blur: Length,
-}
+pub type SimpleShadow = GenericSimpleShadow<IntermediateColor, Length, Length>;
 
-impl From<ComputedFilterList> for FilterList {
+impl ToAnimatedValue for ComputedBoxShadowList {
+    type AnimatedValue = BoxShadowList;
+
     #[inline]
-    fn from(filters: ComputedFilterList) -> Self {
-        filters.0.into_vec().into_iter().map(|f| f.into()).collect::<Vec<_>>().into()
+    fn to_animated_value(self) -> Self::AnimatedValue {
+        ShadowList(self.0.to_animated_value())
+    }
+
+    #[inline]
+    fn from_animated_value(animated: Self::AnimatedValue) -> Self {
+        ComputedBoxShadowList(ToAnimatedValue::from_animated_value(animated.0))
     }
 }
 
-impl From<FilterList> for ComputedFilterList {
+impl<S> Animatable for ShadowList<S>
+where
+    S: Animatable + Clone,
+{
     #[inline]
-    fn from(filters: FilterList) -> Self {
-        filters.0.into_vec().into_iter().map(|f| f.into()).collect::<Vec<_>>().into()
-    }
-}
-
-impl From<ComputedFilter> for Filter {
-    #[inline]
-    fn from(filter: ComputedFilter) -> Self {
-        match filter {
-            GenericFilter::Blur(angle) => GenericFilter::Blur(angle),
-            GenericFilter::Brightness(factor) => GenericFilter::Brightness(factor),
-            GenericFilter::Contrast(factor) => GenericFilter::Contrast(factor),
-            GenericFilter::Grayscale(factor) => GenericFilter::Grayscale(factor),
-            GenericFilter::HueRotate(factor) => GenericFilter::HueRotate(factor),
-            GenericFilter::Invert(factor) => GenericFilter::Invert(factor),
-            GenericFilter::Opacity(factor) => GenericFilter::Opacity(factor),
-            GenericFilter::Saturate(factor) => GenericFilter::Saturate(factor),
-            GenericFilter::Sepia(factor) => GenericFilter::Sepia(factor),
-            GenericFilter::DropShadow(shadow) => {
-                GenericFilter::DropShadow(shadow.into())
-            },
-            #[cfg(feature = "gecko")]
-            GenericFilter::Url(url) => GenericFilter::Url(url),
+    fn add_weighted(
+        &self,
+        other: &Self,
+        self_portion: f64,
+        other_portion: f64,
+    ) -> Result<Self, ()> {
+        let max_len = cmp::max(self.0.len(), other.0.len());
+        let mut shadows = Vec::with_capacity(max_len);
+        for i in 0..max_len {
+            shadows.push(match (self.0.get(i), other.0.get(i)) {
+                (Some(shadow), Some(other)) => {
+                    shadow.add_weighted(other, self_portion, other_portion)?
+                },
+                (Some(shadow), None) => {
+                    shadow.add_weighted(&shadow.get_zero_value()?, self_portion, other_portion)?
+                },
+                (None, Some(shadow)) => {
+                    shadow.get_zero_value()?.add_weighted(&shadow, self_portion, other_portion)?
+                },
+                (None, None) => unreachable!(),
+            });
         }
+        Ok(ShadowList(shadows))
     }
-}
 
-impl From<Filter> for ComputedFilter {
     #[inline]
-    fn from(filter: Filter) -> Self {
-        match filter {
-            GenericFilter::Blur(angle) => GenericFilter::Blur(angle),
-            GenericFilter::Brightness(factor) => GenericFilter::Brightness(factor),
-            GenericFilter::Contrast(factor) => GenericFilter::Contrast(factor),
-            GenericFilter::Grayscale(factor) => GenericFilter::Grayscale(factor),
-            GenericFilter::HueRotate(factor) => GenericFilter::HueRotate(factor),
-            GenericFilter::Invert(factor) => GenericFilter::Invert(factor),
-            GenericFilter::Opacity(factor) => GenericFilter::Opacity(factor),
-            GenericFilter::Saturate(factor) => GenericFilter::Saturate(factor),
-            GenericFilter::Sepia(factor) => GenericFilter::Sepia(factor),
-            GenericFilter::DropShadow(shadow) => {
-                GenericFilter::DropShadow(shadow.into())
-            },
-            #[cfg(feature = "gecko")]
-            GenericFilter::Url(url) => GenericFilter::Url(url.clone())
-        }
+    fn add(&self, other: &Self) -> Result<Self, ()> {
+        Ok(ShadowList(
+            self.0.iter().cloned().chain(other.0.iter().cloned()).collect(),
+        ))
     }
 }
 
-impl From<ComputedDropShadow> for DropShadow {
+impl ToAnimatedValue for ComputedTextShadowList {
+    type AnimatedValue = TextShadowList;
+
+    #[inline]
+    fn to_animated_value(self) -> Self::AnimatedValue {
+        ShadowList(self.0.to_animated_value())
+    }
+
+    #[inline]
+    fn from_animated_value(animated: Self::AnimatedValue) -> Self {
+        ComputedTextShadowList(ToAnimatedValue::from_animated_value(animated.0))
+    }
+}
+
+impl Animatable for BoxShadow {
+    #[inline]
+    fn add_weighted(
+        &self,
+        other: &Self,
+        self_portion: f64,
+        other_portion: f64,
+    ) -> Result<Self, ()> {
+        if self.inset != other.inset {
+            return Err(());
+        }
+        Ok(BoxShadow {
+            base: self.base.add_weighted(&other.base, self_portion, other_portion)?,
+            spread: self.spread.add_weighted(&other.spread, self_portion, other_portion)?,
+            inset: self.inset,
+        })
+    }
+
+    #[inline]
+    fn get_zero_value(&self) -> Result<Self, ()> {
+        Ok(BoxShadow {
+            base: self.base.get_zero_value()?,
+            spread: self.spread.get_zero_value()?,
+            inset: self.inset,
+        })
+    }
+
+    #[inline]
+    fn compute_distance(&self, other: &Self) -> Result<f64, ()> {
+        self.compute_squared_distance(other).map(|sd| sd.sqrt())
+    }
+
+    #[inline]
+    fn compute_squared_distance(&self, other: &Self) -> Result<f64, ()> {
+        if self.inset != other.inset {
+            return Err(());
+        }
+        Ok(
+            self.base.compute_squared_distance(&other.base)? +
+            self.spread.compute_squared_distance(&other.spread)?,
+        )
+    }
+}
+
+impl ToAnimatedValue for ComputedFilterList {
+    type AnimatedValue = FilterList;
+
     #[cfg(not(feature = "gecko"))]
     #[inline]
-    fn from(shadow: ComputedDropShadow) -> Self {
-        match shadow {}
+    fn to_animated_value(self) -> Self::AnimatedValue {
+        FilterList(self.0)
     }
 
     #[cfg(feature = "gecko")]
     #[inline]
-    fn from(shadow: ComputedDropShadow) -> Self {
-        DropShadow {
-            color: shadow.color.into(),
-            horizontal: shadow.horizontal,
-            vertical: shadow.vertical,
-            blur: shadow.blur,
-        }
+    fn to_animated_value(self) -> Self::AnimatedValue {
+        FilterList(self.0.to_animated_value())
     }
-}
 
-impl From<DropShadow> for ComputedDropShadow {
     #[cfg(not(feature = "gecko"))]
     #[inline]
-    fn from(shadow: DropShadow) -> Self {
-        match shadow {}
+    fn from_animated_value(animated: Self::AnimatedValue) -> Self {
+        ComputedFilterList(animated.0)
     }
 
     #[cfg(feature = "gecko")]
     #[inline]
-    fn from(shadow: DropShadow) -> Self {
-        ComputedDropShadow {
-            color: shadow.color.into(),
-            horizontal: shadow.horizontal,
-            vertical: shadow.vertical,
-            blur: shadow.blur,
-        }
+    fn from_animated_value(animated: Self::AnimatedValue) -> Self {
+        ComputedFilterList(ToAnimatedValue::from_animated_value(animated.0))
     }
 }
 
-impl Animatable for DropShadow {
-    #[cfg(not(feature = "gecko"))]
-    #[inline]
-    fn add_weighted(&self, _other: &Self, _self_portion: f64, _other_portion: f64) -> Result<Self, ()> {
-        match *self {}
-    }
-
-    #[cfg(feature = "gecko")]
+impl Animatable for SimpleShadow {
     #[inline]
     fn add_weighted(&self, other: &Self, self_portion: f64, other_portion: f64) -> Result<Self, ()> {
         let color = self.color.add_weighted(&other.color, self_portion, other_portion)?;
@@ -163,7 +196,7 @@ impl Animatable for DropShadow {
         let vertical = self.vertical.add_weighted(&other.vertical, self_portion, other_portion)?;
         let blur = self.blur.add_weighted(&other.blur, self_portion, other_portion)?;
 
-        Ok(DropShadow {
+        Ok(SimpleShadow {
             color: color,
             horizontal: horizontal,
             vertical: vertical,
@@ -171,25 +204,21 @@ impl Animatable for DropShadow {
         })
     }
 
-    #[cfg(not(feature = "gecko"))]
     #[inline]
-    fn compute_distance(&self, _other: &Self) -> Result<f64, ()> {
-        match *self {}
+    fn get_zero_value(&self) -> Result<Self, ()> {
+        Ok(SimpleShadow {
+            color: IntermediateColor::transparent(),
+            horizontal: self.horizontal.get_zero_value()?,
+            vertical: self.vertical.get_zero_value()?,
+            blur: self.blur.get_zero_value()?,
+        })
     }
 
-    #[cfg(feature = "gecko")]
     #[inline]
     fn compute_distance(&self, other: &Self) -> Result<f64, ()> {
         self.compute_squared_distance(other).map(|sd| sd.sqrt())
     }
 
-    #[cfg(not(feature = "gecko"))]
-    #[inline]
-    fn compute_squared_distance(&self, _other: &Self) -> Result<f64, ()> {
-        match *self {}
-    }
-
-    #[cfg(feature = "gecko")]
     #[inline]
     fn compute_squared_distance(&self, other: &Self) -> Result<f64, ()> {
         Ok(

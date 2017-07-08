@@ -31,6 +31,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::ops::Deref;
 use stylearc::Arc;
+use stylist::Stylist;
 use thread_state;
 
 pub use style_traits::UnsafeNode;
@@ -126,10 +127,6 @@ pub trait TNode : Sized + Copy + Clone + Debug + NodeInfo {
 
     /// Get this node's children from the perspective of a restyle traversal.
     fn traversal_children(&self) -> LayoutIterator<Self::ConcreteChildrenIterator>;
-
-    /// Returns whether `children()` and `traversal_children()` might return
-    /// iterators over different nodes.
-    fn children_and_traversal_children_might_differ(&self) -> bool;
 
     /// Converts self into an `OpaqueNode`.
     fn opaque(&self) -> OpaqueNode;
@@ -299,7 +296,7 @@ pub trait TElement : Eq + PartialEq + Debug + Hash + Sized + Copy + Clone +
     ///
     /// XXXManishearth It would be better to make this a type parameter on
     /// ThreadLocalStyleContext and StyleContext
-    type FontMetricsProvider: FontMetricsProvider;
+    type FontMetricsProvider: FontMetricsProvider + Send;
 
     /// Get this element as a node.
     fn as_node(&self) -> Self::ConcreteNode;
@@ -426,9 +423,19 @@ pub trait TElement : Eq + PartialEq + Debug + Hash + Sized + Copy + Clone +
     /// TODO(emilio, bz): actually implement the logic for it.
     fn may_generate_pseudo(
         &self,
-        _pseudo: &PseudoElement,
+        pseudo: &PseudoElement,
         _primary_style: &ComputedValues,
     ) -> bool {
+        // ::before/::after are always supported for now, though we could try to
+        // optimize out leaf elements.
+
+        // ::first-letter and ::first-line are only supported for block-inside
+        // things, and only in Gecko, not Servo.  Unfortunately, Gecko has
+        // block-inside things that might have any computed display value due to
+        // things like fieldsets, legends, etc.  Need to figure out how this
+        // should work.
+        debug_assert!(pseudo.is_eager(),
+                      "Someone called may_generate_pseudo with a non-eager pseudo.");
         true
     }
 
@@ -617,13 +624,32 @@ pub trait TElement : Eq + PartialEq + Debug + Hash + Sized + Copy + Clone +
         }
     }
 
-    /// Gets declarations from XBL bindings from the element. Only gecko element could have this.
-    fn get_declarations_from_xbl_bindings<V>(&self,
-                                             _pseudo_element: Option<&PseudoElement>,
-                                             _applicable_declarations: &mut V)
-                                             -> bool
-        where V: Push<ApplicableDeclarationBlock> + VecLike<ApplicableDeclarationBlock> {
+    /// Implements Gecko's `nsBindingManager::WalkRules`.
+    ///
+    /// Returns whether to cut off the inheritance.
+    fn each_xbl_stylist<F>(&self, _: F) -> bool
+    where
+        F: FnMut(&Stylist),
+    {
         false
+    }
+
+    /// Gets declarations from XBL bindings from the element.
+    fn get_declarations_from_xbl_bindings<V>(
+        &self,
+        pseudo_element: Option<&PseudoElement>,
+        applicable_declarations: &mut V
+    ) -> bool
+    where
+        V: Push<ApplicableDeclarationBlock> + VecLike<ApplicableDeclarationBlock>
+    {
+        self.each_xbl_stylist(|stylist| {
+            stylist.push_applicable_declarations_as_xbl_only_stylist(
+                self,
+                pseudo_element,
+                applicable_declarations
+            );
+        })
     }
 
     /// Gets the current existing CSS transitions, by |property, end value| pairs in a HashMap.
