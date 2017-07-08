@@ -14,7 +14,7 @@ const { connect } = require("devtools/client/shared/vendor/react-redux");
 const Actions = require("../actions/index");
 const { FILTER_SEARCH_DELAY } = require("../constants");
 const {
-  getDisplayedRequests,
+  getButtonFilteredRequests,
   getDisplayedRequestsSummary,
   getRequestFilterTypes,
   isNetworkDetailsToggleButtonDisabled,
@@ -134,7 +134,7 @@ module.exports = connect(
     networkDetailsToggleDisabled: isNetworkDetailsToggleButtonDisabled(state),
     networkDetailsOpen: state.ui.networkDetailsOpen,
     requestFilterTypes: getRequestFilterTypes(state),
-    displayedRequests: getDisplayedRequests(state),
+    displayedRequests: getButtonFilteredRequests(state),
     summary: getDisplayedRequestsSummary(state),
   }),
   (dispatch) => ({

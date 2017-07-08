@@ -45,6 +45,16 @@ const getFilterFn = createSelector(
   }
 );
 
+const getButtonFilterFn = createSelector(
+  state => state.filters,
+  filters => r => {
+    const matchesType = filters.requestFilterTypes.some((enabled, filter) => {
+      return enabled && Filters[filter] && Filters[filter](r);
+    });
+    return matchesType;
+  }
+);
+
 const getSortFn = createSelector(
   state => state.requests.requests,
   state => state.sort,
@@ -67,6 +77,12 @@ const getDisplayedRequests = createSelector(
   getSortFn,
   (requests, filterFn, sortFn) => requests.valueSeq()
     .filter(filterFn).sort(sortFn).toList()
+);
+
+const getButtonFilteredRequests = createSelector(
+  state =>
+    state.requests.requests, getButtonFilterFn, (requests, filterFn) =>
+      requests.valueSeq().filter(filterFn).toList()
 );
 
 const getDisplayedRequestsSummary = createSelector(
@@ -114,6 +130,7 @@ function getDisplayedRequestById(state, id) {
 module.exports = {
   getDisplayedRequestById,
   getDisplayedRequests,
+  getButtonFilteredRequests,
   getDisplayedRequestsSummary,
   getRequestById,
   getSelectedRequest,
