@@ -49,6 +49,7 @@ const Toolbar = createClass({
     networkDetailsOpen: PropTypes.bool.isRequired,
     toggleNetworkDetails: PropTypes.func.isRequired,
     toggleRequestFilterType: PropTypes.func.isRequired,
+    displayedRequests: PropTypes.object.isRequired,
   },
 
   toggleRequestFilterType(evt) {

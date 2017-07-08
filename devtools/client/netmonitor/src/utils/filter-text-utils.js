@@ -322,7 +322,7 @@ function getFilterFlagValues(filterFlag, displayedRequests) {
   }
 
   return Array.from(uniqueValues)
-    .filter(value => 
+    .filter(value =>
       typeof value !== "undefined" && value !== "" && value !== "undefined")
     .sort()
     .map(value => `${filterFlag}${value}`);
