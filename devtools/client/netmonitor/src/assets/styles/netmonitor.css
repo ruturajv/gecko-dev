@@ -106,13 +106,6 @@ body,
   text-decoration: underline;
 }
 
-/* Special direction change and ellipsis for netmon autocomplete */
-.network-monitor .autocomplete-item {
-  text-overflow: ellipsis;
-  white-space: pre;
-  overflow: hidden;
-}
-
 /* Status bar */
 
 .devtools-status-bar-label {

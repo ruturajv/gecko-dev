@@ -14,13 +14,13 @@ const { connect } = require("devtools/client/shared/vendor/react-redux");
 const Actions = require("../actions/index");
 const { FILTER_SEARCH_DELAY } = require("../constants");
 const {
-  getButtonFilteredRequests,
+  getTypeFilteredRequests,
   getDisplayedRequestsSummary,
   getRequestFilterTypes,
   isNetworkDetailsToggleButtonDisabled,
 } = require("../selectors/index");
 
-const { autocompleteProvider } = require("../utils/filter-text-utils");
+const { autocompleteProvider } = require("../utils/filter-autocomplete-provider");
 const { L10N } = require("../utils/l10n");
 
 // Components
@@ -134,7 +134,7 @@ module.exports = connect(
     networkDetailsToggleDisabled: isNetworkDetailsToggleButtonDisabled(state),
     networkDetailsOpen: state.ui.networkDetailsOpen,
     requestFilterTypes: getRequestFilterTypes(state),
-    filteredRequests: getButtonFilteredRequests(state),
+    filteredRequests: getTypeFilteredRequests(state),
     summary: getDisplayedRequestsSummary(state),
   }),
   (dispatch) => ({
