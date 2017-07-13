@@ -16,7 +16,7 @@ const { FILTER_FLAGS } = require("../constants");
  * @param {object} request - Network request item
  * @return {string|Array} - The output is a string or an array based on the request
  */
-function getRequestFlagValue(flag, request) {
+function getAutocompleteValuesForFlag(flag, request) {
   let value;
   let { responseCookies = { cookies: [] } } = request;
   responseCookies = responseCookies.cookies || responseCookies;
@@ -94,7 +94,7 @@ function getLastTokenFlagValues(lastToken, requests) {
   let uniqueValues = new Set();
   for (let request of requests) {
     // strip out "-" and ":" from flags ie. "-method:" and pass as flag
-    let value = getRequestFlagValue(flag.replace(/^-?(.*?):$/, "$1"), request);
+    let value = getAutocompleteValuesForFlag(flag.replace(/^-?(.*?):$/, "$1"), request);
     if (Array.isArray(value)) {
       for (let v of value) {
         uniqueValues.add(v);
