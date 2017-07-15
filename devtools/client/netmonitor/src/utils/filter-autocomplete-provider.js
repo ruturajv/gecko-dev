@@ -80,12 +80,17 @@ function getAutocompleteValuesForFlag(flag, request) {
  * @return {Array} - array of autocomplete values
  */
 function getLastTokenFlagValues(lastToken, requests) {
-  let flag, typedFlagValue;
+  let flag, tokenFlag, typedFlagValue, isNegativeFlag = false;
   if (!lastToken.includes(":")) {
     return [];
   }
 
-  [flag, typedFlagValue] = lastToken.split(":");
+  [tokenFlag, typedFlagValue] = lastToken.split(":");
+  flag = tokenFlag;
+  if (tokenFlag.startsWith("-")) {
+    flag = tokenFlag.slice(1);
+    isNegativeFlag = true;
+  }
   if (!FILTER_FLAGS.includes(flag)) {
     // Flag is some random string, return
     return [];
@@ -94,7 +99,7 @@ function getLastTokenFlagValues(lastToken, requests) {
   let uniqueValues = new Set();
   for (let request of requests) {
     // strip out "-" and ":" from flags ie. "-method:" and pass as flag
-    let value = getAutocompleteValuesForFlag(flag.replace(/^-?(.*?):$/, "$1"), request);
+    let value = getAutocompleteValuesForFlag(flag, request);
     if (Array.isArray(value)) {
       for (let v of value) {
         uniqueValues.add(v);
@@ -109,12 +114,12 @@ function getLastTokenFlagValues(lastToken, requests) {
       if (typedFlagValue) {
         let lowerTyped = typedFlagValue.toLowerCase(),
           lowerValue = value.toLowerCase();
-        return lowerValue.startsWith(lowerTyped) && lowerValue !== lowerTyped;
+        return lowerValue.includes(lowerTyped) && lowerValue !== lowerTyped;
       }
       return typeof value !== "undefined" && value !== "" && value !== "undefined";
     })
     .sort()
-    .map(value => `${flag}:${value}`);
+    .map(value => isNegativeFlag ? `-${flag}:${value}` : `${flag}:${value}`);
 }
 
 /**
