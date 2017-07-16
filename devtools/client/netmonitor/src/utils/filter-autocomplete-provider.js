@@ -17,57 +17,57 @@ const { FILTER_FLAGS } = require("../constants");
  * @return {string|Array} - The output is a string or an array based on the request
  */
 function getAutocompleteValuesForFlag(flag, request) {
-  let value;
+  let values = [];
   let { responseCookies = { cookies: [] } } = request;
   responseCookies = responseCookies.cookies || responseCookies;
 
   switch (flag) {
     case "status-code":
       // Sometimes status comes as Number
-      value = String(request.status);
+      values.push(String(request.status));
       break;
     case "scheme":
-      value = request.urlDetails.scheme;
+      values.push(request.urlDetails.scheme);
       break;
     case "domain":
-      value = request.urlDetails.host;
+      values.push(request.urlDetails.host);
       break;
     case "remote-ip":
-      value = request.remoteAddress;
+      values.push(request.remoteAddress);
       break;
     case "cause":
-      value = request.cause.type;
+      values.push(request.cause.type);
       break;
     case "mime-type":
-      value = request.mimeType;
+      values.push(request.mimeType);
       break;
     case "set-cookie-name":
-      value = responseCookies.map(c => c.name);
+      values = responseCookies.map(c => c.name);
       break;
     case "set-cookie-value":
-      value = responseCookies.map(c => c.value);
+      values = responseCookies.map(c => c.value);
       break;
     case "set-cookie-domain":
-      value = responseCookies.map(c => c.hasOwnProperty("domain") ?
+      values = responseCookies.map(c => c.hasOwnProperty("domain") ?
           c.domain : request.urlDetails.host);
       break;
     case "is":
-      value = ["cached", "from-cache", "running"];
+      values = ["cached", "from-cache", "running"];
       break;
     case "has-response-header":
       // Some requests not having responseHeaders..?
-      value = request.responseHeaders &&
+      values = request.responseHeaders &&
         request.responseHeaders.headers.map(h => h.name);
       break;
     case "protocol":
-      value = request.httpVersion;
+      values.push(request.httpVersion);
       break;
     case "method":
     default:
-      value = request[flag];
+      values.push(request[flag]);
   }
 
-  return value;
+  return values;
 }
 
 /*
@@ -80,36 +80,34 @@ function getAutocompleteValuesForFlag(flag, request) {
  * @return {Array} - array of autocomplete values
  */
 function getLastTokenFlagValues(lastToken, requests) {
-  let flag, tokenFlag, typedFlagValue, isNegativeFlag = false;
+  // The last token must be a string like "method:GET" or "method:", Any token
+  // without a ":" cant be used to parse out flag values
   if (!lastToken.includes(":")) {
     return [];
   }
 
-  [tokenFlag, typedFlagValue] = lastToken.split(":");
-  flag = tokenFlag;
-  if (tokenFlag.startsWith("-")) {
-    flag = tokenFlag.slice(1);
+  // Parse out possible flag from lastToken
+  let [flag, typedFlagValue] = lastToken.split(":");
+  let isNegativeFlag = false;
+
+  // Check if flag is used with negative match
+  if (flag.startsWith("-")) {
+    flag = flag.slice(1);
     isNegativeFlag = true;
   }
+
+  // Flag is some random string, return
   if (!FILTER_FLAGS.includes(flag)) {
-    // Flag is some random string, return
     return [];
   }
 
-  let uniqueValues = new Set();
+  let values = [];
   for (let request of requests) {
-    // strip out "-" and ":" from flags ie. "-method:" and pass as flag
-    let value = getAutocompleteValuesForFlag(flag, request);
-    if (Array.isArray(value)) {
-      for (let v of value) {
-        uniqueValues.add(v);
-      }
-    } else {
-      uniqueValues.add(value);
-    }
+    values.push(...getAutocompleteValuesForFlag(flag, request));
   }
+  values = [...new Set(values)];
 
-  return Array.from(uniqueValues)
+  return values
     .filter(value => {
       if (typedFlagValue) {
         let lowerTyped = typedFlagValue.toLowerCase(),
