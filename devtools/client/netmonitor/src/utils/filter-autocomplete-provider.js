@@ -153,9 +153,9 @@ function autocompleteProvider(filter, requests) {
   }
 
   let autocompleteList;
-  let filledInFlags = getLastTokenFlagValues(lastToken, requests);
-  if (filledInFlags.length > 0) {
-    autocompleteList = filledInFlags;
+  let availableValues = getLastTokenFlagValues(lastToken, requests);
+  if (availableValues.length > 0) {
+    autocompleteList = availableValues;
   } else {
     autocompleteList = baseList
       .filter((item) => {

@@ -14,9 +14,9 @@ const { connect } = require("devtools/client/shared/vendor/react-redux");
 const Actions = require("../actions/index");
 const { FILTER_SEARCH_DELAY } = require("../constants");
 const {
-  getTypeFilteredRequests,
   getDisplayedRequestsSummary,
   getRequestFilterTypes,
+  getTypeFilteredRequests,
   isNetworkDetailsToggleButtonDisabled,
 } = require("../selectors/index");
 

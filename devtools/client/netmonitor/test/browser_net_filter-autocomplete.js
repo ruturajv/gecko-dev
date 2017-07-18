@@ -43,6 +43,8 @@ add_task(async function () {
 
   info("Starting test... ");
 
+  // Let the requests load completely before the autocomplete tests begin
+  // as autocomplete values also rely on the network requests.
   let waitNetwork = waitForNetworkEvents(monitor, REQUESTS.length);
   loadCommonFrameScript();
   await performRequestsInContent(REQUESTS);
@@ -88,7 +90,9 @@ add_task(async function () {
   testAutocompleteContents(["protocol:"], document);
 
   // The new value of the text box should be previousTokens + latest value selected
+  // First return selects "protocol:"
   EventUtils.synthesizeKey("VK_RETURN", {});
+  // Second return selects "protocol:HTTP/1.1"
   EventUtils.synthesizeKey("VK_RETURN", {});
   is(document.querySelector(".devtools-filterinput").value,
     "scheme:http protocol:HTTP/1.1",

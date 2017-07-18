@@ -80,9 +80,9 @@ const getDisplayedRequests = createSelector(
 );
 
 const getTypeFilteredRequests = createSelector(
-  state =>
-    state.requests.requests, getTypeFilterFn, (requests, filterFn) =>
-      requests.valueSeq().filter(filterFn).toList()
+  state => state.requests.requests,
+  getTypeFilterFn,
+  (requests, filterFn) => requests.valueSeq().filter(filterFn).toList()
 );
 
 const getDisplayedRequestsSummary = createSelector(
