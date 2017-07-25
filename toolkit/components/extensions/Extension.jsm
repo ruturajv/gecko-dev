@@ -49,6 +49,8 @@ XPCOMUtils.defineLazyModuleGetter(this, "AddonManager",
                                   "resource://gre/modules/AddonManager.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "AppConstants",
                                   "resource://gre/modules/AppConstants.jsm");
+XPCOMUtils.defineLazyModuleGetter(this, "AsyncShutdown",
+                                  "resource://gre/modules/AsyncShutdown.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "ExtensionAPIs",
                                   "resource://gre/modules/ExtensionAPI.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "ExtensionCommon",
@@ -88,6 +90,9 @@ XPCOMUtils.defineLazyGetter(
 Cu.import("resource://gre/modules/ExtensionParent.jsm");
 Cu.import("resource://gre/modules/ExtensionUtils.jsm");
 
+XPCOMUtils.defineLazyServiceGetter(this, "aomStartup",
+                                   "@mozilla.org/addons/addon-manager-startup;1",
+                                   "amIAddonManagerStartup");
 XPCOMUtils.defineLazyServiceGetter(this, "uuidGen",
                                    "@mozilla.org/uuid-generator;1",
                                    "nsIUUIDGenerator");
@@ -269,10 +274,12 @@ var UninstallObserver = {
 
     if (!this.leaveStorage) {
       // Clear browser.local.storage
-      ExtensionStorage.clear(addon.id);
+      AsyncShutdown.profileChangeTeardown.addBlocker(
+        `Clear Extension Storage ${addon.id}`,
+        ExtensionStorage.clear(addon.id));
 
       // Clear any IndexedDB storage created by the extension
-      let baseURI = NetUtil.newURI(`moz-extension://${uuid}/`);
+      let baseURI = Services.io.newURI(`moz-extension://${uuid}/`);
       let principal = Services.scriptSecurityManager.createCodebasePrincipal(
         baseURI, {});
       Services.qms.clearStoragesForPrincipal(principal);
@@ -322,6 +329,7 @@ this.ExtensionData = class {
     this.permissions = new Set();
 
     this.errors = [];
+    this.warnings = [];
   }
 
   get builtinMessages() {
@@ -338,10 +346,31 @@ this.ExtensionData = class {
     this.packagingError(`Reading manifest: ${message}`);
   }
 
+  manifestWarning(message) {
+    this.packagingWarning(`Reading manifest: ${message}`);
+  }
+
   // Report an error about the extension's general packaging.
   packagingError(message) {
     this.errors.push(message);
-    this.logger.error(`Loading extension '${this.id}': ${message}`);
+    this.logError(message);
+  }
+
+  packagingWarning(message) {
+    this.warnings.push(message);
+    this.logWarning(message);
+  }
+
+  logWarning(message) {
+    this._logMessage(message, "warn");
+  }
+
+  logError(message) {
+    this._logMessage(message, "error");
+  }
+
+  _logMessage(message, severity) {
+    this.logger[severity](`Loading extension '${this.id}': ${message}`);
   }
 
   /**
@@ -366,7 +395,7 @@ this.ExtensionData = class {
 
   async readDirectory(path) {
     if (this.rootURI instanceof Ci.nsIFileURL) {
-      let uri = NetUtil.newURI(this.rootURI.resolve("./" + path));
+      let uri = Services.io.newURI(this.rootURI.resolve("./" + path));
       let fullPath = uri.QueryInterface(Ci.nsIFileURL).file.path;
 
       let iter = new OS.File.DirectoryIterator(fullPath);
@@ -379,52 +408,42 @@ this.ExtensionData = class {
       } catch (e) {
         // Always return a list, even if the directory does not exist (or is
         // not a directory) for symmetry with the ZipReader behavior.
+        Cu.reportError(e);
       }
       iter.close();
 
       return results;
     }
 
-    // FIXME: We need a way to do this without main thread IO.
-
     let uri = this.rootURI.QueryInterface(Ci.nsIJARURI);
-
     let file = uri.JARFile.QueryInterface(Ci.nsIFileURL).file;
-    let zipReader = Cc["@mozilla.org/libjar/zip-reader;1"].createInstance(Ci.nsIZipReader);
-    zipReader.open(file);
-    try {
-      let results = [];
 
-      // Normalize the directory path.
-      path = `${uri.JAREntry}/${path}`;
-      path = path.replace(/\/\/+/g, "/").replace(/^\/|\/$/g, "") + "/";
+    // Normalize the directory path.
+    path = `${uri.JAREntry}/${path}`;
+    path = path.replace(/\/\/+/g, "/").replace(/^\/|\/$/g, "") + "/";
 
-      // Escape pattern metacharacters.
-      let pattern = path.replace(/[[\]()?*~|$\\]/g, "\\$&");
+    // Escape pattern metacharacters.
+    let pattern = path.replace(/[[\]()?*~|$\\]/g, "\\$&") + "*";
 
-      let enumerator = zipReader.findEntries(pattern + "*");
-      while (enumerator.hasMore()) {
-        let name = enumerator.getNext();
-        if (!name.startsWith(path)) {
-          throw new Error("Unexpected ZipReader entry");
-        }
-
-        // The enumerator returns the full path of all entries.
-        // Trim off the leading path, and filter out entries from
-        // subdirectories.
-        name = name.slice(path.length);
-        if (name && !/\/./.test(name)) {
-          results.push({
-            name: name.replace("/", ""),
-            isDir: name.endsWith("/"),
-          });
-        }
+    let results = [];
+    for (let name of aomStartup.enumerateZipFile(file, pattern)) {
+      if (!name.startsWith(path)) {
+        throw new Error("Unexpected ZipReader entry");
       }
 
-      return results;
-    } finally {
-      zipReader.close();
+      // The enumerator returns the full path of all entries.
+      // Trim off the leading path, and filter out entries from
+      // subdirectories.
+      name = name.slice(path.length);
+      if (name && !/\/./.test(name)) {
+        results.push({
+          name: name.replace("/", ""),
+          isDir: name.endsWith("/"),
+        });
+      }
     }
+
+    return results;
   }
 
   readJSON(path) {
@@ -506,7 +525,7 @@ this.ExtensionData = class {
         principal: this.principal,
 
         logError: error => {
-          this.logger.warn(`Loading extension '${this.id}': Reading manifest: ${error}`);
+          this.manifestWarning(error);
         },
 
         preprocessors: {},
@@ -636,6 +655,34 @@ this.ExtensionData = class {
     }
   }
 
+  async _promiseLocaleMap() {
+    let locales = new Map();
+
+    let entries = await this.readDirectory("_locales");
+    for (let file of entries) {
+      if (file.isDir) {
+        let locale = this.normalizeLocaleCode(file.name);
+        locales.set(locale, file.name);
+      }
+    }
+
+    return locales;
+  }
+
+  _setupLocaleData(locales) {
+    if (this.localeData) {
+      return this.localeData.locales;
+    }
+
+    this.localeData = new LocaleData({
+      defaultLocale: this.defaultLocale,
+      locales,
+      builtinMessages: this.builtinMessages,
+    });
+
+    return locales;
+  }
+
   // Reads the list of locales available in the extension, and returns a
   // Promise which resolves to a Map upon completion.
   // Each map key is a Gecko-compatible locale code, and each value is the
@@ -645,23 +692,8 @@ this.ExtensionData = class {
   promiseLocales() {
     if (!this._promiseLocales) {
       this._promiseLocales = (async () => {
-        let locales = new Map();
-
-        let entries = await this.readDirectory("_locales");
-        for (let file of entries) {
-          if (file.isDir) {
-            let locale = this.normalizeLocaleCode(file.name);
-            locales.set(locale, file.name);
-          }
-        }
-
-        this.localeData = new LocaleData({
-          defaultLocale: this.defaultLocale,
-          locales,
-          builtinMessages: this.builtinMessages,
-        });
-
-        return locales;
+        let locales = this._promiseLocaleMap();
+        return this._setupLocaleData(locales);
       })();
     }
 
@@ -722,6 +754,8 @@ this.ExtensionData = class {
 
 const PROXIED_EVENTS = new Set(["test-harness-message", "add-permissions", "remove-permissions"]);
 
+const shutdownPromises = new Map();
+
 // We create one instance of this class per extension. |addonData|
 // comes directly from bootstrap.js when initializing.
 this.Extension = class extends ExtensionData {
@@ -752,18 +786,16 @@ this.Extension = class extends ExtensionData {
     if (this.remote && processCount !== 1) {
       throw new Error("Out-of-process WebExtensions are not supported with multiple child processes");
     }
-    if (this.remote && !Services.prefs.getBoolPref("layers.popups.compositing.enabled", false)) {
-      Cu.reportError(new Error("Remote extensions should not be enabled without also setting " +
-                               "the layers.popups.compositing.enabled preference to true"));
-    }
 
     // This is filled in the first time an extension child is created.
     this.parentMessageManager = null;
 
     this.id = addonData.id;
     this.version = addonData.version;
-    this.baseURI = NetUtil.newURI(this.getURL("")).QueryInterface(Ci.nsIURL);
+    this.baseURI = Services.io.newURI(this.getURL("")).QueryInterface(Ci.nsIURL);
     this.principal = this.createPrincipal();
+    this.views = new Set();
+    this._backgroundPageFrameLoader = null;
 
     this.onStartup = null;
 
@@ -812,6 +844,19 @@ this.Extension = class extends ExtensionData {
       this.policy.allowedOrigins = this.whiteListedHosts;
     });
     /* eslint-enable mozilla/balanced-listeners */
+  }
+
+  get groupFrameLoader() {
+    let frameLoader = this._backgroundPageFrameLoader;
+    for (let view of this.views) {
+      if (view.viewType === "background" && view.xulBrowser) {
+        return view.xulBrowser.frameLoader;
+      }
+      if (!frameLoader && view.xulBrowser) {
+        frameLoader = view.xulBrowser.frameLoader;
+      }
+    }
+    return frameLoader || ExtensionParent.DebugUtils.getFrameLoader(this.id);
   }
 
   static generateXPI(data) {
@@ -866,6 +911,13 @@ this.Extension = class extends ExtensionData {
 
     let common = this.baseURI.getCommonBaseSpec(uri);
     return common == this.baseURI.spec;
+  }
+
+  async promiseLocales(locale) {
+    let locales = await StartupCache.locales
+      .get([this.id, "@@all_locales"], () => this._promiseLocaleMap());
+
+    return this._setupLocaleData(locales);
   }
 
   readLocaleFile(locale) {
@@ -947,7 +999,7 @@ this.Extension = class extends ExtensionData {
           resolve();
         }
       };
-      ppmm.addMessageListener(msg + "Complete", listener);
+      ppmm.addMessageListener(msg + "Complete", listener, true);
       Services.obs.addObserver(observer, "message-manager-close");
       Services.obs.addObserver(observer, "message-manager-disconnect");
 
@@ -1036,10 +1088,18 @@ this.Extension = class extends ExtensionData {
 
   startup() {
     this.startupPromise = this._startup();
+
+    this._startupComplete = this.startupPromise.catch(() => {});
+    OS.File.shutdown.addBlocker("Extension startup", this._startupComplete);
+
     return this.startupPromise;
   }
 
   async _startup() {
+    if (shutdownPromises.has(this.id)) {
+      await shutdownPromises.get(this.id);
+    }
+
     // Create a temporary policy object for the devtools and add-on
     // manager callers that depend on it being available early.
     this.policy = new WebExtensionPolicy({
@@ -1059,7 +1119,10 @@ this.Extension = class extends ExtensionData {
 
     TelemetryStopwatch.start("WEBEXT_EXTENSION_STARTUP_MS", this);
     try {
-      let [, perms] = await Promise.all([this.loadManifest(), ExtensionPermissions.get(this)]);
+      let [perms] = await Promise.all([
+        ExtensionPermissions.get(this),
+        this.loadManifest(),
+      ]);
 
       if (!this.hasShutdown) {
         await this.initLocale();
@@ -1111,7 +1174,7 @@ this.Extension = class extends ExtensionData {
       this.emit("ready");
       TelemetryStopwatch.finish("WEBEXT_EXTENSION_STARTUP_MS", this);
     } catch (e) {
-      dump(`Extension error: ${e.message} ${e.filename || e.fileName}:${e.lineNumber} :: ${e.stack || new Error().stack}\n`);
+      dump(`Extension error: ${e.message || e} ${e.filename || e.fileName}:${e.lineNumber} :: ${e.stack || new Error().stack}\n`);
       Cu.reportError(e);
 
       if (this.policy) {
@@ -1146,6 +1209,29 @@ this.Extension = class extends ExtensionData {
   }
 
   async shutdown(reason) {
+    let promise = this._shutdown(reason);
+
+    AsyncShutdown.profileChangeTeardown.addBlocker(
+      `Extension Shutdown: ${this.id} (${this.manifest && this.name})`,
+      promise.catch(() => {}));
+
+    // If we already have a shutdown promise for this extension, wait
+    // for it to complete before replacing it with a new one. This can
+    // sometimes happen during tests with rapid startup/shutdown cycles
+    // of multiple versions.
+    if (shutdownPromises.has(this.id)) {
+      await shutdownPromises.get(this.id);
+    }
+
+    let cleanup = () => {
+      shutdownPromises.delete(this.id);
+    };
+    shutdownPromises.set(this.id, promise.then(cleanup, cleanup));
+
+    return Promise.resolve(promise);
+  }
+
+  async _shutdown(reason) {
     try {
       if (this.startupPromise) {
         await this.startupPromise;
@@ -1159,6 +1245,11 @@ this.Extension = class extends ExtensionData {
 
     if (!this.policy) {
       return;
+    }
+
+    if (this.rootURI instanceof Ci.nsIJARURI) {
+      let file = this.rootURI.JARFile.QueryInterface(Ci.nsIFileURL).file;
+      Services.ppmm.broadcastAsyncMessage("Extension:FlushJarCache", {path: file.path});
     }
 
     if (this.cleanupFile ||

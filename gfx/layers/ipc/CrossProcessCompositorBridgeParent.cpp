@@ -10,6 +10,9 @@
 #include "base/message_loop.h"          // for MessageLoop
 #include "base/task.h"                  // for CancelableTask, etc
 #include "base/thread.h"                // for Thread
+#ifdef XP_WIN
+#include "mozilla/gfx/DeviceManagerDx.h"// for DeviceManagerDx
+#endif
 #include "mozilla/ipc/Transport.h"      // for Transport
 #include "mozilla/layers/AnimationHelper.h" // for CompositorAnimationStorage
 #include "mozilla/layers/APZCTreeManager.h"  // for APZCTreeManager
@@ -88,7 +91,7 @@ CrossProcessCompositorBridgeParent::AllocPLayerTransactionParent(
   if (state && state->mLayerManager) {
     state->mCrossProcessParent = this;
     HostLayerManager* lm = state->mLayerManager;
-    CompositorAnimationStorage* animStorage = state->mParent ? state->mParent->GetAnimationStorage(0) : nullptr;
+    CompositorAnimationStorage* animStorage = state->mParent ? state->mParent->GetAnimationStorage() : nullptr;
     LayerTransactionParent* p = new LayerTransactionParent(lm, this, animStorage, aId);
     p->AddIPDLReference();
     sIndirectLayerTrees[aId].mLayerTree = p;
@@ -223,7 +226,7 @@ CrossProcessCompositorBridgeParent::AllocPWebRenderBridgeParent(const wr::Pipeli
 
   RefPtr<wr::WebRenderAPI> api = root->GetWebRenderAPI();
   RefPtr<WebRenderCompositableHolder> holder = root->CompositableHolder();
-  RefPtr<CompositorAnimationStorage> animStorage = cbp->GetAnimationStorage(0);
+  RefPtr<CompositorAnimationStorage> animStorage = cbp->GetAnimationStorage();
   parent = new WebRenderBridgeParent(this, aPipelineId, nullptr, root->CompositorScheduler(), Move(api), Move(holder), Move(animStorage));
 
   parent->AddRef(); // IPDL reference
@@ -275,6 +278,29 @@ CrossProcessCompositorBridgeParent::RecvMapAndNotifyChildCreated(const uint64_t&
   // ensures proper window ownership of layer trees.
   return IPC_FAIL_NO_REASON(this);
 }
+
+
+mozilla::ipc::IPCResult
+CrossProcessCompositorBridgeParent::RecvCheckContentOnlyTDR(const uint32_t& sequenceNum,
+                                                            bool* isContentOnlyTDR)
+{
+  *isContentOnlyTDR = false;
+#ifdef XP_WIN
+  ContentDeviceData compositor;
+
+  DeviceManagerDx* dm = DeviceManagerDx::Get();
+
+  // Check that the D3D11 device sequence numbers match.
+  D3D11DeviceStatus status;
+  dm->ExportDeviceInfo(&status);
+
+  if (sequenceNum == status.sequenceNumber() && !dm->HasDeviceReset()) {
+    *isContentOnlyTDR = true;
+  }
+
+#endif
+  return IPC_OK();
+};
 
 void
 CrossProcessCompositorBridgeParent::ShadowLayersUpdated(
@@ -338,10 +364,16 @@ CrossProcessCompositorBridgeParent::DidComposite(
 {
   sIndirectLayerTreesLock->AssertCurrentThreadOwns();
   if (LayerTransactionParent *layerTree = sIndirectLayerTrees[aId].mLayerTree) {
-    Unused << SendDidComposite(aId, layerTree->GetPendingTransactionId(), aCompositeStart, aCompositeEnd);
-    layerTree->SetPendingTransactionId(0);
+    uint64_t transactionId = layerTree->GetPendingTransactionId();
+    if (transactionId) {
+      Unused << SendDidComposite(aId, transactionId, aCompositeStart, aCompositeEnd);
+      layerTree->SetPendingTransactionId(0);
+    }
   } else if (WebRenderBridgeParent* wrbridge = sIndirectLayerTrees[aId].mWrBridge) {
-    Unused << SendDidComposite(aId, wrbridge->FlushPendingTransactionIds(), aCompositeStart, aCompositeEnd);
+    uint64_t transactionId = wrbridge->FlushPendingTransactionIds();
+    if (transactionId) {
+      Unused << SendDidComposite(aId, transactionId, aCompositeStart, aCompositeEnd);
+    }
   }
 }
 
@@ -418,22 +450,6 @@ CrossProcessCompositorBridgeParent::ApplyAsyncProperties(
 
   MOZ_ASSERT(state->mParent);
   state->mParent->ApplyAsyncProperties(aLayerTree);
-}
-
-CompositorAnimationStorage*
-CrossProcessCompositorBridgeParent::GetAnimationStorage(
-    const uint64_t& aId)
-{
-  MOZ_ASSERT(aId != 0);
-  const CompositorBridgeParent::LayerTreeState* state =
-    CompositorBridgeParent::GetIndirectShadowTree(aId);
-  if (!state) {
-    return nullptr;
-  }
-
-  MOZ_ASSERT(state->mParent);
-  // GetAnimationStorage in CompositorBridgeParent expects id as 0
-  return state->mParent->GetAnimationStorage(0);
 }
 
 void

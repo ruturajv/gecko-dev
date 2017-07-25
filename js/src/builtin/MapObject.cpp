@@ -85,7 +85,7 @@ HashValue(const Value& v, const mozilla::HashCodeScrambler& hcs)
         return hcs.scramble(v.asRawBits());
 
     MOZ_ASSERT(!v.isGCThing(), "do not reveal pointers via hash codes");
-    return v.asRawBits();
+    return mozilla::HashGeneric(v.asRawBits());
 }
 
 HashNumber
@@ -564,8 +564,7 @@ MapObject::construct(JSContext* cx, unsigned argc, Value* vp)
         return false;
 
     RootedObject proto(cx);
-    RootedObject newTarget(cx, &args.newTarget().toObject());
-    if (!GetPrototypeFromConstructor(cx, newTarget, &proto))
+    if (!GetPrototypeFromBuiltinConstructor(cx, args, &proto))
         return false;
 
     Rooted<MapObject*> obj(cx, MapObject::create(cx, proto));
@@ -1168,8 +1167,7 @@ SetObject::construct(JSContext* cx, unsigned argc, Value* vp)
         return false;
 
     RootedObject proto(cx);
-    RootedObject newTarget(cx, &args.newTarget().toObject());
-    if (!GetPrototypeFromConstructor(cx, newTarget, &proto))
+    if (!GetPrototypeFromBuiltinConstructor(cx, args, &proto))
         return false;
 
     Rooted<SetObject*> obj(cx, SetObject::create(cx, proto));

@@ -65,6 +65,7 @@ class nsIChannel;
 class nsIHttpChannel;
 class nsILoadGroup;
 class nsIRunnable;
+class nsISerialEventTarget;
 class nsITimer;
 class nsRange;
 
@@ -330,7 +331,7 @@ public:
    * Called when there's been an error fetching the resource. This decides
    * whether it's appropriate to fire an error event.
    */
-  void NotifyLoadError();
+  void NotifyLoadError(const nsACString& aErrorDetails = nsCString());
 
   /**
    * Called by one of our associated MediaTrackLists (audio/video) when an
@@ -661,7 +662,7 @@ public:
 
   bool ContainsRestrictedContent();
 
-  void CannotDecryptWaitingForKey();
+  void NotifyWaitingForKey() override;
 
   bool MozAutoplayEnabled() const
   {
@@ -774,6 +775,11 @@ public:
   // "seeking" event task.
   void AsyncResolveSeekDOMPromiseIfExists() override;
   void AsyncRejectSeekDOMPromiseIfExists() override;
+
+  nsISerialEventTarget* MainThreadEventTarget()
+  {
+    return mMainThreadEventTarget;
+  }
 
 protected:
   virtual ~HTMLMediaElement();
@@ -1316,6 +1322,10 @@ protected:
   // The current decoder. Load() has been called on this decoder.
   // At most one of mDecoder and mSrcStream can be non-null.
   RefPtr<MediaDecoder> mDecoder;
+
+  // The DocGroup-specific nsISerialEventTarget of this HTML element on the main
+  // thread.
+  nsCOMPtr<nsISerialEventTarget> mMainThreadEventTarget;
 
   // The DocGroup-specific AbstractThread::MainThread() of this HTML element.
   RefPtr<AbstractThread> mAbstractMainThread;

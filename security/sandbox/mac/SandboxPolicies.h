@@ -68,6 +68,7 @@ static const char contentSandboxRules[] = R"(
   (define testingReadPath1 (param "TESTING_READ_PATH1"))
   (define testingReadPath2 (param "TESTING_READ_PATH2"))
   (define testingReadPath3 (param "TESTING_READ_PATH3"))
+  (define testingReadPath4 (param "TESTING_READ_PATH4"))
 
   (if (string=? should-log "TRUE")
     (deny default)
@@ -107,8 +108,50 @@ static const char contentSandboxRules[] = R"(
     file-ioctl
     (literal "/dev/dtracehelper"))
 
-  ; Used to read hw.ncpu, hw.physicalcpu_max, kern.ostype, and others
-  (allow sysctl-read)
+  ; macOS 10.9 does not support the |sysctl-name| predicate, so unfortunately
+  ; we need to allow all sysctl-reads there.
+  (if (string=? macosMinorVersion-9 "TRUE")
+    (allow sysctl-read)
+    (allow sysctl-read
+      (sysctl-name-regex #"^sysctl\.")
+      (sysctl-name "kern.ostype")
+      (sysctl-name "kern.osversion")
+      (sysctl-name "kern.osrelease")
+      (sysctl-name "kern.version")
+      ; TODO: remove "kern.hostname". Without it the tests hang, but the hostname
+      ; is arguably sensitive information, so we should see what can be done about
+      ; removing it.
+      (sysctl-name "kern.hostname")
+      (sysctl-name "hw.machine")
+      (sysctl-name "hw.model")
+      (sysctl-name "hw.ncpu")
+      (sysctl-name "hw.activecpu")
+      (sysctl-name "hw.byteorder")
+      (sysctl-name "hw.pagesize_compat")
+      (sysctl-name "hw.logicalcpu_max")
+      (sysctl-name "hw.physicalcpu_max")
+      (sysctl-name "hw.busfrequency_compat")
+      (sysctl-name "hw.busfrequency_max")
+      (sysctl-name "hw.cpufrequency")
+      (sysctl-name "hw.cpufrequency_compat")
+      (sysctl-name "hw.cpufrequency_max")
+      (sysctl-name "hw.l2cachesize")
+      (sysctl-name "hw.l3cachesize")
+      (sysctl-name "hw.cachelinesize_compat")
+      (sysctl-name "hw.tbfrequency_compat")
+      (sysctl-name "hw.vectorunit")
+      (sysctl-name "hw.optional.sse2")
+      (sysctl-name "hw.optional.sse3")
+      (sysctl-name "hw.optional.sse4_1")
+      (sysctl-name "hw.optional.sse4_2")
+      (sysctl-name "hw.optional.avx1_0")
+      (sysctl-name "hw.optional.avx2_0")
+      (sysctl-name "machdep.cpu.vendor")
+      (sysctl-name "machdep.cpu.family")
+      (sysctl-name "machdep.cpu.model")
+      (sysctl-name "machdep.cpu.stepping")
+      (sysctl-name "debug.intel.gstLevelGST")
+      (sysctl-name "debug.intel.gstLoaderControl")))
 
   (define (home-regex home-relative-regex)
     (regex (string-append "^" (regex-quote home-path) home-relative-regex)))
@@ -224,6 +267,8 @@ static const char contentSandboxRules[] = R"(
     (allow file-read* (subpath testingReadPath2)))
   (when testingReadPath3
     (allow file-read* (subpath testingReadPath3)))
+  (when testingReadPath4
+    (allow file-read* (subpath testingReadPath4)))
 
   (allow file-read-metadata (home-subpath "/Library"))
 
@@ -231,9 +276,14 @@ static const char contentSandboxRules[] = R"(
     (literal "/private/var")
     (subpath "/private/var/folders"))
 
-; bug 1303987
+  ; bug 1303987
   (if (string? debugWriteDir)
-    (allow file-write* (subpath debugWriteDir)))
+    (begin
+      (allow file-write-data (subpath debugWriteDir))
+      (allow file-write-create
+        (require-all
+          (subpath debugWriteDir)
+          (vnode-type REGULAR-FILE)))))
 
   ; bug 1324610
   (allow network-outbound file-read*
@@ -317,8 +367,14 @@ static const char contentSandboxRules[] = R"(
       (iokit-user-client-class "Gen6DVDContext"))
 
   ; bug 1237847
-  (allow file-read* file-write*
-      (subpath appTempDir))
+  (allow file-read* file-write-data
+    (subpath appTempDir))
+  (allow file-write-create
+    (require-all
+      (subpath appTempDir)
+      (require-any
+        (vnode-type REGULAR-FILE)
+        (vnode-type DIRECTORY))))
 )";
 
 }

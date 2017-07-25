@@ -36,7 +36,7 @@
 #define BORDER_RIGHT     2
 #define BORDER_BOTTOM    3
 
-// Border styles as defined in webrender_traits/types.rs
+// Border styles as defined in webrender_api/types.rs
 #define BORDER_STYLE_NONE         0
 #define BORDER_STYLE_SOLID        1
 #define BORDER_STYLE_DOUBLE       2
@@ -133,14 +133,12 @@ vec4[2] fetch_from_resource_cache_2(int address) {
 #define VECS_PER_LAYER              9
 #define VECS_PER_RENDER_TASK        3
 #define VECS_PER_PRIM_HEADER        2
-#define VECS_PER_TEXT_RUN           1
+#define VECS_PER_TEXT_RUN           2
 #define VECS_PER_GRADIENT           3
 #define VECS_PER_GRADIENT_STOP      2
 
 uniform HIGHP_SAMPLER_FLOAT sampler2D sLayers;
 uniform HIGHP_SAMPLER_FLOAT sampler2D sRenderTasks;
-
-uniform HIGHP_SAMPLER_FLOAT sampler2D sData32;
 
 // Instanced attributes
 in ivec4 aData0;
@@ -152,13 +150,6 @@ in ivec4 aData1;
 // https://github.com/servo/servo/issues/13953
 #define get_fetch_uv(i, vpi)  ivec2(vpi * (i % (WR_MAX_VERTEX_TEXTURE_WIDTH/vpi)), i / (WR_MAX_VERTEX_TEXTURE_WIDTH/vpi))
 
-vec4[2] fetch_data_2(int index) {
-    ivec2 uv = get_fetch_uv(index, 2);
-    return vec4[2](
-        texelFetchOffset(sData32, uv, 0, ivec2(0, 0)),
-        texelFetchOffset(sData32, uv, 0, ivec2(1, 0))
-    );
-}
 
 vec4[8] fetch_from_resource_cache_8(int address) {
     ivec2 uv = get_resource_cache_uv(address);
@@ -503,6 +494,17 @@ struct Primitive {
     float z;
 };
 
+struct PrimitiveGeometry {
+    RectWithSize local_rect;
+    RectWithSize local_clip_rect;
+};
+
+PrimitiveGeometry fetch_primitive_geometry(int address) {
+    vec4 geom[2] = fetch_from_resource_cache_2(address);
+    return PrimitiveGeometry(RectWithSize(geom[0].xy, geom[0].zw),
+                             RectWithSize(geom[1].xy, geom[1].zw));
+}
+
 Primitive load_primitive() {
     PrimitiveInstance pi = fetch_prim_instance();
 
@@ -512,9 +514,9 @@ Primitive load_primitive() {
     prim.clip_area = fetch_clip_area(pi.clip_task_index);
     prim.task = fetch_alpha_batch_task(pi.render_task_index);
 
-    vec4 geom[2] = fetch_from_resource_cache_2(pi.prim_address);
-    prim.local_rect = RectWithSize(geom[0].xy, geom[0].zw);
-    prim.local_clip_rect = RectWithSize(geom[1].xy, geom[1].zw);
+    PrimitiveGeometry geom = fetch_primitive_geometry(pi.prim_address);
+    prim.local_rect = geom.local_rect;
+    prim.local_clip_rect = geom.local_clip_rect;
 
     prim.specific_prim_address = pi.specific_prim_address;
     prim.user_data0 = pi.user_data0;
@@ -728,12 +730,8 @@ TransformVertexInfo write_transform_vertex(RectWithSize instance_rect,
 
     vec4 layer_pos = get_layer_pos(device_pos / uDevicePixelRatio, layer);
 
-    /// Compute the snapping offset.
-    vec2 snap_offset = compute_snap_offset(layer_pos.xy / layer_pos.w,
-                                           local_clip_rect, layer, snap_rect);
-
     // Apply offsets for the render task to get correct screen location.
-    vec2 final_pos = device_pos + snap_offset -
+    vec2 final_pos = device_pos - //Note: `snap_rect` is not used
                      task.screen_space_origin +
                      task.render_target_origin;
 
@@ -774,13 +772,25 @@ Rectangle fetch_rectangle(int address) {
     return Rectangle(data);
 }
 
+struct TextShadow {
+    vec4 color;
+    vec2 offset;
+    float blur_radius;
+};
+
+TextShadow fetch_text_shadow(int address) {
+    vec4 data[2] = fetch_from_resource_cache_2(address);
+    return TextShadow(data[0], data[1].xy, data[1].z);
+}
+
 struct TextRun {
     vec4 color;
+    vec2 offset;
 };
 
 TextRun fetch_text_run(int address) {
-    vec4 data = fetch_from_resource_cache_1(address);
-    return TextRun(data);
+    vec4 data[2] = fetch_from_resource_cache_2(address);
+    return TextRun(data[0], data[1].xy);
 }
 
 struct Image {

@@ -34,7 +34,7 @@ def normalize_osx_path(p):
     return p
 
 def is_l10n_file(path):
-    return os.path.splitext(path)[1] in ['.properties', '.dtd', '.ftl']
+    return '/locale/' in path
 
 def normalize_path(p):
     return normalize_osx_path(p)

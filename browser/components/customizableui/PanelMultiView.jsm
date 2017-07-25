@@ -9,6 +9,8 @@ this.EXPORTED_SYMBOLS = ["PanelMultiView"];
 const {classes: Cc, interfaces: Ci, utils: Cu} = Components;
 
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
+XPCOMUtils.defineLazyModuleGetter(this, "AppConstants",
+  "resource://gre/modules/AppConstants.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "CustomizableWidgets",
   "resource:///modules/CustomizableWidgets.jsm");
 
@@ -413,6 +415,7 @@ this.PanelMultiView = class {
       if (this.panelViews) {
         viewNode.removeAttribute("current");
         this.showSubView(this._mainViewId);
+        this.node.setAttribute("viewtype", "main");
       } else {
         this._transitionHeight(() => {
           viewNode.removeAttribute("current");
@@ -511,11 +514,11 @@ this.PanelMultiView = class {
         }
       }
 
+      this._viewShowing = null;
       if (cancel) {
         return;
       }
 
-      this._viewShowing = null;
       this._currentSubView = viewNode;
       viewNode.setAttribute("current", true);
       if (this.panelViews) {
@@ -565,7 +568,7 @@ this.PanelMultiView = class {
         this._panel.setAttribute("width", rect.width);
         this._panel.setAttribute("height", rect.height);
 
-        this._viewBoundsOffscreen(viewNode, viewRect => {
+        this._viewBoundsOffscreen(viewNode, previousRect, viewRect => {
           this._transitioning = true;
           if (this._autoResizeWorkaroundTimer)
             window.clearTimeout(this._autoResizeWorkaroundTimer);
@@ -594,6 +597,10 @@ this.PanelMultiView = class {
           // has taken full effect; once both views are visible, we want to
           // correctly measure rects using `dwu.getBoundsWithoutFlushing`.
           window.addEventListener("MozAfterPaint", () => {
+            if (this._panel.state != "open") {
+              onTransitionEnd();
+              return;
+            }
             // Now set the viewContainer dimensions to that of the new view, which
             // kicks of the height animation.
             this._viewContainer.style.height = Math.max(viewRect.height, this._mainViewHeight) + "px";
@@ -610,15 +617,15 @@ this.PanelMultiView = class {
             // sliding animation with smaller views.
             nodeToAnimate.style.width = viewRect.width + "px";
 
-            let listener;
-            this._viewContainer.addEventListener("transitionend", listener = ev => {
+            this._viewContainer.addEventListener("transitionend", this._transitionEndListener = ev => {
               // It's quite common that `height` on the view container doesn't need
               // to transition, so we make sure to do all the work on the transform
               // transition-end, because that is guaranteed to happen.
               if (ev.target != nodeToAnimate || ev.propertyName != "transform")
                 return;
 
-              this._viewContainer.removeEventListener("transitionend", listener);
+              this._viewContainer.removeEventListener("transitionend", this._transitionEndListener);
+              this._transitionEndListener = null;
               onTransitionEnd();
               this._transitioning = false;
               this._resetKeyNavigation(previousViewNode);
@@ -675,12 +682,27 @@ this.PanelMultiView = class {
    * amount of paint flashing and keep the stack vs panel layouts from interfering.
    *
    * @param {panelview} viewNode Node to measure the bounds of.
+   * @param {Rect}      previousRect Rect representing the previous view
+   *                                 (used to fill in any blanks).
    * @param {Function}  callback Called when we got the measurements in and pass
    *                             them on as its first argument.
    */
-  _viewBoundsOffscreen(viewNode, callback) {
+  _viewBoundsOffscreen(viewNode, previousRect, callback) {
     if (viewNode.__lastKnownBoundingRect) {
       callback(viewNode.__lastKnownBoundingRect);
+      return;
+    }
+
+    if (viewNode.customRectGetter) {
+      // Can't use Object.assign directly with a DOM Rect object because its properties
+      // aren't enumerable.
+      let {height, width} = previousRect;
+      let rect = Object.assign({height, width}, viewNode.customRectGetter());
+      let {header} = viewNode;
+      if (header) {
+        rect.height += this._dwu.getBoundsWithoutFlushing(header).height;
+      }
+      callback(rect);
       return;
     }
 
@@ -880,11 +902,24 @@ this.PanelMultiView = class {
         // exceeds the available space we set the height explicitly and enable
         // scrolling.
         if (this._mainView.hasAttribute("blockinboxworkaround")) {
-          let mainViewHeight =
-              this._dwu.getBoundsWithoutFlushing(this._mainView).height;
-          if (mainViewHeight > maxHeight) {
-            this._mainView.style.height = maxHeight + "px";
-            this._mainView.setAttribute("exceeding", "true");
+          let blockInBoxWorkaround = () => {
+            let mainViewHeight =
+                this._dwu.getBoundsWithoutFlushing(this._mainView).height;
+            if (mainViewHeight > maxHeight) {
+              this._mainView.style.height = maxHeight + "px";
+              this._mainView.setAttribute("exceeding", "true");
+            }
+          };
+          // On Windows, we cannot measure the full height of the main view
+          // until it is visible. Unfortunately, this causes a visible jump when
+          // the view needs to scroll, but there is no easy way around this.
+          if (AppConstants.platform == "win") {
+            // We register a "once" listener so we don't need to store the value
+            // of maxHeight elsewhere on the object.
+            this._panel.addEventListener("popupshown", blockInBoxWorkaround,
+                                         { once: true });
+          } else {
+            blockInBoxWorkaround();
           }
         }
         break;
@@ -894,11 +929,20 @@ this.PanelMultiView = class {
         this.descriptionHeightWorkaround();
         break;
       case "popuphidden":
+        // WebExtensions consumers can hide the popup from viewshowing, or
+        // mid-transition, which disrupts our state:
+        this._viewShowing = null;
+        this._transitioning = false;
         this.node.removeAttribute("panelopen");
         this.showMainView();
         if (this.panelViews) {
+          if (this._transitionEndListener) {
+            this._viewContainer.removeEventListener("transitionend", this._transitionEndListener);
+            this._transitionEndListener = null;
+          }
           for (let panelView of this._viewStack.children) {
             if (panelView.nodeName != "children") {
+              panelView.__lastKnownBoundingRect = null;
               panelView.style.removeProperty("min-width");
               panelView.style.removeProperty("max-width");
             }
@@ -906,8 +950,17 @@ this.PanelMultiView = class {
           this.window.removeEventListener("keydown", this);
           this._panel.removeEventListener("mousemove", this);
           this._resetKeyNavigation();
+
+          // Clear the main view size caches. The dimensions could be different
+          // when the popup is opened again, e.g. through touch mode sizing.
           this._mainViewHeight = 0;
+          this._mainViewWidth = 0;
+          this._viewContainer.style.removeProperty("min-height");
+          this._viewStack.style.removeProperty("max-height");
+          this._viewContainer.style.removeProperty("min-width");
+          this._viewContainer.style.removeProperty("max-width");
         }
+
         // Always try to layout the panel normally when reopening it. This is
         // also the layout that will be used in customize mode.
         if (this._mainView.hasAttribute("blockinboxworkaround")) {

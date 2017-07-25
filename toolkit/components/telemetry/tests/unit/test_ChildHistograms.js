@@ -92,6 +92,7 @@ add_task(async function() {
   do_get_profile(true);
   loadAddonManager(APP_ID, APP_NAME, APP_VERSION, PLATFORM_VERSION);
   Services.prefs.setBoolPref(TelemetryUtils.Preferences.TelemetryEnabled, true);
+  finishAddonManagerStartup();
   await TelemetryController.testSetup();
   if (runningInParent) {
     // Make sure we don't generate unexpected pings due to pref changes.
@@ -124,6 +125,8 @@ add_task(async function() {
   allLinear.add(20);
   let allChildLinear = Telemetry.getHistogramById("TELEMETRY_TEST_ALL_CHILD_PROCESSES");
   allChildLinear.add(20);
+  let countKeyed = Telemetry.getKeyedHistogramById("TELEMETRY_TEST_KEYED_COUNT");
+  countKeyed.add("a");
 
   const payload = TelemetrySession.getPayload("test-ping");
   Assert.ok("processes" in payload, "Should have processes section");
@@ -159,6 +162,7 @@ add_task(async function() {
   Assert.ok(!("TELEMETRY_TEST_ALL_CHILD_PROCESSES" in mainHs), "Should not have all-child process histogram in main process payload");
   Assert.ok("TELEMETRY_TEST_FLAG_MAIN_PROCESS" in mainHs, "Should have main process histogram in main process payload");
   Assert.equal(mainHs.TELEMETRY_TEST_FLAG_MAIN_PROCESS.sum, 1, "Should have correct value");
+  Assert.equal(mainKhs.TELEMETRY_TEST_KEYED_COUNT.a.sum, 1, "Should have correct value in parent");
 
   do_test_finished();
 });

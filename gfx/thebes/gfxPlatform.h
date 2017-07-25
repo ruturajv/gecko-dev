@@ -189,6 +189,8 @@ public:
      */
     static void InitNullMetadata();
 
+    static int32_t MaxTextureSize();
+    static int32_t MaxAllocSize();
     static void InitMoz2DLogging();
 
     static bool IsHeadless();
@@ -469,8 +471,10 @@ public:
      */
     bool UseGraphiteShaping();
 
-    // check whether format is supported on a platform or not (if unclear, returns true)
-    virtual bool IsFontFormatSupported(nsIURI *aFontURI, uint32_t aFormatFlags) { return false; }
+    // Check whether format is supported on a platform (if unclear, returns true).
+    // Default implementation checks for "common" formats that we support across
+    // all platforms, but individual platform implementations may override.
+    virtual bool IsFontFormatSupported(uint32_t aFormatFlags);
 
     virtual bool DidRenderingDeviceReset(DeviceResetReason* aResetReason = nullptr) { return false; }
 

@@ -133,6 +133,7 @@ public:
                                           int32_t aVertical) override;
   virtual void            PlaceBehind(nsTopLevelWidgetZPlacement aPlacement, nsIWidget *aWidget, bool aActivate) override;
   virtual void            SetSizeMode(nsSizeMode aMode) override;
+  virtual void            SuppressAnimation(bool aSuppress) override;
   virtual void            Enable(bool aState) override;
   virtual bool            IsEnabled() const override;
   virtual nsresult        SetFocus(bool aRaise) override;
@@ -301,6 +302,7 @@ public:
   bool                    const DestroyCalled() { return mDestroyCalled; }
 
   bool IsPopup();
+  virtual bool ShouldUseOffMainThreadCompositing() override;
 
   const IMEContext& DefaultIMC() const { return mDefaultIMC; }
 

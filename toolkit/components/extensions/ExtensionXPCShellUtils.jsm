@@ -61,11 +61,6 @@ function frameScript() {
 
 const FRAME_SCRIPT = `data:text/javascript,(${encodeURI(frameScript)}).call(this)`;
 
-
-const XUL_URL = "data:application/vnd.mozilla.xul+xml;charset=utf-8," + encodeURI(
-  `<?xml version="1.0"?>
-  <window id="documentElement"/>`);
-
 let kungFuDeathGrip = new Set();
 function promiseBrowserLoaded(browser, url) {
   return new Promise(resolve => {
@@ -110,7 +105,7 @@ class ContentPage {
 
     chromeShell.createAboutBlankContentViewer(system);
     chromeShell.useGlobalHistory = false;
-    chromeShell.loadURI(XUL_URL, 0, null, null, null);
+    chromeShell.loadURI("chrome://extensions/content/dummy.xul", 0, null, null, null);
 
     await promiseObserved("chrome-document-global-created",
                           win => win.document == chromeShell.document);
@@ -523,6 +518,13 @@ class AOMExtensionWrapper extends ExtensionWrapper {
     }
   }
 
+  async _flushCache() {
+    if (this.extension && this.extension.rootURI instanceof Ci.nsIJARURI) {
+      let file = this.extension.rootURI.JARFile.QueryInterface(Ci.nsIFileURL).file;
+      await Services.ppmm.broadcastAsyncMessage("Extension:FlushJarCache", {path: file.path});
+    }
+  }
+
   get version() {
     return this.addon && this.addon.version;
   }
@@ -540,11 +542,18 @@ class AOMExtensionWrapper extends ExtensionWrapper {
     return this._install(this.file);
   }
 
-  upgrade(data) {
+  async unload() {
+    await this._flushCache();
+    return super.unload();
+  }
+
+  async upgrade(data) {
     this.startupPromise = new Promise(resolve => {
       this.resolveStartup = resolve;
     });
     this.state = "restarting";
+
+    await this._flushCache();
 
     let xpiFile = Extension.generateXPI(data);
 

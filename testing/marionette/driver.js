@@ -1314,6 +1314,7 @@ GeckoDriver.prototype.getChromeWindowHandles = function(cmd, resp) {
  *     A modal dialog is open, blocking this operation.
  */
 GeckoDriver.prototype.getWindowRect = function(cmd, resp) {
+  assert.window(this.getCurrentWindow());
   assert.noUserPrompt(this.dialog);
   return this.curBrowser.rect;
 };
@@ -1629,11 +1630,11 @@ GeckoDriver.prototype.switchToFrame = function* (cmd, resp) {
     if (win.document.readyState == "complete") {
       return;
     } else if (win.document.readyState == "interactive") {
-      let baseURI = win.document.baseURI;
-      if (baseURI.startsWith("about:certerror")) {
+      let documentURI = win.document.documentURI;
+      if (documentURI.startsWith("about:certerror")) {
         throw new InsecureCertificateError();
-      } else if (otherErrorsExpr.exec(win.document.baseURI)) {
-        throw new UnknownError("Error loading page");
+      } else if (otherErrorsExpr.exec(documentURI)) {
+        throw new UnknownError("Reached error page: " + documentURI);
       }
     }
 

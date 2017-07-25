@@ -7,7 +7,7 @@ function assertOnboardingDestroyed(browser) {
   return ContentTask.spawn(browser, {}, function() {
     let expectedRemovals = [
       "#onboarding-overlay",
-      "#onboarding-overlay-icon"
+      "#onboarding-overlay-button"
     ];
     for (let selector of expectedRemovals) {
       let removal = content.document.querySelector(selector);
@@ -29,15 +29,14 @@ function assertTourCompletedStyle(tourId, expectComplete, browser) {
 
 add_task(async function test_hide_onboarding_tours() {
   resetOnboardingDefaultState();
-  await SpecialPowers.pushPrefEnv({set: [["browser.onboarding.enabled", true]]});
 
   let tourIds = TOUR_IDs;
   let tabs = [];
-  for (let url of [ABOUT_NEWTAB_URL, ABOUT_HOME_URL]) {
+  for (let url of URLs) {
     let tab = await BrowserTestUtils.openNewForegroundTab(gBrowser);
     await BrowserTestUtils.loadURI(tab.linkedBrowser, url);
     await promiseOnboardingOverlayLoaded(tab.linkedBrowser);
-    await BrowserTestUtils.synthesizeMouseAtCenter("#onboarding-overlay-icon", {}, tab.linkedBrowser);
+    await BrowserTestUtils.synthesizeMouseAtCenter("#onboarding-overlay-button", {}, tab.linkedBrowser);
     await promiseOnboardingOverlayOpened(tab.linkedBrowser);
     tabs.push(tab);
   }
@@ -61,15 +60,14 @@ add_task(async function test_hide_onboarding_tours() {
 
 add_task(async function test_click_action_button_to_set_tour_completed() {
   resetOnboardingDefaultState();
-  await SpecialPowers.pushPrefEnv({set: [["browser.onboarding.enabled", true]]});
 
   let tourIds = TOUR_IDs;
   let tabs = [];
-  for (let url of [ABOUT_NEWTAB_URL, ABOUT_HOME_URL]) {
+  for (let url of URLs) {
     let tab = await BrowserTestUtils.openNewForegroundTab(gBrowser);
     await BrowserTestUtils.loadURI(tab.linkedBrowser, url);
     await promiseOnboardingOverlayLoaded(tab.linkedBrowser);
-    await BrowserTestUtils.synthesizeMouseAtCenter("#onboarding-overlay-icon", {}, tab.linkedBrowser);
+    await BrowserTestUtils.synthesizeMouseAtCenter("#onboarding-overlay-button", {}, tab.linkedBrowser);
     await promiseOnboardingOverlayOpened(tab.linkedBrowser);
     tabs.push(tab);
   }
@@ -91,7 +89,6 @@ add_task(async function test_click_action_button_to_set_tour_completed() {
 
 add_task(async function test_set_right_tour_completed_style_on_overlay() {
   resetOnboardingDefaultState();
-  await SpecialPowers.pushPrefEnv({set: [["browser.onboarding.enabled", true]]});
 
   let tourIds = TOUR_IDs;
   // Make the tours of even number as completed
@@ -100,11 +97,11 @@ add_task(async function test_set_right_tour_completed_style_on_overlay() {
   }
 
   let tabs = [];
-  for (let url of [ABOUT_NEWTAB_URL, ABOUT_HOME_URL]) {
+  for (let url of URLs) {
     let tab = await BrowserTestUtils.openNewForegroundTab(gBrowser);
     await BrowserTestUtils.loadURI(tab.linkedBrowser, url);
     await promiseOnboardingOverlayLoaded(tab.linkedBrowser);
-    await BrowserTestUtils.synthesizeMouseAtCenter("#onboarding-overlay-icon", {}, tab.linkedBrowser);
+    await BrowserTestUtils.synthesizeMouseAtCenter("#onboarding-overlay-button", {}, tab.linkedBrowser);
     await promiseOnboardingOverlayOpened(tab.linkedBrowser);
     tabs.push(tab);
   }

@@ -72,7 +72,7 @@ using mozilla::dom::cache::CacheStorage;
 using mozilla::ipc::PrincipalInfo;
 
 WorkerGlobalScope::WorkerGlobalScope(WorkerPrivate* aWorkerPrivate)
-: mSerialEventTarget(aWorkerPrivate->GetEventTarget())
+: mSerialEventTarget(aWorkerPrivate->HybridEventTarget())
 , mWindowInteractionsAllowed(0)
 , mWorkerPrivate(aWorkerPrivate)
 {
@@ -860,7 +860,7 @@ ServiceWorkerGlobalScope::OpenWindowEnabled(JSContext* aCx, JSObject* aObj)
 WorkerDebuggerGlobalScope::WorkerDebuggerGlobalScope(
                                                   WorkerPrivate* aWorkerPrivate)
 : mWorkerPrivate(aWorkerPrivate)
-, mSerialEventTarget(aWorkerPrivate->GetEventTarget())
+, mSerialEventTarget(aWorkerPrivate->HybridEventTarget())
 {
   mWorkerPrivate->AssertIsOnWorkerThread();
 
@@ -1104,17 +1104,13 @@ BEGIN_WORKERS_NAMESPACE
 bool
 IsWorkerGlobal(JSObject* object)
 {
-  nsIGlobalObject* globalObject = nullptr;
-  return NS_SUCCEEDED(UNWRAP_OBJECT(WorkerGlobalScope, object,
-                                    globalObject)) && !!globalObject;
+  return IS_INSTANCE_OF(WorkerGlobalScope, object);
 }
 
 bool
 IsDebuggerGlobal(JSObject* object)
 {
-  nsIGlobalObject* globalObject = nullptr;
-  return NS_SUCCEEDED(UNWRAP_OBJECT(WorkerDebuggerGlobalScope, object,
-                                    globalObject)) && !!globalObject;
+  return IS_INSTANCE_OF(WorkerDebuggerGlobalScope, object);
 }
 
 bool

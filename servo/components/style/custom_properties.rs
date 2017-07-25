@@ -11,12 +11,12 @@ use cssparser::{Delimiter, Parser, ParserInput, SourcePosition, Token, TokenSeri
 use parser::ParserContext;
 use properties::{CSSWideKeyword, DeclaredValue};
 use selectors::parser::SelectorParseError;
+use servo_arc::Arc;
 use std::ascii::AsciiExt;
 use std::borrow::Cow;
 use std::collections::{HashMap, hash_map, HashSet};
 use std::fmt;
 use style_traits::{HasViewportPercentage, ToCss, StyleParseError, ParseError};
-use stylearc::Arc;
 
 /// A custom property name is just an `Atom`.
 ///
@@ -280,10 +280,10 @@ fn parse_declaration_value_block<'i, 't>
                 }
                 token.serialization_type()
             }
-            Token::BadUrl =>
-                return Err(StyleParseError::BadUrlInDeclarationValueBlock.into()),
-            Token::BadString =>
-                return Err(StyleParseError::BadStringInDeclarationValueBlock.into()),
+            Token::BadUrl(u) =>
+                return Err(StyleParseError::BadUrlInDeclarationValueBlock(u).into()),
+            Token::BadString(s) =>
+                return Err(StyleParseError::BadStringInDeclarationValueBlock(s).into()),
             Token::CloseParenthesis =>
                 return Err(StyleParseError::UnbalancedCloseParenthesisInDeclarationValueBlock.into()),
             Token::CloseSquareBracket =>

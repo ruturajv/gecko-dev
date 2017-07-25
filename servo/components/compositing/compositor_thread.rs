@@ -19,7 +19,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use style_traits::cursor::Cursor;
 use style_traits::viewport::ViewportConstraints;
 use webrender;
-use webrender_traits;
+use webrender_api;
 
 
 /// Used to wake up the event loop, provided by the servo port/embedder.
@@ -85,13 +85,13 @@ pub enum Msg {
     ShutdownComplete,
 
     /// Scroll a page in a window
-    ScrollFragmentPoint(webrender_traits::ClipId, Point2D<f32>, bool),
+    ScrollFragmentPoint(webrender_api::ClipId, Point2D<f32>, bool),
     /// Alerts the compositor that the current page has changed its title.
     ChangePageTitle(PipelineId, Option<String>),
     /// Alerts the compositor that the given pipeline has changed whether it is running animations.
     ChangeRunningAnimationsState(PipelineId, AnimationState),
     /// Replaces the current frame tree, typically called during main frame navigation.
-    SetFrameTree(SendableFrameTree, IpcSender<()>),
+    SetFrameTree(SendableFrameTree),
     /// The load of a page has begun
     LoadStart,
     /// The load of a page has completed
@@ -194,5 +194,5 @@ pub struct InitialCompositorState {
     pub mem_profiler_chan: mem::ProfilerChan,
     /// Instance of webrender API
     pub webrender: webrender::Renderer,
-    pub webrender_api_sender: webrender_traits::RenderApiSender,
+    pub webrender_api_sender: webrender_api::RenderApiSender,
 }

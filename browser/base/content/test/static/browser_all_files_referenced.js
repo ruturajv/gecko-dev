@@ -43,6 +43,10 @@ var whitelist = [
   // Used by setting this url as a pref in about:config
   {file: "chrome://browser/content/newtab/alternativeDefaultSites.json"},
 
+  // Temporary whitelisted while WebPayments in construction
+  // See Bug 1381141
+  {file: "chrome://payments/content/paymentRequest.xhtml"},
+
   // Add-on compat
   {file: "chrome://browser/skin/devtools/common.css"},
   {file: "chrome://global/content/XPCNativeWrapper.js"},
@@ -130,8 +134,6 @@ var whitelist = [
   {file: "chrome://global/content/findUtils.js"},
   // Bug 1343843
   {file: "chrome://global/content/url-classifier/unittests.xul"},
-  // Bug 1343839
-  {file: "chrome://global/locale/headsUpDisplay.properties"},
   // Bug 1348362
   {file: "chrome://global/skin/icons/warning-64.png", platforms: ["linux", "win"]},
   // Bug 1348525
@@ -166,8 +168,6 @@ var whitelist = [
   {file: "resource://gre/modules/ISO8601DateUtils.jsm"},
   // Bug 1337345
   {file: "resource://gre/modules/Manifest.jsm"},
-  // Bug 1351089
-  {file: "resource://gre/modules/PresentationDeviceInfoManager.jsm"},
   // Bug 1351097
   {file: "resource://gre/modules/accessibility/AccessFu.jsm"},
   // Bug 1351637

@@ -58,6 +58,8 @@ public:
   virtual mozilla::ipc::IPCResult RecvStartFrameTimeRecording(const int32_t& aBufferSize, uint32_t* aOutStartIndex) override { return IPC_OK(); }
   virtual mozilla::ipc::IPCResult RecvStopFrameTimeRecording(const uint32_t& aStartIndex, InfallibleTArray<float>* intervals) override  { return IPC_OK(); }
 
+  virtual mozilla::ipc::IPCResult RecvCheckContentOnlyTDR(const uint32_t& sequenceNum, bool* isContentOnlyTDR) override;
+
   virtual mozilla::ipc::IPCResult RecvClearApproximatelyVisibleRegions(const uint64_t& aLayersId,
                                                     const uint32_t& aPresShellId) override;
 
@@ -95,8 +97,6 @@ public:
   virtual void LeaveTestMode(const uint64_t& aId) override;
   virtual void ApplyAsyncProperties(LayerTransactionParent* aLayerTree)
                override;
-  virtual CompositorAnimationStorage*
-    GetAnimationStorage(const uint64_t& aId) override;
   virtual void FlushApzRepaints(const uint64_t& aLayersId) override;
   virtual void GetAPZTestData(const uint64_t& aLayersId,
                               APZTestData* aOutData) override;

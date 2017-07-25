@@ -89,13 +89,14 @@ public:
   // Otherwise it blocks until the GPU process has finished launching.
   bool EnsureGPUReady();
 
-  RefPtr<CompositorSession> CreateTopLevelCompositor(
+  already_AddRefed<CompositorSession> CreateTopLevelCompositor(
     nsBaseWidget* aWidget,
     LayerManager* aLayerManager,
     CSSToLayoutDeviceScale aScale,
     const CompositorOptions& aOptions,
     bool aUseExternalSurfaceSize,
-    const gfx::IntSize& aSurfaceSize);
+    const gfx::IntSize& aSurfaceSize,
+    bool* aRetry);
 
   bool CreateContentBridges(
     base::ProcessId aOtherProcess,
@@ -144,7 +145,7 @@ public:
 
   void OnProcessLaunchComplete(GPUProcessHost* aHost) override;
   void OnProcessUnexpectedShutdown(GPUProcessHost* aHost) override;
-  void TriggerDeviceResetForTesting();
+  void SimulateDeviceReset();
   void OnInProcessDeviceReset();
   void OnRemoteProcessDeviceReset(GPUProcessHost* aHost) override;
   void NotifyListenersOnCompositeDeviceReset();

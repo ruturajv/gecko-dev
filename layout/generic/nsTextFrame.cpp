@@ -4625,7 +4625,6 @@ nsContinuingTextFrame::AddInlineMinISize(gfxContext *aRenderingContext,
                                          InlineMinISizeData *aData)
 {
   // Do nothing, since the first-in-flow accounts for everything.
-  return;
 }
 
 /* virtual */ void
@@ -4633,7 +4632,6 @@ nsContinuingTextFrame::AddInlinePrefISize(gfxContext *aRenderingContext,
                                           InlinePrefISizeData *aData)
 {
   // Do nothing, since the first-in-flow accounts for everything.
-  return;
 }
 
 //----------------------------------------------------------------------
@@ -5115,12 +5113,12 @@ nsDisplayText::nsDisplayText(nsDisplayListBuilder* aBuilder, nsTextFrame* aFrame
 {
   MOZ_COUNT_CTOR(nsDisplayText);
   mIsFrameSelected = aIsSelected;
-
   mBounds = mFrame->GetVisualOverflowRectRelativeToSelf() + ToReferenceFrame();
     // Bug 748228
   mBounds.Inflate(mFrame->PresContext()->AppUnitsPerDevPixel());
 
-  if (ShouldUseAdvancedLayer(aBuilder->GetWidgetLayerManager(), gfxPrefs::LayersAllowTextLayers)) {
+  if (gfxPrefs::LayersAllowTextLayers() &&
+      CanUseAdvancedLayer(aBuilder->GetWidgetLayerManager())) {
     RefPtr<DrawTargetCapture> capture =
       gfxPlatform::GetPlatform()->ScreenReferenceDrawTarget()->CreateCaptureDT(IntSize());
     RefPtr<gfxContext> captureCtx = gfxContext::CreateOrNull(capture);
@@ -5245,16 +5243,15 @@ nsDisplayText::RenderToContext(gfxContext* aCtx, nsDisplayListBuilder* aBuilder,
     LayoutDeviceRect::FromAppUnits(mVisibleRect, A2D);
   extraVisible.Inflate(1);
 
-  gfxContextAutoSaveRestore save(aCtx);
-
   gfxRect pixelVisible(extraVisible.x, extraVisible.y,
                        extraVisible.width, extraVisible.height);
   pixelVisible.Inflate(2);
   pixelVisible.RoundOut();
 
-  if (!aBuilder->IsForGenerateGlyphMask() &&
-      !aBuilder->IsForPaintingSelectionBG() &&
-      !aIsRecording) {
+  bool willClip = !aBuilder->IsForGenerateGlyphMask() &&
+                  !aBuilder->IsForPaintingSelectionBG() &&
+                  !aIsRecording;
+  if (willClip) {
     aCtx->NewPath();
     aCtx->Rectangle(pixelVisible);
     aCtx->Clip();
@@ -5263,17 +5260,20 @@ nsDisplayText::RenderToContext(gfxContext* aCtx, nsDisplayListBuilder* aBuilder,
   NS_ASSERTION(mVisIStartEdge >= 0, "illegal start edge");
   NS_ASSERTION(mVisIEndEdge >= 0, "illegal end edge");
 
+  gfxContextMatrixAutoSaveRestore matrixSR;
+
   nsPoint framePt = ToReferenceFrame();
   if (f->StyleContext()->IsTextCombined()) {
     float scaleFactor = GetTextCombineScaleFactor(f);
     if (scaleFactor != 1.0f) {
+      matrixSR.SetContext(aCtx);
       // Setup matrix to compress text for text-combine-upright if
       // necessary. This is done here because we want selection be
       // compressed at the same time as text.
       gfxPoint pt = nsLayoutUtils::PointToGfxPoint(framePt, A2D);
       gfxMatrix mat = aCtx->CurrentMatrix()
         .PreTranslate(pt).PreScale(scaleFactor, 1.0).PreTranslate(-pt);
-      aCtx->SetMatrix(mat);
+      aCtx->SetMatrix (mat);
     }
   }
   nsTextFrame::PaintTextParams params(aCtx);
@@ -5290,6 +5290,10 @@ nsDisplayText::RenderToContext(gfxContext* aCtx, nsDisplayListBuilder* aBuilder,
   }
 
   f->PaintText(params, *this, mOpacity);
+
+  if (willClip) {
+    aCtx->PopClip();
+  }
 }
 
 void

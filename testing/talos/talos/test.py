@@ -169,7 +169,7 @@ class sessionrestore(TsBase):
     gecko_profile_entries = 10000000
     profile_path = '${talos}/startup_test/sessionrestore/profile'
     shutdown = False
-    reinstall = ['sessionstore.js', 'sessionCheckpoints.json']
+    reinstall = ['sessionstore.jsonlz4', 'sessionstore.js', 'sessionCheckpoints.json']
     # Restore the session. We have to provide a URL, otherwise Talos
     # asks for a manifest URL.
     url = 'about:home'
@@ -306,7 +306,7 @@ class tps(PageloaderTest):
     extensions = '${talos}/tests/tabswitch/tabswitch-signed.xpi'
     tpmanifest = '${talos}/tests/tabswitch/tps.manifest'
     tppagecycles = 5
-    gecko_profile_entries = 1000000
+    gecko_profile_entries = 5000000
     tploadnocache = True
     preferences = {
         'addon.test.tabswitch.urlfile': os.path.join('${talos}',
@@ -596,8 +596,8 @@ class kraken(PageloaderTest):
     tpmanifest = '${talos}/tests/kraken/kraken.manifest'
     tpcycles = 1
     tppagecycles = 1
-    gecko_profile_interval = 0.1
-    gecko_profile_entries = 1000000
+    gecko_profile_interval = 1
+    gecko_profile_entries = 5000000
     tpmozafterpaint = False
     tpchrome = False
     preferences = {'dom.send_after_paint_to_content': False}
@@ -807,6 +807,22 @@ class bloom_basic(PageloaderTest):
     """
     base_vs_ref = True  # compare the two test pages with eachother and report comparison
     tpmanifest = '${talos}/tests/perf-reftest/bloom_basic.manifest'
+    tpcycles = 1
+    tppagecycles = 25
+    gecko_profile_interval = 1
+    gecko_profile_entries = 2000000
+    filters = filter.ignore_first.prepare(5) + filter.median.prepare()
+    unit = 'ms'
+    lower_is_better = True
+    alert_threshold = 5.0
+
+
+@register_test()
+class bloom_basic_singleton(PageloaderTest):
+    """
+    Stylo bloom_basic: runs bloom_basic and bloom_basic_ref and reports difference
+    """
+    tpmanifest = '${talos}/tests/perf-reftest-singletons/bloom_basic_singleton.manifest'
     tpcycles = 1
     tppagecycles = 25
     gecko_profile_interval = 1

@@ -52,6 +52,11 @@ class mozJSComponentLoader : public mozilla::ModuleLoader,
 
     static mozJSComponentLoader* Get() { return sSelf; }
 
+    nsresult Import(const nsACString& aResourceURI, JS::HandleValue aTargetObj,
+                    JSContext* aCx, uint8_t aArgc, JS::MutableHandleValue aRetval);
+    nsresult Unload(const nsACString& aResourceURI);
+    nsresult IsModuleLoaded(const nsACString& aResourceURI, bool* aRetval);
+
     size_t SizeOfIncludingThis(mozilla::MallocSizeOf aMallocSizeOf);
 
  protected:
@@ -86,7 +91,6 @@ class mozJSComponentLoader : public mozilla::ModuleLoader,
                         JS::MutableHandleObject vp);
 
     nsCOMPtr<nsIComponentManager> mCompMgr;
-    nsCOMPtr<nsIPrincipal> mSystemPrincipal;
 
     class ModuleEntry : public mozilla::Module
     {

@@ -17,10 +17,38 @@
  *  - intermittentShown: An array of platforms where this image is
  *                       intermittently shown, contrary to what our
  *                       whitelist says.
+ *  - photon: If true, this entry only applies for builds with the Photon theme.
+ *            If false, this entry only applies for builds without the Photon theme.
+ *            If undefined, this entry applies for both Photon and non-Photon builds.
  *
  * Please don't add items to this list. Please remove items from this list.
  */
 const whitelist = [
+  // Photon-only entries
+  {
+    file: "chrome://browser/skin/stop.svg",
+    platforms: ["linux", "win", "macosx"],
+    photon: true,
+  },
+  {
+    file: "chrome://browser/skin/toolbarbutton-dropdown-arrow.png",
+    platforms: ["win"],
+    photon: true,
+  },
+  {
+    file: "chrome://browser/skin/bookmark-hollow.svg",
+    platforms: ["linux", "win", "macosx"],
+    photon: true,
+  },
+
+  // Non-Photon-only entries
+  {
+    file: "chrome://browser/skin/toolbarbutton-dropdown-arrow.png",
+    platforms: ["linux", "win", "macosx"],
+    photon: false,
+  },
+
+  // Shared entries
   {
     file: "chrome://browser/skin/fxa/sync-illustration.svg",
     platforms: ["linux", "win", "macosx"],
@@ -29,35 +57,14 @@ const whitelist = [
     file: "chrome://browser/skin/tabbrowser/tab-overflow-indicator.png",
     platforms: ["linux", "win", "macosx"],
   },
-  {
-    file: "chrome://browser/skin/stop.svg",
-    platforms: ["linux", "win", "macosx"],
-  },
-  {
-    file: "chrome://browser/skin/sidebars.svg",
-    platforms: ["linux", "win", "macosx"],
-    intermittentNotLoaded: ["macosx"],
-  },
-  {
-    file: "chrome://pocket-shared/skin/pocket.svg",
-    platforms: ["linux", "win", "macosx"],
-    intermittentNotLoaded: ["macosx"],
-  },
+
   {
     file: "chrome://browser/skin/places/toolbarDropMarker.png",
     platforms: ["linux", "win", "macosx"],
   },
   {
-    file: "chrome://browser/skin/bookmark-hollow.svg",
-    platforms: ["linux", "win", "macosx"],
-  },
-  {
     file: "chrome://browser/skin/tracking-protection-16.svg#enabled",
     platforms: ["linux", "win", "macosx"],
-  },
-  {
-    file: "chrome://browser/skin/toolbarbutton-dropdown-arrow.png",
-    platforms: ["win"],
   },
   {
     file: "chrome://global/skin/icons/autoscroll.png",
@@ -112,26 +119,32 @@ const whitelist = [
   {
     file: "chrome://browser/skin/yosemite/tab-selected-start-inactive.svg",
     platforms: ["macosx"],
+    intermittentShown: ["macosx"],
   },
   {
     file: "chrome://browser/skin/yosemite/tab-active-middle-inactive.png",
+    hidpi: "<not loaded>",
     platforms: ["macosx"],
   },
   {
     file: "chrome://browser/skin/yosemite/tab-selected-end-inactive.svg",
     platforms: ["macosx"],
+    intermittentShown: ["macosx"],
   },
   {
     file: "chrome://browser/skin/yosemite/tab-stroke-start-inactive.png",
+    hidpi: "<not loaded>",
     platforms: ["macosx"],
   },
   {
     file: "chrome://browser/skin/yosemite/tab-stroke-end-inactive.png",
+    hidpi: "<not loaded>",
     platforms: ["macosx"],
   },
 
   {
     file: "chrome://browser/skin/tabbrowser/newtab.png",
+    hidpi: "chrome://browser/skin/tabbrowser/newtab@2x.png",
     platforms: ["macosx"],
   },
 
@@ -148,9 +161,45 @@ const whitelist = [
   },
 
   {
+    file: "chrome://pocket/content/panels/img/pocketmenuitem16.png",
+    hidpi: "chrome://pocket/content/panels/img/pocketmenuitem16@2x.png",
+    platforms: ["macosx"],
+  },
+
+  {
+    file: "chrome://browser/skin/places/bookmarksToolbar.png",
+    hidpi: "chrome://browser/skin/places/bookmarksToolbar@2x.png",
+    platforms: ["macosx"],
+  },
+
+  {
+    file: "chrome://global/skin/tree/folder.png",
+    hidpi: "chrome://global/skin/tree/folder@2x.png",
+    platforms: ["macosx"],
+  },
+
+  {
+    file: "chrome://browser/skin/tabbrowser/tab-arrow-left-inverted.png",
+    hidpi: "chrome://browser/skin/tabbrowser/tab-arrow-left-inverted@2x.png",
+    platforms: ["linux", "macosx"],
+  },
+  {
+    file: "chrome://browser/skin/tabbrowser/tab-arrow-right-inverted.png",
+    hidpi: "chrome://browser/skin/tabbrowser/tab-arrow-right-inverted@2x.png",
+    platforms: ["macosx"],
+  },
+
+  {
+    file: "chrome://browser/skin/tabbrowser/alltabs-box-bkgnd-icon-inverted.png",
+    hidpi: "chrome://browser/skin/tabbrowser/alltabs-box-bkgnd-icon-inverted@2x.png",
+    platforms: ["macosx"],
+  },
+
+  {
     file: "chrome://global/skin/toolbar/chevron.gif",
     platforms: ["win", "linux"],
   },
+
   {
     file: "chrome://browser/skin/reload-stop-go.png",
     platforms: ["win", "linux"],
@@ -161,14 +210,13 @@ const whitelist = [
     file: "chrome://browser/skin/tabbrowser/alltabs.png",
     platforms: ["linux"],
   },
-
   {
-    file: "chrome://browser/skin/tabbrowser/tab-arrow-left.svg",
-    platforms: ["win"],
+    file: "chrome://browser/skin/tabbrowser/alltabs-inverted.png",
+    platforms: ["linux"],
   },
 
   {
-    file: "chrome://global/skin/icons/resizer.png",
+    file: "chrome://browser/skin/tabbrowser/tab-arrow-left.svg",
     platforms: ["win"],
   },
 
@@ -189,15 +237,21 @@ const whitelist = [
   },
 ];
 
-function test() {
-  let data = Cc["@mozilla.org/test/startuprecorder;1"].getService().wrappedJSObject.data.images;
-  let platformWhitelist = whitelist.filter(el => el.platforms.includes(AppConstants.platform));
+add_task(async function() {
+  let startupRecorder = Cc["@mozilla.org/test/startuprecorder;1"].getService().wrappedJSObject;
+  await startupRecorder.done;
+
+  let data = startupRecorder.data.images;
+  let filteredWhitelist = whitelist.filter(el => {
+    return el.platforms.includes(AppConstants.platform) &&
+           (el.photon === undefined || el.photon == AppConstants.MOZ_PHOTON_THEME);
+  });
 
   let loadedImages = data["image-loading"];
   let shownImages = data["image-drawing"];
 
   for (let loaded of loadedImages.values()) {
-    let whitelistItem = platformWhitelist.find(el => {
+    let whitelistItem = filteredWhitelist.find(el => {
       if (window.devicePixelRatio >= 2 && el.hidpi && el.hidpi == loaded) {
         return true;
       }
@@ -214,7 +268,7 @@ function test() {
   }
 
   // Check for unneeded whitelist entries.
-  for (let item of platformWhitelist) {
+  for (let item of filteredWhitelist) {
     if (!item.intermittentNotLoaded ||
         !item.intermittentNotLoaded.includes(AppConstants.platform)) {
       if (window.devicePixelRatio >= 2 && item.hidpi) {
@@ -226,4 +280,4 @@ function test() {
       }
     }
   }
-}
+});

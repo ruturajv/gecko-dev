@@ -37,6 +37,7 @@ using mozilla::ArrayLength;
 using mozilla::DebugOnly;
 using mozilla::Unused;
 using mozilla::TimeDuration;
+using mozilla::TimeStamp;
 
 namespace js {
 
@@ -1057,15 +1058,11 @@ GlobalHelperThreadState::maxGCParallelThreads() const
 }
 
 bool
-GlobalHelperThreadState::canStartWasmCompile(const AutoLockHelperThreadState& lock,
-                                             bool assumeThreadAvailable)
+GlobalHelperThreadState::canStartWasmCompile(const AutoLockHelperThreadState& lock)
 {
     // Don't execute an wasm job if an earlier one failed.
     if (wasmWorklist(lock).empty() || numWasmFailedJobs)
         return false;
-
-    if (assumeThreadAvailable)
-        return true;
 
     // Honor the maximum allowed threads to compile wasm jobs at once,
     // to avoid oversaturating the machine.
@@ -1319,14 +1316,28 @@ js::GCParallelTask::join()
     joinWithLockHeld(helperLock);
 }
 
+static inline
+TimeDuration
+TimeSince(TimeStamp prev)
+{
+    TimeStamp now = TimeStamp::Now();
+#ifdef ANDROID
+    // Sadly this happens sometimes.
+    if (now < prev)
+        now = prev;
+#endif
+    MOZ_RELEASE_ASSERT(now >= prev);
+    return now - prev;
+}
+
 void
 js::GCParallelTask::runFromActiveCooperatingThread(JSRuntime* rt)
 {
     MOZ_ASSERT(state == NotStarted);
     MOZ_ASSERT(js::CurrentThreadCanAccessRuntime(rt));
-    mozilla::TimeStamp timeStart = mozilla::TimeStamp::Now();
+    TimeStamp timeStart = TimeStamp::Now();
     run();
-    duration_ = mozilla::TimeStamp::Now() - timeStart;
+    duration_ = TimeSince(timeStart);
 }
 
 void
@@ -1337,11 +1348,11 @@ js::GCParallelTask::runFromHelperThread(AutoLockHelperThreadState& locked)
 
     {
         AutoUnlockHelperThreadState parallelSection(locked);
-        mozilla::TimeStamp timeStart = mozilla::TimeStamp::Now();
+        TimeStamp timeStart = TimeStamp::Now();
         TlsContext.get()->heapState = JS::HeapState::MajorCollecting;
         run();
         TlsContext.get()->heapState = JS::HeapState::Idle;
-        duration_ = mozilla::TimeStamp::Now() - timeStart;
+        duration_ = TimeSince(timeStart);
     }
 
     state = Finished;
@@ -1587,9 +1598,10 @@ GlobalHelperThreadState::mergeParseTaskCompartment(JSContext* cx, ParseTask* par
     JS::AutoAssertNoGC nogc(cx);
 
     LeaveParseTaskZone(cx->runtime(), parseTask);
-    AutoCompartment ac(cx, parseTask->parseGlobal);
 
     {
+        AutoCompartment ac(cx, parseTask->parseGlobal);
+
         // Generator functions don't have Function.prototype as prototype but a
         // different function object, so the IdentifyStandardPrototype trick
         // below won't work.  Just special-case it.
@@ -1668,9 +1680,9 @@ HelperThread::ThreadMain(void* arg)
 }
 
 void
-HelperThread::handleWasmWorkload(AutoLockHelperThreadState& locked, bool assumeThreadAvailable)
+HelperThread::handleWasmWorkload(AutoLockHelperThreadState& locked)
 {
-    MOZ_ASSERT(HelperThreadState().canStartWasmCompile(locked, assumeThreadAvailable));
+    MOZ_ASSERT(HelperThreadState().canStartWasmCompile(locked));
     MOZ_ASSERT(idle());
 
     currentTask.emplace(HelperThreadState().wasmWorklist(locked).popCopy());
@@ -1696,33 +1708,6 @@ HelperThread::handleWasmWorkload(AutoLockHelperThreadState& locked, bool assumeT
     // Notify the active thread in case it's waiting.
     HelperThreadState().notifyAll(GlobalHelperThreadState::CONSUMER, locked);
     currentTask.reset();
-}
-
-bool
-HelperThread::handleWasmIdleWorkload(AutoLockHelperThreadState& locked)
-{
-    // Perform wasm compilation work on a HelperThread that is running
-    // ModuleGenerator instead of blocking while other compilation threads
-    // finish.  This removes a source of deadlocks, as putting all threads to
-    // work guarantees forward progress for compilation.
-
-    // The current thread has already been accounted for, so don't guard on
-    // thread subscription when checking whether we can do work.
-
-    if (HelperThreadState().canStartWasmCompile(locked, /*assumeThreadAvailable=*/ true)) {
-        HelperTaskUnion oldTask = currentTask.value();
-        currentTask.reset();
-        js::oom::ThreadType oldType = (js::oom::ThreadType)js::oom::GetThreadType();
-
-        js::oom::SetThreadType(js::oom::THREAD_TYPE_WASM);
-        handleWasmWorkload(locked, /*assumeThreadAvailable=*/ true);
-
-        js::oom::SetThreadType(oldType);
-        currentTask.emplace(oldTask);
-        return true;
-    }
-
-    return false;
 }
 
 void

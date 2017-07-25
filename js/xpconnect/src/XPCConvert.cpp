@@ -729,13 +729,13 @@ XPCConvert::JSData2Native(void* d, HandleValue s,
 }
 
 static inline bool
-CreateHolderIfNeeded(HandleObject obj, MutableHandleValue d,
+CreateHolderIfNeeded(JSContext* cx, HandleObject obj, MutableHandleValue d,
                      nsIXPConnectJSObjectHolder** dest)
 {
     if (dest) {
         if (!obj)
             return false;
-        RefPtr<XPCJSObjectHolder> objHolder = new XPCJSObjectHolder(obj);
+        RefPtr<XPCJSObjectHolder> objHolder = new XPCJSObjectHolder(cx, obj);
         objHolder.forget(dest);
     }
 
@@ -796,7 +796,7 @@ XPCConvert::NativeInterface2JSObject(MutableHandleValue d,
     if (flat) {
         if (allowNativeWrapper && !JS_WrapObject(cx, &flat))
             return false;
-        return CreateHolderIfNeeded(flat, d, dest);
+        return CreateHolderIfNeeded(cx, flat, d, dest);
     }
 
     if (iid->Equals(NS_GET_IID(nsISupports))) {
@@ -808,7 +808,7 @@ XPCConvert::NativeInterface2JSObject(MutableHandleValue d,
             flat = promise->PromiseObj();
             if (!JS_WrapObject(cx, &flat))
                 return false;
-            return CreateHolderIfNeeded(flat, d, dest);
+            return CreateHolderIfNeeded(cx, flat, d, dest);
         }
     }
 
@@ -867,7 +867,7 @@ XPCConvert::NativeInterface2JSObject(MutableHandleValue d,
         } else {
             if (!flat)
                 return false;
-            RefPtr<XPCJSObjectHolder> objHolder = new XPCJSObjectHolder(flat);
+            RefPtr<XPCJSObjectHolder> objHolder = new XPCJSObjectHolder(cx, flat);
             objHolder.forget(dest);
         }
     }
@@ -914,7 +914,11 @@ XPCConvert::JSObject2NativeInterface(void** dest, HandleObject src,
         // because the caller may explicitly want to create the XPCWrappedJS
         // around a security wrapper. XBL does this with Xrays from the XBL
         // scope - see nsBindingManager::GetBindingImplementation.
-        JSObject* inner = js::CheckedUnwrap(src, /* stopAtWindowProxy = */ false);
+        //
+        // It's also very important that "inner" be rooted here.
+        RootedObject inner(cx,
+                           js::CheckedUnwrap(src,
+                                             /* stopAtWindowProxy = */ false));
         if (!inner) {
             if (pErr)
                 *pErr = NS_ERROR_XPC_SECURITY_MANAGER_VETO;
@@ -1124,7 +1128,7 @@ XPCConvert::JSValToXPCException(MutableHandleValue s,
         JSObject* unwrapped = js::CheckedUnwrap(obj, /* stopAtWindowProxy = */ false);
         if (!unwrapped)
             return NS_ERROR_XPC_SECURITY_MANAGER_VETO;
-        if (nsISupports* supports = UnwrapReflectorToISupports(unwrapped)) {
+        if (nsCOMPtr<nsISupports> supports = UnwrapReflectorToISupports(unwrapped)) {
             nsCOMPtr<nsIException> iface = do_QueryInterface(supports);
             if (iface) {
                 // just pass through the exception (with extra ref and all)

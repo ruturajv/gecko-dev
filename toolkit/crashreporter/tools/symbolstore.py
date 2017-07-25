@@ -407,7 +407,7 @@ class Dumper:
             self.srcdirs.append(rust_srcdir)
             Dumper.srcdirRepoInfo[rust_srcdir] = GitRepoInfo(rust_srcdir,
                                                              buildconfig.substs['RUSTC_COMMIT'],
-                                                             'https://github.com/rust-lang/rust/')
+                                                             'https://github.com/rust-lang/rust/src/')
 
     def parse_repo_manifest(self, repo_manifest):
         """
@@ -820,6 +820,7 @@ class Dumper_Mac(Dumper):
             subprocess.check_call(cmd, stdout=open(os.devnull, 'w'))
         except subprocess.CalledProcessError as e:
             print('Error running dsymutil: %s' % str(e), file=sys.stderr)
+            raise
 
         if not os.path.exists(dsymbundle):
             # dsymutil won't produce a .dSYM for files without symbols

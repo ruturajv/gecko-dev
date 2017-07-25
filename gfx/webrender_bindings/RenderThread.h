@@ -34,10 +34,10 @@ public:
 
   ~WebRenderThreadPool();
 
-  WrThreadPool* Raw() { return mThreadPool; }
+  wr::WrThreadPool* Raw() { return mThreadPool; }
 
 protected:
-  WrThreadPool* mThreadPool;
+  wr::WrThreadPool* mThreadPool;
 };
 
 
@@ -105,9 +105,6 @@ public:
 
   /// Automatically forwarded to the render thread.
   void NewFrameReady(wr::WindowId aWindowId);
-
-  /// Automatically forwarded to the render thread.
-  void NewScrollFrameReady(wr::WindowId aWindowId, bool aCompositeNeeded);
 
   /// Automatically forwarded to the render thread.
   void PipelineSizeChanged(wr::WindowId aWindowId, uint64_t aPipelineId, float aWidth, float aHeight);

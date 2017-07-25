@@ -17,17 +17,18 @@ use std::hash::Hash;
 use std::mem;
 use std::sync::Arc;
 use texture_cache::{TextureCache, TextureCacheItemId};
-use webrender_traits::{Epoch, FontKey, FontTemplate, GlyphKey, ImageKey, ImageRendering};
-use webrender_traits::{FontRenderMode, ImageData, GlyphDimensions, WebGLContextId};
-use webrender_traits::{DevicePoint, DeviceIntSize, DeviceUintRect, ImageDescriptor, ColorF};
-use webrender_traits::{GlyphOptions, GlyphInstance, TileOffset, TileSize};
-use webrender_traits::{BlobImageRenderer, BlobImageDescriptor, BlobImageError, BlobImageRequest, BlobImageData};
-use webrender_traits::BlobImageResources;
-use webrender_traits::{ExternalImageData, ExternalImageType, LayoutPoint};
+use api::{Epoch, FontKey, FontTemplate, GlyphKey, ImageKey, ImageRendering};
+use api::{FontRenderMode, ImageData, GlyphDimensions, WebGLContextId};
+use api::{DevicePoint, DeviceIntSize, DeviceUintRect, ImageDescriptor, ColorF};
+use api::{GlyphOptions, GlyphInstance, SubpixelPoint, TileOffset, TileSize};
+use api::{BlobImageRenderer, BlobImageDescriptor, BlobImageError, BlobImageRequest, BlobImageData};
+use api::BlobImageResources;
+use api::{ExternalImageData, ExternalImageType, LayoutPoint};
 use rayon::ThreadPool;
 use glyph_rasterizer::{GlyphRasterizer, GlyphCache, GlyphRequest};
 
 const DEFAULT_TILE_SIZE: TileSize = 512;
+const BLACK: ColorF = ColorF { r: 0.0, b: 0.0, g: 0.0, a: 1.0 };
 
 // These coordinates are always in texels.
 // They are converted to normalized ST
@@ -43,6 +44,7 @@ pub struct CacheItem {
     pub uv_rect_handle: GpuCacheHandle,
 }
 
+#[derive(Debug)]
 pub struct ImageProperties {
     pub descriptor: ImageDescriptor,
     pub external_image: Option<ExternalImageData>,
@@ -56,6 +58,7 @@ enum State {
     QueryResources,
 }
 
+#[derive(Debug)]
 struct ImageResource {
     data: ImageData,
     descriptor: ImageDescriptor,
@@ -228,13 +231,13 @@ impl ResourceCache {
                 image_templates: ImageTemplates::new(),
             },
             cached_glyph_dimensions: HashMap::default(),
-            texture_cache: texture_cache,
+            texture_cache,
             state: State::Idle,
             current_frame_id: FrameId(0),
             pending_image_requests: Vec::new(),
             glyph_rasterizer: GlyphRasterizer::new(workers),
 
-            blob_image_renderer: blob_image_renderer,
+            blob_image_renderer,
             blob_image_requests: HashSet::new(),
 
             requested_glyphs: HashSet::default(),
@@ -294,10 +297,10 @@ impl ResourceCache {
         }
 
         let resource = ImageResource {
-            descriptor: descriptor,
-            data: data,
+            descriptor,
+            data,
             epoch: Epoch(0),
-            tiling: tiling,
+            tiling,
             dirty_rect: None,
         };
 
@@ -310,9 +313,6 @@ impl ResourceCache {
                                  mut data: ImageData,
                                  dirty_rect: Option<DeviceUintRect>) {
         let resource = if let Some(image) = self.resources.image_templates.get(image_key) {
-            assert_eq!(image.descriptor.width, descriptor.width);
-            assert_eq!(image.descriptor.height, descriptor.height);
-            assert_eq!(image.descriptor.format, descriptor.format);
 
             let next_epoch = Epoch(image.epoch.0 + 1);
 
@@ -329,10 +329,10 @@ impl ResourceCache {
             }
 
             ImageResource {
-                descriptor: descriptor,
-                data: data,
+                descriptor,
+                data,
                 epoch: next_epoch,
-                tiling: tiling,
+                tiling,
                 dirty_rect: match (dirty_rect, image.dirty_rect) {
                     (Some(rect), Some(prev_rect)) => Some(rect.union(&prev_rect)),
                     (Some(rect), None) => Some(rect),
@@ -364,7 +364,7 @@ impl ResourceCache {
     pub fn add_webgl_texture(&mut self, id: WebGLContextId, texture_id: SourceTexture, size: DeviceIntSize) {
         self.webgl_textures.insert(id, WebGLTexture {
             id: texture_id,
-            size: size,
+            size,
         });
     }
 
@@ -383,9 +383,9 @@ impl ResourceCache {
 
         debug_assert_eq!(self.state, State::AddResources);
         let request = ImageRequest {
-            key: key,
-            rendering: rendering,
-            tile: tile,
+            key,
+            rendering,
+            tile,
         };
 
         let template = self.resources.image_templates.get(key).unwrap();
@@ -433,7 +433,7 @@ impl ResourceCache {
                         &BlobImageDescriptor {
                             width: w,
                             height: h,
-                            offset: offset,
+                            offset,
                             format: template.descriptor.format,
                         },
                         template.dirty_rect,
@@ -448,11 +448,18 @@ impl ResourceCache {
     pub fn request_glyphs(&mut self,
                           key: FontKey,
                           size: Au,
-                          color: ColorF,
+                          mut color: ColorF,
                           glyph_instances: &[GlyphInstance],
                           render_mode: FontRenderMode,
                           glyph_options: Option<GlyphOptions>) {
         debug_assert_eq!(self.state, State::AddResources);
+
+        // In alpha/mono mode, the color of the font is irrelevant.
+        // Forcing it to black in those cases saves rasterizing glyphs
+        // of different colors when not needed.
+        if render_mode != FontRenderMode::Subpixel {
+            color = BLACK;
+        }
 
         self.glyph_rasterizer.request_glyphs(
             &mut self.cached_glyphs,
@@ -474,27 +481,33 @@ impl ResourceCache {
     pub fn get_glyphs<F>(&self,
                          font_key: FontKey,
                          size: Au,
-                         color: ColorF,
+                         mut color: ColorF,
                          glyph_instances: &[GlyphInstance],
                          render_mode: FontRenderMode,
                          glyph_options: Option<GlyphOptions>,
                          mut f: F) -> SourceTexture where F: FnMut(usize, &GpuCacheHandle) {
+        // Color when retrieving glyphs must match that of the request,
+        // otherwise the hash keys won't match.
+        if render_mode != FontRenderMode::Subpixel {
+            color = BLACK;
+        }
+
         debug_assert_eq!(self.state, State::QueryResources);
-        let mut glyph_key = GlyphRequest::new(
+        let mut glyph_request = GlyphRequest::new(
             font_key,
             size,
             color,
             0,
-            LayoutPoint::new(0.0, 0.0),
+            LayoutPoint::zero(),
             render_mode,
             glyph_options
         );
         let mut texture_id = None;
         for (loop_index, glyph_instance) in glyph_instances.iter().enumerate() {
-            glyph_key.key.index = glyph_instance.index;
-            glyph_key.key.subpixel_point.set_offset(glyph_instance.point, render_mode);
+            glyph_request.key.index = glyph_instance.index;
+            glyph_request.key.subpixel_point = SubpixelPoint::new(glyph_instance.point, render_mode);
 
-            let image_id = self.cached_glyphs.get(&glyph_key, self.current_frame_id);
+            let image_id = self.cached_glyphs.get(&glyph_request, self.current_frame_id);
             let cache_item = image_id.map(|image_id| self.texture_cache.get(image_id));
             if let Some(cache_item) = cache_item {
                 f(loop_index, &cache_item.uv_rect_handle);
@@ -525,7 +538,7 @@ impl ResourceCache {
         let key = ImageRequest {
             key: image_key,
             rendering: image_rendering,
-            tile: tile,
+            tile,
         };
         let image_info = &self.cached_images.get(&key, self.current_frame_id);
         let item = self.texture_cache.get(image_info.texture_cache_id);
@@ -556,7 +569,7 @@ impl ResourceCache {
 
         ImageProperties {
             descriptor: image_template.descriptor,
-            external_image: external_image,
+            external_image,
             tiling: image_template.tiling,
         }
     }
@@ -635,15 +648,15 @@ impl ResourceCache {
         for texture_cache_item_id in self.requested_images.drain() {
             let item = self.texture_cache.get_mut(texture_cache_item_id);
             if let Some(mut request) = gpu_cache.request(&mut item.uv_rect_handle) {
-                request.push(item.uv_rect.into());
+                request.push(item.uv_rect);
             }
         }
 
         for texture_cache_item_id in self.requested_glyphs.drain() {
             let item = self.texture_cache.get_mut(texture_cache_item_id);
             if let Some(mut request) = gpu_cache.request(&mut item.uv_rect_handle) {
-                request.push(item.uv_rect.into());
-                request.push([item.user_data[0], item.user_data[1], 0.0, 0.0].into());
+                request.push(item.uv_rect);
+                request.push([item.user_data[0], item.user_data[1], 0.0, 0.0]);
             }
         }
     }
@@ -656,6 +669,11 @@ impl ResourceCache {
         let image_data = image_data.unwrap_or_else(||{
             image_template.data.clone()
         });
+
+        let filter = match request.rendering {
+            ImageRendering::Pixelated => TextureFilter::Nearest,
+            ImageRendering::Auto | ImageRendering::CrispEdges => TextureFilter::Linear,
+        };
 
         let descriptor = if let Some(tile) = request.tile {
             let tile_size = image_template.tiling.unwrap();
@@ -681,8 +699,8 @@ impl ResourceCache {
             ImageDescriptor {
                 width: actual_width,
                 height: actual_height,
-                stride: stride,
-                offset: offset,
+                stride,
+                offset,
                 format: image_descriptor.format,
                 is_opaque: image_descriptor.is_opaque,
             }
@@ -697,6 +715,7 @@ impl ResourceCache {
                 if entry.get().epoch != image_template.epoch {
                     self.texture_cache.update(image_id,
                                               descriptor,
+                                              filter,
                                               image_data,
                                               image_template.dirty_rect);
 

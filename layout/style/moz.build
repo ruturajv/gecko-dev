@@ -119,6 +119,7 @@ EXPORTS.mozilla += [
     'ServoPropPrefList.h',
     'ServoSpecifiedValues.h',
     'ServoStyleContext.h',
+    'ServoStyleContextInlines.h',
     'ServoStyleRule.h',
     'ServoStyleSet.h',
     'ServoStyleSheet.h',
@@ -314,4 +315,8 @@ if CONFIG['COMPILE_ENVIRONMENT']:
     css_props.inputs = [
         'nsCSSPropsGenerated.inc.in',
         'PythonCSSProps.h',
+    ]
+
+    CONFIGURE_SUBST_FILES += [
+        'bindgen.toml',
     ]

@@ -514,6 +514,18 @@ def photon_animations(value):
 set_config('MOZ_PHOTON_ANIMATIONS', photon_animations)
 set_define('MOZ_PHOTON_ANIMATIONS', photon_animations)
 
+option(env='MOZ_PHOTON_PREFERENCES',
+       help='Enable Photon preferences',
+       default=milestone.is_nightly)
+
+@depends('MOZ_PHOTON_PREFERENCES')
+def photon_preferences(value):
+    if value:
+        return bool(value)
+
+set_config('MOZ_PHOTON_PREFERENCES', photon_preferences)
+set_define('MOZ_PHOTON_PREFERENCES', photon_preferences)
+
 option(env='MOZ_PHOTON_THEME',
        help='Enable Photon theme',
        default=milestone.is_nightly)
@@ -623,21 +635,14 @@ def building_stylo_bindgen(stylo_config, bindgen_enabled, compile_environment):
 def llvm_config_paths(host):
     llvm_config_progs = [
         'llvm-config-4.0',
-        'llvm-config-mp-4.0',   # MacPorts's chosen naming scheme
+        'llvm-config-mp-4.0',   # MacPorts' chosen naming scheme.
         'llvm-config40',
         'llvm-config-3.9',
         'llvm-config39',
         'llvm-config',
     ]
 
-    # Also add in the location to which `mach bootstrap` installs clang.
-    mozbuild_state_dir = os.environ.get('MOZBUILD_STATE_PATH',
-                                        os.path.expanduser(os.path.join('~', '.mozbuild')))
-    bootstrap_llvm_config = os.path.join(mozbuild_state_dir, 'clang', 'bin', 'llvm-config')
-
-    llvm_config_progs.append(bootstrap_llvm_config)
-
-    # Homebrew on OS X doesn't make clang available on PATH, so we have to
+    # Homebrew on macOS doesn't make clang available on PATH, so we have to
     # look for it in non-standard places.
     if host.kernel == 'Darwin':
         try:
@@ -654,6 +659,14 @@ def llvm_config_paths(host):
         except which.WhichError:
             # Homebrew not installed, which is fine.
             pass
+
+    # Also add in the location to which `mach bootstrap` or
+    # `mach artifact toolchain` installs clang.
+    mozbuild_state_dir = os.environ.get('MOZBUILD_STATE_PATH',
+                                        os.path.expanduser(os.path.join('~', '.mozbuild')))
+    bootstrap_llvm_config = os.path.join(mozbuild_state_dir, 'clang', 'bin', 'llvm-config')
+
+    llvm_config_progs.append(bootstrap_llvm_config)
 
     return llvm_config_progs
 
@@ -1223,3 +1236,17 @@ def geckodriver(enable, automation, compile_env, cross_compile, hazard, target):
             return True
 
 set_config('ENABLE_GECKODRIVER', geckodriver)
+
+# Code Coverage
+# ==============================================================
+
+option('--enable-coverage', env='MOZ_CODE_COVERAGE',
+       help='Enable code coverage')
+
+@depends('--enable-coverage')
+def code_coverage(value):
+    if value:
+        return True
+
+set_config('MOZ_CODE_COVERAGE', code_coverage)
+set_define('MOZ_CODE_COVERAGE', code_coverage)

@@ -638,6 +638,12 @@ interface nsIDOMWindowUtils : nsISupports {
                            [optional] in nsIObserver aObserver);
 
   /**
+   * Suppress animations that are applied to a window by OS when
+   * resizing, moving, changing size mode, ...
+   */
+  void suppressAnimation(in boolean aSuppress);
+
+  /**
    * The values for sendNativeMouseScrollEvent's aAdditionalFlags.
    */
 
@@ -2016,6 +2022,14 @@ interface nsIDOMWindowUtils : nsISupports {
    *         on the first-strong character found in the string.
    */
   long getDirectionFromText(in AString aString);
+
+  /**
+   * Calls FrameNeedsReflow on that root frame so that a layout flush
+   * will be necessary.
+   *
+   * This should only be used for testing.
+   */
+  void ensureDirtyRootFrame();
 
   /**
    * Whether the current document is styled by Servo's style engine.

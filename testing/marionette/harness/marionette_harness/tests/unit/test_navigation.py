@@ -197,6 +197,22 @@ class TestNavigate(BaseNavigationTestCase):
         self.assertTrue(self.marionette.execute_script(
             "return window.visited", sandbox=None))
 
+    def test_navigate_hash_argument_identical(self):
+        test_page = "{}#foo".format(inline("<p id=foo>"))
+
+        self.marionette.navigate(test_page)
+        self.marionette.find_element(By.ID, "foo")
+        self.marionette.navigate(test_page)
+        self.marionette.find_element(By.ID, "foo")
+
+    def test_navigate_hash_argument_differnt(self):
+        test_page = "{}#Foo".format(inline("<p id=foo>"))
+
+        self.marionette.navigate(test_page)
+        self.marionette.find_element(By.ID, "foo")
+        self.marionette.navigate(test_page.lower())
+        self.marionette.find_element(By.ID, "foo")
+
     @skip_if_mobile("Test file is only located on host machine")
     def test_navigate_file_url(self):
         self.marionette.navigate(self.test_page_file_url)
@@ -368,7 +384,6 @@ class TestBackForwardNavigation(BaseNavigationTestCase):
         ]
         self.run_bfcache_test(test_pages)
 
-    @skip("Causes crashes for JS GC (bug 1344863) and a11y (bug 1344868)")
     def test_frameset(self):
         test_pages = [
             {"url": self.marionette.absolute_url("frameset.html")},

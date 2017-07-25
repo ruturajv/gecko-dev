@@ -514,7 +514,7 @@ WindowOrNull(JSObject* aObj)
     MOZ_ASSERT(!js::IsWrapper(aObj));
 
     nsGlobalWindow* win = nullptr;
-    UNWRAP_OBJECT(Window, aObj, win);
+    UNWRAP_NON_WRAPPER_OBJECT(Window, aObj, win);
     return win;
 }
 
@@ -628,12 +628,6 @@ void XPCJSRuntime::TraceNativeBlackRoots(JSTracer* trc)
         if (AutoMarkingPtr* roots = cx->mAutoRoots)
             roots->TraceJSAll(trc);
     }
-
-    // XPCJSObjectHolders don't participate in cycle collection, so always
-    // trace them here.
-    XPCRootSetElem* e;
-    for (e = mObjectHolderRoots; e; e = e->GetNextRoot())
-        static_cast<XPCJSObjectHolder*>(e)->TraceJS(trc);
 
     JSContext* cx = XPCJSContext::Get()->Context();
     dom::TraceBlackJS(trc, JS_GetGCParameter(cx, JSGC_NUMBER),
@@ -2208,21 +2202,17 @@ class XPCJSRuntimeStats : public JS::RuntimeStats
 
     virtual void initExtraZoneStats(JS::Zone* zone, JS::ZoneStats* zStats) override {
         // Get the compartment's global.
-        nsXPConnect* xpc = nsXPConnect::XPConnect();
         AutoSafeJSContext cx;
         JSCompartment* comp = js::GetAnyCompartmentInZone(zone);
         xpc::ZoneStatsExtras* extras = new xpc::ZoneStatsExtras;
         extras->pathPrefix.AssignLiteral("explicit/js-non-window/zones/");
         RootedObject global(cx, JS_GetGlobalForCompartmentOrNull(cx, comp));
         if (global) {
-            // Need to enter the compartment, otherwise GetNativeOfWrapper()
-            // might crash.
-            JSAutoCompartment ac(cx, global);
-            nsISupports* native = xpc->GetNativeOfWrapper(cx, global);
-            if (nsCOMPtr<nsPIDOMWindowInner> piwindow = do_QueryInterface(native)) {
+            RefPtr<nsGlobalWindow> window;
+            if (NS_SUCCEEDED(UNWRAP_OBJECT(Window, global, window))) {
                 // The global is a |window| object.  Use the path prefix that
                 // we should have already created for it.
-                if (mTopWindowPaths->Get(piwindow->WindowID(),
+                if (mTopWindowPaths->Get(window->WindowID(),
                                          &extras->pathPrefix))
                     extras->pathPrefix.AppendLiteral("/js-");
             }
@@ -2253,19 +2243,15 @@ class XPCJSRuntimeStats : public JS::RuntimeStats
         }
 
         // Get the compartment's global.
-        nsXPConnect* xpc = nsXPConnect::XPConnect();
         AutoSafeJSContext cx;
         bool needZone = true;
         RootedObject global(cx, JS_GetGlobalForCompartmentOrNull(cx, c));
         if (global) {
-            // Need to enter the compartment, otherwise GetNativeOfWrapper()
-            // might crash.
-            JSAutoCompartment ac(cx, global);
-            nsISupports* native = xpc->GetNativeOfWrapper(cx, global);
-            if (nsCOMPtr<nsPIDOMWindowInner> piwindow = do_QueryInterface(native)) {
+            RefPtr<nsGlobalWindow> window;
+            if (NS_SUCCEEDED(UNWRAP_OBJECT(Window, global, window))) {
                 // The global is a |window| object.  Use the path prefix that
                 // we should have already created for it.
-                if (mWindowPaths->Get(piwindow->WindowID(),
+                if (mWindowPaths->Get(window->WindowID(),
                                       &extras->jsPathPrefix)) {
                     extras->domPathPrefix.Assign(extras->jsPathPrefix);
                     extras->domPathPrefix.AppendLiteral("/dom/");
@@ -2568,6 +2554,9 @@ AccumulateTelemetryCallback(int id, uint32_t sample, const char* key)
       case JS_TELEMETRY_GC_BUDGET_MS:
         Telemetry::Accumulate(Telemetry::GC_BUDGET_MS, sample);
         break;
+      case JS_TELEMETRY_GC_BUDGET_OVERRUN:
+        Telemetry::Accumulate(Telemetry::GC_BUDGET_OVERRUN, sample);
+        break;
       case JS_TELEMETRY_GC_ANIMATION_MS:
         Telemetry::Accumulate(Telemetry::GC_ANIMATION_MS, sample);
         break;
@@ -2815,7 +2804,6 @@ XPCJSRuntime::XPCJSRuntime(JSContext* aCx)
    mDoingFinalization(false),
    mVariantRoots(nullptr),
    mWrappedJSRoots(nullptr),
-   mObjectHolderRoots(nullptr),
    mAsyncSnowWhiteFreer(new AsyncFreeSnowWhite())
 {
     MOZ_COUNT_CTOR_INHERITED(XPCJSRuntime, CycleCollectedJSRuntime);
@@ -2859,6 +2847,7 @@ XPCJSRuntime::Initialize(JSContext* cx)
     js::SetPreserveWrapperCallback(cx, PreserveWrapper);
     JS_SetAccumulateTelemetryCallback(cx, AccumulateTelemetryCallback);
     js::SetWindowProxyClass(cx, &OuterWindowProxyClass);
+    js::SetXrayJitInfo(&gXrayJitInfo);
     JS::SetProcessLargeAllocationFailureCallback(OnLargeAllocationFailureCallback);
 
     // The JS engine needs to keep the source code around in order to implement
@@ -3033,7 +3022,7 @@ XPCRootSetElem::AddToRootSet(XPCRootSetElem** listHead)
 void
 XPCRootSetElem::RemoveFromRootSet()
 {
-    JS::PokeGC(XPCJSContext::Get()->Context());
+    JS::NotifyGCRootsRemoved(XPCJSContext::Get()->Context());
 
     MOZ_ASSERT(mSelfp, "Must be linked");
 

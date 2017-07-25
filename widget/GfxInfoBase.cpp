@@ -353,6 +353,8 @@ BlacklistFeatureToGfxFeature(const nsAString& aFeature)
       return nsIGfxInfo::FEATURE_CANVAS2D_ACCELERATION;
   else if (aFeature.EqualsLiteral("WEBGL2"))
     return nsIGfxInfo::FEATURE_WEBGL2;
+  else if (aFeature.EqualsLiteral("ADVANCED_LAYERS"))
+    return nsIGfxInfo::FEATURE_ADVANCED_LAYERS;
 
   // If we don't recognize the feature, it may be new, and something
   // this version doesn't understand.  So, nothing to do.  This is
@@ -983,6 +985,7 @@ GfxInfoBase::EvaluateDownloadedBlacklist(nsTArray<GfxDriverInfo>& aDriverInfo)
     nsIGfxInfo::FEATURE_WEBRTC_HW_ACCELERATION,
     nsIGfxInfo::FEATURE_CANVAS2D_ACCELERATION,
     nsIGfxInfo::FEATURE_WEBGL2,
+    nsIGfxInfo::FEATURE_ADVANCED_LAYERS,
     0
   };
 
@@ -1381,6 +1384,11 @@ GfxInfoBase::DescribeFeatures(JSContext* aCx, JS::Handle<JSObject*> aObj)
   if (advancedLayers != FeatureStatus::Unused) {
     InitFeatureObject(aCx, aObj, "advancedLayers", FEATURE_ADVANCED_LAYERS,
                       Some(advancedLayers), &obj);
+
+    if (gfxConfig::UseFallback(Fallback::NO_CONSTANT_BUFFER_OFFSETTING)) {
+      JS::Rooted<JS::Value> trueVal(aCx, JS::BooleanValue(true));
+      JS_SetProperty(aCx, obj, "noConstantBufferOffsetting", trueVal);
+    }
   }
 }
 

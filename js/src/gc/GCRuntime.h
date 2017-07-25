@@ -38,6 +38,7 @@ class AutoRunParallelTask;
 class AutoTraceSession;
 class MarkingValidator;
 struct MovingTracer;
+class WeakCacheSweepIterator;
 
 enum IncrementalProgress
 {
@@ -715,7 +716,7 @@ class GCRuntime
     }
 
     void runDebugGC();
-    inline void poke();
+    void notifyRootsRemoved();
 
     enum TraceOrMarkRuntime {
         TraceRuntime,
@@ -803,9 +804,16 @@ class GCRuntime
     void removeBlackRootsTracer(JSTraceDataOp traceOp, void* data);
 
     bool triggerGCForTooMuchMalloc() {
+        if (!triggerGC(JS::gcreason::TOO_MUCH_MALLOC))
+            return false;
+
+        // Even though this method may be called off the main thread it is safe
+        // to access mallocCounter here since triggerGC() will return false in
+        // that case.
         stats().recordTrigger(mallocCounter.bytes(), mallocCounter.maxBytes());
-        return triggerGC(JS::gcreason::TOO_MUCH_MALLOC);
+        return true;
     }
+
     int32_t getMallocBytes() const { return mallocCounter.bytes(); }
     size_t maxMallocBytesAllocated() const { return mallocCounter.maxBytes(); }
     bool isTooMuchMalloc() const { return mallocCounter.isTooMuchMalloc(); }
@@ -923,6 +931,15 @@ class GCRuntime
 
     void bufferGrayRoots();
 
+    /*
+     * Concurrent sweep infrastructure.
+     */
+    void startTask(GCParallelTask& task, gcstats::PhaseKind phase, AutoLockHelperThreadState& locked);
+    void joinTask(GCParallelTask& task, gcstats::PhaseKind phase, AutoLockHelperThreadState& locked);
+
+    // Delete an empty zone group after its contents have been merged.
+    void deleteEmptyZoneGroup(ZoneGroup* group);
+
   private:
     enum IncrementalResult
     {
@@ -1025,6 +1042,8 @@ class GCRuntime
     static IncrementalProgress sweepAtomsTable(GCRuntime* gc, SliceBudget& budget);
     void startSweepingAtomsTable();
     IncrementalProgress sweepAtomsTable(SliceBudget& budget);
+    static IncrementalProgress sweepWeakCaches(GCRuntime* gc, SliceBudget& budget);
+    IncrementalProgress sweepWeakCaches(SliceBudget& budget);
     static IncrementalProgress finalizeAllocKind(GCRuntime* gc, FreeOp* fop, Zone* zone,
                                                  SliceBudget& budget, AllocKind kind);
     static IncrementalProgress sweepShapeTree(GCRuntime* gc, FreeOp* fop, Zone* zone,
@@ -1078,7 +1097,10 @@ class GCRuntime
     UnprotectedData<ZoneGroup*> systemZoneGroup;
 
     // List of all zone groups (protected by the GC lock).
-    ActiveThreadOrGCTaskData<ZoneGroupVector> groups;
+  private:
+    ActiveThreadOrGCTaskData<ZoneGroupVector> groups_;
+  public:
+    ZoneGroupVector& groups() { return groups_.ref(); }
 
     // The unique atoms zone, which has no zone group.
     WriteOnceData<Zone*> atomsZone;
@@ -1247,17 +1269,13 @@ class GCRuntime
     ActiveThreadOrGCTaskData<JS::Zone*> currentSweepGroup;
     ActiveThreadData<SweepActionList> sweepActionList;
     ActiveThreadData<size_t> sweepPhaseIndex;
-    ActiveThreadData<JS::Zone*> sweepZone;
+    ActiveThreadOrGCTaskData<JS::Zone*> sweepZone;
     ActiveThreadData<size_t> sweepActionIndex;
     ActiveThreadData<mozilla::Maybe<AtomSet::Enum>> maybeAtomsToSweep;
+    ActiveThreadOrGCTaskData<JS::detail::WeakCacheBase*> sweepCache;
     ActiveThreadData<bool> abortSweepAfterCurrentGroup;
 
-    /*
-     * Concurrent sweep infrastructure.
-     */
-    void startTask(GCParallelTask& task, gcstats::PhaseKind phase, AutoLockHelperThreadState& locked);
-    void joinTask(GCParallelTask& task, gcstats::PhaseKind phase, AutoLockHelperThreadState& locked);
-    friend class AutoRunParallelTask;
+    friend class WeakCacheSweepIterator;
 
     /*
      * List head of arenas allocated during the sweep phase.
@@ -1296,7 +1314,7 @@ class GCRuntime
      */
     ActiveThreadData<bool> compactingEnabled;
 
-    ActiveThreadData<bool> poked;
+    ActiveThreadData<bool> rootsRemoved;
 
     /*
      * These options control the zealousness of the GC. At every allocation,
@@ -1312,7 +1330,8 @@ class GCRuntime
      *     (see the help for details)
      *
      * If gcZeal_ == 1 then we perform GCs in select places (during MaybeGC and
-     * whenever a GC poke happens). This option is mainly useful to embedders.
+     * whenever we are notified that GC roots have been removed). This option is
+     * mainly useful to embedders.
      *
      * We use zeal_ == 4 to enable write barrier verification. See the comment
      * in jsgc.cpp for more information about this.

@@ -262,7 +262,12 @@ const SIGNED_TYPES = new Set([
   "webextension-theme",
 ]);
 
-const ALL_TYPES = new Set([
+const LEGACY_TYPES = new Set([
+  "apiextension",
+  "extension",
+]);
+
+const ALL_EXTERNAL_TYPES = new Set([
   "dictionary",
   "extension",
   "experiment",
@@ -835,8 +840,8 @@ function isUsableAddon(aAddon) {
       return false;
   }
 
-  if (!AddonSettings.ALLOW_LEGACY_EXTENSIONS &&
-      aAddon.type == "extension" && !aAddon._installLocation.isSystem &&
+  if (!AddonSettings.ALLOW_LEGACY_EXTENSIONS && LEGACY_TYPES.has(aAddon.type) &&
+      !aAddon._installLocation.isSystem &&
       aAddon.signedState !== AddonManager.SIGNEDSTATE_PRIVILEGED) {
     logger.warn(`disabling legacy extension ${aAddon.id}`);
     return false;
@@ -2270,20 +2275,41 @@ this.XPIProvider = {
         }
       }, "final-ui-startup");
 
-      // Once other important startup work is finished, try to load the
-      // XPI database so that the telemetry environment can be populated
-      // with detailed addon information.
+      // If we haven't yet loaded the XPI database, schedule loading it
+      // to occur once other important startup work is finished.  We want
+      // this to happen relatively quickly after startup so the telemetry
+      // environment has complete addon information.
+      //
+      // Unfortunately we have to use a variety of ways do detect when it
+      // is time to load.  In a regular browser process we just wait for
+      // sessionstore-windows-restored.  In a browser toolbox process
+      // we wait for the toolbox to show up, based on xul-window-visible
+      // and a visible toolbox window.
+      // Finally, we have a test-only event called test-load-xpi-database
+      // as a temporary workaround for bug 1372845.  The latter can be
+      // cleaned up when that bug is resolved.
       if (!this.isDBLoaded) {
-        Services.obs.addObserver({
+        const EVENTS = [ "sessionstore-windows-restored", "xul-window-visible", "test-load-xpi-database" ];
+        let observer = {
           observe(subject, topic, data) {
-            Services.obs.removeObserver(this, "sessionstore-windows-restored");
+            if (topic == "xul-window-visible" &&
+                !Services.wm.getMostRecentWindow("devtools:toolbox")) {
+              return;
+            }
+
+            for (let event of EVENTS) {
+              Services.obs.removeObserver(observer, event);
+            }
 
             // It would be nice to defer some of the work here until we
             // have idle time but we can't yet use requestIdleCallback()
             // from chrome.  See bug 1358476.
             XPIDatabase.asyncLoadDB();
           },
-        }, "sessionstore-windows-restored");
+        };
+        for (let event of EVENTS) {
+          Services.obs.addObserver(observer, event);
+        }
       }
 
       AddonManagerPrivate.recordTimestamp("XPI_startup_end");
@@ -2308,7 +2334,7 @@ this.XPIProvider = {
    *                          flushing the XPI Database if it was loaded,
    *                          0 otherwise.
    */
-  shutdown() {
+  async shutdown() {
     logger.debug("shutdown");
 
     // Stop anything we were doing asynchronously
@@ -2350,6 +2376,13 @@ this.XPIProvider = {
       Services.prefs.setBoolPref(PREF_PENDING_OPERATIONS, false);
     }
 
+    // Ugh, if we reach this point without loading the xpi database,
+    // we need to load it know, otherwise the telemetry shutdown blocker
+    // will never resolve.
+    if (!XPIDatabase.initialized) {
+      await XPIDatabase.asyncLoadDB();
+    }
+
     this.installs = null;
     this.installLocations = null;
     this.installLocationsByName = null;
@@ -2358,24 +2391,11 @@ this.XPIProvider = {
     this.extensionsActive = false;
     this._addonFileMap.clear();
 
-    if (gLazyObjectsLoaded) {
-      let done = XPIDatabase.shutdown();
-      done.then(
-        ret => {
-          logger.debug("Notifying XPI shutdown observers");
-          Services.obs.notifyObservers(null, "xpi-provider-shutdown");
-        },
-        err => {
-          logger.debug("Notifying XPI shutdown observers");
-          this._shutdownError = err;
-          Services.obs.notifyObservers(null, "xpi-provider-shutdown", err);
-        }
-      );
-      return done;
+    try {
+      await XPIDatabase.shutdown();
+    } catch (err) {
+      this._shutdownError = err;
     }
-    logger.debug("Notifying XPI shutdown observers");
-    Services.obs.notifyObservers(null, "xpi-provider-shutdown");
-    return undefined;
   },
 
   /**
@@ -2482,7 +2502,7 @@ this.XPIProvider = {
       return;
     }
 
-    url = UpdateUtils.formatUpdateURL(url);
+    url = await UpdateUtils.formatUpdateURL(url);
 
     logger.info(`Starting system add-on update check from ${url}.`);
     let res = await ProductAddonChecker.getProductAddonList(url);
@@ -3573,7 +3593,7 @@ this.XPIProvider = {
    */
   getAddonsByTypes(aTypes, aCallback) {
     let typesToGet = getAllAliasesForTypes(aTypes);
-    if (typesToGet && !typesToGet.some(type => ALL_TYPES.has(type))) {
+    if (typesToGet && !typesToGet.some(type => ALL_EXTERNAL_TYPES.has(type))) {
       aCallback([]);
       return;
     }
@@ -3612,6 +3632,9 @@ this.XPIProvider = {
 
     let result = [];
     for (let addon of XPIStates.enabledAddons()) {
+      if (aTypes && !aTypes.includes(addon.type)) {
+        continue;
+      }
       let location = this.installLocationsByName[addon.location.name];
       let scope, isSystem;
       if (location) {

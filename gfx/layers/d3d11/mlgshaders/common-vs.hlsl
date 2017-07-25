@@ -27,11 +27,6 @@ cbuffer Layers : register(b1)
   Layer sLayers[682];
 };
 
-cbuffer Items : register(b2)
-{
-  float4 sItems[4096];
-};
-
 cbuffer MaskRects : register(b3)
 {
   float4 sMaskRects[4096];
@@ -62,6 +57,16 @@ float3 ComputeMaskCoords(float4 aPosition, Layer aLayer)
   return float3(mul(transform, aPosition / aPosition.w).xy, 1.0) * aPosition.w;
 }
 
+float2 UnitTriangleToPos(const float3 aVertex,
+                         const float2 aPos1,
+                         const float2 aPos2,
+                         const float2 aPos3)
+{
+  return aVertex.x * aPos1 +
+         aVertex.y * aPos2 +
+         aVertex.z * aPos3;
+}
+
 float2 UnitQuadToRect(const float2 aVertex, const float4 aRect)
 {
   return float2(aRect.x + aVertex.x * aRect.z, aRect.y + aVertex.y * aRect.w);
@@ -80,12 +85,12 @@ VertexInfo ComputePosition(float2 aVertex, uint aLayerId, float aSortIndex)
   Layer layer = sLayers[aLayerId];
 
   // Translate from unit vertex to layer quad vertex.
-  float4 position = float4(aVertex, 0, 1);
   float4 clipRect = layer.clipRect;
 
   // Transform to screen coordinates.
   float4x4 transform = layer.transform;
-  position = mul(transform, position);
+  float4 layerPos = mul(transform, float4(aVertex, 0, 1));
+  float4 position = layerPos;
   position.xyz /= position.w;
   position.xy -= RenderTargetOffset.xy;
   position.xyz *= position.w;
@@ -104,7 +109,7 @@ VertexInfo ComputePosition(float2 aVertex, uint aLayerId, float aSortIndex)
   VertexInfo info;
   info.screenPos = position.xy;
   info.worldPos = worldPos;
-  info.maskCoords = ComputeMaskCoords(position, layer);
+  info.maskCoords = ComputeMaskCoords(layerPos, layer);
   info.clipRect = clipRect;
   return info;
 }

@@ -178,6 +178,7 @@ public:
     NS_IMETHOD GetDomainLookupStart(mozilla::TimeStamp *aDomainLookupStart) override;
     NS_IMETHOD GetDomainLookupEnd(mozilla::TimeStamp *aDomainLookupEnd) override;
     NS_IMETHOD GetConnectStart(mozilla::TimeStamp *aConnectStart) override;
+    NS_IMETHOD GetSecureConnectionStart(mozilla::TimeStamp *aSecureConnectionStart) override;
     NS_IMETHOD GetConnectEnd(mozilla::TimeStamp *aConnectEnd) override;
     NS_IMETHOD GetRequestStart(mozilla::TimeStamp *aRequestStart) override;
     NS_IMETHOD GetResponseStart(mozilla::TimeStamp *aResponseStart) override;
@@ -479,7 +480,7 @@ private:
     int64_t ComputeTelemetryBucketNumber(int64_t difftime_ms);
 
     // Report telemetry and stats to about:networking
-    void ReportRcwnStats(nsIRequest* firstResponseRequest, bool isFromNet);
+    void ReportRcwnStats(bool isFromNet);
 
     // Create a aggregate set of the current notification callbacks
     // and ensure the transaction is updated to use it.

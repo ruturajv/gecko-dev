@@ -11,6 +11,7 @@
 #include "mozilla/UniquePtr.h"
 #include "mozilla/WidgetUtils.h"
 #include "mozilla/layers/APZCCallbackHelper.h"
+#include "mozilla/layers/CompositorOptions.h"
 #include "nsRect.h"
 #include "nsIWidget.h"
 #include "nsWidgetsCID.h"
@@ -406,7 +407,7 @@ public:
 
 #if defined(MOZ_WIDGET_ANDROID)
   void RecvToolbarAnimatorMessageFromCompositor(int32_t) override {};
-  void UpdateRootFrameMetrics(const ScreenPoint& aScrollOffset, const CSSToScreenScale& aZoom, const CSSRect& aPage) override {};
+  void UpdateRootFrameMetrics(const ScreenPoint& aScrollOffset, const CSSToScreenScale& aZoom) override {};
   void RecvScreenPixels(mozilla::ipc::Shmem&& aMem, const ScreenIntSize& aSize) override {};
 #endif
 
@@ -743,6 +744,11 @@ protected:
 
   static bool debug_GetCachedBoolPref(const char* aPrefName);
 #endif
+
+private:
+  already_AddRefed<LayerManager>
+  CreateCompositorSession(int aWidth, int aHeight,
+                          mozilla::layers::CompositorOptions* aOptionsOut);
 };
 
 #endif // nsBaseWidget_h__

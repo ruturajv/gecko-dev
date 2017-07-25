@@ -25,6 +25,7 @@
 #include "gfxPrefs.h"
 #include "gfxEnv.h"
 #include "gfxTextRun.h"
+#include "gfxUserFontSet.h"
 #include "gfxConfig.h"
 #include "MediaPrefs.h"
 
@@ -848,18 +849,36 @@ gfxPlatform::IsDXInterop2Blocked()
   return status != nsIGfxInfo::FEATURE_STATUS_OK;
 }
 
+/* static */ int32_t
+gfxPlatform::MaxTextureSize()
+{
+  // Make sure we don't completely break rendering because of a typo in the
+  // pref or whatnot.
+  const int32_t kMinSizePref = 2048;
+  return std::max(kMinSizePref, gfxPrefs::MaxTextureSizeDoNotUseDirectly());
+}
+
+/* static */ int32_t
+gfxPlatform::MaxAllocSize()
+{
+  // Make sure we don't completely break rendering because of a typo in the
+  // pref or whatnot.
+  const int32_t kMinAllocPref = 10000000;
+  return std::max(kMinAllocPref, gfxPrefs::MaxAllocSizeDoNotUseDirectly());
+}
+
 /* static */ void
 gfxPlatform::InitMoz2DLogging()
 {
-    auto fwd = new CrashStatsLogForwarder("GraphicsCriticalError");
-    fwd->SetCircularBufferSize(gfxPrefs::GfxLoggingCrashLength());
+  auto fwd = new CrashStatsLogForwarder("GraphicsCriticalError");
+  fwd->SetCircularBufferSize(gfxPrefs::GfxLoggingCrashLength());
 
-    mozilla::gfx::Config cfg;
-    cfg.mLogForwarder = fwd;
-    cfg.mMaxTextureSize = gfxPrefs::MaxTextureSize();
-    cfg.mMaxAllocSize = gfxPrefs::MaxAllocSize();
+  mozilla::gfx::Config cfg;
+  cfg.mLogForwarder = fwd;
+  cfg.mMaxTextureSize = gfxPlatform::MaxTextureSize();
+  cfg.mMaxAllocSize = gfxPlatform::MaxAllocSize();
 
-    gfx::Factory::Init(cfg);
+  gfx::Factory::Init(cfg);
 }
 
 /* static */ bool
@@ -1678,6 +1697,27 @@ gfxPlatform::UseGraphiteShaping()
     }
 
     return mGraphiteShapingEnabled;
+}
+
+bool
+gfxPlatform::IsFontFormatSupported(uint32_t aFormatFlags)
+{
+    // check for strange format flags
+    MOZ_ASSERT(!(aFormatFlags & gfxUserFontSet::FLAG_FORMAT_NOT_USED),
+               "strange font format hint set");
+
+    // accept "common" formats that we support on all platforms
+    if (aFormatFlags & gfxUserFontSet::FLAG_FORMATS_COMMON) {
+        return true;
+    }
+
+    // reject all other formats, known and unknown
+    if (aFormatFlags != 0) {
+        return false;
+    }
+
+    // no format hint set, need to look at data
+    return true;
 }
 
 gfxFontEntry*

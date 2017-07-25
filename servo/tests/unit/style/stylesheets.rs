@@ -8,6 +8,7 @@ use media_queries::CSSErrorReporterTest;
 use parking_lot::RwLock;
 use selectors::attr::*;
 use selectors::parser::*;
+use servo_arc::Arc;
 use servo_atoms::Atom;
 use servo_url::ServoUrl;
 use std::borrow::ToOwned;
@@ -21,12 +22,12 @@ use style::properties::{CSSWideKeyword, DeclaredValueOwned, PropertyDeclaration,
 use style::properties::longhands;
 use style::properties::longhands::animation_play_state;
 use style::shared_lock::SharedRwLock;
-use style::stylearc::Arc;
 use style::stylesheets::{Origin, Namespaces};
 use style::stylesheets::{Stylesheet, StylesheetContents, NamespaceRule, CssRule, CssRules, StyleRule, KeyframesRule};
 use style::stylesheets::keyframes_rule::{Keyframe, KeyframeSelector, KeyframePercentage};
 use style::values::{KeyframesName, CustomIdent};
-use style::values::specified::{LengthOrPercentageOrAuto, Percentage, PositionComponent};
+use style::values::computed::Percentage;
+use style::values::specified::{LengthOrPercentageOrAuto, PositionComponent};
 
 pub fn block_from<I>(iterable: I) -> PropertyDeclarationBlock
 where I: IntoIterator<Item=(PropertyDeclaration, Importance)> {
@@ -84,7 +85,7 @@ fn test_parse_stylesheet() {
                     url: NsAtom::from("http://www.w3.org/1999/xhtml"),
                     source_location: SourceLocation {
                         line: 1,
-                        column: 19,
+                        column: 18,
                     },
                 }))),
                 CssRule::Style(Arc::new(stylesheet.shared_lock.wrap(StyleRule {
@@ -114,7 +115,7 @@ fn test_parse_stylesheet() {
                     ]))),
                     source_location: SourceLocation {
                         line: 3,
-                        column: 9,
+                        column: 8,
                     },
                 }))),
                 CssRule::Style(Arc::new(stylesheet.shared_lock.wrap(StyleRule {
@@ -141,7 +142,7 @@ fn test_parse_stylesheet() {
                     ]))),
                     source_location: SourceLocation {
                         line: 11,
-                        column: 9,
+                        column: 8,
                     },
                 }))),
                 CssRule::Style(Arc::new(stylesheet.shared_lock.wrap(StyleRule {
@@ -203,7 +204,7 @@ fn test_parse_stylesheet() {
                     ]))),
                     source_location: SourceLocation {
                         line: 15,
-                        column: 9,
+                        column: 8,
                     },
                 }))),
                 CssRule::Keyframes(Arc::new(stylesheet.shared_lock.wrap(KeyframesRule {
@@ -235,7 +236,7 @@ fn test_parse_stylesheet() {
                     vendor_prefix: None,
                     source_location: SourceLocation {
                         line: 16,
-                        column: 19,
+                        column: 18,
                     },
                 })))
 
@@ -314,16 +315,44 @@ fn test_report_error_stylesheet() {
     let mut errors = errors.lock().unwrap();
 
     let error = errors.pop().unwrap();
-    assert_eq!("Unsupported property declaration: 'invalid: true;', found unexpected identifier true", error.message);
-    assert_eq!(10, error.line);
-    assert_eq!(9, error.column);
+    assert_eq!("Unsupported property declaration: 'invalid: true;', \
+                Custom(PropertyDeclaration(UnknownProperty(\"invalid\")))", error.message);
+    assert_eq!(9, error.line);
+    assert_eq!(8, error.column);
 
     let error = errors.pop().unwrap();
     assert_eq!("Unsupported property declaration: 'display: invalid;', \
-                Custom(PropertyDeclaration(InvalidValue))", error.message);
-    assert_eq!(9, error.line);
-    assert_eq!(9, error.column);
+                Custom(PropertyDeclaration(InvalidValue(\"display\")))", error.message);
+    assert_eq!(8, error.line);
+    assert_eq!(8, error.column);
 
     // testing for the url
     assert_eq!(url, error.url);
+}
+
+#[test]
+fn test_no_report_unrecognized_vendor_properties() {
+    let css = r"
+    div {
+        -o-background-color: red;
+        _background-color: red;
+        -moz-background-color: red;
+    }
+    ";
+    let url = ServoUrl::parse("about::test").unwrap();
+    let error_reporter = CSSInvalidErrorReporterTest::new();
+
+    let errors = error_reporter.errors.clone();
+
+    let lock = SharedRwLock::new();
+    let media = Arc::new(lock.wrap(MediaList::empty()));
+    Stylesheet::from_str(css, url, Origin::UserAgent, media, lock,
+                         None, &error_reporter, QuirksMode::NoQuirks, 0u64);
+
+    let mut errors = errors.lock().unwrap();
+    let error = errors.pop().unwrap();
+    assert_eq!("Unsupported property declaration: '-moz-background-color: red;', \
+                Custom(PropertyDeclaration(UnknownProperty(\"-moz-background-color\")))",
+               error.message);
+    assert!(errors.is_empty());
 }

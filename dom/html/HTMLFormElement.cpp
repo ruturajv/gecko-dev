@@ -474,10 +474,7 @@ nsresult
 HTMLFormElement::GetEventTargetParent(EventChainPreVisitor& aVisitor)
 {
   aVisitor.mWantsWillHandleEvent = true;
-  // According to the UI events spec section "Trusted events", we shouldn't
-  // trigger UA default action with an untrusted event except click.
-  if (aVisitor.mEvent->mOriginalTarget == static_cast<nsIContent*>(this) &&
-      aVisitor.mEvent->IsTrusted()) {
+  if (aVisitor.mEvent->mOriginalTarget == static_cast<nsIContent*>(this)) {
     uint32_t msg = aVisitor.mEvent->mMessage;
     if (msg == eFormSubmit) {
       if (mGeneratingSubmit) {
@@ -519,10 +516,7 @@ HTMLFormElement::WillHandleEvent(EventChainPostVisitor& aVisitor)
 nsresult
 HTMLFormElement::PostHandleEvent(EventChainPostVisitor& aVisitor)
 {
-  // According to the UI events spec section "Trusted events", we shouldn't
-  // trigger UA default action with an untrusted event except click.
-  if (aVisitor.mEvent->mOriginalTarget == static_cast<nsIContent*>(this) &&
-      aVisitor.mEvent->IsTrusted()) {
+  if (aVisitor.mEvent->mOriginalTarget == static_cast<nsIContent*>(this)) {
     EventMessage msg = aVisitor.mEvent->mMessage;
     if (msg == eFormSubmit) {
       // let the form know not to defer subsequent submissions
@@ -925,13 +919,11 @@ HTMLFormElement::DoSecureToInsecureSubmitCheck(nsIURI* aActionURL,
   nsAutoString message;
   nsAutoString cont;
   stringBundle->GetStringFromName(
-    u"formPostSecureToInsecureWarning.title", getter_Copies(title));
+    "formPostSecureToInsecureWarning.title", getter_Copies(title));
   stringBundle->GetStringFromName(
-    u"formPostSecureToInsecureWarning.message",
-    getter_Copies(message));
+    "formPostSecureToInsecureWarning.message", getter_Copies(message));
   stringBundle->GetStringFromName(
-    u"formPostSecureToInsecureWarning.continue",
-    getter_Copies(cont));
+    "formPostSecureToInsecureWarning.continue", getter_Copies(cont));
   int32_t buttonPressed;
   bool checkState = false; // this is unused (ConfirmEx requires this parameter)
   rv = prompt->ConfirmEx(title.get(), message.get(),
@@ -1593,6 +1585,27 @@ HTMLFormElement::FlushPendingSubmission()
   }
 }
 
+void
+HTMLFormElement::GetAction(nsString& aValue)
+{
+  if (!GetAttr(kNameSpaceID_None, nsGkAtoms::action, aValue) ||
+      aValue.IsEmpty()) {
+    nsIDocument* document = OwnerDoc();
+    nsIURI* docURI = document->GetDocumentURI();
+    if (docURI) {
+      nsAutoCString spec;
+      nsresult rv = docURI->GetSpec(spec);
+      if (NS_FAILED(rv)) {
+        return;
+      }
+
+      CopyUTF8toUTF16(spec, aValue);
+    }
+  } else {
+    GetURIAttr(nsGkAtoms::action, nullptr, aValue);
+  }
+}
+
 nsresult
 HTMLFormElement::GetActionURL(nsIURI** aActionURL,
                               nsIContent* aOriginatingElement)
@@ -1734,7 +1747,7 @@ HTMLFormElement::GetActionURL(nsIURI** aActionURL,
     NS_ConvertUTF8toUTF16 reportScheme(scheme);
 
     const char16_t* params[] = { reportSpec.get(), reportScheme.get() };
-    CSP_LogLocalizedStr(u"upgradeInsecureRequest",
+    CSP_LogLocalizedStr("upgradeInsecureRequest",
                         params, ArrayLength(params),
                         EmptyString(), // aSourceFile
                         EmptyString(), // aScriptSample
