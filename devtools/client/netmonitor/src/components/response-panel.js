@@ -156,6 +156,12 @@ const ResponsePanel = createClass({
         sectionName = JSON_SCOPE_NAME;
       }
       object[sectionName] = json;
+      object[RESPONSE_PAYLOAD] = {
+        EDITOR_CONFIG: {
+          text,
+          mode: "application/json",
+        },
+      };
     } else {
       sectionName = RESPONSE_PAYLOAD;
 
@@ -175,7 +181,7 @@ const ResponsePanel = createClass({
         PropertiesView({
           object,
           filterPlaceHolder: JSON_FILTER_TEXT,
-          sectionNames: [sectionName],
+          sectionNames: Object.keys(object),
         }),
       )
     );
