@@ -169,9 +169,15 @@ add_task(function* () {
       is(jsonView.textContent !== L10N.getStr("jsonScopeName"),
         box != "json",
         "The response json view doesn't display");
-      is(tabpanel.querySelector(".CodeMirror-code") === null,
-        box != "textarea",
-        "The response editor doesn't display");
+      if (type === "json") {
+        is(tabpanel.querySelector(".CodeMirror-code") !== null,
+            true,
+            "The response editor is displayed");
+      } else {
+        is(tabpanel.querySelector(".CodeMirror-code") === null,
+          box != "textarea",
+          "The response editor doesn't display");
+      }
       is(tabpanel.querySelector(".response-image-box") === null,
         box != "image",
         "The response image view doesn't display");
@@ -208,8 +214,8 @@ add_task(function* () {
       case "json": {
         checkVisibility("json");
 
-        is(tabpanel.querySelectorAll(".tree-section").length, 1,
-          "There should be 1 tree sections displayed in this tabpanel.");
+        is(tabpanel.querySelectorAll(".tree-section").length, 2,
+          "There should be 2 tree sections displayed in this tabpanel.");
         is(tabpanel.querySelectorAll(".empty-notice").length, 0,
           "The empty notice should not be displayed in this tabpanel.");
 

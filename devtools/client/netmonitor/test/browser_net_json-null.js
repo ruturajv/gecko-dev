@@ -27,8 +27,8 @@ add_task(function* () {
   checkResponsePanelDisplaysJSON();
 
   let tabpanel = document.querySelector("#response-panel");
-  is(tabpanel.querySelectorAll(".tree-section").length, 1,
-    "There should be 1 tree sections displayed in this tabpanel.");
+  is(tabpanel.querySelectorAll(".tree-section").length, 2,
+    "There should be 2 tree sections displayed in this tabpanel.");
   is(tabpanel.querySelectorAll(".treeRow:not(.tree-section)").length, 1,
     "There should be 1 json properties displayed in this tabpanel.");
   is(tabpanel.querySelectorAll(".empty-notice").length, 0,

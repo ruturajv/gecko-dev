@@ -72,8 +72,8 @@ add_task(function* () {
     is(tabpanel.querySelector(".response-image-box") === null, true,
       "The response image box doesn't have the intended visibility.");
 
-    is(tabpanel.querySelectorAll(".tree-section").length, 1,
-      "There should be 1 tree sections displayed in this tabpanel.");
+    is(tabpanel.querySelectorAll(".tree-section").length, 2,
+      "There should be 2 tree sections displayed in this tabpanel.");
     is(tabpanel.querySelectorAll(".treeRow:not(.tree-section)").length, 2047,
       "There should be 2047 json properties displayed in this tabpanel.");
     is(tabpanel.querySelectorAll(".empty-notice").length, 0,
