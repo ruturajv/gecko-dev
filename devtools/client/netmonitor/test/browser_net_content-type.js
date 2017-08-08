@@ -169,15 +169,9 @@ add_task(function* () {
       is(jsonView.textContent !== L10N.getStr("jsonScopeName"),
         box != "json",
         "The response json view doesn't display");
-      if (type === "json") {
-        is(tabpanel.querySelector(".CodeMirror-code") !== null,
-            true,
-            "The response editor is displayed");
-      } else {
-        is(tabpanel.querySelector(".CodeMirror-code") === null,
-          box != "textarea",
-          "The response editor doesn't display");
-      }
+      is(tabpanel.querySelector(".CodeMirror-code") === null,
+        (box !== "textarea" && box !== "json"),
+        "The response editor doesn't display");
       is(tabpanel.querySelector(".response-image-box") === null,
         box != "image",
         "The response image view doesn't display");

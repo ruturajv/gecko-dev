@@ -23,7 +23,7 @@ add_task(function* () {
   });
   yield wait;
 
-  wait = waitForDOM(document, "#response-panel");
+  wait = waitForDOM(document, "#response-panel .CodeMirror-code");
   EventUtils.sendMouseEvent({ type: "click" },
     document.querySelector(".network-details-panel-toggle"));
   EventUtils.sendMouseEvent({ type: "click" },
@@ -37,8 +37,8 @@ add_task(function* () {
   let jsonView = tabpanel.querySelector(".tree-section .treeLabel") || {};
   is(jsonView.textContent === L10N.getStr("jsonScopeName"), true,
     "The response json view has the intended visibility.");
-  is(tabpanel.querySelector(".CodeMirror-code") === null, true,
-    "The response editor doesn't have the intended visibility.");
+  is(tabpanel.querySelector(".CodeMirror-code") !== null, true,
+    "The response editor has the intended visibility.");
   is(tabpanel.querySelector(".response-image-box") === null, true,
     "The response image box doesn't have the intended visibility.");
 
