@@ -55,7 +55,7 @@ add_task(function* () {
     let jsonView = panel.querySelector(".tree-section .treeLabel") || {};
     is(jsonView.textContent === L10N.getStr("jsonScopeName"), true,
       "The response json view has the intended visibility.");
-    is(panel.querySelector(".CodeMirror-code") !== null, true,
+    is(panel.querySelector(".CodeMirror-code") === null, false,
       "The response editor has the intended visibility.");
     is(panel.querySelector(".response-image-box") === null, true,
       "The response image box doesn't have the intended visibility.");

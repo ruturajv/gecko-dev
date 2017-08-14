@@ -86,7 +86,7 @@ add_task(function* () {
     is(tabpanel.querySelector(".tree-section .treeLabel").textContent,
       L10N.getFormatStr("jsonpScopeName", func),
       "The response json view has the intened visibility and correct title.");
-    is(tabpanel.querySelector(".CodeMirror-code") !== null, true,
+    is(tabpanel.querySelector(".CodeMirror-code") === null, false,
       "The response editor has the intended visibility.");
     is(tabpanel.querySelector(".responseImageBox") === null, true,
       "The response image box doesn't have the intended visibility.");
