@@ -274,6 +274,7 @@ devtools.jar:
     skin/images/pane-collapse.svg (themes/images/pane-collapse.svg)
     skin/images/pane-expand.svg (themes/images/pane-expand.svg)
     skin/images/help.svg (themes/images/help.svg)
+    skin/images/help-16.svg (themes/images/help-16.svg)
 
     # Firebug Theme
     skin/images/firebug/read-only.svg (themes/images/firebug/read-only.svg)
