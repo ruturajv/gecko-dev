@@ -103,8 +103,7 @@ body,
 }
 
 .learn-more-link::before {
-  background: url(chrome://devtools/skin/images/help-16.svg);
-  background-size: 14px !important;
+  background: url(chrome://devtools/skin/images/help.svg);
 }
 
 /* Status bar */
