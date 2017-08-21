@@ -62,6 +62,12 @@ class RequestListHeaderContextMenu {
         menu.push(entry);
     }
 
+    // Setup Custom Header Columns menu
+    subMenu.responseHeaders.push({ type: "separator" });
+    subMenu.responseHeaders.push({
+      label: L10N.getStr("netmonitor.toolbar.customHeaderColumns")
+    });
+
     menu.push({ type: "separator" });
     menu.push({
       label: L10N.getStr("netmonitor.toolbar.timings"),
