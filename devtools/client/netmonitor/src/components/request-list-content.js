@@ -74,6 +74,8 @@ const RequestListContent = createClass({
   },
 
   componentWillUpdate(nextProps) {
+    console.log(`customHeaderColumnsUIAvailable: ${customHeaderColumnsUIAvailable}`);
+
     // Check if the list is scrolled to bottom before the UI update.
     // The scroll is ever needed only if new rows are added to the list.
     const delta = nextProps.displayedRequests.size - this.props.displayedRequests.size;
@@ -273,6 +275,7 @@ module.exports = connect(
     firstRequestStartedMillis: state.requests.firstStartedMillis,
     selectedRequestId: state.requests.selectedId,
     scale: getWaterfallScale(state),
+    isCustomHeaderColumnsUIAvailable: state.ui.customHeaderColumnsUIAvailable
   }),
   (dispatch) => ({
     dispatch,

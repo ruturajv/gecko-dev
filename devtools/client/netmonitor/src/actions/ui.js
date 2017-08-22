@@ -13,6 +13,7 @@ const {
   SELECT_DETAILS_PANEL_TAB,
   TOGGLE_COLUMN,
   WATERFALL_RESIZE,
+  SHOW_CUSTOM_HEADER_COLUMNS_UI,
 } = require("../constants");
 const { triggerActivity } = require("../connector/index");
 
@@ -62,6 +63,12 @@ function openStatistics(open) {
 function resetColumns() {
   return {
     type: RESET_COLUMNS,
+  };
+}
+
+function toggleCustomHeaderColumnsUI() {
+  return {
+    type: SHOW_CUSTOM_HEADER_COLUMNS_UI,
   };
 }
 
@@ -128,6 +135,7 @@ module.exports = {
   disableBrowserCache,
   openStatistics,
   resetColumns,
+  toggleCustomHeaderColumnsUI,
   resizeWaterfall,
   selectDetailsPanelTab,
   toggleColumn,

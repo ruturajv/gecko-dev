@@ -40,10 +40,11 @@ const RequestListHeader = createClass({
   },
 
   componentWillMount() {
-    const { resetColumns, toggleColumn } = this.props;
+    const { resetColumns, toggleColumn, toggleCustomHeaderColumnsUI } = this.props;
     this.contextMenu = new RequestListHeaderContextMenu({
       resetColumns,
       toggleColumn,
+      toggleCustomHeaderColumnsUI,
     });
   },
 
@@ -208,5 +209,6 @@ module.exports = connect(
     resizeWaterfall: (width) => dispatch(Actions.resizeWaterfall(width)),
     sortBy: (type) => dispatch(Actions.sortBy(type)),
     toggleColumn: (column) => dispatch(Actions.toggleColumn(column)),
+    toggleCustomHeaderColumnsUI: (column) => dispatch(Actions.toggleCustomHeaderColumnsUI()),
   })
 )(RequestListHeader);

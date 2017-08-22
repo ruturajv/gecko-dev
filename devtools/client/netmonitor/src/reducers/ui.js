@@ -62,6 +62,12 @@ function resetColumns(state) {
   return state.set("columns", new Columns());
 }
 
+function toggleCustomHeaderColumnsUI(state) {
+  console.log("Setting state", !state.get("customHeaderColumnsUIAvailable"));
+  return state.set("customHeaderColumnsUIAvailable",
+    !state.get("customHeaderColumnsUIAvailable"));
+}
+
 function resizeWaterfall(state, action) {
   return state.set("waterfallWidth", action.width);
 }
