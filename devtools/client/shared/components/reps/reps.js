@@ -2134,7 +2134,7 @@ function makeNumericalBuckets(propertiesNames, parent, ownProperties, startIndex
   const numProperties = propertiesNames.length;
 
   // We want to have at most a hundred slices.
-  const bucketSize = 10 ** Math.max(2, Math.ceil(Math.log10(numProperties)) - 2);
+  const bucketSize = Math.pow(10, Math.max(2, Math.ceil(Math.log10(numProperties)) - 2));
   const numBuckets = Math.ceil(numProperties / bucketSize);
 
   let buckets = [];

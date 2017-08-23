@@ -17,6 +17,7 @@ const {
   SELECT_DETAILS_PANEL_TAB,
   SEND_CUSTOM_REQUEST,
   SELECT_REQUEST,
+  SHOW_CUSTOM_HEADER_COLUMNS_UI,
   TOGGLE_COLUMN,
   WATERFALL_RESIZE,
 } = require("../constants");
@@ -56,6 +57,7 @@ const UI = I.Record({
   browserCacheDisabled: Services.prefs.getBoolPref("devtools.cache.disabled"),
   statisticsOpen: false,
   waterfallWidth: null,
+  customHeaderColumnsUIAvailable: false,
 });
 
 function resetColumns(state) {
@@ -63,9 +65,8 @@ function resetColumns(state) {
 }
 
 function toggleCustomHeaderColumnsUI(state) {
-  console.log("Setting state", !state.get("customHeaderColumnsUIAvailable"));
-  return state.set("customHeaderColumnsUIAvailable",
-    !state.get("customHeaderColumnsUIAvailable"));
+  let baseState = state.get("customHeaderColumnsUIAvailable") || false;
+  return state.set("customHeaderColumnsUIAvailable", !baseState);
 }
 
 function resizeWaterfall(state, action) {
@@ -120,6 +121,8 @@ function ui(state = new UI(), action) {
       return setDetailsPanelTab(state, action);
     case SELECT_REQUEST:
       return openNetworkDetails(state, { open: true });
+    case SHOW_CUSTOM_HEADER_COLUMNS_UI:
+      return toggleCustomHeaderColumnsUI(state);
     case TOGGLE_COLUMN:
       return state.set("columns", toggleColumn(state.columns, action));
     case WATERFALL_RESIZE:

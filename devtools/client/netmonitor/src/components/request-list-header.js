@@ -36,6 +36,7 @@ const RequestListHeader = createClass({
     sort: PropTypes.object,
     sortBy: PropTypes.func.isRequired,
     toggleColumn: PropTypes.func.isRequired,
+    toggleCustomHeaderColumnsUI: PropTypes.func.isRequired,
     waterfallWidth: PropTypes.number,
   },
 
