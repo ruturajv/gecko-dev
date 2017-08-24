@@ -57,7 +57,9 @@ const UI = I.Record({
   browserCacheDisabled: Services.prefs.getBoolPref("devtools.cache.disabled"),
   statisticsOpen: false,
   waterfallWidth: null,
-  customHeaderColumnsUIAvailable: false,
+
+  // forced for development
+  customHeaderColumnsUIAvailable: true,
 });
 
 function resetColumns(state) {
@@ -65,8 +67,8 @@ function resetColumns(state) {
 }
 
 function toggleCustomHeaderColumnsUI(state) {
-  let baseState = state.get("customHeaderColumnsUIAvailable") || false;
-  return state.set("customHeaderColumnsUIAvailable", !baseState);
+  return state.set("customHeaderColumnsUIAvailable",
+    !state.get("customHeaderColumnsUIAvailable"));
 }
 
 function resizeWaterfall(state, action) {

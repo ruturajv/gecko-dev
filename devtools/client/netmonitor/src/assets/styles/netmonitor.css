@@ -1407,3 +1407,58 @@ body,
   }
 }
 
+.devtools-custom-headers {
+  top: 10px;
+  position: absolute;
+  background-color: #fafafa;
+  text-align: left;
+  left: 50%; 
+  transform: translateX(-50%);
+  width: 200px;
+  padding: 10px;
+  border: 1px solid var(--theme-splitter-color);
+  max-height: 300px;
+}
+
+.custom-headers-title {
+  font-weight: bold;
+}
+
+.devtools-custom-headers-listbox {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow-y: auto;
+  border-top: 1px solid var(--theme-splitter-color);
+  padding-top: 5px;
+}
+
+.devtools-custom-headers-listbox li {
+  display: block;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  position: relative;
+  cursor: pointer;
+}
+
+.devtools-custom-headers-listbox li:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.devtools-custom-headers-listbox li input {
+  border: 1px solid var(--theme-splitter-color);
+  width: 100%;
+}
+
+.custom-header1::after {
+  background-image: url(chrome://devtools/skin/images/help.svg);
+  content: "";
+  background-size: cover;
+  background-repeat: no-repeat;
+  width: 16px;
+  height: 16px;
+  position: absolute;
+  right: 0;
+}

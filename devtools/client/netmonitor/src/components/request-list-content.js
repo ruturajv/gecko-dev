@@ -22,6 +22,7 @@ const {
 // Components
 const RequestListItem = createFactory(require("./request-list-item"));
 const RequestListContextMenu = require("../request-list-context-menu");
+const CustomHeadersUI = createFactory(require("./custom-headers-ui"));
 
 const { div } = DOM;
 
@@ -40,6 +41,7 @@ const RequestListContent = createClass({
     displayedRequests: PropTypes.object.isRequired,
     firstRequestStartedMillis: PropTypes.number.isRequired,
     fromCache: PropTypes.bool,
+    isCustomHeaderColumnsUIAvailable: PropTypes.bool.isRequired,
     onCauseBadgeMouseDown: PropTypes.func.isRequired,
     onItemMouseDown: PropTypes.func.isRequired,
     onSecurityIconMouseDown: PropTypes.func.isRequired,
@@ -222,7 +224,6 @@ const RequestListContent = createClass({
   },
 
   render() {
-    console.log("State in request-list-content",  this.props.isCustomHeaderColumnsUIAvailable);
     const {
       columns,
       displayedRequests,
@@ -233,6 +234,7 @@ const RequestListContent = createClass({
       onThumbnailMouseDown,
       onWaterfallMouseDown,
       selectedRequestId,
+      isCustomHeaderColumnsUIAvailable,
     } = this.props;
 
     return (
@@ -261,7 +263,8 @@ const RequestListContent = createClass({
               onWaterfallMouseDown: () => onWaterfallMouseDown(),
             }))
           )
-        )
+        ),
+        isCustomHeaderColumnsUIAvailable && CustomHeadersUI()
       )
     );
   },
