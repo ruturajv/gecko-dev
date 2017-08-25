@@ -1410,7 +1410,7 @@ body,
 .devtools-custom-headers {
   top: 10px;
   position: absolute;
-  background-color: #fafafa;
+  background-color: var(--theme-body-background);
   text-align: left;
   left: 50%; 
   transform: translateX(-50%);
@@ -1418,6 +1418,7 @@ body,
   padding: 10px;
   border: 1px solid var(--theme-splitter-color);
   max-height: 300px;
+  overflow: auto;
 }
 
 .custom-headers-title {
@@ -1429,7 +1430,6 @@ body,
   margin: 0;
   padding: 0;
   height: 100%;
-  overflow-y: auto;
   border-top: 1px solid var(--theme-splitter-color);
   padding-top: 5px;
 }
@@ -1452,6 +1452,12 @@ body,
   width: 100%;
 }
 
+.custom-header1 {
+  position: relative;
+  width: 80%;
+  display: inline-block;
+}
+
 .custom-header1::after {
   background-image: url(chrome://devtools/skin/images/help.svg);
   content: "";
@@ -1461,4 +1467,10 @@ body,
   height: 16px;
   position: absolute;
   right: 0;
+}
+
+.custom-header-del {
+  background-image: url(chrome://devtools/skin/images/clear.svg);
+  width: 16px;
+  height: 16px;
 }

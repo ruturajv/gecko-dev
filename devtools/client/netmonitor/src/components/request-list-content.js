@@ -52,6 +52,10 @@ const RequestListContent = createClass({
     selectedRequestId: PropTypes.string,
   },
 
+  getInitialState() {
+    return { customHeadersList: ["x-header-1", "x-header-2", "x-header-3"] };
+  },
+
   componentWillMount() {
     const { dispatch } = this.props;
     this.contextMenu = new RequestListContextMenu({
@@ -223,6 +227,30 @@ const RequestListContent = createClass({
     this.shouldScrollBottom = false;
   },
 
+  onDeleteCustomHeader(header) {
+    if (header.length <= 0) {
+      return;
+    }
+
+    console.log(`Deleting ${header}`);
+    let { customHeadersList } = this.state;
+    customHeadersList = customHeadersList.filter(value => value !== header);
+    this.setState({ customHeadersList });
+  },
+
+  onAddCustomHeader(header) {
+    if (header.length <= 0) {
+      return;
+    }
+
+    console.log(`Adding ${header}`);
+    let { customHeadersList } = this.state;
+    customHeadersList.push(header);
+    this.setState({
+      customHeadersList: [...new Set(customHeadersList)]
+    });
+  },
+
   render() {
     const {
       columns,
@@ -236,6 +264,8 @@ const RequestListContent = createClass({
       selectedRequestId,
       isCustomHeaderColumnsUIAvailable,
     } = this.props;
+
+    let { customHeadersList } = this.state;
 
     return (
       div({ className: "requests-list-wrapper"},
@@ -264,7 +294,11 @@ const RequestListContent = createClass({
             }))
           )
         ),
-        isCustomHeaderColumnsUIAvailable && CustomHeadersUI()
+        isCustomHeaderColumnsUIAvailable && CustomHeadersUI({
+          customHeadersList,
+          onAddCustomHeader: this.onAddCustomHeader,
+          onDeleteCustomHeader: this.onDeleteCustomHeader,
+        })
       )
     );
   },

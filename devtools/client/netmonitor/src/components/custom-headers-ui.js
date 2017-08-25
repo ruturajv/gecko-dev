@@ -12,15 +12,22 @@ const {
   createFactory,
 } = require("devtools/client/shared/vendor/react");
 
-let CustomHeader = createFactory(createClass({
-  displayName: "CustomHeader",
+let CustomHeaderColumn = createFactory(createClass({
+  displayName: "CustomHeaderColumn",
   propTypes: {
     header: PropTypes.string.isRequired,
+    onDeleteCustomHeader: PropTypes.func.isRequired,
   },
 
   getInitialState() {
     let { header } = this.props;
     return { header };
+  },
+
+  componentDidUpdate() {
+    if (this.state.editMode) {
+      this.refs.inputHeader.focus();
+    }
   },
 
   spanClickHandler(e) {
@@ -31,7 +38,6 @@ let CustomHeader = createFactory(createClass({
     // debugger;
     e.preventDefault();
     e.stopPropagation();
-    console.log(e.key);
     switch (e.key) {
       case "Enter":
         this.setState({ editMode: false, header: this.refs.inputHeader.value });
@@ -53,18 +59,47 @@ let CustomHeader = createFactory(createClass({
         onKeyUp: this.inputKeyHandler,
         ref: "inputHeader",
       }) :
-      dom.div({
-        onClick: this.spanClickHandler,
-        className: "custom-header1 devtools-button"
-      }, header);
+      dom.div(
+        {},
+        dom.span({
+          onClick: this.spanClickHandler,
+          className: "custom-header1"
+        }, header),
+        dom.button({
+          className: "custom-header-del devtools-button",
+          "data-value": header,
+          onClick: (e) => {
+            this.props.onDeleteCustomHeader(e.target.dataset.value);
+          },
+        })
+      );
   }
 }));
 
 module.exports = createClass({
   displayName: "CustomHeadersUI",
 
+  propTypes: {
+    customHeadersList: PropTypes.array.isRequired,
+    onAddCustomHeader: PropTypes.func.isRequired,
+    onDeleteCustomHeader: PropTypes.func.isRequired,
+  },
+
+  newHeaderKeyUpHandler(e) {
+    let newHeaderRef = this.refs.newHeader;
+    switch (e.key) {
+      case "Enter":
+        this.props.onAddCustomHeader(newHeaderRef.value);
+        newHeaderRef.value = "";
+        break;
+      case "Escape":
+        newHeaderRef.value = "";
+        break;
+    }
+  },
+
   render() {
-    let customHeadersList = ["ABC", "PQR", "XYZ"];
+    let { customHeadersList } = this.props;
 
     return dom.div(
       { className: "devtools-custom-headers" },
@@ -76,13 +111,30 @@ module.exports = createClass({
         { className: "devtools-custom-headers-listbox" },
         customHeadersList.map((item, i) => {
           return dom.li({
-            key: i,
-            "data-index": i,
-            "data-value": item.value,
+            key: item,
             title: "Click to edit",
-          }, CustomHeader({ header: item }));
+          }, CustomHeaderColumn({
+            header: item,
+            onDeleteCustomHeader: this.props.onDeleteCustomHeader,
+          }));
         })
-      )
+      ),
+      dom.input({
+        defaultValue: "",
+        placeholder: "x-header",
+        className: "devtools-input",
+        ref: "newHeader",
+        onKeyUp: this.newHeaderKeyUpHandler,
+      }),
+      dom.button({
+        className: "devtools-button",
+        onClick: () => {
+          let newHeaderRef = this.refs.newHeader;
+          this.props.onAddCustomHeader(newHeaderRef.value);
+          newHeaderRef.value = "";
+          newHeaderRef.focus();
+        },
+      }, L10N.getStr("netmonitor.toolbar.customHeaderColumnsAdd"))
     );
   }
 });
