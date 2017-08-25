@@ -16,12 +16,11 @@ let CustomHeaderColumn = createFactory(createClass({
   displayName: "CustomHeaderColumn",
   propTypes: {
     header: PropTypes.string.isRequired,
-    onDeleteCustomHeader: PropTypes.func.isRequired,
+    deleteCustomHeaderColumn: PropTypes.func.isRequired,
   },
 
   getInitialState() {
-    let { header } = this.props;
-    return { header };
+    return { editMode: false };
   },
 
   componentDidUpdate() {
@@ -34,29 +33,31 @@ let CustomHeaderColumn = createFactory(createClass({
     this.setState({ editMode: true });
   },
 
-  inputKeyHandler(e) {
+  inputKeyHandler(e, oldHeader) {
     // debugger;
     e.preventDefault();
     e.stopPropagation();
     switch (e.key) {
       case "Enter":
-        this.setState({ editMode: false, header: this.refs.inputHeader.value });
+        this.props.renameCustomHeaderColumn(oldHeader, this.refs.inputHeader.value);
+        this.setState({ editMode: false });
         break;
       case "Escape":
-        this.setState({ editMode: false, header: this.state.header });
+        this.setState({ editMode: false, header: this.props.header });
         break;
     }
   },
 
   render() {
-    let { editMode, header } = this.state;
+    let { editMode } = this.state;
+    let { header } = this.props;
 
     return editMode ?
       dom.input({
         type: "text",
         defaultValue: header,
         placeholder: "x-header",
-        onKeyUp: this.inputKeyHandler,
+        onKeyUp: e => this.inputKeyHandler(e, header),
         ref: "inputHeader",
       }) :
       dom.div(
@@ -68,8 +69,8 @@ let CustomHeaderColumn = createFactory(createClass({
         dom.button({
           className: "custom-header-del devtools-button",
           "data-value": header,
-          onClick: (e) => {
-            this.props.onDeleteCustomHeader(e.target.dataset.value);
+          onClick: e => {
+            this.props.deleteCustomHeaderColumn(e.target.dataset.value);
           },
         })
       );
@@ -80,16 +81,17 @@ module.exports = createClass({
   displayName: "CustomHeadersUI",
 
   propTypes: {
+    addCustomHeaderColumn: PropTypes.func.isRequired,
+    deleteCustomHeaderColumn: PropTypes.func.isRequired,
+    renameCustomHeaderColumn: PropTypes.func.isRequired,
     customHeadersList: PropTypes.array.isRequired,
-    onAddCustomHeader: PropTypes.func.isRequired,
-    onDeleteCustomHeader: PropTypes.func.isRequired,
   },
 
   newHeaderKeyUpHandler(e) {
     let newHeaderRef = this.refs.newHeader;
     switch (e.key) {
       case "Enter":
-        this.props.onAddCustomHeader(newHeaderRef.value);
+        this.props.addCustomHeaderColumn(newHeaderRef.value);
         newHeaderRef.value = "";
         break;
       case "Escape":
@@ -99,7 +101,11 @@ module.exports = createClass({
   },
 
   render() {
-    let { customHeadersList } = this.props;
+    let {
+      customHeadersList,
+      deleteCustomHeaderColumn,
+      renameCustomHeaderColumn,
+    } = this.props;
 
     return dom.div(
       { className: "devtools-custom-headers" },
@@ -115,7 +121,8 @@ module.exports = createClass({
             title: "Click to edit",
           }, CustomHeaderColumn({
             header: item,
-            onDeleteCustomHeader: this.props.onDeleteCustomHeader,
+            deleteCustomHeaderColumn,
+            renameCustomHeaderColumn,
           }));
         })
       ),
@@ -130,7 +137,7 @@ module.exports = createClass({
         className: "devtools-button",
         onClick: () => {
           let newHeaderRef = this.refs.newHeader;
-          this.props.onAddCustomHeader(newHeaderRef.value);
+          this.props.addCustomHeaderColumn(newHeaderRef.value);
           newHeaderRef.value = "";
           newHeaderRef.focus();
         },

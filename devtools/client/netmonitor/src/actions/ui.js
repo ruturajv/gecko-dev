@@ -6,14 +6,17 @@
 
 const {
   ACTIVITY_TYPE,
+  ADD_CUSTOM_HEADER_COLUMN,
+  DELETE_CUSTOM_HEADER_COLUMN,
   OPEN_NETWORK_DETAILS,
   DISABLE_BROWSER_CACHE,
   OPEN_STATISTICS,
+  RENAME_CUSTOM_HEADER_COLUMN,
   RESET_COLUMNS,
   SELECT_DETAILS_PANEL_TAB,
+  SHOW_CUSTOM_HEADER_COLUMNS_UI,
   TOGGLE_COLUMN,
   WATERFALL_RESIZE,
-  SHOW_CUSTOM_HEADER_COLUMNS_UI,
 } = require("../constants");
 const { triggerActivity } = require("../connector/index");
 
@@ -66,9 +69,34 @@ function resetColumns() {
   };
 }
 
+/**
+ * Enable flag to show custom Header Columns UI
+ */
 function toggleCustomHeaderColumnsUI() {
   return {
     type: SHOW_CUSTOM_HEADER_COLUMNS_UI,
+  };
+}
+
+function addCustomHeaderColumn(header) {
+  return {
+    type: ADD_CUSTOM_HEADER_COLUMN,
+    header,
+  };
+}
+
+function deleteCustomHeaderColumn(header) {
+  return {
+    type: DELETE_CUSTOM_HEADER_COLUMN,
+    header,
+  };
+}
+
+function renameCustomHeaderColumn(oldHeader, newHeader) {
+  return {
+    type: RENAME_CUSTOM_HEADER_COLUMN,
+    oldHeader,
+    newHeader,
   };
 }
 
@@ -131,9 +159,12 @@ function toggleStatistics() {
 }
 
 module.exports = {
+  addCustomHeaderColumn,
+  deleteCustomHeaderColumn,
   openNetworkDetails,
   disableBrowserCache,
   openStatistics,
+  renameCustomHeaderColumn,
   resetColumns,
   toggleCustomHeaderColumnsUI,
   resizeWaterfall,

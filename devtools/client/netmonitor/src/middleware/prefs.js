@@ -6,7 +6,10 @@
 
 const Services = require("Services");
 const {
+  ADD_CUSTOM_HEADER_COLUMN,
+  DELETE_CUSTOM_HEADER_COLUMN,
   ENABLE_REQUEST_FILTER_TYPE_ONLY,
+  RENAME_CUSTOM_HEADER_COLUMN,
   RESET_COLUMNS,
   TOGGLE_COLUMN,
   TOGGLE_REQUEST_FILTER_TYPE,
@@ -23,6 +26,14 @@ function prefsMiddleware(store) {
   return next => action => {
     const res = next(action);
     switch (action.type) {
+      case ADD_CUSTOM_HEADER_COLUMN:
+      case DELETE_CUSTOM_HEADER_COLUMN:
+      case RENAME_CUSTOM_HEADER_COLUMN:
+        Services.prefs.setCharPref(
+          "devtools.netmonitor.customHeaderColumns",
+          JSON.stringify(store.getState().ui.customHeaderColumns)
+        );
+        break;
       case ENABLE_REQUEST_FILTER_TYPE_ONLY:
       case TOGGLE_REQUEST_FILTER_TYPE:
         let filters = getRequestFilterTypes(store.getState())

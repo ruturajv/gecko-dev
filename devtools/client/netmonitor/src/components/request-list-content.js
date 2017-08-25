@@ -36,7 +36,10 @@ const RequestListContent = createClass({
   displayName: "RequestListContent",
 
   propTypes: {
+    addCustomHeaderColumn: PropTypes.func.isRequired,
+    deleteCustomHeaderColumn: PropTypes.func.isRequired,
     columns: PropTypes.object.isRequired,
+    customHeaderColumns: PropTypes.array.isRequired,
     dispatch: PropTypes.func.isRequired,
     displayedRequests: PropTypes.object.isRequired,
     firstRequestStartedMillis: PropTypes.number.isRequired,
@@ -48,12 +51,9 @@ const RequestListContent = createClass({
     onSelectDelta: PropTypes.func.isRequired,
     onThumbnailMouseDown: PropTypes.func.isRequired,
     onWaterfallMouseDown: PropTypes.func.isRequired,
+    renameCustomHeaderColumn: PropTypes.func.isRequired,
     scale: PropTypes.number,
     selectedRequestId: PropTypes.string,
-  },
-
-  getInitialState() {
-    return { customHeadersList: ["x-header-1", "x-header-2", "x-header-3"] };
   },
 
   componentWillMount() {
@@ -227,30 +227,6 @@ const RequestListContent = createClass({
     this.shouldScrollBottom = false;
   },
 
-  onDeleteCustomHeader(header) {
-    if (header.length <= 0) {
-      return;
-    }
-
-    console.log(`Deleting ${header}`);
-    let { customHeadersList } = this.state;
-    customHeadersList = customHeadersList.filter(value => value !== header);
-    this.setState({ customHeadersList });
-  },
-
-  onAddCustomHeader(header) {
-    if (header.length <= 0) {
-      return;
-    }
-
-    console.log(`Adding ${header}`);
-    let { customHeadersList } = this.state;
-    customHeadersList.push(header);
-    this.setState({
-      customHeadersList: [...new Set(customHeadersList)]
-    });
-  },
-
   render() {
     const {
       columns,
@@ -262,10 +238,13 @@ const RequestListContent = createClass({
       onThumbnailMouseDown,
       onWaterfallMouseDown,
       selectedRequestId,
-      isCustomHeaderColumnsUIAvailable,
-    } = this.props;
 
-    let { customHeadersList } = this.state;
+      isCustomHeaderColumnsUIAvailable,
+      customHeaderColumns,
+      addCustomHeaderColumn,
+      deleteCustomHeaderColumn,
+      renameCustomHeaderColumn,
+    } = this.props;
 
     return (
       div({ className: "requests-list-wrapper"},
@@ -295,9 +274,10 @@ const RequestListContent = createClass({
           )
         ),
         isCustomHeaderColumnsUIAvailable && CustomHeadersUI({
-          customHeadersList,
-          onAddCustomHeader: this.onAddCustomHeader,
-          onDeleteCustomHeader: this.onDeleteCustomHeader,
+          customHeadersList: customHeaderColumns,
+          addCustomHeaderColumn,
+          deleteCustomHeaderColumn,
+          renameCustomHeaderColumn,
         })
       )
     );
@@ -307,6 +287,7 @@ const RequestListContent = createClass({
 module.exports = connect(
   (state) => ({
     columns: state.ui.columns,
+    customHeaderColumns: state.ui.customHeaderColumns,
     displayedRequests: getDisplayedRequests(state),
     firstRequestStartedMillis: state.requests.firstStartedMillis,
     selectedRequestId: state.requests.selectedId,
@@ -315,6 +296,10 @@ module.exports = connect(
   }),
   (dispatch) => ({
     dispatch,
+    addCustomHeaderColumn: header =>
+      dispatch(Actions.addCustomHeaderColumn(header)),
+    deleteCustomHeaderColumn: header =>
+      dispatch(Actions.deleteCustomHeaderColumn(header)),
     /**
      * A handler that opens the stack trace tab when a stack trace is available
      */
@@ -347,5 +332,7 @@ module.exports = connect(
     onWaterfallMouseDown: () => {
       dispatch(Actions.selectDetailsPanelTab("timings"));
     },
+    renameCustomHeaderColumn: (oldHeader, newHeader) =>
+      dispatch(Actions.renameCustomHeaderColumn(oldHeader, newHeader)),
   }),
 )(RequestListContent);

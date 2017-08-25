@@ -7,11 +7,14 @@
 const I = require("devtools/client/shared/vendor/immutable");
 const Services = require("Services");
 const {
+  ADD_CUSTOM_HEADER_COLUMN,
+  DELETE_CUSTOM_HEADER_COLUMN,
   CLEAR_REQUESTS,
   OPEN_NETWORK_DETAILS,
   DISABLE_BROWSER_CACHE,
   OPEN_STATISTICS,
   REMOVE_SELECTED_CUSTOM_REQUEST,
+  RENAME_CUSTOM_HEADER_COLUMN,
   RESET_COLUMNS,
   RESPONSE_HEADERS,
   SELECT_DETAILS_PANEL_TAB,
@@ -60,6 +63,8 @@ const UI = I.Record({
 
   // forced for development
   customHeaderColumnsUIAvailable: true,
+  customHeaderColumns:
+    JSON.parse(Services.prefs.getCharPref("devtools.netmonitor.customHeaderColumns"))
 });
 
 function resetColumns(state) {
@@ -104,8 +109,52 @@ function toggleColumn(state, action) {
   return newState;
 }
 
+function addCustomHeaderColumn(state, action) {
+  let { header } = action;
+  if (header.length < 1) {
+    return state;
+  }
+
+  let customHeaderColumns = state.get("customHeaderColumns");
+  customHeaderColumns.push(header);
+
+  return state.set("customHeaderColumns", [...new Set(customHeaderColumns)]);
+}
+
+function deleteCustomHeaderColumn(state, action) {
+  let { header } = action;
+  if (header.length < 1) {
+    return state;
+  }
+
+  let customHeaderColumns = state.get("customHeaderColumns");
+  customHeaderColumns = customHeaderColumns.filter(value => value !== header);
+
+  return state.set("customHeaderColumns", customHeaderColumns);
+}
+
+function renameCustomHeaderColumn(state, action) {
+  let { oldHeader, newHeader } = action;
+  if (newHeader.length < 1) {
+    return state;
+  }
+
+  let customHeaderColumns = state.get("customHeaderColumns");
+  let newCustomHeaderColumns = [];
+  customHeaderColumns.forEach(value => {
+    let newValue = value === oldHeader ? newHeader : value;
+    newCustomHeaderColumns.push(newValue);
+  });
+
+  return state.set("customHeaderColumns", newCustomHeaderColumns);
+}
+
 function ui(state = new UI(), action) {
   switch (action.type) {
+    case ADD_CUSTOM_HEADER_COLUMN:
+      return addCustomHeaderColumn(state, action);
+    case DELETE_CUSTOM_HEADER_COLUMN:
+      return deleteCustomHeaderColumn(state, action);
     case CLEAR_REQUESTS:
       return openNetworkDetails(state, { open: false });
     case OPEN_NETWORK_DETAILS:
@@ -114,6 +163,8 @@ function ui(state = new UI(), action) {
       return disableBrowserCache(state, action);
     case OPEN_STATISTICS:
       return openStatistics(state, action);
+    case RENAME_CUSTOM_HEADER_COLUMN:
+      return renameCustomHeaderColumn(state, action);
     case RESET_COLUMNS:
       return resetColumns(state);
     case REMOVE_SELECTED_CUSTOM_REQUEST:
