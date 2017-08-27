@@ -38,6 +38,7 @@ const RequestListHeader = createClass({
     toggleColumn: PropTypes.func.isRequired,
     toggleCustomHeaderColumnsUI: PropTypes.func.isRequired,
     waterfallWidth: PropTypes.number,
+    customHeaderColumns: PropTypes.array.isRequired,
   },
 
   componentWillMount() {
@@ -84,11 +85,31 @@ const RequestListHeader = createClass({
   },
 
   render() {
-    let { columns, scale, sort, sortBy, waterfallWidth } = this.props;
+    let {
+      columns,
+      scale,
+      sort,
+      sortBy,
+      waterfallWidth,
+      customHeaderColumns
+    } = this.props;
+    console.log("in request-list-header", HEADERS, columns);
+
+    // DIRTY CODE STARTS !! I DON'T LIKE THIS BIT
+    let listHeaders = [
+      ...HEADERS
+        .filter(header => columns.get(header.name) && header.name !== "waterfall"),
+      ...customHeaderColumns
+        .map(header => ({ name: header, noLocalization: true }))
+    ];
+    listHeaders = columns.get("waterfall") ? listHeaders.concat(HEADERS[HEADERS.length - 1]) : listHeaders;
+    console.log("listHeaders", listHeaders);
+    // DIRTY CODE ENDS
 
     return (
       div({ className: "devtools-toolbar requests-list-headers" },
-        HEADERS.filter((header) => columns.get(header.name)).map((header) => {
+        listHeaders.map((header) => {
+          console.log(header, header.name);
           let name = header.name;
           let boxName = header.boxName || name;
           let label = header.noLocalization
@@ -199,6 +220,7 @@ function WaterfallLabel(waterfallWidth, scale, label) {
 module.exports = connect(
   (state) => ({
     columns: state.ui.columns,
+    customHeaderColumns: state.ui.customHeaderColumns,
     firstRequestStartedMillis: state.requests.firstStartedMillis,
     scale: getWaterfallScale(state),
     sort: state.sort,

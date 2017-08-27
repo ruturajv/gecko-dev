@@ -270,6 +270,9 @@ const RequestListContent = createClass({
               onSecurityIconMouseDown: () => onSecurityIconMouseDown(item.securityState),
               onThumbnailMouseDown: () => onThumbnailMouseDown(),
               onWaterfallMouseDown: () => onWaterfallMouseDown(),
+              // I had to pass a copy, else RequestListItem'
+              // shouldComponentUpdate failed to understand
+              customHeaderColumns: Array.from(customHeaderColumns),
             }))
           )
         ),

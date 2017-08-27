@@ -91,6 +91,7 @@ const RequestListItem = createClass({
     onThumbnailMouseDown: PropTypes.func.isRequired,
     onWaterfallMouseDown: PropTypes.func.isRequired,
     waterfallWidth: PropTypes.number,
+    customHeaderColumns: PropTypes.array.isRequired,
   },
 
   componentDidMount() {
@@ -100,9 +101,14 @@ const RequestListItem = createClass({
   },
 
   shouldComponentUpdate(nextProps) {
+    let { customHeaderColumns: oldCustomHeaders } = this.props;
+    let { customHeaderColumns: newCustomHeaders } = nextProps;
+    let customHeadersChanged = (newCustomHeaders.length !== oldCustomHeaders.length)
+      || !propertiesEqual(newCustomHeaders, oldCustomHeaders, newCustomHeaders);
+
     return !propertiesEqual(UPDATED_REQ_ITEM_PROPS, this.props.item, nextProps.item) ||
       !propertiesEqual(UPDATED_REQ_PROPS, this.props, nextProps) ||
-      !I.is(this.props.columns, nextProps.columns);
+      !I.is(this.props.columns, nextProps.columns) || customHeadersChanged;
   },
 
   componentDidUpdate(prevProps) {
@@ -128,6 +134,7 @@ const RequestListItem = createClass({
       onSecurityIconMouseDown,
       onThumbnailMouseDown,
       onWaterfallMouseDown,
+      customHeaderColumns,
     } = this.props;
 
     let classList = ["request-list-item", index % 2 ? "odd" : "even"];
@@ -166,6 +173,9 @@ const RequestListItem = createClass({
         columns.get("duration") && RequestListColumnDuration({ item }),
         columns.get("latency") && RequestListColumnLatency({ item }),
         ...RESPONSE_HEADERS.filter(header => columns.get(header)).map(
+          header => RequestListColumnResponseHeader({ item, header }),
+        ),
+        ...customHeaderColumns.map(
           header => RequestListColumnResponseHeader({ item, header }),
         ),
         columns.get("waterfall") &&
