@@ -302,6 +302,13 @@ function propertiesEqual(props, item1, item2) {
 }
 
 /**
+ * Compare if two arrays are equal
+ */
+function arrayEqual(array1, array2) {
+  return array1 === array2 || array2.every((el, ix) => el === array1[ix]);
+}
+
+/**
  * Calculate the start time of a request, which is the time from start
  * of 1st request until the start of this request.
  *
@@ -375,6 +382,7 @@ function getResponseHeader(item, header) {
 }
 
 module.exports = {
+  arrayEqual,
   getFormDataSections,
   fetchHeaders,
   formDataURI,

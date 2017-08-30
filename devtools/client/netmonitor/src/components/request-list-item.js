@@ -11,7 +11,7 @@ const {
   PropTypes,
 } = require("devtools/client/shared/vendor/react");
 const I = require("devtools/client/shared/vendor/immutable");
-const { propertiesEqual } = require("../utils/request-utils");
+const { arrayEqual, propertiesEqual } = require("../utils/request-utils");
 const { RESPONSE_HEADERS } = require("../constants");
 
 // Components
@@ -104,7 +104,7 @@ const RequestListItem = createClass({
     let { headerColumns: oldCustomHeaders } = this.props;
     let { headerColumns: newCustomHeaders } = nextProps;
     let customHeadersChanged = (newCustomHeaders.length !== oldCustomHeaders.length)
-      || !propertiesEqual(newCustomHeaders, oldCustomHeaders, newCustomHeaders);
+      || !arrayEqual(oldCustomHeaders, newCustomHeaders);
 
     return !propertiesEqual(UPDATED_REQ_ITEM_PROPS, this.props.item, nextProps.item) ||
       !propertiesEqual(UPDATED_REQ_PROPS, this.props, nextProps) ||
