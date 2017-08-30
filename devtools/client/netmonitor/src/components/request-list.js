@@ -11,22 +11,26 @@ const {
 } = require("devtools/client/shared/vendor/react");
 
 // Components
+const HeadersModal = createFactory(require("./headers-modal"));
 const RequestListContent = createFactory(require("./request-list-content"));
 const RequestListEmptyNotice = createFactory(require("./request-list-empty-notice"));
 const RequestListHeader = createFactory(require("./request-list-header"));
 const StatusBar = createFactory(require("./status-bar"));
+
+const { connect } = require("devtools/client/shared/vendor/react-redux");
 
 const { div } = DOM;
 
 /**
  * Request panel component
  */
-function RequestList({ isEmpty }) {
+function RequestList({ isEmpty, headerColumnsModalShown }) {
   return (
     div({ className: "request-list-container" },
       RequestListHeader(),
       isEmpty ? RequestListEmptyNotice() : RequestListContent(),
       StatusBar(),
+      headerColumnsModalShown && HeadersModal(),
     )
   );
 }
@@ -35,6 +39,9 @@ RequestList.displayName = "RequestList";
 
 RequestList.propTypes = {
   isEmpty: PropTypes.bool.isRequired,
+  headerColumnsModalShown: PropTypes.bool.isRequired,
 };
 
-module.exports = RequestList;
+module.exports = connect(state => ({
+  headerColumnsModalShown: state.ui.headerColumnsModalShown
+}))(RequestList);

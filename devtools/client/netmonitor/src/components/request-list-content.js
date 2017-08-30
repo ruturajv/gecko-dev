@@ -22,7 +22,6 @@ const {
 // Components
 const RequestListItem = createFactory(require("./request-list-item"));
 const RequestListContextMenu = require("../request-list-context-menu");
-const HeadersModal = createFactory(require("./headers-modal"));
 
 const { div } = DOM;
 
@@ -229,15 +228,13 @@ const RequestListContent = createClass({
       columns,
       displayedRequests,
       firstRequestStartedMillis,
+      headerColumns,
       onCauseBadgeMouseDown,
       onItemMouseDown,
       onSecurityIconMouseDown,
       onThumbnailMouseDown,
       onWaterfallMouseDown,
       selectedRequestId,
-
-      headerColumnsModalShown,
-      headerColumns,
     } = this.props;
 
     return (
@@ -264,13 +261,10 @@ const RequestListContent = createClass({
               onSecurityIconMouseDown: () => onSecurityIconMouseDown(item.securityState),
               onThumbnailMouseDown: () => onThumbnailMouseDown(),
               onWaterfallMouseDown: () => onWaterfallMouseDown(),
-              // I had to pass a copy, else RequestListItem'
-              // shouldComponentUpdate failed to understand
               headerColumns,
             }))
           )
-        ),
-        headerColumnsModalShown && HeadersModal()
+        )
       )
     );
   },
@@ -284,7 +278,6 @@ module.exports = connect(
     firstRequestStartedMillis: state.requests.firstStartedMillis,
     selectedRequestId: state.requests.selectedId,
     scale: getWaterfallScale(state),
-    headerColumnsModalShown: state.ui.headerColumnsModalShown
   }),
   (dispatch) => ({
     dispatch,

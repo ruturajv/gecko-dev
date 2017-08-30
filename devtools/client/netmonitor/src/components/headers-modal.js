@@ -162,4 +162,3 @@ module.exports = connect(
       dispatch(Actions.renameCustomHeaderColumn(oldHeader, newHeader)),
   }),
 )(HeadersModal);
-
