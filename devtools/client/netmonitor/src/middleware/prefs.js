@@ -30,8 +30,8 @@ function prefsMiddleware(store) {
       case DELETE_CUSTOM_HEADER_COLUMN:
       case RENAME_CUSTOM_HEADER_COLUMN:
         Services.prefs.setCharPref(
-          "devtools.netmonitor.customHeaderColumns",
-          JSON.stringify(store.getState().ui.customHeaderColumns)
+          "devtools.netmonitor.headerColumns",
+          JSON.stringify(store.getState().ui.headerColumns)
         );
         break;
       case ENABLE_REQUEST_FILTER_TYPE_ONLY:

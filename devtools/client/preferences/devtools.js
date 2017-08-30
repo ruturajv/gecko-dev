@@ -167,7 +167,7 @@ pref("devtools.netmonitor.filters", "[\"all\"]");
 pref("devtools.netmonitor.visibleColumns",
   "[\"status\",\"method\",\"file\",\"domain\",\"cause\",\"type\",\"transferred\",\"contentSize\",\"waterfall\"]"
 );
-pref("devtools.netmonitor.customHeaderColumns", "[]");
+pref("devtools.netmonitor.headerColumns", "[]");
 
 // The default Network monitor HAR export setting
 pref("devtools.netmonitor.har.defaultLogDir", "");

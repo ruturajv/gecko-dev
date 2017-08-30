@@ -5,7 +5,7 @@
 DevToolsModules(
     'app.js',
     'cookies-panel.js',
-    'custom-headers-ui.js',
+    'headers-modal.js',
     'custom-request-panel.js',
     'headers-panel.js',
     'mdn-link.js',

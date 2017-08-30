@@ -36,17 +36,17 @@ const RequestListHeader = createClass({
     sort: PropTypes.object,
     sortBy: PropTypes.func.isRequired,
     toggleColumn: PropTypes.func.isRequired,
-    toggleCustomHeaderColumnsUI: PropTypes.func.isRequired,
+    toggleCustomHeaderModal: PropTypes.func.isRequired,
     waterfallWidth: PropTypes.number,
-    customHeaderColumns: PropTypes.array.isRequired,
+    headerColumns: PropTypes.array.isRequired,
   },
 
   componentWillMount() {
-    const { resetColumns, toggleColumn, toggleCustomHeaderColumnsUI } = this.props;
+    const { resetColumns, toggleColumn, toggleCustomHeaderModal } = this.props;
     this.contextMenu = new RequestListHeaderContextMenu({
       resetColumns,
       toggleColumn,
-      toggleCustomHeaderColumnsUI,
+      toggleCustomHeaderModal,
     });
   },
 
@@ -91,7 +91,7 @@ const RequestListHeader = createClass({
       sort,
       sortBy,
       waterfallWidth,
-      customHeaderColumns
+      headerColumns
     } = this.props;
     console.log("in request-list-header", HEADERS, columns);
 
@@ -99,7 +99,7 @@ const RequestListHeader = createClass({
     let listHeaders = [
       ...HEADERS
         .filter(header => columns.get(header.name) && header.name !== "waterfall"),
-      ...customHeaderColumns
+      ...headerColumns
         .map(header => ({ name: header, noLocalization: true }))
     ];
     listHeaders = columns.get("waterfall") ? listHeaders.concat(HEADERS[HEADERS.length - 1]) : listHeaders;
@@ -220,7 +220,7 @@ function WaterfallLabel(waterfallWidth, scale, label) {
 module.exports = connect(
   (state) => ({
     columns: state.ui.columns,
-    customHeaderColumns: state.ui.customHeaderColumns,
+    headerColumns: state.ui.headerColumns,
     firstRequestStartedMillis: state.requests.firstStartedMillis,
     scale: getWaterfallScale(state),
     sort: state.sort,
@@ -232,6 +232,6 @@ module.exports = connect(
     resizeWaterfall: (width) => dispatch(Actions.resizeWaterfall(width)),
     sortBy: (type) => dispatch(Actions.sortBy(type)),
     toggleColumn: (column) => dispatch(Actions.toggleColumn(column)),
-    toggleCustomHeaderColumnsUI: (column) => dispatch(Actions.toggleCustomHeaderColumnsUI()),
+    toggleCustomHeaderModal: (column) => dispatch(Actions.toggleCustomHeaderModal()),
   })
 )(RequestListHeader);

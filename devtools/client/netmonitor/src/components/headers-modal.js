@@ -78,7 +78,7 @@ let CustomHeaderColumn = createFactory(createClass({
 }));
 
 module.exports = createClass({
-  displayName: "CustomHeadersUI",
+  displayName: "HeadersModal",
 
   propTypes: {
     addCustomHeaderColumn: PropTypes.func.isRequired,
@@ -111,7 +111,7 @@ module.exports = createClass({
       { className: "devtools-custom-headers" },
       dom.div(
         { className: "custom-headers-title" },
-        L10N.getStr("netmonitor.toolbar.customHeaderColumns")
+        L10N.getStr("netmonitor.toolbar.headerColumns")
       ),
       dom.ul(
         { className: "devtools-custom-headers-listbox" },
@@ -141,7 +141,7 @@ module.exports = createClass({
           newHeaderRef.value = "";
           newHeaderRef.focus();
         },
-      }, L10N.getStr("netmonitor.toolbar.customHeaderColumnsAdd"))
+      }, L10N.getStr("netmonitor.toolbar.headerColumnsAdd"))
     );
   }
 });

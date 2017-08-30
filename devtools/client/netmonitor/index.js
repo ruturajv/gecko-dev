@@ -24,7 +24,7 @@ pref("devtools.netmonitor.visibleColumns",
      "[\"status\",\"method\",\"file\",\"domain\",\"cause\"," +
      "\"type\",\"transferred\",\"contentSize\",\"waterfall\"]"
 );
-pref("devtools.netmonitor.customHeaderColumns", "[]");
+pref("devtools.netmonitor.headerColumns", "[]");
 pref("devtools.netmonitor.panes-network-details-width", 550);
 pref("devtools.netmonitor.panes-network-details-height", 450);
 pref("devtools.netmonitor.har.defaultLogDir", "");

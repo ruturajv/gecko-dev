@@ -91,7 +91,7 @@ const RequestListItem = createClass({
     onThumbnailMouseDown: PropTypes.func.isRequired,
     onWaterfallMouseDown: PropTypes.func.isRequired,
     waterfallWidth: PropTypes.number,
-    customHeaderColumns: PropTypes.array.isRequired,
+    headerColumns: PropTypes.array.isRequired,
   },
 
   componentDidMount() {
@@ -101,8 +101,8 @@ const RequestListItem = createClass({
   },
 
   shouldComponentUpdate(nextProps) {
-    let { customHeaderColumns: oldCustomHeaders } = this.props;
-    let { customHeaderColumns: newCustomHeaders } = nextProps;
+    let { headerColumns: oldCustomHeaders } = this.props;
+    let { headerColumns: newCustomHeaders } = nextProps;
     let customHeadersChanged = (newCustomHeaders.length !== oldCustomHeaders.length)
       || !propertiesEqual(newCustomHeaders, oldCustomHeaders, newCustomHeaders);
 
@@ -134,7 +134,7 @@ const RequestListItem = createClass({
       onSecurityIconMouseDown,
       onThumbnailMouseDown,
       onWaterfallMouseDown,
-      customHeaderColumns,
+      headerColumns,
     } = this.props;
 
     let classList = ["request-list-item", index % 2 ? "odd" : "even"];
@@ -175,7 +175,7 @@ const RequestListItem = createClass({
         ...RESPONSE_HEADERS.filter(header => columns.get(header)).map(
           header => RequestListColumnResponseHeader({ item, header }),
         ),
-        ...customHeaderColumns.map(
+        ...headerColumns.map(
           header => RequestListColumnResponseHeader({ item, header }),
         ),
         columns.get("waterfall") &&

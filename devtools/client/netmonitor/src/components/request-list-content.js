@@ -22,7 +22,7 @@ const {
 // Components
 const RequestListItem = createFactory(require("./request-list-item"));
 const RequestListContextMenu = require("../request-list-context-menu");
-const CustomHeadersUI = createFactory(require("./custom-headers-ui"));
+const HeadersModal = createFactory(require("./headers-modal"));
 
 const { div } = DOM;
 
@@ -39,12 +39,12 @@ const RequestListContent = createClass({
     addCustomHeaderColumn: PropTypes.func.isRequired,
     deleteCustomHeaderColumn: PropTypes.func.isRequired,
     columns: PropTypes.object.isRequired,
-    customHeaderColumns: PropTypes.array.isRequired,
+    headerColumns: PropTypes.array.isRequired,
     dispatch: PropTypes.func.isRequired,
     displayedRequests: PropTypes.object.isRequired,
     firstRequestStartedMillis: PropTypes.number.isRequired,
     fromCache: PropTypes.bool,
-    isCustomHeaderColumnsUIAvailable: PropTypes.bool.isRequired,
+    headerColumnsModalShown: PropTypes.bool.isRequired,
     onCauseBadgeMouseDown: PropTypes.func.isRequired,
     onItemMouseDown: PropTypes.func.isRequired,
     onSecurityIconMouseDown: PropTypes.func.isRequired,
@@ -239,8 +239,8 @@ const RequestListContent = createClass({
       onWaterfallMouseDown,
       selectedRequestId,
 
-      isCustomHeaderColumnsUIAvailable,
-      customHeaderColumns,
+      headerColumnsModalShown,
+      headerColumns,
       addCustomHeaderColumn,
       deleteCustomHeaderColumn,
       renameCustomHeaderColumn,
@@ -272,12 +272,12 @@ const RequestListContent = createClass({
               onWaterfallMouseDown: () => onWaterfallMouseDown(),
               // I had to pass a copy, else RequestListItem'
               // shouldComponentUpdate failed to understand
-              customHeaderColumns: Array.from(customHeaderColumns),
+              headerColumns: Array.from(headerColumns),
             }))
           )
         ),
-        isCustomHeaderColumnsUIAvailable && CustomHeadersUI({
-          customHeadersList: customHeaderColumns,
+        headerColumnsModalShown && HeadersModal({
+          customHeadersList: headerColumns,
           addCustomHeaderColumn,
           deleteCustomHeaderColumn,
           renameCustomHeaderColumn,
@@ -290,12 +290,12 @@ const RequestListContent = createClass({
 module.exports = connect(
   (state) => ({
     columns: state.ui.columns,
-    customHeaderColumns: state.ui.customHeaderColumns,
+    headerColumns: state.ui.headerColumns,
     displayedRequests: getDisplayedRequests(state),
     firstRequestStartedMillis: state.requests.firstStartedMillis,
     selectedRequestId: state.requests.selectedId,
     scale: getWaterfallScale(state),
-    isCustomHeaderColumnsUIAvailable: state.ui.customHeaderColumnsUIAvailable
+    headerColumnsModalShown: state.ui.headerColumnsModalShown
   }),
   (dispatch) => ({
     dispatch,

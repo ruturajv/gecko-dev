@@ -21,10 +21,10 @@ const nonLocalizedHeaders = HEADERS
   .map((header) => header.name);
 
 class RequestListHeaderContextMenu {
-  constructor({ toggleColumn, resetColumns, toggleCustomHeaderColumnsUI }) {
+  constructor({ toggleColumn, resetColumns, toggleCustomHeaderModal }) {
     this.toggleColumn = toggleColumn;
     this.resetColumns = resetColumns;
-    this.toggleCustomHeaderColumnsUI = toggleCustomHeaderColumnsUI;
+    this.toggleCustomHeaderModal = toggleCustomHeaderModal;
   }
 
   get columns() {
@@ -66,7 +66,7 @@ class RequestListHeaderContextMenu {
     // Setup Custom Header Columns menu
     subMenu.responseHeaders.push({ type: "separator" });
     subMenu.responseHeaders.push({
-      label: L10N.getStr("netmonitor.toolbar.customHeaderColumnsMenu")
+      label: L10N.getStr("netmonitor.toolbar.headerColumnsMenu")
     });
 
     menu.push({ type: "separator" });
@@ -77,7 +77,7 @@ class RequestListHeaderContextMenu {
     menu.push({
       label: L10N.getStr("netmonitor.toolbar.responseHeaders"),
       submenu: subMenu.responseHeaders,
-      click: () => this.toggleCustomHeaderColumnsUI(),
+      click: () => this.toggleCustomHeaderModal(),
     });
 
     menu.push({ type: "separator" });

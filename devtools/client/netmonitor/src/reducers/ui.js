@@ -62,18 +62,18 @@ const UI = I.Record({
   waterfallWidth: null,
 
   // forced for development
-  customHeaderColumnsUIAvailable: true,
-  customHeaderColumns:
-    JSON.parse(Services.prefs.getCharPref("devtools.netmonitor.customHeaderColumns"))
+  headerColumnsModalShown: true,
+  headerColumns:
+    JSON.parse(Services.prefs.getCharPref("devtools.netmonitor.headerColumns"))
 });
 
 function resetColumns(state) {
   return state.set("columns", new Columns());
 }
 
-function toggleCustomHeaderColumnsUI(state) {
-  return state.set("customHeaderColumnsUIAvailable",
-    !state.get("customHeaderColumnsUIAvailable"));
+function toggleCustomHeaderModal(state) {
+  return state.set("headerColumnsModalShown",
+    !state.get("headerColumnsModalShown"));
 }
 
 function resizeWaterfall(state, action) {
@@ -115,10 +115,10 @@ function addCustomHeaderColumn(state, action) {
     return state;
   }
 
-  let customHeaderColumns = state.get("customHeaderColumns");
-  customHeaderColumns.push(header);
+  let headerColumns = state.get("headerColumns");
+  headerColumns.push(header);
 
-  return state.set("customHeaderColumns", [...new Set(customHeaderColumns)]);
+  return state.set("headerColumns", [...new Set(headerColumns)]);
 }
 
 function deleteCustomHeaderColumn(state, action) {
@@ -127,10 +127,10 @@ function deleteCustomHeaderColumn(state, action) {
     return state;
   }
 
-  let customHeaderColumns = state.get("customHeaderColumns");
-  customHeaderColumns = customHeaderColumns.filter(value => value !== header);
+  let headerColumns = state.get("headerColumns");
+  headerColumns = headerColumns.filter(value => value !== header);
 
-  return state.set("customHeaderColumns", customHeaderColumns);
+  return state.set("headerColumns", headerColumns);
 }
 
 function renameCustomHeaderColumn(state, action) {
@@ -139,14 +139,14 @@ function renameCustomHeaderColumn(state, action) {
     return state;
   }
 
-  let customHeaderColumns = state.get("customHeaderColumns");
+  let headerColumns = state.get("headerColumns");
   let newCustomHeaderColumns = [];
-  customHeaderColumns.forEach(value => {
+  headerColumns.forEach(value => {
     let newValue = value === oldHeader ? newHeader : value;
     newCustomHeaderColumns.push(newValue);
   });
 
-  return state.set("customHeaderColumns", newCustomHeaderColumns);
+  return state.set("headerColumns", newCustomHeaderColumns);
 }
 
 function ui(state = new UI(), action) {
@@ -175,7 +175,7 @@ function ui(state = new UI(), action) {
     case SELECT_REQUEST:
       return openNetworkDetails(state, { open: true });
     case SHOW_CUSTOM_HEADER_COLUMNS_UI:
-      return toggleCustomHeaderColumnsUI(state);
+      return toggleCustomHeaderModal(state);
     case TOGGLE_COLUMN:
       return state.set("columns", toggleColumn(state.columns, action));
     case WATERFALL_RESIZE:

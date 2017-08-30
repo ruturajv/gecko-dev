@@ -72,7 +72,7 @@ function resetColumns() {
 /**
  * Enable flag to show custom Header Columns UI
  */
-function toggleCustomHeaderColumnsUI() {
+function toggleCustomHeaderModal() {
   return {
     type: SHOW_CUSTOM_HEADER_COLUMNS_UI,
   };
@@ -166,10 +166,10 @@ module.exports = {
   openStatistics,
   renameCustomHeaderColumn,
   resetColumns,
-  toggleCustomHeaderColumnsUI,
   resizeWaterfall,
   selectDetailsPanelTab,
   toggleColumn,
+  toggleCustomHeaderModal,
   toggleNetworkDetails,
   toggleBrowserCache,
   toggleStatistics,
