@@ -36,8 +36,6 @@ const RequestListContent = createClass({
   displayName: "RequestListContent",
 
   propTypes: {
-    addCustomHeaderColumn: PropTypes.func.isRequired,
-    deleteCustomHeaderColumn: PropTypes.func.isRequired,
     columns: PropTypes.object.isRequired,
     headerColumns: PropTypes.array.isRequired,
     dispatch: PropTypes.func.isRequired,
@@ -51,7 +49,6 @@ const RequestListContent = createClass({
     onSelectDelta: PropTypes.func.isRequired,
     onThumbnailMouseDown: PropTypes.func.isRequired,
     onWaterfallMouseDown: PropTypes.func.isRequired,
-    renameCustomHeaderColumn: PropTypes.func.isRequired,
     scale: PropTypes.number,
     selectedRequestId: PropTypes.string,
   },
@@ -241,9 +238,6 @@ const RequestListContent = createClass({
 
       headerColumnsModalShown,
       headerColumns,
-      addCustomHeaderColumn,
-      deleteCustomHeaderColumn,
-      renameCustomHeaderColumn,
     } = this.props;
 
     return (
@@ -272,16 +266,11 @@ const RequestListContent = createClass({
               onWaterfallMouseDown: () => onWaterfallMouseDown(),
               // I had to pass a copy, else RequestListItem'
               // shouldComponentUpdate failed to understand
-              headerColumns: Array.from(headerColumns),
+              headerColumns,
             }))
           )
         ),
-        headerColumnsModalShown && HeadersModal({
-          customHeadersList: headerColumns,
-          addCustomHeaderColumn,
-          deleteCustomHeaderColumn,
-          renameCustomHeaderColumn,
-        })
+        headerColumnsModalShown && HeadersModal()
       )
     );
   },
@@ -290,7 +279,7 @@ const RequestListContent = createClass({
 module.exports = connect(
   (state) => ({
     columns: state.ui.columns,
-    headerColumns: state.ui.headerColumns,
+    headerColumns: Array.from(state.ui.headerColumns),
     displayedRequests: getDisplayedRequests(state),
     firstRequestStartedMillis: state.requests.firstStartedMillis,
     selectedRequestId: state.requests.selectedId,
@@ -299,10 +288,6 @@ module.exports = connect(
   }),
   (dispatch) => ({
     dispatch,
-    addCustomHeaderColumn: header =>
-      dispatch(Actions.addCustomHeaderColumn(header)),
-    deleteCustomHeaderColumn: header =>
-      dispatch(Actions.deleteCustomHeaderColumn(header)),
     /**
      * A handler that opens the stack trace tab when a stack trace is available
      */
@@ -335,7 +320,5 @@ module.exports = connect(
     onWaterfallMouseDown: () => {
       dispatch(Actions.selectDetailsPanelTab("timings"));
     },
-    renameCustomHeaderColumn: (oldHeader, newHeader) =>
-      dispatch(Actions.renameCustomHeaderColumn(oldHeader, newHeader)),
   }),
 )(RequestListContent);

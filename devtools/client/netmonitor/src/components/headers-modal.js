@@ -11,6 +11,8 @@ const {
   PropTypes,
   createFactory,
 } = require("devtools/client/shared/vendor/react");
+const { connect } = require("devtools/client/shared/vendor/react-redux");
+const Actions = require("../actions/index");
 
 let CustomHeaderColumn = createFactory(createClass({
   displayName: "CustomHeaderColumn",
@@ -77,7 +79,7 @@ let CustomHeaderColumn = createFactory(createClass({
   }
 }));
 
-module.exports = createClass({
+const HeadersModal = createClass({
   displayName: "HeadersModal",
 
   propTypes: {
@@ -145,3 +147,19 @@ module.exports = createClass({
     );
   }
 });
+
+module.exports = connect(
+  (state) => ({
+    customHeadersList: state.ui.headerColumns,
+  }),
+  (dispatch) => ({
+    dispatch,
+    addCustomHeaderColumn: header =>
+      dispatch(Actions.addCustomHeaderColumn(header)),
+    deleteCustomHeaderColumn: header =>
+      dispatch(Actions.deleteCustomHeaderColumn(header)),
+    renameCustomHeaderColumn: (oldHeader, newHeader) =>
+      dispatch(Actions.renameCustomHeaderColumn(oldHeader, newHeader)),
+  }),
+)(HeadersModal);
+
