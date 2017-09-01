@@ -84,31 +84,29 @@ const RequestListHeader = createClass({
     }
   },
 
-  render() {
-    let {
-      columns,
-      scale,
-      sort,
-      sortBy,
-      waterfallWidth,
-      headerColumns
-    } = this.props;
-    console.log("in request-list-header", HEADERS, columns);
-
-    // DIRTY CODE STARTS !! I DON'T LIKE THIS BIT
+  getListHeaders() {
+    let { columns, headerColumns } = this.props;
     let listHeaders = [
       ...HEADERS
         .filter(header => columns.get(header.name) && header.name !== "waterfall"),
       ...headerColumns
         .map(header => ({ name: header, noLocalization: true }))
     ];
-    listHeaders = columns.get("waterfall") ? listHeaders.concat(HEADERS[HEADERS.length - 1]) : listHeaders;
-    console.log("listHeaders", listHeaders);
-    // DIRTY CODE ENDS
+    listHeaders = columns.get("waterfall") ?
+      listHeaders.concat(HEADERS[HEADERS.length - 1]) : listHeaders;
+
+    return listHeaders;
+  },
+
+  render() {
+    let { scale, sort, sortBy, waterfallWidth } = this.props;
+    console.log("in request-list-header", HEADERS);
+
+    console.log("listHeaders", this.getListHeaders());
 
     return (
       div({ className: "devtools-toolbar requests-list-headers" },
-        listHeaders.map((header) => {
+        this.getListHeaders().map((header) => {
           console.log(header, header.name);
           let name = header.name;
           let boxName = header.boxName || name;
