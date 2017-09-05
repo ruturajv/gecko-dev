@@ -12,7 +12,7 @@ const {
 } = require("devtools/client/shared/vendor/react");
 const I = require("devtools/client/shared/vendor/immutable");
 const { arrayEqual, propertiesEqual } = require("../utils/request-utils");
-const { RESPONSE_HEADERS } = require("../constants");
+// const { RESPONSE_HEADERS } = require("../constants");
 
 // Components
 const RequestListColumnCause = createFactory(require("./request-list-column-cause"));
@@ -172,9 +172,9 @@ const RequestListItem = createClass({
           RequestListColumnResponseTime({ item, firstRequestStartedMillis }),
         columns.get("duration") && RequestListColumnDuration({ item }),
         columns.get("latency") && RequestListColumnLatency({ item }),
-        ...RESPONSE_HEADERS.filter(header => columns.get(header)).map(
-          header => RequestListColumnResponseHeader({ item, header }),
-        ),
+        // ...RESPONSE_HEADERS.filter(header => columns.get(header)).map(
+        //   header => RequestListColumnResponseHeader({ item, header }),
+        // ),
         ...headerColumns.map(
           header => RequestListColumnResponseHeader({ item, header }),
         ),

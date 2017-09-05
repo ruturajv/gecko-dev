@@ -42,7 +42,7 @@ class RequestListHeaderContextMenu {
    */
   open(event = {}) {
     let menu = [];
-    let subMenu = { timings: [], responseHeaders: [] };
+    let subMenu = { timings: [] };
     let onlyOneColumn = this.visibleColumns.length === 1;
 
     for (let [column, shown] of this.columns) {
@@ -63,22 +63,29 @@ class RequestListHeaderContextMenu {
         menu.push(entry);
     }
 
-    // Setup Custom Header Columns menu
-    subMenu.responseHeaders.push({ type: "separator" });
-    subMenu.responseHeaders.push({
-      label: L10N.getStr("netmonitor.toolbar.headerColumnsMenu")
-    });
+    // // Setup Custom Header Columns menu
+    // subMenu.responseHeaders.push({ type: "separator" });
+    // subMenu.responseHeaders.push({
+    //   label: L10N.getStr("netmonitor.toolbar.headerColumnsMenu")
+    // });
 
     menu.push({ type: "separator" });
     menu.push({
       label: L10N.getStr("netmonitor.toolbar.timings"),
       submenu: subMenu.timings,
     });
+
+    menu.push({ type: "separator" });
     menu.push({
-      label: L10N.getStr("netmonitor.toolbar.responseHeaders"),
-      submenu: subMenu.responseHeaders,
+      label: L10N.getStr("netmonitor.toolbar.headerColumnsMenu"),
       click: () => this.toggleCustomHeaderModal(),
     });
+
+    // menu.push({
+    //   label: L10N.getStr("netmonitor.toolbar.responseHeaders"),
+    //   submenu: subMenu.responseHeaders,
+    //   click: () => this.toggleCustomHeaderModal(),
+    // });
 
     menu.push({ type: "separator" });
     menu.push({

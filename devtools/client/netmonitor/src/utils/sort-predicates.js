@@ -12,7 +12,7 @@ const {
   getStartTime,
   ipToLong,
 } = require("./request-utils");
-const { RESPONSE_HEADERS } = require("../constants");
+// const { RESPONSE_HEADERS } = require("../constants");
 
 /**
  * Predicates used when sorting items.
@@ -100,9 +100,12 @@ function compareHeader(header, first, second) {
   return result || waterfall(first, second);
 }
 
-const responseHeaders = RESPONSE_HEADERS
-  .reduce((acc, header) => Object.assign(
-    acc, {[header]: (first, second) => compareHeader(header, first, second)}), {});
+// const responseHeaders = RESPONSE_HEADERS
+//   .reduce((acc, header) => Object.assign(
+//     acc, {[header]: (first, second) => compareHeader(header, first, second)}), {});
+
+// const genericResponseHeader = (header, first, second) =>
+//   compareHeader(header, first, second);
 
 function domain(first, second) {
   const firstDomain = first.urlDetails.host.toLowerCase();
@@ -182,5 +185,7 @@ const sorters = {
   duration,
   latency,
   waterfall,
+  compareHeader,
 };
-exports.Sorters = Object.assign(sorters, responseHeaders);
+exports.Sorters = sorters;
+// exports.Sorters = Object.assign(sorters, responseHeaders);

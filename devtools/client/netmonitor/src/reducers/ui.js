@@ -16,7 +16,7 @@ const {
   REMOVE_SELECTED_CUSTOM_REQUEST,
   RENAME_CUSTOM_HEADER_COLUMN,
   RESET_COLUMNS,
-  RESPONSE_HEADERS,
+  // RESPONSE_HEADERS,
   SELECT_DETAILS_PANEL_TAB,
   SEND_CUSTOM_REQUEST,
   SELECT_REQUEST,
@@ -46,12 +46,12 @@ const cols = {
   latency: false,
   waterfall: true,
 };
-const Columns = I.Record(
-  Object.assign(
-    cols,
-    RESPONSE_HEADERS.reduce((acc, header) => Object.assign(acc, { [header]: false }), {})
-  )
-);
+const Columns = I.Record(cols);
+//   Object.assign(
+//     cols,
+//     // RESPONSE_HEADERS.reduce((acc, header) => Object.assign(acc, { [header]: false }), {})
+//   )
+// );
 
 const UI = I.Record({
   columns: new Columns(),

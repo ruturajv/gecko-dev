@@ -59,7 +59,14 @@ const getSortFn = createSelector(
   state => state.requests.requests,
   state => state.sort,
   (requests, sort) => {
-    const sorter = Sorters[sort.type || "waterfall"];
+    let sorter;
+    if (sort.type) {
+      sorter = Sorters[sort.type] ?
+        Sorters[sort.type] :
+        (first, second) => Sorters.compareHeader(sort.type, first, second);
+    } else {
+      sorter = Sorters.waterfall;
+    }
     const ascending = sort.ascending ? +1 : -1;
     return (a, b) => ascending * sortWithClones(requests, sorter, a, b);
   }
