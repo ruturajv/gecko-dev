@@ -31,7 +31,7 @@ let CustomHeaderColumn = createFactory(createClass({
     }
   },
 
-  spanClickHandler(e) {
+  headerClickHandler(e) {
     this.setState({ editMode: true });
   },
 
@@ -65,7 +65,7 @@ let CustomHeaderColumn = createFactory(createClass({
       dom.div(
         {},
         dom.span({
-          onClick: this.spanClickHandler,
+          onClick: this.headerClickHandler,
           className: "custom-header1"
         }, header),
         dom.button({

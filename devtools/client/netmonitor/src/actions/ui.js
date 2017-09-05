@@ -14,7 +14,7 @@ const {
   RENAME_CUSTOM_HEADER_COLUMN,
   RESET_COLUMNS,
   SELECT_DETAILS_PANEL_TAB,
-  SHOW_CUSTOM_HEADER_COLUMNS_UI,
+  TOGGLE_CUSTOM_HEADER_MODAL,
   TOGGLE_COLUMN,
   WATERFALL_RESIZE,
 } = require("../constants");
@@ -74,7 +74,7 @@ function resetColumns() {
  */
 function toggleCustomHeaderModal() {
   return {
-    type: SHOW_CUSTOM_HEADER_COLUMNS_UI,
+    type: TOGGLE_CUSTOM_HEADER_MODAL,
   };
 }
 

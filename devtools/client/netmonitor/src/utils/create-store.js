@@ -49,6 +49,7 @@ function configureStore() {
     timingMarkers: new TimingMarkers(),
     ui: new UI({
       columns,
+      headerColumns: getPref("devtools.netmonitor.headerColumns"),
     }),
   };
 

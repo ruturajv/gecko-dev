@@ -20,7 +20,7 @@ const {
   SELECT_DETAILS_PANEL_TAB,
   SEND_CUSTOM_REQUEST,
   SELECT_REQUEST,
-  SHOW_CUSTOM_HEADER_COLUMNS_UI,
+  TOGGLE_CUSTOM_HEADER_MODAL,
   TOGGLE_COLUMN,
   WATERFALL_RESIZE,
 } = require("../constants");
@@ -174,7 +174,7 @@ function ui(state = new UI(), action) {
       return setDetailsPanelTab(state, action);
     case SELECT_REQUEST:
       return openNetworkDetails(state, { open: true });
-    case SHOW_CUSTOM_HEADER_COLUMNS_UI:
+    case TOGGLE_CUSTOM_HEADER_MODAL:
       return toggleCustomHeaderModal(state);
     case TOGGLE_COLUMN:
       return state.set("columns", toggleColumn(state.columns, action));

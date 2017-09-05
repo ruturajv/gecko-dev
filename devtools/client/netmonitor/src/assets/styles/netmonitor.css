@@ -1412,7 +1412,7 @@ body,
   position: absolute;
   background-color: var(--theme-body-background);
   text-align: left;
-  left: 50%; 
+  left: 50%;
   transform: translateX(-50%);
   width: 200px;
   padding: 10px;
