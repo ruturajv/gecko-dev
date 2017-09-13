@@ -50,6 +50,8 @@ const Columns = I.Record(cols);
 //   Object.assign(
 //     cols,
 //     // RESPONSE_HEADERS.reduce((acc, header) => Object.assign(acc, { [header]: false }), {})
+//     JSON.parse(Services.prefs.getCharPref("devtools.netmonitor.headerColumns"))
+//       .reduce((acc, header) => Object.assign(acc, { [header]: false }), {})
 //   )
 // );
 

@@ -42,11 +42,17 @@ const RequestListHeader = createClass({
   },
 
   componentWillMount() {
-    const { resetColumns, toggleColumn, toggleCustomHeaderModal } = this.props;
+    const {
+      resetColumns,
+      toggleColumn,
+      toggleCustomHeaderModal,
+      headerColumns,
+    } = this.props;
     this.contextMenu = new RequestListHeaderContextMenu({
       resetColumns,
       toggleColumn,
       toggleCustomHeaderModal,
+      headerColumns,
     });
   },
 

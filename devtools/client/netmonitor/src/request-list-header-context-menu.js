@@ -33,6 +33,12 @@ class RequestListHeaderContextMenu {
     return window.store.getState().ui.columns;
   }
 
+  get headerColumns() {
+    // FIXME: Bug 1362059 - Implement RequestListHeaderContextMenu React component
+    // Remove window.store
+    return window.store.getState().ui.headerColumns;
+  }
+
   get visibleColumns() {
     return [...this.columns].filter(([_, shown]) => shown);
   }
@@ -42,7 +48,7 @@ class RequestListHeaderContextMenu {
    */
   open(event = {}) {
     let menu = [];
-    let subMenu = { timings: [] };
+    let subMenu = { timings: [], responseHeaders: [] };
     let onlyOneColumn = this.visibleColumns.length === 1;
 
     for (let [column, shown] of this.columns) {
@@ -63,29 +69,30 @@ class RequestListHeaderContextMenu {
         menu.push(entry);
     }
 
-    // // Setup Custom Header Columns menu
-    // subMenu.responseHeaders.push({ type: "separator" });
-    // subMenu.responseHeaders.push({
-    //   label: L10N.getStr("netmonitor.toolbar.headerColumnsMenu")
-    // });
+    // Setup Custom Header Columns menu
+    for (let header of this.headerColumns) {
+      subMenu.responseHeaders.push({
+        id: `request-list-header-${header}-toggle`,
+        label: header,
+        type: "checkbox",
+        checked: true
+      });
+    }
+    subMenu.responseHeaders.push({ type: "separator" });
+    subMenu.responseHeaders.push({
+      label: L10N.getStr("netmonitor.toolbar.headerColumnsMenu")
+    });
 
     menu.push({ type: "separator" });
     menu.push({
       label: L10N.getStr("netmonitor.toolbar.timings"),
       submenu: subMenu.timings,
     });
-
-    menu.push({ type: "separator" });
     menu.push({
-      label: L10N.getStr("netmonitor.toolbar.headerColumnsMenu"),
+      label: L10N.getStr("netmonitor.toolbar.responseHeaders"),
+      submenu: subMenu.responseHeaders,
       click: () => this.toggleCustomHeaderModal(),
     });
-
-    // menu.push({
-    //   label: L10N.getStr("netmonitor.toolbar.responseHeaders"),
-    //   submenu: subMenu.responseHeaders,
-    //   click: () => this.toggleCustomHeaderModal(),
-    // });
 
     menu.push({ type: "separator" });
     menu.push({
