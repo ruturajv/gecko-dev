@@ -7,6 +7,7 @@
 #include "GLContext.h"
 #include "GLContextProvider.h"
 #include "mozilla/gfx/Logging.h"
+#include "mozilla/gfx/gfxVars.h"
 #include "mozilla/layers/CompositorBridgeParent.h"
 #include "mozilla/layers/CompositorThread.h"
 #include "mozilla/layers/LayersTypes.h"
@@ -25,23 +26,32 @@ wr::WrExternalImage LockExternalImage(void* aObj, wr::WrExternalImageId aId, uin
   if (texture->AsBufferTextureHost()) {
     RenderBufferTextureHost* bufferTexture = texture->AsBufferTextureHost();
     MOZ_ASSERT(bufferTexture);
-    bufferTexture->Lock();
-    RenderBufferTextureHost::RenderBufferData data =
-        bufferTexture->GetBufferDataForRender(aChannelIndex);
 
-    return RawDataToWrExternalImage(data.mData, data.mBufferSize);
+    if (bufferTexture->Lock()) {
+      RenderBufferTextureHost::RenderBufferData data =
+          bufferTexture->GetBufferDataForRender(aChannelIndex);
+
+      return RawDataToWrExternalImage(data.mData, data.mBufferSize);
+    } else {
+      return RawDataToWrExternalImage(nullptr, 0);
+    }
   } else {
     // texture handle case
     RenderTextureHostOGL* textureOGL = texture->AsTextureHostOGL();
     MOZ_ASSERT(textureOGL);
 
     textureOGL->SetGLContext(renderer->mGL);
-    textureOGL->Lock();
     gfx::IntSize size = textureOGL->GetSize(aChannelIndex);
-
-    return NativeTextureToWrExternalImage(textureOGL->GetGLHandle(aChannelIndex),
-                                          0, 0,
-                                          size.width, size.height);
+    if (textureOGL->Lock()) {
+      return NativeTextureToWrExternalImage(textureOGL->GetGLHandle(aChannelIndex),
+                                            0, 0,
+                                            size.width, size.height);
+    } else {
+      // Just use 0 for the gl handle if the lock() was failed.
+      return NativeTextureToWrExternalImage(0,
+                                            0, 0,
+                                            size.width, size.height);
+    }
   }
 }
 
@@ -65,6 +75,7 @@ RendererOGL::RendererOGL(RefPtr<RenderThread>&& aThread,
   , mRenderer(aRenderer)
   , mBridge(aBridge)
   , mWindowId(aWindowId)
+  , mDebugFlags({ 0 })
 {
   MOZ_ASSERT(mThread);
   MOZ_ASSERT(mGL);
@@ -127,10 +138,16 @@ RendererOGL::Update()
 bool
 RendererOGL::Render()
 {
+  uint32_t flags = gfx::gfxVars::WebRenderDebugFlags();
+
+  if (mDebugFlags.mBits != flags) {
+    mDebugFlags.mBits = flags;
+    wr_renderer_set_debug_flags(mRenderer, mDebugFlags);
+  }
+
   if (!mGL->MakeCurrent()) {
     gfxCriticalNote << "Failed to make render context current, can't draw.";
-    // XXX This could cause oom in webrender since pending_texture_updates is not handled.
-    // It needs to be addressed.
+    NotifyWebRenderError(WebRenderError::MAKE_CURRENT);
     return false;
   }
 
@@ -157,7 +174,9 @@ RendererOGL::Render()
     mSyncObject->Synchronize();
   }
 
-  wr_renderer_render(mRenderer, size.width, size.height);
+  if (!wr_renderer_render(mRenderer, size.width, size.height)) {
+    NotifyWebRenderError(WebRenderError::RENDER);
+  }
 
   mGL->SwapBuffers();
   mWidget->PostRender(&widgetContext);
@@ -204,12 +223,6 @@ RendererOGL::Resume()
 }
 
 void
-RendererOGL::SetProfilerEnabled(bool aEnabled)
-{
-  wr_renderer_set_profiler_enabled(mRenderer, aEnabled);
-}
-
-void
 RendererOGL::SetFrameStartTime(const TimeStamp& aTime)
 {
   if (mFrameStartTime) {
@@ -230,6 +243,22 @@ RenderTextureHost*
 RendererOGL::GetRenderTexture(wr::WrExternalImageId aExternalImageId)
 {
   return mThread->GetRenderTexture(aExternalImageId);
+}
+
+static void
+DoNotifyWebRenderError(layers::CompositorBridgeParentBase* aBridge, WebRenderError aError)
+{
+  aBridge->NotifyWebRenderError(aError);
+}
+
+void
+RendererOGL::NotifyWebRenderError(WebRenderError aError)
+{
+  layers::CompositorThreadHolder::Loop()->PostTask(NewRunnableFunction(
+    &DoNotifyWebRenderError,
+    mBridge,
+    aError
+  ));
 }
 
 } // namespace wr

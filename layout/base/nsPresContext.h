@@ -17,6 +17,7 @@
 #include "nsCOMPtr.h"
 #include "nsIPresShell.h"
 #include "nsRect.h"
+#include "nsStringFwd.h"
 #include "nsFont.h"
 #include "gfxFontConstants.h"
 #include "nsIAtom.h"
@@ -46,7 +47,6 @@
 #include "mozilla/StaticPresData.h"
 #include "mozilla/StyleBackendType.h"
 
-class nsAString;
 class nsBidi;
 class nsIPrintSettings;
 class nsDocShell;
@@ -59,9 +59,11 @@ class nsFrameManager;
 class nsILinkHandler;
 class nsIAtom;
 class nsIRunnable;
+class gfxFontFeatureValueSet;
 class gfxUserFontEntry;
 class gfxUserFontSet;
 class gfxTextPerfMetrics;
+class nsCSSFontFeatureValuesRule;
 class nsPluginFrame;
 class nsTransitionManager;
 class nsAnimationManager;
@@ -218,7 +220,6 @@ public:
       return mDocument;
   }
 
-#ifdef MOZILLA_INTERNAL_API
   mozilla::StyleSetHandle StyleSet() const { return GetPresShell()->StyleSet(); }
 
   nsFrameManager* FrameManager()
@@ -241,7 +242,6 @@ public:
   mozilla::CounterStyleManager* CounterStyleManager() const {
     return mCounterStyleManager;
   }
-#endif
 
   /**
    * Rebuilds all style data by throwing out the old rule tree and
@@ -317,15 +317,7 @@ public:
    * Access the image animation mode for this context
    */
   uint16_t     ImageAnimationMode() const { return mImageAnimationMode; }
-  virtual void SetImageAnimationModeExternal(uint16_t aMode);
-  void SetImageAnimationModeInternal(uint16_t aMode);
-#ifdef MOZILLA_INTERNAL_API
-  void SetImageAnimationMode(uint16_t aMode)
-  { SetImageAnimationModeInternal(aMode); }
-#else
-  void SetImageAnimationMode(uint16_t aMode)
-  { SetImageAnimationModeExternal(aMode); }
-#endif
+  void SetImageAnimationMode(uint16_t aMode);
 
   /**
    * Get medium of presentation
@@ -427,15 +419,7 @@ public:
 
   void SetContainer(nsIDocShell* aContainer);
 
-  virtual nsISupports* GetContainerWeakExternal() const;
-  nsISupports* GetContainerWeakInternal() const;
-#ifdef MOZILLA_INTERNAL_API
-  nsISupports* GetContainerWeak() const
-  { return GetContainerWeakInternal(); }
-#else
-  nsISupports* GetContainerWeak() const
-  { return GetContainerWeakExternal(); }
-#endif
+  nsISupports* GetContainerWeak() const;
 
   nsIDocShell* GetDocShell() const;
 
@@ -778,13 +762,7 @@ public:
    *
    *  @lina 07/12/2000
    */
-#ifdef MOZILLA_INTERNAL_API
-  bool BidiEnabled() const { return BidiEnabledInternal(); }
-#else
-  bool BidiEnabled() const { return BidiEnabledExternal(); }
-#endif
-  virtual bool BidiEnabledExternal() const;
-  bool BidiEnabledInternal() const;
+  bool BidiEnabled() const;
 
   /**
    *  Set bidi enabled. This means we should apply the Unicode Bidi Algorithm
@@ -839,8 +817,7 @@ public:
   /**
    * Set the Bidi options for the presentation context
    */
-  void SetBidi(uint32_t aBidiOptions,
-                           bool aForceRestyle = false);
+  void SetBidi(uint32_t aBidiOptions);
 
   /**
    * Get the Bidi options for the presentation context
@@ -1007,6 +984,9 @@ public:
 
   void FlushCounterStyles();
   void RebuildCounterStyles(); // asynchronously
+
+  void FlushFontFeatureValues();
+  void RebuildFontFeatureValues(); // asynchronously
 
   // Ensure that it is safe to hand out CSS rules outside the layout
   // engine by ensuring that all CSS style sheets have unique inners
@@ -1184,6 +1164,10 @@ public:
 
   nsBidi& GetBidiEngine();
 
+  gfxFontFeatureValueSet* GetFontFeatureValuesLookup() const {
+    return mFontFeatureValuesLookup;
+  }
+
 protected:
   friend class nsRunnableMethod<nsPresContext>;
   void ThemeChangedInternal();
@@ -1266,6 +1250,11 @@ protected:
     FlushCounterStyles();
   }
 
+  void HandleRebuildFontFeatureValues() {
+    mPostedFlushFontFeatureValues = false;
+    FlushFontFeatureValues();
+  }
+
   bool HavePendingInputEvent();
 
   // Can't be inline because we can't include nsStyleSet.h.
@@ -1300,6 +1289,7 @@ protected:
   RefPtr<mozilla::CounterStyleManager> mCounterStyleManager;
   nsIAtom* MOZ_UNSAFE_REF("always a static atom") mMedium; // initialized by subclass ctors
   nsCOMPtr<nsIAtom> mMediaEmulated;
+  RefPtr<gfxFontFeatureValueSet> mFontFeatureValuesLookup;
 
   // This pointer is nulled out through SetLinkHandler() in the destructors of
   // the classes which set it. (using SetLinkHandler() again).
@@ -1468,6 +1458,11 @@ protected:
   unsigned              mCounterStylesDirty : 1;
   // Do we currently have an event posted to call FlushCounterStyles?
   unsigned              mPostedFlushCounterStyles: 1;
+
+  // Is the current mFontFeatureValuesLookup valid?
+  unsigned              mFontFeatureValuesDirty : 1;
+  // Do we currently have an event posted to call FlushFontFeatureValues?
+  unsigned              mPostedFlushFontFeatureValues: 1;
 
   // resize reflow is suppressed when the only change has been to zoom
   // the document rather than to change the document's dimensions

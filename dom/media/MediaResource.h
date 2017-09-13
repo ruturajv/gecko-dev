@@ -10,10 +10,10 @@
 #include "nsIChannel.h"
 #include "nsIURI.h"
 #include "nsISeekableStream.h"
-#include "nsIStreamingProtocolController.h"
 #include "nsIStreamListener.h"
 #include "nsIChannelEventSink.h"
 #include "nsIInterfaceRequestor.h"
+#include "nsIThreadRetargetableStreamListener.h"
 #include "Intervals.h"
 #include "MediaCache.h"
 #include "MediaContainerType.h"
@@ -150,7 +150,7 @@ typedef media::IntervalSet<int64_t> MediaByteRangeSet;
  * access, so the FileMediaResource implementation class bypasses the cache.
  * MediaResource::Create automatically chooses the best implementation class.
  */
-class MediaResource : public nsISupports
+class MediaResource
 {
 public:
   // Our refcounting is threadsafe, and when our refcount drops to zero
@@ -158,10 +158,8 @@ public:
   // Note that this means it's safe for references to this object to be
   // released on a non main thread, but the destructor will always run on
   // the main thread.
-  NS_DECL_THREADSAFE_ISUPPORTS
-
-  // Get the current principal for the channel
-  virtual already_AddRefed<nsIPrincipal> GetCurrentPrincipal() = 0;
+  NS_METHOD_(MozExternalRefCountType) AddRef(void);
+  NS_METHOD_(MozExternalRefCountType) Release(void);
 
   // These methods are called off the main thread.
   // Read up to aCount bytes from the stream. The read starts at
@@ -175,17 +173,6 @@ public:
   // waste, but caching lock/IO-bound resources means reducing the impact of
   // each read.
   virtual bool ShouldCacheReads() = 0;
-
-  already_AddRefed<MediaByteBuffer> CachedReadAt(int64_t aOffset, uint32_t aCount)
-  {
-    RefPtr<MediaByteBuffer> bytes = new MediaByteBuffer();
-    bool ok = bytes->SetLength(aCount, fallible);
-    NS_ENSURE_TRUE(ok, nullptr);
-    char* curr = reinterpret_cast<char*>(bytes->Elements());
-    nsresult rv = ReadFromCache(curr, aOffset, aCount);
-    NS_ENSURE_SUCCESS(rv, nullptr);
-    return bytes.forget();
-  }
 
   // Report the current offset in bytes from the start of the stream.
   // This is used to approximate where we currently are in the playback of a
@@ -214,25 +201,6 @@ public:
   // Returns true if all the data from aOffset to the end of the stream
   // is in cache. If the end of the stream is not known, we return false.
   virtual bool IsDataCachedToEndOfResource(int64_t aOffset) = 0;
-  // Returns true if we are expecting any more data to arrive
-  // sometime in the not-too-distant future, either from the network or from
-  // an appendBuffer call on a MediaSource element.
-  virtual bool IsExpectingMoreData()
-  {
-    // MediaDecoder::mDecoderPosition is roughly the same as Tell() which
-    // returns a position updated by latest Read() or ReadAt().
-    return !IsDataCachedToEndOfResource(Tell()) && !IsSuspended();
-  }
-  // Returns true if this stream is suspended by the cache because the
-  // cache is full. If true then the decoder should try to start consuming
-  // data, otherwise we may not be able to make progress.
-  // MediaDecoder::NotifySuspendedStatusChanged is called when this
-  // changes.
-  // For resources using the media cache, this returns true only when all
-  // streams for the same resource are all suspended.
-  virtual bool IsSuspendedByCache() = 0;
-  // Returns true if this stream has been suspended.
-  virtual bool IsSuspended() = 0;
   // Reads only data which is cached in the media cache. If you try to read
   // any data which overlaps uncached data, or if aCount bytes otherwise can't
   // be read, this function will return failure. This function be called from
@@ -241,10 +209,6 @@ public:
   virtual nsresult ReadFromCache(char* aBuffer,
                                  int64_t aOffset,
                                  uint32_t aCount) = 0;
-  // Returns true if the resource can be seeked to unbuffered ranges, i.e.
-  // for an HTTP network stream this returns true if HTTP1.1 Byte Range
-  // requests are supported by the connection/server.
-  virtual bool IsTransportSeekable() = 0;
 
   /**
    * Fills aRanges with MediaByteRanges representing the data which is cached
@@ -253,25 +217,13 @@ public:
    */
   virtual nsresult GetCachedRanges(MediaByteRangeSet& aRanges) = 0;
 
-  // Returns true if the resource is a live stream.
-  virtual bool IsLiveStream()
-  {
-    return GetLength() == -1;
-  }
-
-  virtual size_t SizeOfExcludingThis(MallocSizeOf aMallocSizeOf) const {
-    return 0;
-  }
-
-  virtual size_t SizeOfIncludingThis(MallocSizeOf aMallocSizeOf) const {
-    return aMallocSizeOf(this) + SizeOfExcludingThis(aMallocSizeOf);
-  }
-
 protected:
   virtual ~MediaResource() {};
 
 private:
   void Destroy();
+  mozilla::ThreadSafeAutoRefCnt mRefCnt;
+  NS_DECL_OWNINGTHREAD
 };
 
 class BaseMediaResource : public MediaResource {
@@ -323,6 +275,14 @@ public:
   // The mode is initially MODE_PLAYBACK.
   virtual void SetReadMode(MediaCacheStream::ReadMode aMode) = 0;
 
+  // Returns true if the resource can be seeked to unbuffered ranges, i.e.
+  // for an HTTP network stream this returns true if HTTP1.1 Byte Range
+  // requests are supported by the connection/server.
+  virtual bool IsTransportSeekable() = 0;
+
+  // Get the current principal for the channel
+  virtual already_AddRefed<nsIPrincipal> GetCurrentPrincipal() = 0;
+
   /**
    * Open the stream. This creates a stream listener and returns it in
    * aStreamListener; this listener needs to be notified of incoming data.
@@ -345,18 +305,20 @@ public:
     return nullptr;
   }
 
-  size_t SizeOfExcludingThis(MallocSizeOf aMallocSizeOf) const override
+  // Returns true if the resource is a live stream.
+  bool IsLiveStream() { return GetLength() == -1; }
+
+  virtual size_t SizeOfExcludingThis(MallocSizeOf aMallocSizeOf) const
   {
     // Might be useful to track in the future:
     // - mChannel
     // - mURI (possibly owned, looks like just a ref from mChannel)
     // Not owned:
     // - mCallback
-    size_t size = MediaResource::SizeOfExcludingThis(aMallocSizeOf);
-    return size;
+    return 0;
   }
 
-  size_t SizeOfIncludingThis(MallocSizeOf aMallocSizeOf) const override
+  virtual size_t SizeOfIncludingThis(MallocSizeOf aMallocSizeOf) const
   {
     return aMallocSizeOf(this) + SizeOfExcludingThis(aMallocSizeOf);
   }
@@ -410,7 +372,6 @@ class ChannelSuspendAgent {
 public:
   explicit ChannelSuspendAgent(nsIChannel* aChannel)
   : mChannel(aChannel),
-    mSuspendCount(0),
     mIsChannelSuspended(false)
   {}
 
@@ -438,7 +399,7 @@ private:
   void SuspendInternal();
 
   nsIChannel* mChannel;
-  Atomic<uint32_t> mSuspendCount;
+  uint32_t mSuspendCount = 0;
   bool mIsChannelSuspended;
 };
 
@@ -491,6 +452,8 @@ public:
   // Resume the current load since data is wanted again
   nsresult CacheClientResume();
 
+  bool IsSuspended();
+
   void ThrottleReadahead(bool bThrottle) override;
 
   // Main thread
@@ -523,15 +486,12 @@ public:
   int64_t GetNextCachedData(int64_t aOffset) override;
   int64_t GetCachedDataEnd(int64_t aOffset) override;
   bool    IsDataCachedToEndOfResource(int64_t aOffset) override;
-  bool    IsSuspendedByCache() override;
-  bool    IsSuspended() override;
   bool    IsTransportSeekable() override;
 
   size_t SizeOfExcludingThis(MallocSizeOf aMallocSizeOf) const override {
     // Might be useful to track in the future:
     //   - mListener (seems minor)
     //   - mChannelStatistics (seems minor)
-    //   - mDataReceivedEvent (seems minor)
     size_t size = BaseMediaResource::SizeOfExcludingThis(aMallocSizeOf);
     size += mCacheStream.SizeOfExcludingThis(aMallocSizeOf);
 
@@ -542,9 +502,11 @@ public:
     return aMallocSizeOf(this) + SizeOfExcludingThis(aMallocSizeOf);
   }
 
-  class Listener final : public nsIStreamListener,
-                         public nsIInterfaceRequestor,
-                         public nsIChannelEventSink
+  class Listener final
+    : public nsIStreamListener
+    , public nsIInterfaceRequestor
+    , public nsIChannelEventSink
+    , public nsIThreadRetargetableStreamListener
   {
     ~Listener() {}
   public:
@@ -555,6 +517,7 @@ public:
     NS_DECL_NSISTREAMLISTENER
     NS_DECL_NSICHANNELEVENTSINK
     NS_DECL_NSIINTERFACEREQUESTOR
+    NS_DECL_NSITHREADRETARGETABLESTREAMLISTENER
 
     void Revoke() { mResource = nullptr; }
 
@@ -566,6 +529,7 @@ public:
   nsresult GetCachedRanges(MediaByteRangeSet& aRanges) override;
 
 protected:
+  bool IsSuspendedByCache();
   // These are called on the main thread by Listener.
   nsresult OnStartRequest(nsIRequest* aRequest);
   nsresult OnStopRequest(nsIRequest* aRequest, nsresult aStatus);
@@ -576,7 +540,7 @@ protected:
 
   // Opens the channel, using an HTTP byte range request to start at mOffset
   // if possible. Main thread only.
-  nsresult OpenChannel(nsIStreamListener** aStreamListener);
+  nsresult OpenChannel();
   nsresult RecreateChannel();
   // Add headers to HTTP request. Main thread only.
   nsresult SetupChannelHeaders();
@@ -590,8 +554,6 @@ protected:
                                    int64_t& aRangeStart,
                                    int64_t& aRangeEnd,
                                    int64_t& aRangeTotal);
-
-  void DoNotifyDataReceived();
 
   static nsresult CopySegmentToCache(nsIInputStream* aInStream,
                                      void* aClosure,
@@ -608,28 +570,14 @@ protected:
   // Main thread access only
   int64_t            mOffset;
   RefPtr<Listener> mListener;
-  // A data received event for the decoder that has been dispatched but has
-  // not yet been processed.
-  nsRevocableEventPtr<nsRunnableMethod<ChannelMediaResource, void, false> > mDataReceivedEvent;
   // When this flag is set, if we get a network error we should silently
   // reopen the stream.
   bool               mReopenOnError;
-  // When this flag is set, we should not report the next close of the
-  // channel.
-  bool               mIgnoreClose;
 
   // Any thread access
   MediaCacheStream mCacheStream;
 
-  // This lock protects mChannelStatistics
-  Mutex               mLock;
   MediaChannelStatistics mChannelStatistics;
-
-  // True if we couldn't suspend the stream and we therefore don't want
-  // to resume later. This is usually due to the channel not being in the
-  // isPending state at the time of the suspend request.
-  bool mIgnoreResume;
-
   ChannelSuspendAgent mSuspendAgent;
 };
 
@@ -790,6 +738,19 @@ public:
     bytes->SetLength(curr - start);
     return bytes.forget();
   }
+
+  already_AddRefed<MediaByteBuffer> CachedMediaReadAt(int64_t aOffset,
+                                                      uint32_t aCount) const
+  {
+    RefPtr<MediaByteBuffer> bytes = new MediaByteBuffer();
+    bool ok = bytes->SetLength(aCount, fallible);
+    NS_ENSURE_TRUE(ok, nullptr);
+    char* curr = reinterpret_cast<char*>(bytes->Elements());
+    nsresult rv = mResource->ReadFromCache(curr, aOffset, aCount);
+    NS_ENSURE_SUCCESS(rv, nullptr);
+    return bytes.forget();
+  }
+
   // Get the length of the stream in bytes. Returns -1 if not known.
   // This can change over time; after a seek operation, a misbehaving
   // server may give us a resource of a different length to what it had

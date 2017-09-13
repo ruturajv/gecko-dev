@@ -20,6 +20,7 @@
 #define wasm_types_h
 
 #include "mozilla/Alignment.h"
+#include "mozilla/Atomics.h"
 #include "mozilla/EnumeratedArray.h"
 #include "mozilla/HashFunctions.h"
 #include "mozilla/Maybe.h"
@@ -74,6 +75,7 @@ typedef MutableHandle<WasmTableObject*> MutableHandleWasmTableObject;
 
 namespace wasm {
 
+using mozilla::Atomic;
 using mozilla::DebugOnly;
 using mozilla::EnumeratedArray;
 using mozilla::Maybe;
@@ -145,7 +147,7 @@ typedef Vector<Type, 0, SystemAllocPolicy> VectorName;
 // about:memory stats.
 
 template <class T>
-struct ShareableBase : RefCounted<T>
+struct ShareableBase : AtomicRefCounted<T>
 {
     using SeenSet = HashSet<const T*, DefaultHasher<const T*>, SystemAllocPolicy>;
 
@@ -359,7 +361,7 @@ enum class Tier
     Baseline,
     Debug = Baseline,
     Ion,
-    Serialized = Ion,
+    Serialized = Ion
 };
 
 // The CompileMode controls how compilation of a module is performed (notably,
@@ -370,6 +372,14 @@ enum class CompileMode
     Once,
     Tier1,
     Tier2
+};
+
+// Typed enum for whether debugging is enabled.
+
+enum class DebugEnabled
+{
+    False,
+    True
 };
 
 // Iterator over tiers present in a tiered data structure.
@@ -1357,7 +1367,7 @@ struct TlsData
 
     // When compiling with tiering, the jumpTable has one entry for each
     // baseline-compiled function.
-    uintptr_t* jumpTable;
+    void** jumpTable;
 
     // The globalArea must be the last field.  Globals for the module start here
     // and are inline in this structure.  16-byte alignment is required for SIMD
@@ -1457,7 +1467,8 @@ class CalleeDesc
     };
 
   private:
-    Which which_;
+    // which_ shall be initialized in the static constructors
+    MOZ_INIT_OUTSIDE_CTOR Which which_;
     union U {
         U() {}
         uint32_t funcIndex_;

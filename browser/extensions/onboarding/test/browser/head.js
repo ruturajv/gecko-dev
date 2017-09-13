@@ -9,8 +9,7 @@ const URLs = [ABOUT_HOME_URL, ABOUT_NEWTAB_URL];
 const TOUR_IDs = [
   "onboarding-tour-performance",
   "onboarding-tour-private-browsing",
-  // TODO: should enable in bug 1371538
-  // "onboarding-tour-screenshots",
+  "onboarding-tour-screenshots",
   "onboarding-tour-addons",
   "onboarding-tour-customize",
   "onboarding-tour-default-browser",
@@ -18,8 +17,7 @@ const TOUR_IDs = [
 const UPDATE_TOUR_IDs = [
   "onboarding-tour-performance",
   "onboarding-tour-library",
-  // TODO: should enable in bug 1371538
-  // "onboarding-tour-screenshots",
+  "onboarding-tour-screenshots",
   "onboarding-tour-singlesearch",
   "onboarding-tour-customize",
   "onboarding-tour-sync",
@@ -31,10 +29,10 @@ function resetOnboardingDefaultState() {
   // All the prefs should be reset to the default states
   // and no need to revert back so we don't use `SpecialPowers.pushPrefEnv` here.
   Preferences.set("browser.onboarding.enabled", true);
-  Preferences.set("browser.onboarding.hidden", false);
   Preferences.set("browser.onboarding.notification.finished", false);
   Preferences.set("browser.onboarding.notification.mute-duration-on-first-session-ms", 300000);
   Preferences.set("browser.onboarding.notification.max-life-time-per-tour-ms", 432000000);
+  Preferences.set("browser.onboarding.notification.max-life-time-all-tours-ms", 1209600000);
   Preferences.set("browser.onboarding.notification.max-prompt-count-per-tour", 8);
   Preferences.reset("browser.onboarding.notification.last-time-of-changing-tour-sec");
   Preferences.reset("browser.onboarding.notification.prompt-count");
@@ -180,16 +178,22 @@ function getCurrentActiveTour(browser) {
     let activeNavItemId = null;
     for (let item of items) {
       if (item.classList.contains("onboarding-active")) {
-        activeNavItemId = item.id;
-        break;
+        if (!activeNavItemId) {
+          activeNavItemId = item.id;
+        } else {
+          ok(false, "There are more than one item marked as active.");
+        }
       }
     }
     let activePageId = null;
     let pages = content.document.querySelectorAll(".onboarding-tour-page");
     for (let page of pages) {
       if (page.style.display != "none") {
-        activePageId = page.id;
-        break;
+        if (!activePageId) {
+          activePageId = page.id;
+        } else {
+          ok(false, "Thre are more than one tour page visible.");
+        }
       }
     }
     return { activeNavItemId, activePageId };

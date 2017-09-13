@@ -446,6 +446,27 @@ private:
     return broker->Chmod(path, mode);
   }
 
+  static intptr_t LinkTrap(ArgsRef aArgs, void *aux) {
+    auto broker = static_cast<SandboxBrokerClient*>(aux);
+    auto path = reinterpret_cast<const char*>(aArgs.args[0]);
+    auto path2 = reinterpret_cast<const char*>(aArgs.args[1]);
+    return broker->Link(path, path2);
+  }
+
+  static intptr_t SymlinkTrap(ArgsRef aArgs, void *aux) {
+    auto broker = static_cast<SandboxBrokerClient*>(aux);
+    auto path = reinterpret_cast<const char*>(aArgs.args[0]);
+    auto path2 = reinterpret_cast<const char*>(aArgs.args[1]);
+    return broker->Symlink(path, path2);
+  }
+
+  static intptr_t RenameTrap(ArgsRef aArgs, void *aux) {
+    auto broker = static_cast<SandboxBrokerClient*>(aux);
+    auto path = reinterpret_cast<const char*>(aArgs.args[0]);
+    auto path2 = reinterpret_cast<const char*>(aArgs.args[1]);
+    return broker->Rename(path, path2);
+  }
+
   static intptr_t MkdirTrap(ArgsRef aArgs, void* aux) {
     auto broker = static_cast<SandboxBrokerClient*>(aux);
     auto path = reinterpret_cast<const char*>(aArgs.args[0]);
@@ -470,6 +491,20 @@ private:
     auto path = reinterpret_cast<const char*>(aArgs.args[0]);
     auto buf = reinterpret_cast<char*>(aArgs.args[1]);
     auto size = static_cast<size_t>(aArgs.args[2]);
+    return broker->Readlink(path, buf, size);
+  }
+
+  static intptr_t ReadlinkAtTrap(ArgsRef aArgs, void* aux) {
+    auto broker = static_cast<SandboxBrokerClient*>(aux);
+    auto fd = static_cast<int>(aArgs.args[0]);
+    auto path = reinterpret_cast<const char*>(aArgs.args[1]);
+    auto buf = reinterpret_cast<char*>(aArgs.args[2]);
+    auto size = static_cast<size_t>(aArgs.args[3]);
+    if (fd != AT_FDCWD && path[0] != '/') {
+      SANDBOX_LOG_ERROR("unsupported fd-relative readlinkat(%d, %s, %p, %u)",
+                        fd, path, buf, size);
+      return BlockedSyscallTrap(aArgs, nullptr);
+    }
     return broker->Readlink(path, buf, size);
   }
 
@@ -594,14 +629,22 @@ public:
         return Trap(StatAtTrap, mBroker);
       case __NR_chmod:
         return Trap(ChmodTrap, mBroker);
+      case __NR_link:
+        return Trap(LinkTrap, mBroker);
       case __NR_mkdir:
         return Trap(MkdirTrap, mBroker);
+      case __NR_symlink:
+        return Trap(SymlinkTrap, mBroker);
+      case __NR_rename:
+        return Trap(RenameTrap, mBroker);
       case __NR_rmdir:
         return Trap(RmdirTrap, mBroker);
       case __NR_unlink:
         return Trap(UnlinkTrap, mBroker);
       case __NR_readlink:
         return Trap(ReadlinkTrap, mBroker);
+      case __NR_readlinkat:
+        return Trap(ReadlinkAtTrap, mBroker);
       }
     } else {
       // No broker; allow the syscalls directly.  )-:
@@ -614,10 +657,14 @@ public:
       CASES_FOR_lstat:
       CASES_FOR_fstatat:
       case __NR_chmod:
+      case __NR_link:
       case __NR_mkdir:
+      case __NR_symlink:
+      case __NR_rename:
       case __NR_rmdir:
       case __NR_unlink:
       case __NR_readlink:
+      case __NR_readlinkat:
         return Allow();
       }
     }
@@ -649,15 +696,6 @@ public:
       // settings.  Can remove when bug 1325242 happens in some form.
     case __NR_utime:
       return Error(EPERM);
-#endif
-
-    case __NR_readlinkat:
-#ifdef DESKTOP
-      // Bug 1290896
-      return Allow();
-#else
-      // Workaround for bug 964455:
-      return Error(EINVAL);
 #endif
 
     CASES_FOR_select:
@@ -809,6 +847,9 @@ public:
 #endif
 
     case __NR_fallocate:
+      return Allow();
+
+    case __NR_get_mempolicy:
       return Allow();
 
 #endif // DESKTOP

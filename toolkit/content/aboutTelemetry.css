@@ -16,6 +16,7 @@ body {
 #categories {
   padding-top: 0px;
   overflow-y: auto;
+  margin-bottom: 42px;
 }
 
 .main-content.search > section > *:not(.data) {
@@ -24,8 +25,11 @@ body {
 
 .main-content {
   flex: 1;
-  font-size: 18px;
   line-height: 1.6;
+}
+
+#home-section {
+  font-size: 18px;
 }
 
 #category-raw {
@@ -38,9 +42,10 @@ body {
 .heading {
   display: flex;
   flex-direction: column;
-  font-size: 18px;
+  font-size: 17px;
+  font-weight: 600;
   pointer-events: none;
-  padding: 12px 21px 15px 21px;
+  padding: 12px 8px;
 }
 
 .header {
@@ -61,7 +66,8 @@ body {
 }
 
 #ping-type {
-  align-self: center;
+  flex-grow: 1;
+  text-align: center;
   pointer-events: all;
   cursor: pointer;
 }
@@ -73,8 +79,21 @@ body {
   text-align: center;
 }
 
-.controls {
+.dropdown {
+  background-image: url(chrome://global/skin/icons/arrow-dropdown-16.svg);
+  background-position: right 8px center;
+  background-repeat: no-repeat;
+  -moz-context-properties: fill;
+  fill: currentColor;
+}
+
+body[dir=rtl] .dropdown {
+  background-position-x: left 8px;
+}
+
+#controls {
   display: flex;
+  margin-top: 4px;
   justify-content: space-between;
 }
 
@@ -135,8 +154,29 @@ section:not(.active) {
   border-bottom-style: solid;
 }
 
-#ping-picker.hidden {
-  display: none;
+#no-search-results {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%,-50%);
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+}
+
+#no-search-results-text {
+  font-size: 17px;
+  margin-bottom: 2em;
+}
+
+.no-search-results-image {
+  background-image: url("chrome://browser/skin/preferences/in-content/no-search-results.svg");
+  width: 380px;
+  height: 293px;
+}
+
+.hidden {
+  display: none !important;
 }
 
 #ping-picker {
@@ -151,7 +191,7 @@ section:not(.active) {
   padding: 24px;
   flex-direction: column;
   background-color: white;
-  border: 1px solid var(--in-content-header-border-color);
+  border: 1px solid var(--in-content-box-border-color);
   margin: 12px 0px;
 }
 
@@ -188,7 +228,7 @@ section:not(.active) {
   border-radius: 2px;
   margin-bottom: 24px;
   margin-right: 24px;
-  min-height: 284px;
+  min-height: 17.5em;
 }
 
 
@@ -201,24 +241,34 @@ body[dir="rtl"] .histogram {
   width: 100%;
   white-space: nowrap;
   overflow: hidden;
+  font-size: 17px
+}
+
+.histogram-stats {
+  font-size: 13px;
 }
 
 .keyed-histogram {
   white-space: nowrap;
   position: relative; /* required for position:absolute of the contained .copy-node */
   overflow: hidden;
+  margin-bottom: 1em;
 }
 
-.keyed-histogram-title {
+.keyed-scalar, .sub-section {
+  margin-bottom: 1em;
+}
+
+
+.keyed-title {
   text-overflow: ellipsis;
-  width: 100%;
   margin: 12px 0;
-  font-weight: bold;
-  font-size: 120%;
+  font-size: 17px;
   white-space: nowrap;
 }
 
 .bar {
+  font-size: 17px;
   width: 2em;
   margin: 2px;
   text-align: center;
@@ -242,10 +292,12 @@ body[dir="rtl"] .bar {
 
 th, td, table {
   text-align: start;
+  word-break: break-all;
   border-collapse: collapse;
 }
 
 table {
+  table-layout: fixed;
   width: 100%;
   font-size: 15px;
 }
@@ -260,10 +312,9 @@ tr:not(:first-child):hover {
 }
 
 th {
-  font-size: larger;
-  font-weight: bold;
+  font-size: 13px;
   white-space: nowrap;
-  padding-bottom: 0.5em;
+  padding: 0.5em 0;
 }
 
 body[dir="rtl"] th {
@@ -272,8 +323,8 @@ body[dir="rtl"] th {
 
 caption {
   text-align: left;
-  font-size: xx-large;
-  margin: 1em 0 0.5em 0;
+  font-size: 22px;
+  margin: 0.5em 0 0.5em 0;
 }
 
 body[dir="rtl"] caption {

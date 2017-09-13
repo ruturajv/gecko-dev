@@ -546,42 +546,40 @@ pub mod root {
         1;
     pub const NS_STYLE_LIST_STYLE_CUSTOM: ::std::os::raw::c_int = -1;
     pub const NS_STYLE_LIST_STYLE_NONE: ::std::os::raw::c_uint = 0;
-    pub const NS_STYLE_LIST_STYLE_DISC: ::std::os::raw::c_uint = 1;
-    pub const NS_STYLE_LIST_STYLE_CIRCLE: ::std::os::raw::c_uint = 2;
-    pub const NS_STYLE_LIST_STYLE_SQUARE: ::std::os::raw::c_uint = 3;
-    pub const NS_STYLE_LIST_STYLE_DECIMAL: ::std::os::raw::c_uint = 4;
-    pub const NS_STYLE_LIST_STYLE_HEBREW: ::std::os::raw::c_uint = 5;
+    pub const NS_STYLE_LIST_STYLE_DECIMAL: ::std::os::raw::c_uint = 1;
+    pub const NS_STYLE_LIST_STYLE_DISC: ::std::os::raw::c_uint = 2;
+    pub const NS_STYLE_LIST_STYLE_CIRCLE: ::std::os::raw::c_uint = 3;
+    pub const NS_STYLE_LIST_STYLE_SQUARE: ::std::os::raw::c_uint = 4;
+    pub const NS_STYLE_LIST_STYLE_DISCLOSURE_CLOSED: ::std::os::raw::c_uint =
+        5;
+    pub const NS_STYLE_LIST_STYLE_DISCLOSURE_OPEN: ::std::os::raw::c_uint = 6;
+    pub const NS_STYLE_LIST_STYLE_HEBREW: ::std::os::raw::c_uint = 7;
     pub const NS_STYLE_LIST_STYLE_JAPANESE_INFORMAL: ::std::os::raw::c_uint =
-        6;
-    pub const NS_STYLE_LIST_STYLE_JAPANESE_FORMAL: ::std::os::raw::c_uint = 7;
+        8;
+    pub const NS_STYLE_LIST_STYLE_JAPANESE_FORMAL: ::std::os::raw::c_uint = 9;
     pub const NS_STYLE_LIST_STYLE_KOREAN_HANGUL_FORMAL: ::std::os::raw::c_uint
               =
-        8;
+        10;
     pub const NS_STYLE_LIST_STYLE_KOREAN_HANJA_INFORMAL:
               ::std::os::raw::c_uint =
-        9;
+        11;
     pub const NS_STYLE_LIST_STYLE_KOREAN_HANJA_FORMAL: ::std::os::raw::c_uint
               =
-        10;
+        12;
     pub const NS_STYLE_LIST_STYLE_SIMP_CHINESE_INFORMAL:
               ::std::os::raw::c_uint =
-        11;
+        13;
     pub const NS_STYLE_LIST_STYLE_SIMP_CHINESE_FORMAL: ::std::os::raw::c_uint
               =
-        12;
+        14;
     pub const NS_STYLE_LIST_STYLE_TRAD_CHINESE_INFORMAL:
               ::std::os::raw::c_uint =
-        13;
+        15;
     pub const NS_STYLE_LIST_STYLE_TRAD_CHINESE_FORMAL: ::std::os::raw::c_uint
               =
-        14;
-    pub const NS_STYLE_LIST_STYLE_ETHIOPIC_NUMERIC: ::std::os::raw::c_uint =
-        15;
-    pub const NS_STYLE_LIST_STYLE_DISCLOSURE_CLOSED: ::std::os::raw::c_uint =
         16;
-    pub const NS_STYLE_LIST_STYLE_DISCLOSURE_OPEN: ::std::os::raw::c_uint =
+    pub const NS_STYLE_LIST_STYLE_ETHIOPIC_NUMERIC: ::std::os::raw::c_uint =
         17;
-    pub const NS_STYLE_LIST_STYLE__MAX: ::std::os::raw::c_uint = 18;
     pub const NS_STYLE_LIST_STYLE_LOWER_ROMAN: ::std::os::raw::c_uint = 100;
     pub const NS_STYLE_LIST_STYLE_UPPER_ROMAN: ::std::os::raw::c_uint = 101;
     pub const NS_STYLE_LIST_STYLE_LOWER_ALPHA: ::std::os::raw::c_uint = 102;
@@ -1047,6 +1045,8 @@ pub mod root {
         }
         pub type pair_first_type<_T1> = _T1;
         pub type pair_second_type<_T2> = _T2;
+        pub type pair__PCCP = u8;
+        pub type pair__PCCFP = u8;
         #[repr(C)]
         #[derive(Debug, Copy)]
         pub struct input_iterator_tag {
@@ -1078,6 +1078,11 @@ pub mod root {
         #[repr(C)]
         #[derive(Debug, Copy, Clone)]
         pub struct atomic {
+        }
+        #[repr(C)]
+        #[derive(Debug, Copy, Clone)]
+        pub struct function {
+            pub _address: u8,
         }
         pub type _Base_bitset__WordT = ::std::os::raw::c_ulong;
         pub type bitset__Base = u8;
@@ -1138,8 +1143,9 @@ pub mod root {
                 root::nsSubstringTuple;
             pub type nsStringRepr_string_type = ::nsstring::nsStringRepr;
             pub type nsStringRepr_const_iterator =
-                root::nsReadingIterator<u16>;
-            pub type nsStringRepr_iterator = root::nsWritingIterator<u16>;
+                root::nsReadingIterator<root::mozilla::detail::nsStringRepr_char_type>;
+            pub type nsStringRepr_iterator =
+                root::nsWritingIterator<root::mozilla::detail::nsStringRepr_char_type>;
             pub type nsStringRepr_comparator_type = root::nsStringComparator;
             pub type nsStringRepr_char_iterator =
                 *mut root::mozilla::detail::nsStringRepr_char_type;
@@ -1206,9 +1212,9 @@ pub mod root {
                 root::nsCSubstringTuple;
             pub type nsCStringRepr_string_type = root::nsCString;
             pub type nsCStringRepr_const_iterator =
-                root::nsReadingIterator<::std::os::raw::c_char>;
+                root::nsReadingIterator<root::mozilla::detail::nsCStringRepr_char_type>;
             pub type nsCStringRepr_iterator =
-                root::nsWritingIterator<::std::os::raw::c_char>;
+                root::nsWritingIterator<root::mozilla::detail::nsCStringRepr_char_type>;
             pub type nsCStringRepr_comparator_type =
                 root::nsCStringComparator;
             pub type nsCStringRepr_char_iterator =
@@ -1317,6 +1323,12 @@ pub mod root {
             #[derive(Debug, Copy, Clone)]
             pub struct WeakReference {
             }
+            #[repr(C)]
+            #[derive(Debug, Copy, Clone)]
+            pub struct ThreadLocal<T> {
+                pub mValue: T,
+                pub _phantom_0: ::std::marker::PhantomData<::std::cell::UnsafeCell<T>>,
+            }
         }
         pub type Conditional_Type<A> = A;
         #[repr(u32)]
@@ -1418,6 +1430,7 @@ pub mod root {
             #[allow(unused_imports)]
             use self::super::super::super::root;
             #[repr(C)]
+            #[derive(Debug)]
             pub struct ErrorReporter {
                 pub mError: root::nsAutoString,
                 pub mErrorLine: ::nsstring::nsStringRepr,
@@ -2631,6 +2644,7 @@ pub mod root {
             impl Clone for Element_MappedAttributeEntry {
                 fn clone(&self) -> Self { *self }
             }
+            pub const Element_kAllServoDescendantBits: u32 = 25296896;
             pub const Element_kFireMutationEvent: bool = true;
             pub const Element_kDontFireMutationEvent: bool = false;
             pub const Element_kNotifyDocumentObservers: bool = true;
@@ -4925,10 +4939,7 @@ pub mod root {
         pub const ServoTraversalFlags_Forgetful:
                   root::mozilla::ServoTraversalFlags =
             8;
-        pub const ServoTraversalFlags_AggressivelyForgetful:
-                  root::mozilla::ServoTraversalFlags =
-            16;
-        pub const ServoTraversalFlags_ClearDirtyDescendants:
+        pub const ServoTraversalFlags_ClearDirtyBits:
                   root::mozilla::ServoTraversalFlags =
             32;
         pub const ServoTraversalFlags_ClearAnimationOnlyDirtyDescendants:
@@ -4996,7 +5007,7 @@ pub mod root {
         }
         #[test]
         fn bindgen_test_layout_ServoStyleContext() {
-            assert_eq!(::std::mem::size_of::<ServoStyleContext>() , 272usize ,
+            assert_eq!(::std::mem::size_of::<ServoStyleContext>() , 280usize ,
                        concat ! (
                        "Size of: " , stringify ! ( ServoStyleContext ) ));
             assert_eq! (::std::mem::align_of::<ServoStyleContext>() , 8usize ,
@@ -5019,14 +5030,14 @@ pub mod root {
             assert_eq! (unsafe {
                         & ( * ( 0 as * const ServoStyleContext ) ) .
                         mNextInheritingAnonBoxStyle as * const _ as usize } ,
-                        256usize , concat ! (
+                        264usize , concat ! (
                         "Alignment of field: " , stringify ! (
                         ServoStyleContext ) , "::" , stringify ! (
                         mNextInheritingAnonBoxStyle ) ));
             assert_eq! (unsafe {
                         & ( * ( 0 as * const ServoStyleContext ) ) .
                         mNextLazyPseudoStyle as * const _ as usize } ,
-                        264usize , concat ! (
+                        272usize , concat ! (
                         "Alignment of field: " , stringify ! (
                         ServoStyleContext ) , "::" , stringify ! (
                         mNextLazyPseudoStyle ) ));
@@ -5453,6 +5464,78 @@ pub mod root {
                         const _ as usize } , 0usize , concat ! (
                         "Alignment of field: " , stringify ! ( GeckoEffects )
                         , "::" , stringify ! ( gecko ) ));
+        }
+        #[repr(C)]
+        #[derive(Debug, Copy)]
+        pub struct ServoStyleSetSizes {
+            pub mStylistRuleTree: usize,
+            pub mStylistPrecomputedPseudos: usize,
+            pub mStylistElementAndPseudosMaps: usize,
+            pub mStylistInvalidationMap: usize,
+            pub mStylistRevalidationSelectors: usize,
+            pub mStylistOther: usize,
+            pub mOther: usize,
+        }
+        #[test]
+        fn bindgen_test_layout_ServoStyleSetSizes() {
+            assert_eq!(::std::mem::size_of::<ServoStyleSetSizes>() , 56usize ,
+                       concat ! (
+                       "Size of: " , stringify ! ( ServoStyleSetSizes ) ));
+            assert_eq! (::std::mem::align_of::<ServoStyleSetSizes>() , 8usize
+                        , concat ! (
+                        "Alignment of " , stringify ! ( ServoStyleSetSizes )
+                        ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const ServoStyleSetSizes ) ) .
+                        mStylistRuleTree as * const _ as usize } , 0usize ,
+                        concat ! (
+                        "Alignment of field: " , stringify ! (
+                        ServoStyleSetSizes ) , "::" , stringify ! (
+                        mStylistRuleTree ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const ServoStyleSetSizes ) ) .
+                        mStylistPrecomputedPseudos as * const _ as usize } ,
+                        8usize , concat ! (
+                        "Alignment of field: " , stringify ! (
+                        ServoStyleSetSizes ) , "::" , stringify ! (
+                        mStylistPrecomputedPseudos ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const ServoStyleSetSizes ) ) .
+                        mStylistElementAndPseudosMaps as * const _ as usize }
+                        , 16usize , concat ! (
+                        "Alignment of field: " , stringify ! (
+                        ServoStyleSetSizes ) , "::" , stringify ! (
+                        mStylistElementAndPseudosMaps ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const ServoStyleSetSizes ) ) .
+                        mStylistInvalidationMap as * const _ as usize } ,
+                        24usize , concat ! (
+                        "Alignment of field: " , stringify ! (
+                        ServoStyleSetSizes ) , "::" , stringify ! (
+                        mStylistInvalidationMap ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const ServoStyleSetSizes ) ) .
+                        mStylistRevalidationSelectors as * const _ as usize }
+                        , 32usize , concat ! (
+                        "Alignment of field: " , stringify ! (
+                        ServoStyleSetSizes ) , "::" , stringify ! (
+                        mStylistRevalidationSelectors ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const ServoStyleSetSizes ) ) .
+                        mStylistOther as * const _ as usize } , 40usize ,
+                        concat ! (
+                        "Alignment of field: " , stringify ! (
+                        ServoStyleSetSizes ) , "::" , stringify ! (
+                        mStylistOther ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const ServoStyleSetSizes ) ) . mOther
+                        as * const _ as usize } , 48usize , concat ! (
+                        "Alignment of field: " , stringify ! (
+                        ServoStyleSetSizes ) , "::" , stringify ! ( mOther )
+                        ));
+        }
+        impl Clone for ServoStyleSetSizes {
+            fn clone(&self) -> Self { *self }
         }
         #[repr(u8)]
         /// Enumeration that represents one of the two supported style system backends.
@@ -5982,13 +6065,14 @@ pub mod root {
             pub mFirstChild: root::RefPtr<root::mozilla::StyleSheet>,
             pub mSheets: [u64; 10usize],
             pub mSourceMapURL: ::nsstring::nsStringRepr,
+            pub mSourceMapURLFromComment: ::nsstring::nsStringRepr,
             pub mPrincipalSet: bool,
         }
         pub use self::super::super::root::mozilla::net::ReferrerPolicy as
                 StyleSheetInfo_ReferrerPolicy;
         #[test]
         fn bindgen_test_layout_StyleSheetInfo() {
-            assert_eq!(::std::mem::size_of::<StyleSheetInfo>() , 216usize ,
+            assert_eq!(::std::mem::size_of::<StyleSheetInfo>() , 232usize ,
                        concat ! ( "Size of: " , stringify ! ( StyleSheetInfo )
                        ));
             assert_eq! (::std::mem::align_of::<StyleSheetInfo>() , 8usize ,
@@ -6054,7 +6138,14 @@ pub mod root {
                         ) , "::" , stringify ! ( mSourceMapURL ) ));
             assert_eq! (unsafe {
                         & ( * ( 0 as * const StyleSheetInfo ) ) .
-                        mPrincipalSet as * const _ as usize } , 208usize ,
+                        mSourceMapURLFromComment as * const _ as usize } ,
+                        208usize , concat ! (
+                        "Alignment of field: " , stringify ! ( StyleSheetInfo
+                        ) , "::" , stringify ! ( mSourceMapURLFromComment )
+                        ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const StyleSheetInfo ) ) .
+                        mPrincipalSet as * const _ as usize } , 224usize ,
                         concat ! (
                         "Alignment of field: " , stringify ! ( StyleSheetInfo
                         ) , "::" , stringify ! ( mPrincipalSet ) ));
@@ -6104,6 +6195,128 @@ pub mod root {
             XULTree = 27,
             NotPseudo = 28,
             MAX = 29,
+        }
+        /// The set of style sheets that apply to a document, backed by a Servo
+        /// Stylist.  A ServoStyleSet contains ServoStyleSheets.
+        #[repr(C)]
+        #[derive(Debug)]
+        pub struct ServoStyleSet {
+            pub mKind: root::mozilla::ServoStyleSet_Kind,
+            pub mPresContext: *mut root::nsPresContext,
+            pub mLastPresContextUsesXBLStyleSet: *mut ::std::os::raw::c_void,
+            pub mRawSet: root::mozilla::UniquePtr<root::RawServoStyleSet>,
+            pub mSheets: [u64; 9usize],
+            pub mAuthorStyleDisabled: bool,
+            pub mStylistState: root::mozilla::StylistState,
+            pub mUserFontSetUpdateGeneration: u64,
+            pub mUserFontCacheUpdateGeneration: u32,
+            pub mNeedsRestyleAfterEnsureUniqueInner: bool,
+            pub mNonInheritingStyleContexts: [u64; 7usize],
+            pub mPostTraversalTasks: root::nsTArray<root::mozilla::PostTraversalTask>,
+            pub mStyleRuleMap: root::RefPtr<root::mozilla::ServoStyleRuleMap>,
+            pub mBindingManager: root::RefPtr<root::nsBindingManager>,
+        }
+        pub type ServoStyleSet_SnapshotTable =
+            root::mozilla::ServoElementSnapshotTable;
+        #[repr(u8)]
+        #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+        pub enum ServoStyleSet_Kind { Master = 0, ForXBL = 1, }
+        extern "C" {
+            #[link_name = "_ZN7mozilla13ServoStyleSet17sInServoTraversalE"]
+            pub static mut ServoStyleSet_sInServoTraversal:
+                       *mut root::mozilla::ServoStyleSet;
+        }
+        #[test]
+        fn bindgen_test_layout_ServoStyleSet() {
+            assert_eq!(::std::mem::size_of::<ServoStyleSet>() , 208usize ,
+                       concat ! ( "Size of: " , stringify ! ( ServoStyleSet )
+                       ));
+            assert_eq! (::std::mem::align_of::<ServoStyleSet>() , 8usize ,
+                        concat ! (
+                        "Alignment of " , stringify ! ( ServoStyleSet ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const ServoStyleSet ) ) . mKind as *
+                        const _ as usize } , 0usize , concat ! (
+                        "Alignment of field: " , stringify ! ( ServoStyleSet )
+                        , "::" , stringify ! ( mKind ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const ServoStyleSet ) ) . mPresContext
+                        as * const _ as usize } , 8usize , concat ! (
+                        "Alignment of field: " , stringify ! ( ServoStyleSet )
+                        , "::" , stringify ! ( mPresContext ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const ServoStyleSet ) ) .
+                        mLastPresContextUsesXBLStyleSet as * const _ as usize
+                        } , 16usize , concat ! (
+                        "Alignment of field: " , stringify ! ( ServoStyleSet )
+                        , "::" , stringify ! ( mLastPresContextUsesXBLStyleSet
+                        ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const ServoStyleSet ) ) . mRawSet as *
+                        const _ as usize } , 24usize , concat ! (
+                        "Alignment of field: " , stringify ! ( ServoStyleSet )
+                        , "::" , stringify ! ( mRawSet ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const ServoStyleSet ) ) . mSheets as *
+                        const _ as usize } , 32usize , concat ! (
+                        "Alignment of field: " , stringify ! ( ServoStyleSet )
+                        , "::" , stringify ! ( mSheets ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const ServoStyleSet ) ) .
+                        mAuthorStyleDisabled as * const _ as usize } ,
+                        104usize , concat ! (
+                        "Alignment of field: " , stringify ! ( ServoStyleSet )
+                        , "::" , stringify ! ( mAuthorStyleDisabled ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const ServoStyleSet ) ) . mStylistState
+                        as * const _ as usize } , 105usize , concat ! (
+                        "Alignment of field: " , stringify ! ( ServoStyleSet )
+                        , "::" , stringify ! ( mStylistState ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const ServoStyleSet ) ) .
+                        mUserFontSetUpdateGeneration as * const _ as usize } ,
+                        112usize , concat ! (
+                        "Alignment of field: " , stringify ! ( ServoStyleSet )
+                        , "::" , stringify ! ( mUserFontSetUpdateGeneration )
+                        ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const ServoStyleSet ) ) .
+                        mUserFontCacheUpdateGeneration as * const _ as usize }
+                        , 120usize , concat ! (
+                        "Alignment of field: " , stringify ! ( ServoStyleSet )
+                        , "::" , stringify ! ( mUserFontCacheUpdateGeneration
+                        ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const ServoStyleSet ) ) .
+                        mNeedsRestyleAfterEnsureUniqueInner as * const _ as
+                        usize } , 124usize , concat ! (
+                        "Alignment of field: " , stringify ! ( ServoStyleSet )
+                        , "::" , stringify ! (
+                        mNeedsRestyleAfterEnsureUniqueInner ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const ServoStyleSet ) ) .
+                        mNonInheritingStyleContexts as * const _ as usize } ,
+                        128usize , concat ! (
+                        "Alignment of field: " , stringify ! ( ServoStyleSet )
+                        , "::" , stringify ! ( mNonInheritingStyleContexts )
+                        ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const ServoStyleSet ) ) .
+                        mPostTraversalTasks as * const _ as usize } , 184usize
+                        , concat ! (
+                        "Alignment of field: " , stringify ! ( ServoStyleSet )
+                        , "::" , stringify ! ( mPostTraversalTasks ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const ServoStyleSet ) ) . mStyleRuleMap
+                        as * const _ as usize } , 192usize , concat ! (
+                        "Alignment of field: " , stringify ! ( ServoStyleSet )
+                        , "::" , stringify ! ( mStyleRuleMap ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const ServoStyleSet ) ) .
+                        mBindingManager as * const _ as usize } , 200usize ,
+                        concat ! (
+                        "Alignment of field: " , stringify ! ( ServoStyleSet )
+                        , "::" , stringify ! ( mBindingManager ) ));
         }
         #[repr(C)]
         #[derive(Debug, Copy)]
@@ -6244,6 +6457,12 @@ pub mod root {
                         ( "Alignment of " , stringify ! ( Runnable ) ));
         }
         #[repr(C)]
+        #[derive(Debug, Copy, Clone)]
+        pub struct AbstractThread {
+            _unused: [u8; 0],
+        }
+        pub type Preferences_PrefSetting = root::mozilla::dom::PrefSetting;
+        #[repr(C)]
         #[derive(Debug)]
         pub struct CycleCollectedJSContext_RunInMetastableStateData {
             pub mRunnable: root::nsCOMPtr<root::nsIRunnable>,
@@ -6352,49 +6571,51 @@ pub mod root {
             eUseCounter_DataTransfer_mozUserCancelled_setter = 51,
             eUseCounter_DataTransfer_mozSourceNode_getter = 52,
             eUseCounter_DataTransfer_mozSourceNode_setter = 53,
-            eUseCounter_GetAttributeNode = 54,
-            eUseCounter_SetAttributeNode = 55,
-            eUseCounter_GetAttributeNodeNS = 56,
-            eUseCounter_SetAttributeNodeNS = 57,
-            eUseCounter_RemoveAttributeNode = 58,
-            eUseCounter_CreateAttribute = 59,
-            eUseCounter_CreateAttributeNS = 60,
-            eUseCounter_NodeValue = 61,
-            eUseCounter_TextContent = 62,
-            eUseCounter_EnablePrivilege = 63,
-            eUseCounter_DOMExceptionCode = 64,
-            eUseCounter_NoExposedProps = 65,
-            eUseCounter_MutationEvent = 66,
-            eUseCounter_Components = 67,
-            eUseCounter_PrefixedVisibilityAPI = 68,
-            eUseCounter_NodeIteratorDetach = 69,
-            eUseCounter_LenientThis = 70,
-            eUseCounter_GetPreventDefault = 71,
-            eUseCounter_GetSetUserData = 72,
-            eUseCounter_MozGetAsFile = 73,
-            eUseCounter_UseOfCaptureEvents = 74,
-            eUseCounter_UseOfReleaseEvents = 75,
-            eUseCounter_UseOfDOM3LoadMethod = 76,
-            eUseCounter_ChromeUseOfDOM3LoadMethod = 77,
-            eUseCounter_ShowModalDialog = 78,
-            eUseCounter_Window_Content = 79,
-            eUseCounter_SyncXMLHttpRequest = 80,
-            eUseCounter_Window_Cc_ontrollers = 81,
-            eUseCounter_ImportXULIntoContent = 82,
-            eUseCounter_PannerNodeDoppler = 83,
-            eUseCounter_NavigatorGetUserMedia = 84,
-            eUseCounter_WebrtcDeprecatedPrefix = 85,
-            eUseCounter_RTCPeerConnectionGetStreams = 86,
-            eUseCounter_AppCache = 87,
-            eUseCounter_PrefixedImageSmoothingEnabled = 88,
-            eUseCounter_PrefixedFullscreenAPI = 89,
-            eUseCounter_LenientSetter = 90,
-            eUseCounter_FileLastModifiedDate = 91,
-            eUseCounter_ImageBitmapRenderingContext_TransferImageBitmap = 92,
-            eUseCounter_URLCreateObjectURL_MediaStream = 93,
-            eUseCounter_XMLBaseAttribute = 94,
-            eUseCounter_XMLBaseAttributeForStyleAttr = 95,
-            eUseCounter_Count = 96,
+            eUseCounter_custom_JS_asmjs = 54,
+            eUseCounter_custom_JS_wasm = 55,
+            eUseCounter_GetAttributeNode = 56,
+            eUseCounter_SetAttributeNode = 57,
+            eUseCounter_GetAttributeNodeNS = 58,
+            eUseCounter_SetAttributeNodeNS = 59,
+            eUseCounter_RemoveAttributeNode = 60,
+            eUseCounter_CreateAttribute = 61,
+            eUseCounter_CreateAttributeNS = 62,
+            eUseCounter_NodeValue = 63,
+            eUseCounter_TextContent = 64,
+            eUseCounter_EnablePrivilege = 65,
+            eUseCounter_DOMExceptionCode = 66,
+            eUseCounter_NoExposedProps = 67,
+            eUseCounter_MutationEvent = 68,
+            eUseCounter_Components = 69,
+            eUseCounter_PrefixedVisibilityAPI = 70,
+            eUseCounter_NodeIteratorDetach = 71,
+            eUseCounter_LenientThis = 72,
+            eUseCounter_GetPreventDefault = 73,
+            eUseCounter_GetSetUserData = 74,
+            eUseCounter_MozGetAsFile = 75,
+            eUseCounter_UseOfCaptureEvents = 76,
+            eUseCounter_UseOfReleaseEvents = 77,
+            eUseCounter_UseOfDOM3LoadMethod = 78,
+            eUseCounter_ChromeUseOfDOM3LoadMethod = 79,
+            eUseCounter_ShowModalDialog = 80,
+            eUseCounter_Window_Content = 81,
+            eUseCounter_SyncXMLHttpRequest = 82,
+            eUseCounter_Window_Cc_ontrollers = 83,
+            eUseCounter_ImportXULIntoContent = 84,
+            eUseCounter_PannerNodeDoppler = 85,
+            eUseCounter_NavigatorGetUserMedia = 86,
+            eUseCounter_WebrtcDeprecatedPrefix = 87,
+            eUseCounter_RTCPeerConnectionGetStreams = 88,
+            eUseCounter_AppCache = 89,
+            eUseCounter_PrefixedImageSmoothingEnabled = 90,
+            eUseCounter_PrefixedFullscreenAPI = 91,
+            eUseCounter_LenientSetter = 92,
+            eUseCounter_FileLastModifiedDate = 93,
+            eUseCounter_ImageBitmapRenderingContext_TransferImageBitmap = 94,
+            eUseCounter_URLCreateObjectURL_MediaStream = 95,
+            eUseCounter_XMLBaseAttribute = 96,
+            eUseCounter_XMLBaseAttributeForStyleAttr = 97,
+            eUseCounter_Count = 98,
         }
         #[repr(C)]
         #[derive(Debug)]
@@ -6846,6 +7067,90 @@ pub mod root {
         impl Clone for XREAppData_NSFreePolicy {
             fn clone(&self) -> Self { *self }
         }
+        #[repr(C)]
+        pub struct SchedulerGroup__bindgen_vtable(::std::os::raw::c_void);
+        #[repr(C)]
+        #[derive(Debug)]
+        pub struct SchedulerGroup {
+            pub vtable_: *const SchedulerGroup__bindgen_vtable,
+            pub mIsRunning: bool,
+            pub mEventTargets: [root::nsCOMPtr<root::nsISerialEventTarget>; 8usize],
+            pub mAbstractThreads: [root::RefPtr<root::mozilla::AbstractThread>; 8usize],
+        }
+        #[repr(C)]
+        #[derive(Debug)]
+        pub struct SchedulerGroup_Runnable {
+            pub _base: root::mozilla::Runnable,
+            pub _base_1: root::nsIRunnablePriority,
+            pub _base_2: root::nsILabelableRunnable,
+            pub mRunnable: root::nsCOMPtr<root::nsIRunnable>,
+            pub mGroup: root::RefPtr<root::mozilla::SchedulerGroup>,
+        }
+        #[repr(C)]
+        #[derive(Debug, Copy, Clone)]
+        pub struct SchedulerGroup_Runnable_COMTypeInfo {
+            pub _address: u8,
+        }
+        #[test]
+        fn bindgen_test_layout_SchedulerGroup_Runnable() {
+            assert_eq!(::std::mem::size_of::<SchedulerGroup_Runnable>() ,
+                       72usize , concat ! (
+                       "Size of: " , stringify ! ( SchedulerGroup_Runnable )
+                       ));
+            assert_eq! (::std::mem::align_of::<SchedulerGroup_Runnable>() ,
+                        8usize , concat ! (
+                        "Alignment of " , stringify ! (
+                        SchedulerGroup_Runnable ) ));
+        }
+        #[repr(u32)]
+        #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+        pub enum SchedulerGroup_ValidationType {
+            StartValidation = 0,
+            EndValidation = 1,
+        }
+        extern "C" {
+            #[link_name =
+                  "_ZN7mozilla14SchedulerGroup20sTlsValidatingAccessE"]
+            pub static mut SchedulerGroup_sTlsValidatingAccess:
+                       root::mozilla::detail::ThreadLocal<bool>;
+        }
+        #[test]
+        fn bindgen_test_layout_SchedulerGroup() {
+            assert_eq!(::std::mem::size_of::<SchedulerGroup>() , 144usize ,
+                       concat ! ( "Size of: " , stringify ! ( SchedulerGroup )
+                       ));
+            assert_eq! (::std::mem::align_of::<SchedulerGroup>() , 8usize ,
+                        concat ! (
+                        "Alignment of " , stringify ! ( SchedulerGroup ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const SchedulerGroup ) ) . mIsRunning
+                        as * const _ as usize } , 8usize , concat ! (
+                        "Alignment of field: " , stringify ! ( SchedulerGroup
+                        ) , "::" , stringify ! ( mIsRunning ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const SchedulerGroup ) ) .
+                        mEventTargets as * const _ as usize } , 16usize ,
+                        concat ! (
+                        "Alignment of field: " , stringify ! ( SchedulerGroup
+                        ) , "::" , stringify ! ( mEventTargets ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const SchedulerGroup ) ) .
+                        mAbstractThreads as * const _ as usize } , 80usize ,
+                        concat ! (
+                        "Alignment of field: " , stringify ! ( SchedulerGroup
+                        ) , "::" , stringify ! ( mAbstractThreads ) ));
+        }
+        #[test]
+        fn __bindgen_test_layout_ThreadLocal_open0_bool__close0_instantiation() {
+            assert_eq!(::std::mem::size_of::<root::mozilla::detail::ThreadLocal<bool>>()
+                       , 1usize , concat ! (
+                       "Size of template specialization: " , stringify ! (
+                       root::mozilla::detail::ThreadLocal<bool> ) ));
+            assert_eq!(::std::mem::align_of::<root::mozilla::detail::ThreadLocal<bool>>()
+                       , 1usize , concat ! (
+                       "Alignment of template specialization: " , stringify !
+                       ( root::mozilla::detail::ThreadLocal<bool> ) ));
+        }
         pub mod image {
             #[allow(unused_imports)]
             use self::super::super::super::root;
@@ -6892,6 +7197,53 @@ pub mod root {
                             "Alignment of " , stringify ! ( IProgressObserver
                             ) ));
             }
+        }
+        #[repr(C)]
+        #[derive(Debug)]
+        pub struct AnonymousCounterStyle {
+            pub _base: root::mozilla::CounterStyle,
+            pub mRefCnt: root::mozilla::ThreadSafeAutoRefCnt,
+            pub mSingleString: bool,
+            pub mSystem: u8,
+            pub mSymbols: root::nsTArray<::nsstring::nsStringRepr>,
+        }
+        pub type AnonymousCounterStyle_HasThreadSafeRefCnt =
+            root::mozilla::TrueType;
+        #[test]
+        fn bindgen_test_layout_AnonymousCounterStyle() {
+            assert_eq!(::std::mem::size_of::<AnonymousCounterStyle>() ,
+                       40usize , concat ! (
+                       "Size of: " , stringify ! ( AnonymousCounterStyle ) ));
+            assert_eq! (::std::mem::align_of::<AnonymousCounterStyle>() ,
+                        8usize , concat ! (
+                        "Alignment of " , stringify ! ( AnonymousCounterStyle
+                        ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const AnonymousCounterStyle ) ) .
+                        mRefCnt as * const _ as usize } , 16usize , concat ! (
+                        "Alignment of field: " , stringify ! (
+                        AnonymousCounterStyle ) , "::" , stringify ! ( mRefCnt
+                        ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const AnonymousCounterStyle ) ) .
+                        mSingleString as * const _ as usize } , 24usize ,
+                        concat ! (
+                        "Alignment of field: " , stringify ! (
+                        AnonymousCounterStyle ) , "::" , stringify ! (
+                        mSingleString ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const AnonymousCounterStyle ) ) .
+                        mSystem as * const _ as usize } , 25usize , concat ! (
+                        "Alignment of field: " , stringify ! (
+                        AnonymousCounterStyle ) , "::" , stringify ! ( mSystem
+                        ) ));
+            assert_eq! (unsafe {
+                        & ( * ( 0 as * const AnonymousCounterStyle ) ) .
+                        mSymbols as * const _ as usize } , 32usize , concat !
+                        (
+                        "Alignment of field: " , stringify ! (
+                        AnonymousCounterStyle ) , "::" , stringify ! (
+                        mSymbols ) ));
         }
         #[repr(C)]
         pub struct CounterStyle__bindgen_vtable(::std::os::raw::c_void);
@@ -8449,6 +8801,8 @@ pub mod root {
         #[repr(C)]
         #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
         pub struct OriginFlags(pub u8);
+        pub type ComputedKeyframeValues =
+            root::nsTArray<root::mozilla::PropertyStyleAnimationValuePair>;
         #[test]
         fn __bindgen_test_layout_DefaultDelete_open0_RawServoStyleSet_close0_instantiation() {
             assert_eq!(::std::mem::size_of::<root::mozilla::DefaultDelete>() ,
@@ -8710,7 +9064,7 @@ pub mod root {
         #[test]
         fn bindgen_test_layout_ServoStyleSheetInner() {
             assert_eq!(::std::mem::size_of::<ServoStyleSheetInner>() ,
-                       232usize , concat ! (
+                       248usize , concat ! (
                        "Size of: " , stringify ! ( ServoStyleSheetInner ) ));
             assert_eq! (::std::mem::align_of::<ServoStyleSheetInner>() ,
                         8usize , concat ! (
@@ -8718,14 +9072,14 @@ pub mod root {
                         ));
             assert_eq! (unsafe {
                         & ( * ( 0 as * const ServoStyleSheetInner ) ) .
-                        mContents as * const _ as usize } , 216usize , concat
+                        mContents as * const _ as usize } , 232usize , concat
                         ! (
                         "Alignment of field: " , stringify ! (
                         ServoStyleSheetInner ) , "::" , stringify ! (
                         mContents ) ));
             assert_eq! (unsafe {
                         & ( * ( 0 as * const ServoStyleSheetInner ) ) .
-                        mURLData as * const _ as usize } , 224usize , concat !
+                        mURLData as * const _ as usize } , 240usize , concat !
                         (
                         "Alignment of field: " , stringify ! (
                         ServoStyleSheetInner ) , "::" , stringify ! ( mURLData
@@ -9507,15 +9861,6 @@ pub mod root {
                         "Alignment of field: " , stringify ! ( ServoMediaList
                         ) , "::" , stringify ! ( mRawList ) ));
         }
-        pub mod dmd {
-            #[allow(unused_imports)]
-            use self::super::super::super::root;
-        }
-        #[repr(C)]
-        #[derive(Debug, Copy, Clone)]
-        pub struct JSONWriteFunc {
-            _unused: [u8; 0],
-        }
         /// A PostTraversalTask is a task to be performed immediately after a Servo
         /// traversal.  There are just a few tasks we need to perform, so we use this
         /// class rather than Runnables, to avoid virtual calls and some allocations.
@@ -9567,6 +9912,18 @@ pub mod root {
         }
         impl Clone for PostTraversalTask {
             fn clone(&self) -> Self { *self }
+        }
+        #[repr(C)]
+        #[derive(Debug, Copy, Clone)]
+        pub struct ServoStyleRuleMap {
+            _unused: [u8; 0],
+        }
+        #[repr(u8)]
+        #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+        pub enum StylistState {
+            NotDirty = 0,
+            StyleSheetsDirty = 1,
+            XBLStyleSheetsDirty = 2,
         }
         #[repr(C)]
         #[derive(Debug)]
@@ -9841,6 +10198,7 @@ pub mod root {
         NS_ERROR_PLUGIN_TIME_RANGE_NOT_SUPPORTED = 2152465387,
         NS_ERROR_PLUGIN_CLICKTOPLAY = 2152465388,
         NS_TABLELAYOUT_CELL_NOT_FOUND = 5046272,
+        NS_OK_PARSE_SHEET = 5046273,
         NS_POSITION_BEFORE_TABLE = 5046275,
         NS_STATE_PROPERTY_NOT_THERE = 5046277,
         NS_ERROR_HTMLPARSER_EOF = 2152596456,
@@ -10067,8 +10425,6 @@ pub mod root {
         NS_ERROR_SAVE_LINK_AS_TIMEOUT = 2153578528,
         NS_ERROR_PARSED_DATA_CACHED = 2153578529,
         NS_REFRESHURI_HEADER_FOUND = 6094850,
-        NS_ERROR_IMAGE_SRC_CHANGED = 2153644036,
-        NS_ERROR_IMAGE_BLOCKED = 2153644037,
         NS_ERROR_CONTENT_BLOCKED = 2153644038,
         NS_ERROR_CONTENT_BLOCKED_SHOW_ALT = 2153644039,
         NS_PROPTABLE_PROP_NOT_THERE = 2153644042,
@@ -10296,30 +10652,12 @@ pub mod root {
     impl Clone for nsString_Segment {
         fn clone(&self) -> Self { *self }
     }
-    #[repr(C)]
-    pub struct nsAutoString {
-        pub _base: root::nsFixedString,
-        pub mStorage: [root::mozilla::detail::nsStringRepr_char_type; 64usize],
+    pub type nsAutoStringN_self_type = u8;
+    extern "C" {
+        #[link_name = "kStorageSize"]
+        pub static nsAutoStringN_kStorageSize: usize;
     }
-    pub type nsAutoString_self_type = root::nsAutoString;
-    pub const nsAutoString_kDefaultStorageSize:
-              root::nsAutoString__bindgen_ty_1 =
-        nsAutoString__bindgen_ty_1::kDefaultStorageSize;
-    #[repr(u32)]
-    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub enum nsAutoString__bindgen_ty_1 { kDefaultStorageSize = 64, }
-    #[test]
-    fn bindgen_test_layout_nsAutoString() {
-        assert_eq!(::std::mem::size_of::<nsAutoString>() , 160usize , concat !
-                   ( "Size of: " , stringify ! ( nsAutoString ) ));
-        assert_eq! (::std::mem::align_of::<nsAutoString>() , 8usize , concat !
-                    ( "Alignment of " , stringify ! ( nsAutoString ) ));
-        assert_eq! (unsafe {
-                    & ( * ( 0 as * const nsAutoString ) ) . mStorage as *
-                    const _ as usize } , 32usize , concat ! (
-                    "Alignment of field: " , stringify ! ( nsAutoString ) ,
-                    "::" , stringify ! ( mStorage ) ));
-    }
+    pub type nsAutoString = [u64; 20usize];
     #[repr(C)]
     pub struct nsStringComparator__bindgen_vtable(::std::os::raw::c_void);
     #[repr(C)]
@@ -10526,6 +10864,14 @@ pub mod root {
     pub struct nsCycleCollectingAutoRefCnt {
         pub mRefCntAndFlags: usize,
     }
+    pub type nsCycleCollectingAutoRefCnt_Suspect =
+        ::std::option::Option<unsafe extern "C" fn(aPtr:
+                                                       *mut ::std::os::raw::c_void,
+                                                   aCp:
+                                                       *mut root::nsCycleCollectionParticipant,
+                                                   aRefCnt:
+                                                       *mut root::nsCycleCollectingAutoRefCnt,
+                                                   aShouldDelete: *mut bool)>;
     #[test]
     fn bindgen_test_layout_nsCycleCollectingAutoRefCnt() {
         assert_eq!(::std::mem::size_of::<nsCycleCollectingAutoRefCnt>() ,
@@ -10594,32 +10940,6 @@ pub mod root {
         pub mAutoBuf: root::__BindgenUnionField<*mut ::std::os::raw::c_char>,
         pub mAlign: root::__BindgenUnionField<u8>,
         pub bindgen_union_field: u64,
-    }
-    #[repr(C)]
-    #[derive(Debug)]
-    pub struct nsFixedString {
-        pub _base: ::nsstring::nsStringRepr,
-        pub mFixedCapacity: root::mozilla::detail::nsStringRepr_size_type,
-        pub mFixedBuf: *mut root::mozilla::detail::nsStringRepr_char_type,
-    }
-    pub type nsFixedString_self_type = root::nsFixedString;
-    pub type nsFixedString_fixed_string_type = root::nsFixedString;
-    #[test]
-    fn bindgen_test_layout_nsFixedString() {
-        assert_eq!(::std::mem::size_of::<nsFixedString>() , 32usize , concat !
-                   ( "Size of: " , stringify ! ( nsFixedString ) ));
-        assert_eq! (::std::mem::align_of::<nsFixedString>() , 8usize , concat
-                    ! ( "Alignment of " , stringify ! ( nsFixedString ) ));
-        assert_eq! (unsafe {
-                    & ( * ( 0 as * const nsFixedString ) ) . mFixedCapacity as
-                    * const _ as usize } , 16usize , concat ! (
-                    "Alignment of field: " , stringify ! ( nsFixedString ) ,
-                    "::" , stringify ! ( mFixedCapacity ) ));
-        assert_eq! (unsafe {
-                    & ( * ( 0 as * const nsFixedString ) ) . mFixedBuf as *
-                    const _ as usize } , 24usize , concat ! (
-                    "Alignment of field: " , stringify ! ( nsFixedString ) ,
-                    "::" , stringify ! ( mFixedBuf ) ));
     }
     pub type PRUint32 = ::std::os::raw::c_uint;
     pub type PRIntn = ::std::os::raw::c_int;
@@ -10840,6 +11160,7 @@ pub mod root {
         pub mRecording: bool,
         pub mSeenBadToken: bool,
         pub mSeenVariableReference: bool,
+        pub mSourceMapURL: ::nsstring::nsStringRepr,
     }
     #[repr(u32)]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -10855,7 +11176,7 @@ pub mod root {
     }
     #[test]
     fn bindgen_test_layout_nsCSSScanner() {
-        assert_eq!(::std::mem::size_of::<nsCSSScanner>() , 64usize , concat !
+        assert_eq!(::std::mem::size_of::<nsCSSScanner>() , 80usize , concat !
                    ( "Size of: " , stringify ! ( nsCSSScanner ) ));
         assert_eq! (::std::mem::align_of::<nsCSSScanner>() , 8usize , concat !
                     ( "Alignment of " , stringify ! ( nsCSSScanner ) ));
@@ -10930,6 +11251,11 @@ pub mod root {
                     concat ! (
                     "Alignment of field: " , stringify ! ( nsCSSScanner ) ,
                     "::" , stringify ! ( mSeenVariableReference ) ));
+        assert_eq! (unsafe {
+                    & ( * ( 0 as * const nsCSSScanner ) ) . mSourceMapURL as *
+                    const _ as usize } , 64usize , concat ! (
+                    "Alignment of field: " , stringify ! ( nsCSSScanner ) ,
+                    "::" , stringify ! ( mSourceMapURL ) ));
     }
     #[repr(C)]
     #[derive(Debug, Copy, Clone)]
@@ -11602,6 +11928,11 @@ pub mod root {
                         AutoSetAsyncStackForNewCalls ) , "::" , stringify ! (
                         oldAsyncCallIsExplicit ) ));
         }
+        pub type WarningReporter =
+            ::std::option::Option<unsafe extern "C" fn(cx:
+                                                           *mut root::JSContext,
+                                                       report:
+                                                           *mut root::JSErrorReport)>;
         #[repr(C)]
         #[derive(Debug)]
         pub struct AutoHideScriptedCaller {
@@ -11706,6 +12037,175 @@ pub mod root {
     #[derive(Debug, Copy, Clone)]
     pub struct JSCompartment {
         _unused: [u8; 0],
+    }
+    /// Describes a single error or warning that occurs in the execution of script.
+    #[repr(C)]
+    #[derive(Debug)]
+    pub struct JSErrorReport {
+        pub _base: root::JSErrorBase,
+        pub linebuf_: *const u16,
+        pub linebufLength_: usize,
+        pub tokenOffset_: usize,
+        pub notes: root::mozilla::UniquePtr<root::JSErrorNotes>,
+        pub flags: ::std::os::raw::c_uint,
+        pub exnType: i16,
+        pub _bitfield_1: u8,
+        pub __bindgen_padding_0: u8,
+    }
+    #[test]
+    fn bindgen_test_layout_JSErrorReport() {
+        assert_eq!(::std::mem::size_of::<JSErrorReport>() , 72usize , concat !
+                   ( "Size of: " , stringify ! ( JSErrorReport ) ));
+        assert_eq! (::std::mem::align_of::<JSErrorReport>() , 8usize , concat
+                    ! ( "Alignment of " , stringify ! ( JSErrorReport ) ));
+        assert_eq! (unsafe {
+                    & ( * ( 0 as * const JSErrorReport ) ) . linebuf_ as *
+                    const _ as usize } , 32usize , concat ! (
+                    "Alignment of field: " , stringify ! ( JSErrorReport ) ,
+                    "::" , stringify ! ( linebuf_ ) ));
+        assert_eq! (unsafe {
+                    & ( * ( 0 as * const JSErrorReport ) ) . linebufLength_ as
+                    * const _ as usize } , 40usize , concat ! (
+                    "Alignment of field: " , stringify ! ( JSErrorReport ) ,
+                    "::" , stringify ! ( linebufLength_ ) ));
+        assert_eq! (unsafe {
+                    & ( * ( 0 as * const JSErrorReport ) ) . tokenOffset_ as *
+                    const _ as usize } , 48usize , concat ! (
+                    "Alignment of field: " , stringify ! ( JSErrorReport ) ,
+                    "::" , stringify ! ( tokenOffset_ ) ));
+        assert_eq! (unsafe {
+                    & ( * ( 0 as * const JSErrorReport ) ) . notes as * const
+                    _ as usize } , 56usize , concat ! (
+                    "Alignment of field: " , stringify ! ( JSErrorReport ) ,
+                    "::" , stringify ! ( notes ) ));
+        assert_eq! (unsafe {
+                    & ( * ( 0 as * const JSErrorReport ) ) . flags as * const
+                    _ as usize } , 64usize , concat ! (
+                    "Alignment of field: " , stringify ! ( JSErrorReport ) ,
+                    "::" , stringify ! ( flags ) ));
+        assert_eq! (unsafe {
+                    & ( * ( 0 as * const JSErrorReport ) ) . exnType as *
+                    const _ as usize } , 68usize , concat ! (
+                    "Alignment of field: " , stringify ! ( JSErrorReport ) ,
+                    "::" , stringify ! ( exnType ) ));
+    }
+    impl JSErrorReport {
+        #[inline]
+        pub fn isMuted(&self) -> bool {
+            let mut unit_field_val: u8 =
+                unsafe { ::std::mem::uninitialized() };
+            unsafe {
+                ::std::ptr::copy_nonoverlapping(&self._bitfield_1 as *const _
+                                                    as *const u8,
+                                                &mut unit_field_val as *mut u8
+                                                    as *mut u8,
+                                                ::std::mem::size_of::<u8>())
+            };
+            let mask = 1u64 as u8;
+            let val = (unit_field_val & mask) >> 0usize;
+            unsafe { ::std::mem::transmute(val as u8) }
+        }
+        #[inline]
+        pub fn set_isMuted(&mut self, val: bool) {
+            let mask = 1u64 as u8;
+            let val = val as u8 as u8;
+            let mut unit_field_val: u8 =
+                unsafe { ::std::mem::uninitialized() };
+            unsafe {
+                ::std::ptr::copy_nonoverlapping(&self._bitfield_1 as *const _
+                                                    as *const u8,
+                                                &mut unit_field_val as *mut u8
+                                                    as *mut u8,
+                                                ::std::mem::size_of::<u8>())
+            };
+            unit_field_val &= !mask;
+            unit_field_val |= (val << 0usize) & mask;
+            unsafe {
+                ::std::ptr::copy_nonoverlapping(&unit_field_val as *const _ as
+                                                    *const u8,
+                                                &mut self._bitfield_1 as
+                                                    *mut _ as *mut u8,
+                                                ::std::mem::size_of::<u8>());
+            }
+        }
+        #[inline]
+        pub fn ownsLinebuf_(&self) -> bool {
+            let mut unit_field_val: u8 =
+                unsafe { ::std::mem::uninitialized() };
+            unsafe {
+                ::std::ptr::copy_nonoverlapping(&self._bitfield_1 as *const _
+                                                    as *const u8,
+                                                &mut unit_field_val as *mut u8
+                                                    as *mut u8,
+                                                ::std::mem::size_of::<u8>())
+            };
+            let mask = 2u64 as u8;
+            let val = (unit_field_val & mask) >> 1usize;
+            unsafe { ::std::mem::transmute(val as u8) }
+        }
+        #[inline]
+        pub fn set_ownsLinebuf_(&mut self, val: bool) {
+            let mask = 2u64 as u8;
+            let val = val as u8 as u8;
+            let mut unit_field_val: u8 =
+                unsafe { ::std::mem::uninitialized() };
+            unsafe {
+                ::std::ptr::copy_nonoverlapping(&self._bitfield_1 as *const _
+                                                    as *const u8,
+                                                &mut unit_field_val as *mut u8
+                                                    as *mut u8,
+                                                ::std::mem::size_of::<u8>())
+            };
+            unit_field_val &= !mask;
+            unit_field_val |= (val << 1usize) & mask;
+            unsafe {
+                ::std::ptr::copy_nonoverlapping(&unit_field_val as *const _ as
+                                                    *const u8,
+                                                &mut self._bitfield_1 as
+                                                    *mut _ as *mut u8,
+                                                ::std::mem::size_of::<u8>());
+            }
+        }
+        #[inline]
+        pub fn new_bitfield_1(isMuted: bool, ownsLinebuf_: bool) -> u8 {
+            ({ ({ 0 } | ((isMuted as u8 as u8) << 0usize) & (1u64 as u8)) } |
+                 ((ownsLinebuf_ as u8 as u8) << 1usize) & (2u64 as u8))
+        }
+    }
+    #[repr(C)]
+    #[derive(Debug, Copy)]
+    pub struct nsIWeakReference {
+        pub _base: root::nsISupports,
+        pub _mWeakRefOwningThread: root::nsAutoOwningThread,
+        pub mObject: *mut root::nsISupports,
+    }
+    #[repr(C)]
+    #[derive(Debug, Copy, Clone)]
+    pub struct nsIWeakReference_COMTypeInfo {
+        pub _address: u8,
+    }
+    #[test]
+    fn bindgen_test_layout_nsIWeakReference() {
+        assert_eq!(::std::mem::size_of::<nsIWeakReference>() , 24usize ,
+                   concat ! ( "Size of: " , stringify ! ( nsIWeakReference )
+                   ));
+        assert_eq! (::std::mem::align_of::<nsIWeakReference>() , 8usize ,
+                    concat ! (
+                    "Alignment of " , stringify ! ( nsIWeakReference ) ));
+        assert_eq! (unsafe {
+                    & ( * ( 0 as * const nsIWeakReference ) ) .
+                    _mWeakRefOwningThread as * const _ as usize } , 8usize ,
+                    concat ! (
+                    "Alignment of field: " , stringify ! ( nsIWeakReference )
+                    , "::" , stringify ! ( _mWeakRefOwningThread ) ));
+        assert_eq! (unsafe {
+                    & ( * ( 0 as * const nsIWeakReference ) ) . mObject as *
+                    const _ as usize } , 16usize , concat ! (
+                    "Alignment of field: " , stringify ! ( nsIWeakReference )
+                    , "::" , stringify ! ( mObject ) ));
+    }
+    impl Clone for nsIWeakReference {
+        fn clone(&self) -> Self { *self }
     }
     #[repr(C)]
     #[derive(Debug)]
@@ -12439,17 +12939,16 @@ pub mod root {
     #[repr(C)]
     #[derive(Debug)]
     pub struct gfxFontFeatureValueSet {
-        pub mRefCnt: root::nsAutoRefCnt,
-        pub _mOwningThread: root::nsAutoOwningThread,
+        pub mRefCnt: root::mozilla::ThreadSafeAutoRefCnt,
         pub mFontFeatureValues: [u64; 6usize],
     }
     pub type gfxFontFeatureValueSet_HasThreadSafeRefCnt =
-        root::mozilla::FalseType;
+        root::mozilla::TrueType;
     #[repr(C)]
     #[derive(Debug)]
     pub struct gfxFontFeatureValueSet_ValueList {
         pub name: ::nsstring::nsStringRepr,
-        pub featureSelectors: root::nsTArray<::std::os::raw::c_uint>,
+        pub featureSelectors: root::nsTArray<u32>,
     }
     #[test]
     fn bindgen_test_layout_gfxFontFeatureValueSet_ValueList() {
@@ -12554,7 +13053,7 @@ pub mod root {
     pub struct gfxFontFeatureValueSet_FeatureValueHashEntry {
         pub _base: root::PLDHashEntryHdr,
         pub mKey: root::gfxFontFeatureValueSet_FeatureValueHashKey,
-        pub mValues: root::nsTArray<::std::os::raw::c_uint>,
+        pub mValues: root::nsTArray<u32>,
     }
     pub type gfxFontFeatureValueSet_FeatureValueHashEntry_KeyType =
         *const root::gfxFontFeatureValueSet_FeatureValueHashKey;
@@ -12599,7 +13098,7 @@ pub mod root {
     }
     #[test]
     fn bindgen_test_layout_gfxFontFeatureValueSet() {
-        assert_eq!(::std::mem::size_of::<gfxFontFeatureValueSet>() , 64usize ,
+        assert_eq!(::std::mem::size_of::<gfxFontFeatureValueSet>() , 56usize ,
                    concat ! (
                    "Size of: " , stringify ! ( gfxFontFeatureValueSet ) ));
         assert_eq! (::std::mem::align_of::<gfxFontFeatureValueSet>() , 8usize
@@ -12614,14 +13113,7 @@ pub mod root {
                     ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const gfxFontFeatureValueSet ) ) .
-                    _mOwningThread as * const _ as usize } , 8usize , concat !
-                    (
-                    "Alignment of field: " , stringify ! (
-                    gfxFontFeatureValueSet ) , "::" , stringify ! (
-                    _mOwningThread ) ));
-        assert_eq! (unsafe {
-                    & ( * ( 0 as * const gfxFontFeatureValueSet ) ) .
-                    mFontFeatureValues as * const _ as usize } , 16usize ,
+                    mFontFeatureValues as * const _ as usize } , 8usize ,
                     concat ! (
                     "Alignment of field: " , stringify ! (
                     gfxFontFeatureValueSet ) , "::" , stringify ! (
@@ -12659,7 +13151,7 @@ pub mod root {
         pub alternateValues: root::nsTArray<root::gfxAlternateValue>,
         pub featureValueLookup: root::RefPtr<root::gfxFontFeatureValueSet>,
         pub fontFeatureSettings: root::nsTArray<root::gfxFontFeature>,
-        pub fontVariationSettings: root::nsTArray<root::mozilla::gfx::FontVariation>,
+        pub fontVariationSettings: root::nsTArray<root::gfxFontVariation>,
         pub languageOverride: u32,
     }
     #[test]
@@ -13138,8 +13630,11 @@ pub mod root {
     pub const nsChangeHint_nsChangeHint_UpdateWidgetProperties:
               root::nsChangeHint =
         nsChangeHint(536870912);
+    pub const nsChangeHint_nsChangeHint_UpdateTableCellSpans:
+              root::nsChangeHint =
+        nsChangeHint(1073741824);
     pub const nsChangeHint_nsChangeHint_AllHints: root::nsChangeHint =
-        nsChangeHint(1073741823);
+        nsChangeHint(2147483647);
     impl ::std::ops::BitOr<root::nsChangeHint> for root::nsChangeHint {
         type
         Output
@@ -15419,7 +15914,7 @@ pub mod root {
     }
     #[test]
     fn bindgen_test_layout_ServoComputedData() {
-        assert_eq!(::std::mem::size_of::<ServoComputedData>() , 224usize ,
+        assert_eq!(::std::mem::size_of::<ServoComputedData>() , 232usize ,
                    concat ! ( "Size of: " , stringify ! ( ServoComputedData )
                    ));
         assert_eq! (::std::mem::align_of::<ServoComputedData>() , 8usize ,
@@ -15553,7 +16048,7 @@ pub mod root {
                     , "::" , stringify ! ( writing_mode ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const ServoComputedData ) ) . flags as *
-                    const _ as usize } , 193usize , concat ! (
+                    const _ as usize } , 194usize , concat ! (
                     "Alignment of field: " , stringify ! ( ServoComputedData )
                     , "::" , stringify ! ( flags ) ));
         assert_eq! (unsafe {
@@ -16178,13 +16673,15 @@ pub mod root {
         /// An object implementing nsIDOMNodeList for this content (childNodes)
         /// @see nsIDOMNodeList
         /// @see nsGenericHTMLElement::GetChildNodes
-        pub mChildNodes: root::RefPtr<root::nsChildContentList>,
+        pub mChildNodes: root::RefPtr<root::nsAttrChildContentList>,
         /// Weak reference to this node.  This is cleared by the destructor of
         /// nsNodeWeakReference.
         pub mWeakReference: *mut root::nsNodeWeakReference,
-        /// A set of ranges in the common ancestor for the selection to which
-        /// this node belongs to.
-        pub mCommonAncestorRanges: u64,
+        /// A set of ranges which are in the selection and which have this node as
+        /// their endpoints' common ancestor.  This is a UniquePtr instead of just a
+        /// LinkedList, because that prevents us from pushing DOMSlots up to the next
+        /// allocation bucket size, at the cost of some complexity.
+        pub mCommonAncestorRanges: root::mozilla::UniquePtr<root::mozilla::LinkedList>,
         /// Number of descendant nodes in the uncomposed document that have been
         /// explicitly set as editable.
         pub mEditableDescendantCount: u32,
@@ -17025,7 +17522,7 @@ pub mod root {
         pub mUpgradeInsecurePreloads: bool,
         pub mHSTSPrimingURIList: [u64; 6usize],
         pub mDocumentContainer: u64,
-        pub mCharacterSet: root::mozilla::NotNull<*const root::mozilla::Encoding>,
+        pub mCharacterSet: root::mozilla::NotNull<*const root::nsIDocument_Encoding>,
         pub mCharacterSetSource: i32,
         pub mParentDocument: *mut root::nsIDocument,
         pub mCachedRootElement: *mut root::mozilla::dom::Element,
@@ -17077,7 +17574,7 @@ pub mod root {
         /// The current frame request callback handle
         pub mFrameRequestCallbackCounter: i32,
         pub mStaticCloneCount: u32,
-        pub mBlockedTrackingNodes: root::nsTArray<root::nsCOMPtr<root::nsIWeakReference>>,
+        pub mBlockedTrackingNodes: root::nsTArray<root::nsWeakPtr>,
         pub mWindow: *mut root::nsPIDOMWindowInner,
         pub mCachedEncoder: root::nsCOMPtr<root::nsIDocumentEncoder>,
         pub mFrameRequestCallbacks: root::nsTArray<root::nsIDocument_FrameRequest>,
@@ -17099,6 +17596,8 @@ pub mod root {
         pub mDocGroup: root::RefPtr<root::mozilla::dom::DocGroup>,
         pub mTrackingScripts: [u64; 6usize],
         pub mBufferedCSPViolations: root::nsTArray<root::nsCOMPtr<root::nsIRunnable>>,
+        pub mServoRestyleRoot: root::nsCOMPtr<root::nsINode>,
+        pub mServoRestyleRootDirtyBits: u32,
     }
     pub type nsIDocument_GlobalObject = root::mozilla::dom::GlobalObject;
     pub type nsIDocument_Encoding = root::mozilla::Encoding;
@@ -17393,7 +17892,7 @@ pub mod root {
     pub const nsIDocument_kSegmentSize: usize = 128;
     #[test]
     fn bindgen_test_layout_nsIDocument() {
-        assert_eq!(::std::mem::size_of::<nsIDocument>() , 888usize , concat !
+        assert_eq!(::std::mem::size_of::<nsIDocument>() , 904usize , concat !
                    ( "Size of: " , stringify ! ( nsIDocument ) ));
         assert_eq! (::std::mem::align_of::<nsIDocument>() , 8usize , concat !
                     ( "Alignment of " , stringify ! ( nsIDocument ) ));
@@ -20026,7 +20525,7 @@ pub mod root {
         pub mRefCnt: root::nsCycleCollectingAutoRefCnt,
         pub _mOwningThread: root::nsAutoOwningThread,
         pub mBoundContentSet: u64,
-        pub mWrapperTable: u64,
+        pub mWrapperTable: root::nsAutoPtr<root::nsBindingManager_WrapperHashtable>,
         pub mDocumentTable: u64,
         pub mLoadingDocTable: u64,
         pub mAttachedStack: root::nsBindingList,
@@ -20072,6 +20571,8 @@ pub mod root {
     impl Clone for nsBindingManager_cycleCollection {
         fn clone(&self) -> Self { *self }
     }
+    pub type nsBindingManager_BoundContentBindingCallback =
+        root::std::function;
     pub type nsBindingManager_WrapperHashtable = u8;
     extern "C" {
         #[link_name = "_ZN16nsBindingManager21_cycleCollectorGlobalE"]
@@ -20370,6 +20871,7 @@ pub mod root {
         pub mCounterStyleManager: root::RefPtr<root::mozilla::CounterStyleManager>,
         pub mMedium: *mut root::nsIAtom,
         pub mMediaEmulated: root::nsCOMPtr<root::nsIAtom>,
+        pub mFontFeatureValuesLookup: root::RefPtr<root::gfxFontFeatureValueSet>,
         pub mLinkHandler: *mut root::nsILinkHandler,
         pub mLanguage: root::nsCOMPtr<root::nsIAtom>,
         pub mInflationDisabledForShrinkWrap: bool,
@@ -20428,7 +20930,7 @@ pub mod root {
         pub mTelemetryScrollLastY: root::nscoord,
         pub mTelemetryScrollMaxY: root::nscoord,
         pub mTelemetryScrollTotalY: root::nscoord,
-        pub _bitfield_1: [u8; 6usize],
+        pub _bitfield_1: [u8; 7usize],
         pub mLayoutPhaseCount: [u32; 3usize],
     }
     pub type nsPresContext_Encoding = root::mozilla::Encoding;
@@ -20552,7 +21054,7 @@ pub mod root {
     }
     #[test]
     fn bindgen_test_layout_nsPresContext() {
-        assert_eq!(::std::mem::size_of::<nsPresContext>() , 1328usize , concat
+        assert_eq!(::std::mem::size_of::<nsPresContext>() , 1336usize , concat
                    ! ( "Size of: " , stringify ! ( nsPresContext ) ));
         assert_eq! (::std::mem::align_of::<nsPresContext>() , 8usize , concat
                     ! ( "Alignment of " , stringify ! ( nsPresContext ) ));
@@ -20634,322 +21136,328 @@ pub mod root {
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mMediaEmulated ) ));
         assert_eq! (unsafe {
+                    & ( * ( 0 as * const nsPresContext ) ) .
+                    mFontFeatureValuesLookup as * const _ as usize } ,
+                    136usize , concat ! (
+                    "Alignment of field: " , stringify ! ( nsPresContext ) ,
+                    "::" , stringify ! ( mFontFeatureValuesLookup ) ));
+        assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mLinkHandler as *
-                    const _ as usize } , 136usize , concat ! (
+                    const _ as usize } , 144usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mLinkHandler ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mLanguage as *
-                    const _ as usize } , 144usize , concat ! (
+                    const _ as usize } , 152usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mLanguage ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) .
                     mInflationDisabledForShrinkWrap as * const _ as usize } ,
-                    152usize , concat ! (
+                    160usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mInflationDisabledForShrinkWrap ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mContainer as *
-                    const _ as usize } , 160usize , concat ! (
+                    const _ as usize } , 168usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mContainer ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mBaseMinFontSize
-                    as * const _ as usize } , 168usize , concat ! (
+                    as * const _ as usize } , 176usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mBaseMinFontSize ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mSystemFontScale
-                    as * const _ as usize } , 172usize , concat ! (
+                    as * const _ as usize } , 180usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mSystemFontScale ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mTextZoom as *
-                    const _ as usize } , 176usize , concat ! (
+                    const _ as usize } , 184usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mTextZoom ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) .
-                    mEffectiveTextZoom as * const _ as usize } , 180usize ,
+                    mEffectiveTextZoom as * const _ as usize } , 188usize ,
                     concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mEffectiveTextZoom ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mFullZoom as *
-                    const _ as usize } , 184usize , concat ! (
+                    const _ as usize } , 192usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mFullZoom ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mOverrideDPPX as
-                    * const _ as usize } , 188usize , concat ! (
+                    * const _ as usize } , 196usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mOverrideDPPX ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) .
                     mLastFontInflationScreenSize as * const _ as usize } ,
-                    192usize , concat ! (
+                    200usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mLastFontInflationScreenSize ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) .
-                    mCurAppUnitsPerDevPixel as * const _ as usize } , 208usize
+                    mCurAppUnitsPerDevPixel as * const _ as usize } , 216usize
                     , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mCurAppUnitsPerDevPixel ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) .
                     mAutoQualityMinFontSizePixelsPref as * const _ as usize }
-                    , 212usize , concat ! (
+                    , 220usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mAutoQualityMinFontSizePixelsPref )
                     ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mTheme as * const
-                    _ as usize } , 216usize , concat ! (
+                    _ as usize } , 224usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mTheme ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mLangService as *
-                    const _ as usize } , 224usize , concat ! (
+                    const _ as usize } , 232usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mLangService ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mPrintSettings as
-                    * const _ as usize } , 232usize , concat ! (
+                    * const _ as usize } , 240usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mPrintSettings ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mPrefChangedTimer
-                    as * const _ as usize } , 240usize , concat ! (
+                    as * const _ as usize } , 248usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mPrefChangedTimer ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mBidiEngine as *
-                    const _ as usize } , 248usize , concat ! (
+                    const _ as usize } , 256usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mBidiEngine ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mTransactions as
-                    * const _ as usize } , 256usize , concat ! (
+                    * const _ as usize } , 264usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mTransactions ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mTextPerf as *
-                    const _ as usize } , 336usize , concat ! (
+                    const _ as usize } , 344usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mTextPerf ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mMissingFonts as
-                    * const _ as usize } , 344usize , concat ! (
+                    * const _ as usize } , 352usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mMissingFonts ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mVisibleArea as *
-                    const _ as usize } , 352usize , concat ! (
+                    const _ as usize } , 360usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mVisibleArea ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mPageSize as *
-                    const _ as usize } , 368usize , concat ! (
+                    const _ as usize } , 376usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mPageSize ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mPageScale as *
-                    const _ as usize } , 376usize , concat ! (
+                    const _ as usize } , 384usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mPageScale ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mPPScale as *
-                    const _ as usize } , 380usize , concat ! (
+                    const _ as usize } , 388usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mPPScale ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mDefaultColor as
-                    * const _ as usize } , 384usize , concat ! (
+                    * const _ as usize } , 392usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mDefaultColor ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mBackgroundColor
-                    as * const _ as usize } , 388usize , concat ! (
+                    as * const _ as usize } , 396usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mBackgroundColor ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mLinkColor as *
-                    const _ as usize } , 392usize , concat ! (
+                    const _ as usize } , 400usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mLinkColor ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mActiveLinkColor
-                    as * const _ as usize } , 396usize , concat ! (
+                    as * const _ as usize } , 404usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mActiveLinkColor ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mVisitedLinkColor
-                    as * const _ as usize } , 400usize , concat ! (
+                    as * const _ as usize } , 408usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mVisitedLinkColor ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) .
-                    mFocusBackgroundColor as * const _ as usize } , 404usize ,
+                    mFocusBackgroundColor as * const _ as usize } , 412usize ,
                     concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mFocusBackgroundColor ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mFocusTextColor
-                    as * const _ as usize } , 408usize , concat ! (
+                    as * const _ as usize } , 416usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mFocusTextColor ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mBodyTextColor as
-                    * const _ as usize } , 412usize , concat ! (
+                    * const _ as usize } , 420usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mBodyTextColor ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) .
                     mViewportScrollbarOverrideNode as * const _ as usize } ,
-                    416usize , concat ! (
+                    424usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mViewportScrollbarOverrideNode ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) .
-                    mViewportStyleScrollbar as * const _ as usize } , 424usize
+                    mViewportStyleScrollbar as * const _ as usize } , 432usize
                     , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mViewportStyleScrollbar ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mFocusRingWidth
-                    as * const _ as usize } , 488usize , concat ! (
+                    as * const _ as usize } , 496usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mFocusRingWidth ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) .
-                    mExistThrottledUpdates as * const _ as usize } , 489usize
+                    mExistThrottledUpdates as * const _ as usize } , 497usize
                     , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mExistThrottledUpdates ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) .
-                    mImageAnimationMode as * const _ as usize } , 490usize ,
+                    mImageAnimationMode as * const _ as usize } , 498usize ,
                     concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mImageAnimationMode ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) .
-                    mImageAnimationModePref as * const _ as usize } , 492usize
+                    mImageAnimationModePref as * const _ as usize } , 500usize
                     , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mImageAnimationModePref ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) .
-                    mLangGroupFontPrefs as * const _ as usize } , 496usize ,
+                    mLangGroupFontPrefs as * const _ as usize } , 504usize ,
                     concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mLangGroupFontPrefs ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) .
-                    mFontGroupCacheDirty as * const _ as usize } , 1136usize ,
+                    mFontGroupCacheDirty as * const _ as usize } , 1144usize ,
                     concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mFontGroupCacheDirty ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mLanguagesUsed as
-                    * const _ as usize } , 1144usize , concat ! (
+                    * const _ as usize } , 1152usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mLanguagesUsed ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mBorderWidthTable
-                    as * const _ as usize } , 1192usize , concat ! (
+                    as * const _ as usize } , 1200usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mBorderWidthTable ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) .
-                    mInterruptChecksToSkip as * const _ as usize } , 1204usize
+                    mInterruptChecksToSkip as * const _ as usize } , 1212usize
                     , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mInterruptChecksToSkip ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mElementsRestyled
-                    as * const _ as usize } , 1208usize , concat ! (
+                    as * const _ as usize } , 1216usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mElementsRestyled ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) .
-                    mFramesConstructed as * const _ as usize } , 1216usize ,
+                    mFramesConstructed as * const _ as usize } , 1224usize ,
                     concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mFramesConstructed ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mFramesReflowed
-                    as * const _ as usize } , 1224usize , concat ! (
+                    as * const _ as usize } , 1232usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mFramesReflowed ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mReflowStartTime
-                    as * const _ as usize } , 1232usize , concat ! (
+                    as * const _ as usize } , 1240usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mReflowStartTime ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) .
                     mFirstNonBlankPaintTime as * const _ as usize } ,
-                    1240usize , concat ! (
+                    1248usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mFirstNonBlankPaintTime ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mFirstClickTime
-                    as * const _ as usize } , 1248usize , concat ! (
+                    as * const _ as usize } , 1256usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mFirstClickTime ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mFirstKeyTime as
-                    * const _ as usize } , 1256usize , concat ! (
+                    * const _ as usize } , 1264usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mFirstKeyTime ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) .
-                    mFirstMouseMoveTime as * const _ as usize } , 1264usize ,
+                    mFirstMouseMoveTime as * const _ as usize } , 1272usize ,
                     concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mFirstMouseMoveTime ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mFirstScrollTime
-                    as * const _ as usize } , 1272usize , concat ! (
+                    as * const _ as usize } , 1280usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mFirstScrollTime ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) .
                     mInteractionTimeEnabled as * const _ as usize } ,
-                    1280usize , concat ! (
+                    1288usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mInteractionTimeEnabled ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) .
                     mLastStyleUpdateForAllAnimations as * const _ as usize } ,
-                    1288usize , concat ! (
+                    1296usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mLastStyleUpdateForAllAnimations )
                     ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) .
-                    mTelemetryScrollLastY as * const _ as usize } , 1296usize
+                    mTelemetryScrollLastY as * const _ as usize } , 1304usize
                     , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mTelemetryScrollLastY ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) .
-                    mTelemetryScrollMaxY as * const _ as usize } , 1300usize ,
+                    mTelemetryScrollMaxY as * const _ as usize } , 1308usize ,
                     concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mTelemetryScrollMaxY ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) .
-                    mTelemetryScrollTotalY as * const _ as usize } , 1304usize
+                    mTelemetryScrollTotalY as * const _ as usize } , 1312usize
                     , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mTelemetryScrollTotalY ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsPresContext ) ) . mLayoutPhaseCount
-                    as * const _ as usize } , 1316usize , concat ! (
+                    as * const _ as usize } , 1324usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsPresContext ) ,
                     "::" , stringify ! ( mLayoutPhaseCount ) ));
     }
@@ -22196,7 +22704,7 @@ pub mod root {
             }
         }
         #[inline]
-        pub fn mSuppressResizeReflow(&self) -> ::std::os::raw::c_uint {
+        pub fn mFontFeatureValuesDirty(&self) -> ::std::os::raw::c_uint {
             let mut unit_field_val: u64 =
                 unsafe { ::std::mem::uninitialized() };
             unsafe {
@@ -22211,8 +22719,8 @@ pub mod root {
             unsafe { ::std::mem::transmute(val as u32) }
         }
         #[inline]
-        pub fn set_mSuppressResizeReflow(&mut self,
-                                         val: ::std::os::raw::c_uint) {
+        pub fn set_mFontFeatureValuesDirty(&mut self,
+                                           val: ::std::os::raw::c_uint) {
             let mask = 8589934592u64 as u64;
             let val = val as u32 as u64;
             let mut unit_field_val: u64 =
@@ -22235,7 +22743,8 @@ pub mod root {
             }
         }
         #[inline]
-        pub fn mIsVisual(&self) -> ::std::os::raw::c_uint {
+        pub fn mPostedFlushFontFeatureValues(&self)
+         -> ::std::os::raw::c_uint {
             let mut unit_field_val: u64 =
                 unsafe { ::std::mem::uninitialized() };
             unsafe {
@@ -22250,7 +22759,9 @@ pub mod root {
             unsafe { ::std::mem::transmute(val as u32) }
         }
         #[inline]
-        pub fn set_mIsVisual(&mut self, val: ::std::os::raw::c_uint) {
+        pub fn set_mPostedFlushFontFeatureValues(&mut self,
+                                                 val:
+                                                     ::std::os::raw::c_uint) {
             let mask = 17179869184u64 as u64;
             let val = val as u32 as u64;
             let mut unit_field_val: u64 =
@@ -22273,7 +22784,7 @@ pub mod root {
             }
         }
         #[inline]
-        pub fn mFireAfterPaintEvents(&self) -> ::std::os::raw::c_uint {
+        pub fn mSuppressResizeReflow(&self) -> ::std::os::raw::c_uint {
             let mut unit_field_val: u64 =
                 unsafe { ::std::mem::uninitialized() };
             unsafe {
@@ -22288,7 +22799,7 @@ pub mod root {
             unsafe { ::std::mem::transmute(val as u32) }
         }
         #[inline]
-        pub fn set_mFireAfterPaintEvents(&mut self,
+        pub fn set_mSuppressResizeReflow(&mut self,
                                          val: ::std::os::raw::c_uint) {
             let mask = 34359738368u64 as u64;
             let val = val as u32 as u64;
@@ -22312,7 +22823,7 @@ pub mod root {
             }
         }
         #[inline]
-        pub fn mIsChrome(&self) -> ::std::os::raw::c_uint {
+        pub fn mIsVisual(&self) -> ::std::os::raw::c_uint {
             let mut unit_field_val: u64 =
                 unsafe { ::std::mem::uninitialized() };
             unsafe {
@@ -22327,7 +22838,7 @@ pub mod root {
             unsafe { ::std::mem::transmute(val as u32) }
         }
         #[inline]
-        pub fn set_mIsChrome(&mut self, val: ::std::os::raw::c_uint) {
+        pub fn set_mIsVisual(&mut self, val: ::std::os::raw::c_uint) {
             let mask = 68719476736u64 as u64;
             let val = val as u32 as u64;
             let mut unit_field_val: u64 =
@@ -22350,7 +22861,7 @@ pub mod root {
             }
         }
         #[inline]
-        pub fn mIsChromeOriginImage(&self) -> ::std::os::raw::c_uint {
+        pub fn mFireAfterPaintEvents(&self) -> ::std::os::raw::c_uint {
             let mut unit_field_val: u64 =
                 unsafe { ::std::mem::uninitialized() };
             unsafe {
@@ -22365,8 +22876,8 @@ pub mod root {
             unsafe { ::std::mem::transmute(val as u32) }
         }
         #[inline]
-        pub fn set_mIsChromeOriginImage(&mut self,
-                                        val: ::std::os::raw::c_uint) {
+        pub fn set_mFireAfterPaintEvents(&mut self,
+                                         val: ::std::os::raw::c_uint) {
             let mask = 137438953472u64 as u64;
             let val = val as u32 as u64;
             let mut unit_field_val: u64 =
@@ -22389,7 +22900,7 @@ pub mod root {
             }
         }
         #[inline]
-        pub fn mPaintFlashing(&self) -> ::std::os::raw::c_uint {
+        pub fn mIsChrome(&self) -> ::std::os::raw::c_uint {
             let mut unit_field_val: u64 =
                 unsafe { ::std::mem::uninitialized() };
             unsafe {
@@ -22404,7 +22915,7 @@ pub mod root {
             unsafe { ::std::mem::transmute(val as u32) }
         }
         #[inline]
-        pub fn set_mPaintFlashing(&mut self, val: ::std::os::raw::c_uint) {
+        pub fn set_mIsChrome(&mut self, val: ::std::os::raw::c_uint) {
             let mask = 274877906944u64 as u64;
             let val = val as u32 as u64;
             let mut unit_field_val: u64 =
@@ -22427,7 +22938,7 @@ pub mod root {
             }
         }
         #[inline]
-        pub fn mPaintFlashingInitialized(&self) -> ::std::os::raw::c_uint {
+        pub fn mIsChromeOriginImage(&self) -> ::std::os::raw::c_uint {
             let mut unit_field_val: u64 =
                 unsafe { ::std::mem::uninitialized() };
             unsafe {
@@ -22442,8 +22953,8 @@ pub mod root {
             unsafe { ::std::mem::transmute(val as u32) }
         }
         #[inline]
-        pub fn set_mPaintFlashingInitialized(&mut self,
-                                             val: ::std::os::raw::c_uint) {
+        pub fn set_mIsChromeOriginImage(&mut self,
+                                        val: ::std::os::raw::c_uint) {
             let mask = 549755813888u64 as u64;
             let val = val as u32 as u64;
             let mut unit_field_val: u64 =
@@ -22466,8 +22977,7 @@ pub mod root {
             }
         }
         #[inline]
-        pub fn mHasWarnedAboutPositionedTableParts(&self)
-         -> ::std::os::raw::c_uint {
+        pub fn mPaintFlashing(&self) -> ::std::os::raw::c_uint {
             let mut unit_field_val: u64 =
                 unsafe { ::std::mem::uninitialized() };
             unsafe {
@@ -22482,9 +22992,7 @@ pub mod root {
             unsafe { ::std::mem::transmute(val as u32) }
         }
         #[inline]
-        pub fn set_mHasWarnedAboutPositionedTableParts(&mut self,
-                                                       val:
-                                                           ::std::os::raw::c_uint) {
+        pub fn set_mPaintFlashing(&mut self, val: ::std::os::raw::c_uint) {
             let mask = 1099511627776u64 as u64;
             let val = val as u32 as u64;
             let mut unit_field_val: u64 =
@@ -22507,8 +23015,7 @@ pub mod root {
             }
         }
         #[inline]
-        pub fn mHasWarnedAboutTooLargeDashedOrDottedRadius(&self)
-         -> ::std::os::raw::c_uint {
+        pub fn mPaintFlashingInitialized(&self) -> ::std::os::raw::c_uint {
             let mut unit_field_val: u64 =
                 unsafe { ::std::mem::uninitialized() };
             unsafe {
@@ -22523,9 +23030,8 @@ pub mod root {
             unsafe { ::std::mem::transmute(val as u32) }
         }
         #[inline]
-        pub fn set_mHasWarnedAboutTooLargeDashedOrDottedRadius(&mut self,
-                                                               val:
-                                                                   ::std::os::raw::c_uint) {
+        pub fn set_mPaintFlashingInitialized(&mut self,
+                                             val: ::std::os::raw::c_uint) {
             let mask = 2199023255552u64 as u64;
             let val = val as u32 as u64;
             let mut unit_field_val: u64 =
@@ -22548,7 +23054,8 @@ pub mod root {
             }
         }
         #[inline]
-        pub fn mQuirkSheetAdded(&self) -> ::std::os::raw::c_uint {
+        pub fn mHasWarnedAboutPositionedTableParts(&self)
+         -> ::std::os::raw::c_uint {
             let mut unit_field_val: u64 =
                 unsafe { ::std::mem::uninitialized() };
             unsafe {
@@ -22563,7 +23070,9 @@ pub mod root {
             unsafe { ::std::mem::transmute(val as u32) }
         }
         #[inline]
-        pub fn set_mQuirkSheetAdded(&mut self, val: ::std::os::raw::c_uint) {
+        pub fn set_mHasWarnedAboutPositionedTableParts(&mut self,
+                                                       val:
+                                                           ::std::os::raw::c_uint) {
             let mask = 4398046511104u64 as u64;
             let val = val as u32 as u64;
             let mut unit_field_val: u64 =
@@ -22586,7 +23095,8 @@ pub mod root {
             }
         }
         #[inline]
-        pub fn mNeedsPrefUpdate(&self) -> ::std::os::raw::c_uint {
+        pub fn mHasWarnedAboutTooLargeDashedOrDottedRadius(&self)
+         -> ::std::os::raw::c_uint {
             let mut unit_field_val: u64 =
                 unsafe { ::std::mem::uninitialized() };
             unsafe {
@@ -22601,7 +23111,9 @@ pub mod root {
             unsafe { ::std::mem::transmute(val as u32) }
         }
         #[inline]
-        pub fn set_mNeedsPrefUpdate(&mut self, val: ::std::os::raw::c_uint) {
+        pub fn set_mHasWarnedAboutTooLargeDashedOrDottedRadius(&mut self,
+                                                               val:
+                                                                   ::std::os::raw::c_uint) {
             let mask = 8796093022208u64 as u64;
             let val = val as u32 as u64;
             let mut unit_field_val: u64 =
@@ -22624,7 +23136,7 @@ pub mod root {
             }
         }
         #[inline]
-        pub fn mHadNonBlankPaint(&self) -> ::std::os::raw::c_uint {
+        pub fn mQuirkSheetAdded(&self) -> ::std::os::raw::c_uint {
             let mut unit_field_val: u64 =
                 unsafe { ::std::mem::uninitialized() };
             unsafe {
@@ -22639,7 +23151,7 @@ pub mod root {
             unsafe { ::std::mem::transmute(val as u32) }
         }
         #[inline]
-        pub fn set_mHadNonBlankPaint(&mut self, val: ::std::os::raw::c_uint) {
+        pub fn set_mQuirkSheetAdded(&mut self, val: ::std::os::raw::c_uint) {
             let mask = 17592186044416u64 as u64;
             let val = val as u32 as u64;
             let mut unit_field_val: u64 =
@@ -22662,7 +23174,7 @@ pub mod root {
             }
         }
         #[inline]
-        pub fn mRestyleLoggingEnabled(&self) -> ::std::os::raw::c_uint {
+        pub fn mNeedsPrefUpdate(&self) -> ::std::os::raw::c_uint {
             let mut unit_field_val: u64 =
                 unsafe { ::std::mem::uninitialized() };
             unsafe {
@@ -22677,8 +23189,7 @@ pub mod root {
             unsafe { ::std::mem::transmute(val as u32) }
         }
         #[inline]
-        pub fn set_mRestyleLoggingEnabled(&mut self,
-                                          val: ::std::os::raw::c_uint) {
+        pub fn set_mNeedsPrefUpdate(&mut self, val: ::std::os::raw::c_uint) {
             let mask = 35184372088832u64 as u64;
             let val = val as u32 as u64;
             let mut unit_field_val: u64 =
@@ -22701,7 +23212,7 @@ pub mod root {
             }
         }
         #[inline]
-        pub fn mInitialized(&self) -> ::std::os::raw::c_uint {
+        pub fn mHadNonBlankPaint(&self) -> ::std::os::raw::c_uint {
             let mut unit_field_val: u64 =
                 unsafe { ::std::mem::uninitialized() };
             unsafe {
@@ -22716,7 +23227,7 @@ pub mod root {
             unsafe { ::std::mem::transmute(val as u32) }
         }
         #[inline]
-        pub fn set_mInitialized(&mut self, val: ::std::os::raw::c_uint) {
+        pub fn set_mHadNonBlankPaint(&mut self, val: ::std::os::raw::c_uint) {
             let mask = 70368744177664u64 as u64;
             let val = val as u32 as u64;
             let mut unit_field_val: u64 =
@@ -22730,6 +23241,83 @@ pub mod root {
             };
             unit_field_val &= !mask;
             unit_field_val |= (val << 46usize) & mask;
+            unsafe {
+                ::std::ptr::copy_nonoverlapping(&unit_field_val as *const _ as
+                                                    *const u8,
+                                                &mut self._bitfield_1 as
+                                                    *mut _ as *mut u8,
+                                                ::std::mem::size_of::<u64>());
+            }
+        }
+        #[inline]
+        pub fn mRestyleLoggingEnabled(&self) -> ::std::os::raw::c_uint {
+            let mut unit_field_val: u64 =
+                unsafe { ::std::mem::uninitialized() };
+            unsafe {
+                ::std::ptr::copy_nonoverlapping(&self._bitfield_1 as *const _
+                                                    as *const u8,
+                                                &mut unit_field_val as
+                                                    *mut u64 as *mut u8,
+                                                ::std::mem::size_of::<u64>())
+            };
+            let mask = 140737488355328u64 as u64;
+            let val = (unit_field_val & mask) >> 47usize;
+            unsafe { ::std::mem::transmute(val as u32) }
+        }
+        #[inline]
+        pub fn set_mRestyleLoggingEnabled(&mut self,
+                                          val: ::std::os::raw::c_uint) {
+            let mask = 140737488355328u64 as u64;
+            let val = val as u32 as u64;
+            let mut unit_field_val: u64 =
+                unsafe { ::std::mem::uninitialized() };
+            unsafe {
+                ::std::ptr::copy_nonoverlapping(&self._bitfield_1 as *const _
+                                                    as *const u8,
+                                                &mut unit_field_val as
+                                                    *mut u64 as *mut u8,
+                                                ::std::mem::size_of::<u64>())
+            };
+            unit_field_val &= !mask;
+            unit_field_val |= (val << 47usize) & mask;
+            unsafe {
+                ::std::ptr::copy_nonoverlapping(&unit_field_val as *const _ as
+                                                    *const u8,
+                                                &mut self._bitfield_1 as
+                                                    *mut _ as *mut u8,
+                                                ::std::mem::size_of::<u64>());
+            }
+        }
+        #[inline]
+        pub fn mInitialized(&self) -> ::std::os::raw::c_uint {
+            let mut unit_field_val: u64 =
+                unsafe { ::std::mem::uninitialized() };
+            unsafe {
+                ::std::ptr::copy_nonoverlapping(&self._bitfield_1 as *const _
+                                                    as *const u8,
+                                                &mut unit_field_val as
+                                                    *mut u64 as *mut u8,
+                                                ::std::mem::size_of::<u64>())
+            };
+            let mask = 281474976710656u64 as u64;
+            let val = (unit_field_val & mask) >> 48usize;
+            unsafe { ::std::mem::transmute(val as u32) }
+        }
+        #[inline]
+        pub fn set_mInitialized(&mut self, val: ::std::os::raw::c_uint) {
+            let mask = 281474976710656u64 as u64;
+            let val = val as u32 as u64;
+            let mut unit_field_val: u64 =
+                unsafe { ::std::mem::uninitialized() };
+            unsafe {
+                ::std::ptr::copy_nonoverlapping(&self._bitfield_1 as *const _
+                                                    as *const u8,
+                                                &mut unit_field_val as
+                                                    *mut u64 as *mut u8,
+                                                ::std::mem::size_of::<u64>())
+            };
+            unit_field_val &= !mask;
+            unit_field_val |= (val << 48usize) & mask;
             unsafe {
                 ::std::ptr::copy_nonoverlapping(&unit_field_val as *const _ as
                                                     *const u8,
@@ -22778,6 +23366,9 @@ pub mod root {
                               mPendingViewportChange: ::std::os::raw::c_uint,
                               mCounterStylesDirty: ::std::os::raw::c_uint,
                               mPostedFlushCounterStyles:
+                                  ::std::os::raw::c_uint,
+                              mFontFeatureValuesDirty: ::std::os::raw::c_uint,
+                              mPostedFlushFontFeatureValues:
                                   ::std::os::raw::c_uint,
                               mSuppressResizeReflow: ::std::os::raw::c_uint,
                               mIsVisual: ::std::os::raw::c_uint,
@@ -22842,421 +23433,449 @@ pub mod root {
                                                                                                                                                                                                                                    ({
                                                                                                                                                                                                                                         ({
                                                                                                                                                                                                                                              ({
-                                                                                                                                                                                                                                                  0
+                                                                                                                                                                                                                                                  ({
+                                                                                                                                                                                                                                                       ({
+                                                                                                                                                                                                                                                            0
+                                                                                                                                                                                                                                                        }
+                                                                                                                                                                                                                                                            |
+                                                                                                                                                                                                                                                            ((mHasPendingInterrupt
+                                                                                                                                                                                                                                                                  as
+                                                                                                                                                                                                                                                                  u32
+                                                                                                                                                                                                                                                                  as
+                                                                                                                                                                                                                                                                  u64)
+                                                                                                                                                                                                                                                                 <<
+                                                                                                                                                                                                                                                                 0usize)
+                                                                                                                                                                                                                                                                &
+                                                                                                                                                                                                                                                                (1u64
+                                                                                                                                                                                                                                                                     as
+                                                                                                                                                                                                                                                                     u64))
+                                                                                                                                                                                                                                                   }
+                                                                                                                                                                                                                                                       |
+                                                                                                                                                                                                                                                       ((mPendingInterruptFromTest
+                                                                                                                                                                                                                                                             as
+                                                                                                                                                                                                                                                             u32
+                                                                                                                                                                                                                                                             as
+                                                                                                                                                                                                                                                             u64)
+                                                                                                                                                                                                                                                            <<
+                                                                                                                                                                                                                                                            1usize)
+                                                                                                                                                                                                                                                           &
+                                                                                                                                                                                                                                                           (2u64
+                                                                                                                                                                                                                                                                as
+                                                                                                                                                                                                                                                                u64))
                                                                                                                                                                                                                                               }
                                                                                                                                                                                                                                                   |
-                                                                                                                                                                                                                                                  ((mHasPendingInterrupt
+                                                                                                                                                                                                                                                  ((mInterruptsEnabled
                                                                                                                                                                                                                                                         as
                                                                                                                                                                                                                                                         u32
                                                                                                                                                                                                                                                         as
                                                                                                                                                                                                                                                         u64)
                                                                                                                                                                                                                                                        <<
-                                                                                                                                                                                                                                                       0usize)
+                                                                                                                                                                                                                                                       2usize)
                                                                                                                                                                                                                                                       &
-                                                                                                                                                                                                                                                      (1u64
+                                                                                                                                                                                                                                                      (4u64
                                                                                                                                                                                                                                                            as
                                                                                                                                                                                                                                                            u64))
                                                                                                                                                                                                                                          }
                                                                                                                                                                                                                                              |
-                                                                                                                                                                                                                                             ((mPendingInterruptFromTest
+                                                                                                                                                                                                                                             ((mUseDocumentFonts
                                                                                                                                                                                                                                                    as
                                                                                                                                                                                                                                                    u32
                                                                                                                                                                                                                                                    as
                                                                                                                                                                                                                                                    u64)
                                                                                                                                                                                                                                                   <<
-                                                                                                                                                                                                                                                  1usize)
+                                                                                                                                                                                                                                                  3usize)
                                                                                                                                                                                                                                                  &
-                                                                                                                                                                                                                                                 (2u64
+                                                                                                                                                                                                                                                 (8u64
                                                                                                                                                                                                                                                       as
                                                                                                                                                                                                                                                       u64))
                                                                                                                                                                                                                                     }
                                                                                                                                                                                                                                         |
-                                                                                                                                                                                                                                        ((mInterruptsEnabled
+                                                                                                                                                                                                                                        ((mUseDocumentColors
                                                                                                                                                                                                                                               as
                                                                                                                                                                                                                                               u32
                                                                                                                                                                                                                                               as
                                                                                                                                                                                                                                               u64)
                                                                                                                                                                                                                                              <<
-                                                                                                                                                                                                                                             2usize)
+                                                                                                                                                                                                                                             4usize)
                                                                                                                                                                                                                                             &
-                                                                                                                                                                                                                                            (4u64
+                                                                                                                                                                                                                                            (16u64
                                                                                                                                                                                                                                                  as
                                                                                                                                                                                                                                                  u64))
                                                                                                                                                                                                                                }
                                                                                                                                                                                                                                    |
-                                                                                                                                                                                                                                   ((mUseDocumentFonts
+                                                                                                                                                                                                                                   ((mUnderlineLinks
                                                                                                                                                                                                                                          as
                                                                                                                                                                                                                                          u32
                                                                                                                                                                                                                                          as
                                                                                                                                                                                                                                          u64)
                                                                                                                                                                                                                                         <<
-                                                                                                                                                                                                                                        3usize)
+                                                                                                                                                                                                                                        5usize)
                                                                                                                                                                                                                                        &
-                                                                                                                                                                                                                                       (8u64
+                                                                                                                                                                                                                                       (32u64
                                                                                                                                                                                                                                             as
                                                                                                                                                                                                                                             u64))
                                                                                                                                                                                                                           }
                                                                                                                                                                                                                               |
-                                                                                                                                                                                                                              ((mUseDocumentColors
+                                                                                                                                                                                                                              ((mSendAfterPaintToContent
                                                                                                                                                                                                                                     as
                                                                                                                                                                                                                                     u32
                                                                                                                                                                                                                                     as
                                                                                                                                                                                                                                     u64)
                                                                                                                                                                                                                                    <<
-                                                                                                                                                                                                                                   4usize)
+                                                                                                                                                                                                                                   6usize)
                                                                                                                                                                                                                                   &
-                                                                                                                                                                                                                                  (16u64
+                                                                                                                                                                                                                                  (64u64
                                                                                                                                                                                                                                        as
                                                                                                                                                                                                                                        u64))
                                                                                                                                                                                                                      }
                                                                                                                                                                                                                          |
-                                                                                                                                                                                                                         ((mUnderlineLinks
+                                                                                                                                                                                                                         ((mUseFocusColors
                                                                                                                                                                                                                                as
                                                                                                                                                                                                                                u32
                                                                                                                                                                                                                                as
                                                                                                                                                                                                                                u64)
                                                                                                                                                                                                                               <<
-                                                                                                                                                                                                                              5usize)
+                                                                                                                                                                                                                              7usize)
                                                                                                                                                                                                                              &
-                                                                                                                                                                                                                             (32u64
+                                                                                                                                                                                                                             (128u64
                                                                                                                                                                                                                                   as
                                                                                                                                                                                                                                   u64))
                                                                                                                                                                                                                 }
                                                                                                                                                                                                                     |
-                                                                                                                                                                                                                    ((mSendAfterPaintToContent
+                                                                                                                                                                                                                    ((mFocusRingOnAnything
                                                                                                                                                                                                                           as
                                                                                                                                                                                                                           u32
                                                                                                                                                                                                                           as
                                                                                                                                                                                                                           u64)
                                                                                                                                                                                                                          <<
-                                                                                                                                                                                                                         6usize)
+                                                                                                                                                                                                                         8usize)
                                                                                                                                                                                                                         &
-                                                                                                                                                                                                                        (64u64
+                                                                                                                                                                                                                        (256u64
                                                                                                                                                                                                                              as
                                                                                                                                                                                                                              u64))
                                                                                                                                                                                                            }
                                                                                                                                                                                                                |
-                                                                                                                                                                                                               ((mUseFocusColors
+                                                                                                                                                                                                               ((mFocusRingStyle
                                                                                                                                                                                                                      as
                                                                                                                                                                                                                      u32
                                                                                                                                                                                                                      as
                                                                                                                                                                                                                      u64)
                                                                                                                                                                                                                     <<
-                                                                                                                                                                                                                    7usize)
+                                                                                                                                                                                                                    9usize)
                                                                                                                                                                                                                    &
-                                                                                                                                                                                                                   (128u64
+                                                                                                                                                                                                                   (512u64
                                                                                                                                                                                                                         as
                                                                                                                                                                                                                         u64))
                                                                                                                                                                                                       }
                                                                                                                                                                                                           |
-                                                                                                                                                                                                          ((mFocusRingOnAnything
+                                                                                                                                                                                                          ((mDrawImageBackground
                                                                                                                                                                                                                 as
                                                                                                                                                                                                                 u32
                                                                                                                                                                                                                 as
                                                                                                                                                                                                                 u64)
                                                                                                                                                                                                                <<
-                                                                                                                                                                                                               8usize)
+                                                                                                                                                                                                               10usize)
                                                                                                                                                                                                               &
-                                                                                                                                                                                                              (256u64
+                                                                                                                                                                                                              (1024u64
                                                                                                                                                                                                                    as
                                                                                                                                                                                                                    u64))
                                                                                                                                                                                                  }
                                                                                                                                                                                                      |
-                                                                                                                                                                                                     ((mFocusRingStyle
+                                                                                                                                                                                                     ((mDrawColorBackground
                                                                                                                                                                                                            as
                                                                                                                                                                                                            u32
                                                                                                                                                                                                            as
                                                                                                                                                                                                            u64)
                                                                                                                                                                                                           <<
-                                                                                                                                                                                                          9usize)
+                                                                                                                                                                                                          11usize)
                                                                                                                                                                                                          &
-                                                                                                                                                                                                         (512u64
+                                                                                                                                                                                                         (2048u64
                                                                                                                                                                                                               as
                                                                                                                                                                                                               u64))
                                                                                                                                                                                             }
                                                                                                                                                                                                 |
-                                                                                                                                                                                                ((mDrawImageBackground
+                                                                                                                                                                                                ((mNeverAnimate
                                                                                                                                                                                                       as
                                                                                                                                                                                                       u32
                                                                                                                                                                                                       as
                                                                                                                                                                                                       u64)
                                                                                                                                                                                                      <<
-                                                                                                                                                                                                     10usize)
+                                                                                                                                                                                                     12usize)
                                                                                                                                                                                                     &
-                                                                                                                                                                                                    (1024u64
+                                                                                                                                                                                                    (4096u64
                                                                                                                                                                                                          as
                                                                                                                                                                                                          u64))
                                                                                                                                                                                        }
                                                                                                                                                                                            |
-                                                                                                                                                                                           ((mDrawColorBackground
+                                                                                                                                                                                           ((mIsRenderingOnlySelection
                                                                                                                                                                                                  as
                                                                                                                                                                                                  u32
                                                                                                                                                                                                  as
                                                                                                                                                                                                  u64)
                                                                                                                                                                                                 <<
-                                                                                                                                                                                                11usize)
+                                                                                                                                                                                                13usize)
                                                                                                                                                                                                &
-                                                                                                                                                                                               (2048u64
+                                                                                                                                                                                               (8192u64
                                                                                                                                                                                                     as
                                                                                                                                                                                                     u64))
                                                                                                                                                                                   }
                                                                                                                                                                                       |
-                                                                                                                                                                                      ((mNeverAnimate
+                                                                                                                                                                                      ((mPaginated
                                                                                                                                                                                             as
                                                                                                                                                                                             u32
                                                                                                                                                                                             as
                                                                                                                                                                                             u64)
                                                                                                                                                                                            <<
-                                                                                                                                                                                           12usize)
+                                                                                                                                                                                           14usize)
                                                                                                                                                                                           &
-                                                                                                                                                                                          (4096u64
+                                                                                                                                                                                          (16384u64
                                                                                                                                                                                                as
                                                                                                                                                                                                u64))
                                                                                                                                                                              }
                                                                                                                                                                                  |
-                                                                                                                                                                                 ((mIsRenderingOnlySelection
+                                                                                                                                                                                 ((mCanPaginatedScroll
                                                                                                                                                                                        as
                                                                                                                                                                                        u32
                                                                                                                                                                                        as
                                                                                                                                                                                        u64)
                                                                                                                                                                                       <<
-                                                                                                                                                                                      13usize)
+                                                                                                                                                                                      15usize)
                                                                                                                                                                                      &
-                                                                                                                                                                                     (8192u64
+                                                                                                                                                                                     (32768u64
                                                                                                                                                                                           as
                                                                                                                                                                                           u64))
                                                                                                                                                                         }
                                                                                                                                                                             |
-                                                                                                                                                                            ((mPaginated
+                                                                                                                                                                            ((mDoScaledTwips
                                                                                                                                                                                   as
                                                                                                                                                                                   u32
                                                                                                                                                                                   as
                                                                                                                                                                                   u64)
                                                                                                                                                                                  <<
-                                                                                                                                                                                 14usize)
+                                                                                                                                                                                 16usize)
                                                                                                                                                                                 &
-                                                                                                                                                                                (16384u64
+                                                                                                                                                                                (65536u64
                                                                                                                                                                                      as
                                                                                                                                                                                      u64))
                                                                                                                                                                    }
                                                                                                                                                                        |
-                                                                                                                                                                       ((mCanPaginatedScroll
+                                                                                                                                                                       ((mIsRootPaginatedDocument
                                                                                                                                                                              as
                                                                                                                                                                              u32
                                                                                                                                                                              as
                                                                                                                                                                              u64)
                                                                                                                                                                             <<
-                                                                                                                                                                            15usize)
+                                                                                                                                                                            17usize)
                                                                                                                                                                            &
-                                                                                                                                                                           (32768u64
+                                                                                                                                                                           (131072u64
                                                                                                                                                                                 as
                                                                                                                                                                                 u64))
                                                                                                                                                               }
                                                                                                                                                                   |
-                                                                                                                                                                  ((mDoScaledTwips
+                                                                                                                                                                  ((mPrefBidiDirection
                                                                                                                                                                         as
                                                                                                                                                                         u32
                                                                                                                                                                         as
                                                                                                                                                                         u64)
                                                                                                                                                                        <<
-                                                                                                                                                                       16usize)
+                                                                                                                                                                       18usize)
                                                                                                                                                                       &
-                                                                                                                                                                      (65536u64
+                                                                                                                                                                      (262144u64
                                                                                                                                                                            as
                                                                                                                                                                            u64))
                                                                                                                                                          }
                                                                                                                                                              |
-                                                                                                                                                             ((mIsRootPaginatedDocument
+                                                                                                                                                             ((mPrefScrollbarSide
                                                                                                                                                                    as
                                                                                                                                                                    u32
                                                                                                                                                                    as
                                                                                                                                                                    u64)
                                                                                                                                                                   <<
-                                                                                                                                                                  17usize)
+                                                                                                                                                                  19usize)
                                                                                                                                                                  &
-                                                                                                                                                                 (131072u64
+                                                                                                                                                                 (1572864u64
                                                                                                                                                                       as
                                                                                                                                                                       u64))
                                                                                                                                                     }
                                                                                                                                                         |
-                                                                                                                                                        ((mPrefBidiDirection
+                                                                                                                                                        ((mPendingSysColorChanged
                                                                                                                                                               as
                                                                                                                                                               u32
                                                                                                                                                               as
                                                                                                                                                               u64)
                                                                                                                                                              <<
-                                                                                                                                                             18usize)
+                                                                                                                                                             21usize)
                                                                                                                                                             &
-                                                                                                                                                            (262144u64
+                                                                                                                                                            (2097152u64
                                                                                                                                                                  as
                                                                                                                                                                  u64))
                                                                                                                                                }
                                                                                                                                                    |
-                                                                                                                                                   ((mPrefScrollbarSide
+                                                                                                                                                   ((mPendingThemeChanged
                                                                                                                                                          as
                                                                                                                                                          u32
                                                                                                                                                          as
                                                                                                                                                          u64)
                                                                                                                                                         <<
-                                                                                                                                                        19usize)
+                                                                                                                                                        22usize)
                                                                                                                                                        &
-                                                                                                                                                       (1572864u64
+                                                                                                                                                       (4194304u64
                                                                                                                                                             as
                                                                                                                                                             u64))
                                                                                                                                           }
                                                                                                                                               |
-                                                                                                                                              ((mPendingSysColorChanged
+                                                                                                                                              ((mPendingUIResolutionChanged
                                                                                                                                                     as
                                                                                                                                                     u32
                                                                                                                                                     as
                                                                                                                                                     u64)
                                                                                                                                                    <<
-                                                                                                                                                   21usize)
+                                                                                                                                                   23usize)
                                                                                                                                                   &
-                                                                                                                                                  (2097152u64
+                                                                                                                                                  (8388608u64
                                                                                                                                                        as
                                                                                                                                                        u64))
                                                                                                                                      }
                                                                                                                                          |
-                                                                                                                                         ((mPendingThemeChanged
+                                                                                                                                         ((mPendingMediaFeatureValuesChanged
                                                                                                                                                as
                                                                                                                                                u32
                                                                                                                                                as
                                                                                                                                                u64)
                                                                                                                                               <<
-                                                                                                                                              22usize)
+                                                                                                                                              24usize)
                                                                                                                                              &
-                                                                                                                                             (4194304u64
+                                                                                                                                             (16777216u64
                                                                                                                                                   as
                                                                                                                                                   u64))
                                                                                                                                 }
                                                                                                                                     |
-                                                                                                                                    ((mPendingUIResolutionChanged
+                                                                                                                                    ((mPrefChangePendingNeedsReflow
                                                                                                                                           as
                                                                                                                                           u32
                                                                                                                                           as
                                                                                                                                           u64)
                                                                                                                                          <<
-                                                                                                                                         23usize)
+                                                                                                                                         25usize)
                                                                                                                                         &
-                                                                                                                                        (8388608u64
+                                                                                                                                        (33554432u64
                                                                                                                                              as
                                                                                                                                              u64))
                                                                                                                            }
                                                                                                                                |
-                                                                                                                               ((mPendingMediaFeatureValuesChanged
+                                                                                                                               ((mIsEmulatingMedia
                                                                                                                                      as
                                                                                                                                      u32
                                                                                                                                      as
                                                                                                                                      u64)
                                                                                                                                     <<
-                                                                                                                                    24usize)
+                                                                                                                                    26usize)
                                                                                                                                    &
-                                                                                                                                   (16777216u64
+                                                                                                                                   (67108864u64
                                                                                                                                         as
                                                                                                                                         u64))
                                                                                                                       }
                                                                                                                           |
-                                                                                                                          ((mPrefChangePendingNeedsReflow
+                                                                                                                          ((mIsGlyph
                                                                                                                                 as
                                                                                                                                 u32
                                                                                                                                 as
                                                                                                                                 u64)
                                                                                                                                <<
-                                                                                                                               25usize)
+                                                                                                                               27usize)
                                                                                                                               &
-                                                                                                                              (33554432u64
+                                                                                                                              (134217728u64
                                                                                                                                    as
                                                                                                                                    u64))
                                                                                                                  }
                                                                                                                      |
-                                                                                                                     ((mIsEmulatingMedia
+                                                                                                                     ((mUsesRootEMUnits
                                                                                                                            as
                                                                                                                            u32
                                                                                                                            as
                                                                                                                            u64)
                                                                                                                           <<
-                                                                                                                          26usize)
+                                                                                                                          28usize)
                                                                                                                          &
-                                                                                                                         (67108864u64
+                                                                                                                         (268435456u64
                                                                                                                               as
                                                                                                                               u64))
                                                                                                             }
                                                                                                                 |
-                                                                                                                ((mIsGlyph
+                                                                                                                ((mUsesExChUnits
                                                                                                                       as
                                                                                                                       u32
                                                                                                                       as
                                                                                                                       u64)
                                                                                                                      <<
-                                                                                                                     27usize)
+                                                                                                                     29usize)
                                                                                                                     &
-                                                                                                                    (134217728u64
+                                                                                                                    (536870912u64
                                                                                                                          as
                                                                                                                          u64))
                                                                                                        }
                                                                                                            |
-                                                                                                           ((mUsesRootEMUnits
+                                                                                                           ((mPendingViewportChange
                                                                                                                  as
                                                                                                                  u32
                                                                                                                  as
                                                                                                                  u64)
                                                                                                                 <<
-                                                                                                                28usize)
+                                                                                                                30usize)
                                                                                                                &
-                                                                                                               (268435456u64
+                                                                                                               (1073741824u64
                                                                                                                     as
                                                                                                                     u64))
                                                                                                   }
                                                                                                       |
-                                                                                                      ((mUsesExChUnits
+                                                                                                      ((mCounterStylesDirty
                                                                                                             as
                                                                                                             u32
                                                                                                             as
                                                                                                             u64)
                                                                                                            <<
-                                                                                                           29usize)
+                                                                                                           31usize)
                                                                                                           &
-                                                                                                          (536870912u64
+                                                                                                          (2147483648u64
                                                                                                                as
                                                                                                                u64))
                                                                                              }
                                                                                                  |
-                                                                                                 ((mPendingViewportChange
+                                                                                                 ((mPostedFlushCounterStyles
                                                                                                        as
                                                                                                        u32
                                                                                                        as
                                                                                                        u64)
                                                                                                       <<
-                                                                                                      30usize)
+                                                                                                      32usize)
                                                                                                      &
-                                                                                                     (1073741824u64
+                                                                                                     (4294967296u64
                                                                                                           as
                                                                                                           u64))
                                                                                         }
                                                                                             |
-                                                                                            ((mCounterStylesDirty
+                                                                                            ((mFontFeatureValuesDirty
                                                                                                   as
                                                                                                   u32
                                                                                                   as
                                                                                                   u64)
                                                                                                  <<
-                                                                                                 31usize)
+                                                                                                 33usize)
                                                                                                 &
-                                                                                                (2147483648u64
+                                                                                                (8589934592u64
                                                                                                      as
                                                                                                      u64))
                                                                                    }
                                                                                        |
-                                                                                       ((mPostedFlushCounterStyles
+                                                                                       ((mPostedFlushFontFeatureValues
                                                                                              as
                                                                                              u32
                                                                                              as
                                                                                              u64)
                                                                                             <<
-                                                                                            32usize)
+                                                                                            34usize)
                                                                                            &
-                                                                                           (4294967296u64
+                                                                                           (17179869184u64
                                                                                                 as
                                                                                                 u64))
                                                                               }
@@ -23267,9 +23886,9 @@ pub mod root {
                                                                                         as
                                                                                         u64)
                                                                                        <<
-                                                                                       33usize)
+                                                                                       35usize)
                                                                                       &
-                                                                                      (8589934592u64
+                                                                                      (34359738368u64
                                                                                            as
                                                                                            u64))
                                                                          } |
@@ -23279,9 +23898,9 @@ pub mod root {
                                                                                    as
                                                                                    u64)
                                                                                   <<
-                                                                                  34usize)
+                                                                                  36usize)
                                                                                  &
-                                                                                 (17179869184u64
+                                                                                 (68719476736u64
                                                                                       as
                                                                                       u64))
                                                                     } |
@@ -23291,9 +23910,9 @@ pub mod root {
                                                                               as
                                                                               u64)
                                                                              <<
-                                                                             35usize)
+                                                                             37usize)
                                                                             &
-                                                                            (34359738368u64
+                                                                            (137438953472u64
                                                                                  as
                                                                                  u64))
                                                                } |
@@ -23303,56 +23922,56 @@ pub mod root {
                                                                          as
                                                                          u64)
                                                                         <<
-                                                                        36usize)
+                                                                        38usize)
                                                                        &
-                                                                       (68719476736u64
+                                                                       (274877906944u64
                                                                             as
                                                                             u64))
                                                           } |
                                                               ((mIsChromeOriginImage
                                                                     as u32 as
                                                                     u64) <<
-                                                                   37usize) &
-                                                                  (137438953472u64
+                                                                   39usize) &
+                                                                  (549755813888u64
                                                                        as
                                                                        u64))
                                                      } |
                                                          ((mPaintFlashing as
                                                                u32 as u64) <<
-                                                              38usize) &
-                                                             (274877906944u64
+                                                              40usize) &
+                                                             (1099511627776u64
                                                                   as u64))
                                                 } |
                                                     ((mPaintFlashingInitialized
                                                           as u32 as u64) <<
-                                                         39usize) &
-                                                        (549755813888u64 as
+                                                         41usize) &
+                                                        (2199023255552u64 as
                                                              u64))
                                            } |
                                                ((mHasWarnedAboutPositionedTableParts
                                                      as u32 as u64) <<
-                                                    40usize) &
-                                                   (1099511627776u64 as u64))
+                                                    42usize) &
+                                                   (4398046511104u64 as u64))
                                       } |
                                           ((mHasWarnedAboutTooLargeDashedOrDottedRadius
-                                                as u32 as u64) << 41usize) &
-                                              (2199023255552u64 as u64))
+                                                as u32 as u64) << 43usize) &
+                                              (8796093022208u64 as u64))
                                  } |
                                      ((mQuirkSheetAdded as u32 as u64) <<
-                                          42usize) &
-                                         (4398046511104u64 as u64))
+                                          44usize) &
+                                         (17592186044416u64 as u64))
                             } |
-                                ((mNeedsPrefUpdate as u32 as u64) << 43usize)
-                                    & (8796093022208u64 as u64))
+                                ((mNeedsPrefUpdate as u32 as u64) << 45usize)
+                                    & (35184372088832u64 as u64))
                        } |
-                           ((mHadNonBlankPaint as u32 as u64) << 44usize) &
-                               (17592186044416u64 as u64))
+                           ((mHadNonBlankPaint as u32 as u64) << 46usize) &
+                               (70368744177664u64 as u64))
                   } |
-                      ((mRestyleLoggingEnabled as u32 as u64) << 45usize) &
-                          (35184372088832u64 as u64))
+                      ((mRestyleLoggingEnabled as u32 as u64) << 47usize) &
+                          (140737488355328u64 as u64))
              } |
-                 ((mInitialized as u32 as u64) << 46usize) &
-                     (70368744177664u64 as u64))
+                 ((mInitialized as u32 as u64) << 48usize) &
+                     (281474976710656u64 as u64))
         }
     }
     pub type gfxSize = [u64; 2usize];
@@ -23859,7 +24478,7 @@ pub mod root {
     }
     #[repr(C)]
     #[derive(Debug, Copy, Clone)]
-    pub struct nsChildContentList {
+    pub struct nsAttrChildContentList {
         _unused: [u8; 0],
     }
     #[repr(C)]
@@ -23869,7 +24488,7 @@ pub mod root {
         pub _base_1: root::nsWrapperCache,
         pub mRefCnt: root::nsCycleCollectingAutoRefCnt,
         pub _mOwningThread: root::nsAutoOwningThread,
-        pub mContent: root::nsCOMPtr<root::mozilla::dom::Element>,
+        pub mContent: root::nsCOMPtr<root::nsDOMAttributeMap_Element>,
         /// Cache of Attrs.
         pub mAttributeCache: root::nsDOMAttributeMap_AttrCache,
     }
@@ -25209,13 +25828,12 @@ pub mod root {
         pub _base: root::nsIWeakReference,
         pub mRefCnt: root::nsAutoRefCnt,
         pub _mOwningThread: root::nsAutoOwningThread,
-        pub mNode: *mut root::nsINode,
     }
     pub type nsNodeWeakReference_HasThreadSafeRefCnt =
         root::mozilla::FalseType;
     #[test]
     fn bindgen_test_layout_nsNodeWeakReference() {
-        assert_eq!(::std::mem::size_of::<nsNodeWeakReference>() , 32usize ,
+        assert_eq!(::std::mem::size_of::<nsNodeWeakReference>() , 40usize ,
                    concat ! (
                    "Size of: " , stringify ! ( nsNodeWeakReference ) ));
         assert_eq! (::std::mem::align_of::<nsNodeWeakReference>() , 8usize ,
@@ -25223,20 +25841,15 @@ pub mod root {
                     "Alignment of " , stringify ! ( nsNodeWeakReference ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsNodeWeakReference ) ) . mRefCnt as
-                    * const _ as usize } , 8usize , concat ! (
+                    * const _ as usize } , 24usize , concat ! (
                     "Alignment of field: " , stringify ! ( nsNodeWeakReference
                     ) , "::" , stringify ! ( mRefCnt ) ));
         assert_eq! (unsafe {
                     & ( * ( 0 as * const nsNodeWeakReference ) ) .
-                    _mOwningThread as * const _ as usize } , 16usize , concat
+                    _mOwningThread as * const _ as usize } , 32usize , concat
                     ! (
                     "Alignment of field: " , stringify ! ( nsNodeWeakReference
                     ) , "::" , stringify ! ( _mOwningThread ) ));
-        assert_eq! (unsafe {
-                    & ( * ( 0 as * const nsNodeWeakReference ) ) . mNode as *
-                    const _ as usize } , 24usize , concat ! (
-                    "Alignment of field: " , stringify ! ( nsNodeWeakReference
-                    ) , "::" , stringify ! ( mNode ) ));
     }
     #[repr(C)]
     #[derive(Debug, Copy, Clone)]
@@ -25248,57 +25861,57 @@ pub mod root {
     pub struct nsRange {
         _unused: [u8; 0],
     }
-    pub const NODE_HAS_LISTENERMANAGER: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_HAS_LISTENERMANAGER;
-    pub const NODE_HAS_PROPERTIES: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_HAS_PROPERTIES;
-    pub const NODE_IS_ANONYMOUS_ROOT: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_IS_ANONYMOUS_ROOT;
-    pub const NODE_IS_IN_NATIVE_ANONYMOUS_SUBTREE: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_IS_IN_NATIVE_ANONYMOUS_SUBTREE;
-    pub const NODE_IS_NATIVE_ANONYMOUS_ROOT: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_IS_NATIVE_ANONYMOUS_ROOT;
-    pub const NODE_FORCE_XBL_BINDINGS: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_FORCE_XBL_BINDINGS;
-    pub const NODE_MAY_BE_IN_BINDING_MNGR: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_MAY_BE_IN_BINDING_MNGR;
-    pub const NODE_IS_EDITABLE: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_IS_EDITABLE;
-    pub const NODE_IS_NATIVE_ANONYMOUS: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_IS_NATIVE_ANONYMOUS;
-    pub const NODE_IS_IN_SHADOW_TREE: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_IS_IN_SHADOW_TREE;
-    pub const NODE_HAS_EMPTY_SELECTOR: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_HAS_EMPTY_SELECTOR;
-    pub const NODE_HAS_SLOW_SELECTOR: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_HAS_SLOW_SELECTOR;
-    pub const NODE_HAS_EDGE_CHILD_SELECTOR: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_HAS_EDGE_CHILD_SELECTOR;
-    pub const NODE_HAS_SLOW_SELECTOR_LATER_SIBLINGS: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_HAS_SLOW_SELECTOR_LATER_SIBLINGS;
-    pub const NODE_ALL_SELECTOR_FLAGS: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_ALL_SELECTOR_FLAGS;
-    pub const NODE_NEEDS_FRAME: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_NEEDS_FRAME;
-    pub const NODE_DESCENDANTS_NEED_FRAMES: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_DESCENDANTS_NEED_FRAMES;
-    pub const NODE_HAS_ACCESSKEY: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_HAS_ACCESSKEY;
-    pub const NODE_HAS_DIRECTION_RTL: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_HAS_DIRECTION_RTL;
-    pub const NODE_HAS_DIRECTION_LTR: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_HAS_DIRECTION_LTR;
-    pub const NODE_ALL_DIRECTION_FLAGS: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_ALL_DIRECTION_FLAGS;
-    pub const NODE_CHROME_ONLY_ACCESS: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_CHROME_ONLY_ACCESS;
-    pub const NODE_IS_ROOT_OF_CHROME_ONLY_ACCESS: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_IS_ROOT_OF_CHROME_ONLY_ACCESS;
-    pub const NODE_TYPE_SPECIFIC_BITS_OFFSET: root::_bindgen_ty_83 =
-        _bindgen_ty_83::NODE_TYPE_SPECIFIC_BITS_OFFSET;
+    pub const NODE_HAS_LISTENERMANAGER: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_HAS_LISTENERMANAGER;
+    pub const NODE_HAS_PROPERTIES: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_HAS_PROPERTIES;
+    pub const NODE_IS_ANONYMOUS_ROOT: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_IS_ANONYMOUS_ROOT;
+    pub const NODE_IS_IN_NATIVE_ANONYMOUS_SUBTREE: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_IS_IN_NATIVE_ANONYMOUS_SUBTREE;
+    pub const NODE_IS_NATIVE_ANONYMOUS_ROOT: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_IS_NATIVE_ANONYMOUS_ROOT;
+    pub const NODE_FORCE_XBL_BINDINGS: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_FORCE_XBL_BINDINGS;
+    pub const NODE_MAY_BE_IN_BINDING_MNGR: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_MAY_BE_IN_BINDING_MNGR;
+    pub const NODE_IS_EDITABLE: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_IS_EDITABLE;
+    pub const NODE_IS_NATIVE_ANONYMOUS: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_IS_NATIVE_ANONYMOUS;
+    pub const NODE_IS_IN_SHADOW_TREE: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_IS_IN_SHADOW_TREE;
+    pub const NODE_HAS_EMPTY_SELECTOR: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_HAS_EMPTY_SELECTOR;
+    pub const NODE_HAS_SLOW_SELECTOR: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_HAS_SLOW_SELECTOR;
+    pub const NODE_HAS_EDGE_CHILD_SELECTOR: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_HAS_EDGE_CHILD_SELECTOR;
+    pub const NODE_HAS_SLOW_SELECTOR_LATER_SIBLINGS: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_HAS_SLOW_SELECTOR_LATER_SIBLINGS;
+    pub const NODE_ALL_SELECTOR_FLAGS: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_ALL_SELECTOR_FLAGS;
+    pub const NODE_NEEDS_FRAME: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_NEEDS_FRAME;
+    pub const NODE_DESCENDANTS_NEED_FRAMES: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_DESCENDANTS_NEED_FRAMES;
+    pub const NODE_HAS_ACCESSKEY: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_HAS_ACCESSKEY;
+    pub const NODE_HAS_DIRECTION_RTL: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_HAS_DIRECTION_RTL;
+    pub const NODE_HAS_DIRECTION_LTR: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_HAS_DIRECTION_LTR;
+    pub const NODE_ALL_DIRECTION_FLAGS: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_ALL_DIRECTION_FLAGS;
+    pub const NODE_CHROME_ONLY_ACCESS: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_CHROME_ONLY_ACCESS;
+    pub const NODE_IS_ROOT_OF_CHROME_ONLY_ACCESS: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_IS_ROOT_OF_CHROME_ONLY_ACCESS;
+    pub const NODE_TYPE_SPECIFIC_BITS_OFFSET: root::_bindgen_ty_77 =
+        _bindgen_ty_77::NODE_TYPE_SPECIFIC_BITS_OFFSET;
     #[repr(u32)]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub enum _bindgen_ty_83 {
+    pub enum _bindgen_ty_77 {
         NODE_HAS_LISTENERMANAGER = 4,
         NODE_HAS_PROPERTIES = 8,
         NODE_IS_ANONYMOUS_ROOT = 16,
@@ -25518,27 +26131,6 @@ pub mod root {
                     ) , "::" , stringify ! ( mIsDestroyingFrames ) ));
     }
     impl Clone for nsFrameManagerBase {
-        fn clone(&self) -> Self { *self }
-    }
-    #[repr(C)]
-    #[derive(Debug, Copy)]
-    pub struct nsIWeakReference {
-        pub _base: root::nsISupports,
-    }
-    #[repr(C)]
-    #[derive(Debug, Copy, Clone)]
-    pub struct nsIWeakReference_COMTypeInfo {
-        pub _address: u8,
-    }
-    #[test]
-    fn bindgen_test_layout_nsIWeakReference() {
-        assert_eq!(::std::mem::size_of::<nsIWeakReference>() , 8usize , concat
-                   ! ( "Size of: " , stringify ! ( nsIWeakReference ) ));
-        assert_eq! (::std::mem::align_of::<nsIWeakReference>() , 8usize ,
-                    concat ! (
-                    "Alignment of " , stringify ! ( nsIWeakReference ) ));
-    }
-    impl Clone for nsIWeakReference {
         fn clone(&self) -> Self { *self }
     }
     pub type nsWeakPtr = root::nsCOMPtr<root::nsIWeakReference>;
@@ -26058,6 +26650,66 @@ pub mod root {
     impl Clone for nsIRunnable {
         fn clone(&self) -> Self { *self }
     }
+    #[repr(C)]
+    #[derive(Debug, Copy)]
+    pub struct nsIRunnablePriority {
+        pub _base: root::nsISupports,
+    }
+    #[repr(C)]
+    #[derive(Debug, Copy, Clone)]
+    pub struct nsIRunnablePriority_COMTypeInfo {
+        pub _address: u8,
+    }
+    pub const nsIRunnablePriority_PRIORITY_NORMAL:
+              root::nsIRunnablePriority__bindgen_ty_1 =
+        nsIRunnablePriority__bindgen_ty_1::PRIORITY_NORMAL;
+    pub const nsIRunnablePriority_PRIORITY_INPUT:
+              root::nsIRunnablePriority__bindgen_ty_1 =
+        nsIRunnablePriority__bindgen_ty_1::PRIORITY_INPUT;
+    pub const nsIRunnablePriority_PRIORITY_HIGH:
+              root::nsIRunnablePriority__bindgen_ty_1 =
+        nsIRunnablePriority__bindgen_ty_1::PRIORITY_HIGH;
+    #[repr(u32)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+    pub enum nsIRunnablePriority__bindgen_ty_1 {
+        PRIORITY_NORMAL = 0,
+        PRIORITY_INPUT = 1,
+        PRIORITY_HIGH = 2,
+    }
+    #[test]
+    fn bindgen_test_layout_nsIRunnablePriority() {
+        assert_eq!(::std::mem::size_of::<nsIRunnablePriority>() , 8usize ,
+                   concat ! (
+                   "Size of: " , stringify ! ( nsIRunnablePriority ) ));
+        assert_eq! (::std::mem::align_of::<nsIRunnablePriority>() , 8usize ,
+                    concat ! (
+                    "Alignment of " , stringify ! ( nsIRunnablePriority ) ));
+    }
+    impl Clone for nsIRunnablePriority {
+        fn clone(&self) -> Self { *self }
+    }
+    #[repr(C)]
+    #[derive(Debug, Copy)]
+    pub struct nsISerialEventTarget {
+        pub _base: root::nsIEventTarget,
+    }
+    #[repr(C)]
+    #[derive(Debug, Copy, Clone)]
+    pub struct nsISerialEventTarget_COMTypeInfo {
+        pub _address: u8,
+    }
+    #[test]
+    fn bindgen_test_layout_nsISerialEventTarget() {
+        assert_eq!(::std::mem::size_of::<nsISerialEventTarget>() , 16usize ,
+                   concat ! (
+                   "Size of: " , stringify ! ( nsISerialEventTarget ) ));
+        assert_eq! (::std::mem::align_of::<nsISerialEventTarget>() , 8usize ,
+                    concat ! (
+                    "Alignment of " , stringify ! ( nsISerialEventTarget ) ));
+    }
+    impl Clone for nsISerialEventTarget {
+        fn clone(&self) -> Self { *self }
+    }
     pub type nsRunnableMethod_BaseType = u8;
     #[repr(C)]
     #[derive(Debug, Copy, Clone)]
@@ -26071,7 +26723,7 @@ pub mod root {
     #[repr(C)]
     #[derive(Debug)]
     pub struct nsPIDOMWindowInner {
-        pub _base: [u64; 31usize],
+        pub _base: [u64; 32usize],
     }
     #[repr(C)]
     #[derive(Debug, Copy, Clone)]
@@ -26080,7 +26732,7 @@ pub mod root {
     }
     #[test]
     fn bindgen_test_layout_nsPIDOMWindowInner() {
-        assert_eq!(::std::mem::size_of::<nsPIDOMWindowInner>() , 248usize ,
+        assert_eq!(::std::mem::size_of::<nsPIDOMWindowInner>() , 256usize ,
                    concat ! ( "Size of: " , stringify ! ( nsPIDOMWindowInner )
                    ));
         assert_eq! (::std::mem::align_of::<nsPIDOMWindowInner>() , 8usize ,
@@ -26580,6 +27232,11 @@ pub mod root {
     }
     #[repr(C)]
     #[derive(Debug, Copy, Clone)]
+    pub struct nsCSSFontFeatureValuesRule {
+        _unused: [u8; 0],
+    }
+    #[repr(C)]
+    #[derive(Debug, Copy, Clone)]
     pub struct nsTransitionManager {
         _unused: [u8; 0],
     }
@@ -26801,573 +27458,560 @@ pub mod root {
         eCSSKeyword_digits = 194,
         eCSSKeyword_disabled = 195,
         eCSSKeyword_disc = 196,
-        eCSSKeyword_disclosure_closed = 197,
-        eCSSKeyword_disclosure_open = 198,
-        eCSSKeyword_discretionary_ligatures = 199,
-        eCSSKeyword_distribute = 200,
-        eCSSKeyword_dot = 201,
-        eCSSKeyword_dotted = 202,
-        eCSSKeyword_double = 203,
-        eCSSKeyword_double_circle = 204,
-        eCSSKeyword_double_struck = 205,
-        eCSSKeyword_drag = 206,
-        eCSSKeyword_drop_shadow = 207,
-        eCSSKeyword_e_resize = 208,
-        eCSSKeyword_ease = 209,
-        eCSSKeyword_ease_in = 210,
-        eCSSKeyword_ease_in_out = 211,
-        eCSSKeyword_ease_out = 212,
-        eCSSKeyword_economy = 213,
-        eCSSKeyword_element = 214,
-        eCSSKeyword_elements = 215,
-        eCSSKeyword_ellipse = 216,
-        eCSSKeyword_ellipsis = 217,
-        eCSSKeyword_em = 218,
-        eCSSKeyword_embed = 219,
-        eCSSKeyword_enabled = 220,
-        eCSSKeyword_end = 221,
-        eCSSKeyword_ethiopic_numeric = 222,
-        eCSSKeyword_ex = 223,
-        eCSSKeyword_exact = 224,
-        eCSSKeyword_exclude = 225,
-        eCSSKeyword_exclusion = 226,
-        eCSSKeyword_expanded = 227,
-        eCSSKeyword_extends = 228,
-        eCSSKeyword_extra_condensed = 229,
-        eCSSKeyword_extra_expanded = 230,
-        eCSSKeyword_ew_resize = 231,
-        eCSSKeyword_fallback = 232,
-        eCSSKeyword_fantasy = 233,
-        eCSSKeyword_farthest_side = 234,
-        eCSSKeyword_farthest_corner = 235,
-        eCSSKeyword_fill = 236,
-        eCSSKeyword_filled = 237,
-        eCSSKeyword_fill_box = 238,
-        eCSSKeyword_first = 239,
-        eCSSKeyword_fit_content = 240,
-        eCSSKeyword_fixed = 241,
-        eCSSKeyword_flat = 242,
-        eCSSKeyword_flex = 243,
-        eCSSKeyword_flex_end = 244,
-        eCSSKeyword_flex_start = 245,
-        eCSSKeyword_flip = 246,
-        eCSSKeyword_flow_root = 247,
-        eCSSKeyword_forwards = 248,
-        eCSSKeyword_fraktur = 249,
-        eCSSKeyword_frames = 250,
-        eCSSKeyword_from_image = 251,
-        eCSSKeyword_full_width = 252,
-        eCSSKeyword_fullscreen = 253,
-        eCSSKeyword_grab = 254,
-        eCSSKeyword_grabbing = 255,
-        eCSSKeyword_grad = 256,
-        eCSSKeyword_grayscale = 257,
-        eCSSKeyword_graytext = 258,
-        eCSSKeyword_grid = 259,
-        eCSSKeyword_groove = 260,
-        eCSSKeyword_hard_light = 261,
-        eCSSKeyword_hebrew = 262,
-        eCSSKeyword_help = 263,
-        eCSSKeyword_hidden = 264,
-        eCSSKeyword_hide = 265,
-        eCSSKeyword_highlight = 266,
-        eCSSKeyword_highlighttext = 267,
-        eCSSKeyword_historical_forms = 268,
-        eCSSKeyword_historical_ligatures = 269,
-        eCSSKeyword_horizontal = 270,
-        eCSSKeyword_horizontal_tb = 271,
-        eCSSKeyword_hue = 272,
-        eCSSKeyword_hue_rotate = 273,
-        eCSSKeyword_hz = 274,
-        eCSSKeyword_icon = 275,
-        eCSSKeyword_ignore = 276,
-        eCSSKeyword_ignore_horizontal = 277,
-        eCSSKeyword_ignore_vertical = 278,
-        eCSSKeyword_in = 279,
-        eCSSKeyword_interlace = 280,
-        eCSSKeyword_inactive = 281,
-        eCSSKeyword_inactiveborder = 282,
-        eCSSKeyword_inactivecaption = 283,
-        eCSSKeyword_inactivecaptiontext = 284,
-        eCSSKeyword_infinite = 285,
-        eCSSKeyword_infobackground = 286,
-        eCSSKeyword_infotext = 287,
-        eCSSKeyword_inherit = 288,
-        eCSSKeyword_initial = 289,
-        eCSSKeyword_inline = 290,
-        eCSSKeyword_inline_axis = 291,
-        eCSSKeyword_inline_block = 292,
-        eCSSKeyword_inline_end = 293,
-        eCSSKeyword_inline_flex = 294,
-        eCSSKeyword_inline_grid = 295,
-        eCSSKeyword_inline_start = 296,
-        eCSSKeyword_inline_table = 297,
-        eCSSKeyword_inset = 298,
-        eCSSKeyword_inside = 299,
-        eCSSKeyword_inter_character = 300,
-        eCSSKeyword_inter_word = 301,
-        eCSSKeyword_interpolatematrix = 302,
-        eCSSKeyword_accumulatematrix = 303,
-        eCSSKeyword_intersect = 304,
-        eCSSKeyword_isolate = 305,
-        eCSSKeyword_isolate_override = 306,
-        eCSSKeyword_invert = 307,
-        eCSSKeyword_italic = 308,
-        eCSSKeyword_japanese_formal = 309,
-        eCSSKeyword_japanese_informal = 310,
-        eCSSKeyword_jis78 = 311,
-        eCSSKeyword_jis83 = 312,
-        eCSSKeyword_jis90 = 313,
-        eCSSKeyword_jis04 = 314,
-        eCSSKeyword_justify = 315,
-        eCSSKeyword_keep_all = 316,
-        eCSSKeyword_khz = 317,
-        eCSSKeyword_korean_hangul_formal = 318,
-        eCSSKeyword_korean_hanja_formal = 319,
-        eCSSKeyword_korean_hanja_informal = 320,
-        eCSSKeyword_landscape = 321,
-        eCSSKeyword_large = 322,
-        eCSSKeyword_larger = 323,
-        eCSSKeyword_last = 324,
-        eCSSKeyword_last_baseline = 325,
-        eCSSKeyword_layout = 326,
-        eCSSKeyword_left = 327,
-        eCSSKeyword_legacy = 328,
-        eCSSKeyword_lighten = 329,
-        eCSSKeyword_lighter = 330,
-        eCSSKeyword_line_through = 331,
-        eCSSKeyword_linear = 332,
-        eCSSKeyword_lining_nums = 333,
-        eCSSKeyword_list_item = 334,
-        eCSSKeyword_local = 335,
-        eCSSKeyword_logical = 336,
-        eCSSKeyword_looped = 337,
-        eCSSKeyword_lowercase = 338,
-        eCSSKeyword_lr = 339,
-        eCSSKeyword_lr_tb = 340,
-        eCSSKeyword_ltr = 341,
-        eCSSKeyword_luminance = 342,
-        eCSSKeyword_luminosity = 343,
-        eCSSKeyword_mandatory = 344,
-        eCSSKeyword_manipulation = 345,
-        eCSSKeyword_manual = 346,
-        eCSSKeyword_margin_box = 347,
-        eCSSKeyword_markers = 348,
-        eCSSKeyword_match_parent = 349,
-        eCSSKeyword_match_source = 350,
-        eCSSKeyword_matrix = 351,
-        eCSSKeyword_matrix3d = 352,
-        eCSSKeyword_max_content = 353,
-        eCSSKeyword_medium = 354,
-        eCSSKeyword_menu = 355,
-        eCSSKeyword_menutext = 356,
-        eCSSKeyword_message_box = 357,
-        eCSSKeyword_middle = 358,
-        eCSSKeyword_min_content = 359,
-        eCSSKeyword_minmax = 360,
-        eCSSKeyword_mix = 361,
-        eCSSKeyword_mixed = 362,
-        eCSSKeyword_mm = 363,
-        eCSSKeyword_monospace = 364,
-        eCSSKeyword_move = 365,
-        eCSSKeyword_ms = 366,
-        eCSSKeyword_multiply = 367,
-        eCSSKeyword_n_resize = 368,
-        eCSSKeyword_narrower = 369,
-        eCSSKeyword_ne_resize = 370,
-        eCSSKeyword_nesw_resize = 371,
-        eCSSKeyword_no_clip = 372,
-        eCSSKeyword_no_close_quote = 373,
-        eCSSKeyword_no_common_ligatures = 374,
-        eCSSKeyword_no_contextual = 375,
-        eCSSKeyword_no_discretionary_ligatures = 376,
-        eCSSKeyword_no_drag = 377,
-        eCSSKeyword_no_drop = 378,
-        eCSSKeyword_no_historical_ligatures = 379,
-        eCSSKeyword_no_open_quote = 380,
-        eCSSKeyword_no_repeat = 381,
-        eCSSKeyword_none = 382,
-        eCSSKeyword_normal = 383,
-        eCSSKeyword_not_allowed = 384,
-        eCSSKeyword_nowrap = 385,
-        eCSSKeyword_numeric = 386,
-        eCSSKeyword_ns_resize = 387,
-        eCSSKeyword_nw_resize = 388,
-        eCSSKeyword_nwse_resize = 389,
-        eCSSKeyword_oblique = 390,
-        eCSSKeyword_oldstyle_nums = 391,
-        eCSSKeyword_opacity = 392,
-        eCSSKeyword_open = 393,
-        eCSSKeyword_open_quote = 394,
-        eCSSKeyword_optional = 395,
-        eCSSKeyword_ordinal = 396,
-        eCSSKeyword_ornaments = 397,
-        eCSSKeyword_outset = 398,
-        eCSSKeyword_outside = 399,
-        eCSSKeyword_over = 400,
-        eCSSKeyword_overlay = 401,
-        eCSSKeyword_overline = 402,
-        eCSSKeyword_paint = 403,
-        eCSSKeyword_padding_box = 404,
-        eCSSKeyword_painted = 405,
-        eCSSKeyword_pan_x = 406,
-        eCSSKeyword_pan_y = 407,
-        eCSSKeyword_paused = 408,
-        eCSSKeyword_pc = 409,
-        eCSSKeyword_perspective = 410,
-        eCSSKeyword_petite_caps = 411,
-        eCSSKeyword_physical = 412,
-        eCSSKeyword_plaintext = 413,
-        eCSSKeyword_pointer = 414,
-        eCSSKeyword_polygon = 415,
-        eCSSKeyword_portrait = 416,
-        eCSSKeyword_pre = 417,
-        eCSSKeyword_pre_wrap = 418,
-        eCSSKeyword_pre_line = 419,
-        eCSSKeyword_preserve_3d = 420,
-        eCSSKeyword_progress = 421,
-        eCSSKeyword_progressive = 422,
-        eCSSKeyword_proportional_nums = 423,
-        eCSSKeyword_proportional_width = 424,
-        eCSSKeyword_proximity = 425,
-        eCSSKeyword_pt = 426,
-        eCSSKeyword_px = 427,
-        eCSSKeyword_rad = 428,
-        eCSSKeyword_read_only = 429,
-        eCSSKeyword_read_write = 430,
-        eCSSKeyword_relative = 431,
-        eCSSKeyword_repeat = 432,
-        eCSSKeyword_repeat_x = 433,
-        eCSSKeyword_repeat_y = 434,
-        eCSSKeyword_reverse = 435,
-        eCSSKeyword_ridge = 436,
-        eCSSKeyword_right = 437,
-        eCSSKeyword_rl = 438,
-        eCSSKeyword_rl_tb = 439,
-        eCSSKeyword_rotate = 440,
-        eCSSKeyword_rotate3d = 441,
-        eCSSKeyword_rotatex = 442,
-        eCSSKeyword_rotatey = 443,
-        eCSSKeyword_rotatez = 444,
-        eCSSKeyword_round = 445,
-        eCSSKeyword_row = 446,
-        eCSSKeyword_row_resize = 447,
-        eCSSKeyword_row_reverse = 448,
-        eCSSKeyword_rtl = 449,
-        eCSSKeyword_ruby = 450,
-        eCSSKeyword_ruby_base = 451,
-        eCSSKeyword_ruby_base_container = 452,
-        eCSSKeyword_ruby_text = 453,
-        eCSSKeyword_ruby_text_container = 454,
-        eCSSKeyword_running = 455,
-        eCSSKeyword_s = 456,
-        eCSSKeyword_s_resize = 457,
-        eCSSKeyword_safe = 458,
-        eCSSKeyword_saturate = 459,
-        eCSSKeyword_saturation = 460,
-        eCSSKeyword_scale = 461,
-        eCSSKeyword_scale_down = 462,
-        eCSSKeyword_scale3d = 463,
-        eCSSKeyword_scalex = 464,
-        eCSSKeyword_scaley = 465,
-        eCSSKeyword_scalez = 466,
-        eCSSKeyword_screen = 467,
-        eCSSKeyword_script = 468,
-        eCSSKeyword_scroll = 469,
-        eCSSKeyword_scrollbar = 470,
-        eCSSKeyword_scrollbar_small = 471,
-        eCSSKeyword_scrollbar_horizontal = 472,
-        eCSSKeyword_scrollbar_vertical = 473,
-        eCSSKeyword_se_resize = 474,
-        eCSSKeyword_select_after = 475,
-        eCSSKeyword_select_all = 476,
-        eCSSKeyword_select_before = 477,
-        eCSSKeyword_select_menu = 478,
-        eCSSKeyword_select_same = 479,
-        eCSSKeyword_self_end = 480,
-        eCSSKeyword_self_start = 481,
-        eCSSKeyword_semi_condensed = 482,
-        eCSSKeyword_semi_expanded = 483,
-        eCSSKeyword_separate = 484,
-        eCSSKeyword_sepia = 485,
-        eCSSKeyword_serif = 486,
-        eCSSKeyword_sesame = 487,
-        eCSSKeyword_show = 488,
-        eCSSKeyword_sideways = 489,
-        eCSSKeyword_sideways_lr = 490,
-        eCSSKeyword_sideways_right = 491,
-        eCSSKeyword_sideways_rl = 492,
-        eCSSKeyword_simp_chinese_formal = 493,
-        eCSSKeyword_simp_chinese_informal = 494,
-        eCSSKeyword_simplified = 495,
-        eCSSKeyword_skew = 496,
-        eCSSKeyword_skewx = 497,
-        eCSSKeyword_skewy = 498,
-        eCSSKeyword_slashed_zero = 499,
-        eCSSKeyword_slice = 500,
-        eCSSKeyword_small = 501,
-        eCSSKeyword_small_caps = 502,
-        eCSSKeyword_small_caption = 503,
-        eCSSKeyword_smaller = 504,
-        eCSSKeyword_smooth = 505,
-        eCSSKeyword_soft = 506,
-        eCSSKeyword_soft_light = 507,
-        eCSSKeyword_solid = 508,
-        eCSSKeyword_space_around = 509,
-        eCSSKeyword_space_between = 510,
-        eCSSKeyword_space_evenly = 511,
-        eCSSKeyword_span = 512,
-        eCSSKeyword_spell_out = 513,
-        eCSSKeyword_square = 514,
-        eCSSKeyword_stacked_fractions = 515,
-        eCSSKeyword_start = 516,
-        eCSSKeyword_static = 517,
-        eCSSKeyword_standalone = 518,
-        eCSSKeyword_status_bar = 519,
-        eCSSKeyword_step_end = 520,
-        eCSSKeyword_step_start = 521,
-        eCSSKeyword_sticky = 522,
-        eCSSKeyword_stretch = 523,
-        eCSSKeyword_stretch_to_fit = 524,
-        eCSSKeyword_stretched = 525,
-        eCSSKeyword_strict = 526,
-        eCSSKeyword_stroke = 527,
-        eCSSKeyword_stroke_box = 528,
-        eCSSKeyword_style = 529,
-        eCSSKeyword_styleset = 530,
-        eCSSKeyword_stylistic = 531,
-        eCSSKeyword_sub = 532,
-        eCSSKeyword_subgrid = 533,
-        eCSSKeyword_subtract = 534,
-        eCSSKeyword_super = 535,
-        eCSSKeyword_sw_resize = 536,
-        eCSSKeyword_swash = 537,
-        eCSSKeyword_swap = 538,
-        eCSSKeyword_table = 539,
-        eCSSKeyword_table_caption = 540,
-        eCSSKeyword_table_cell = 541,
-        eCSSKeyword_table_column = 542,
-        eCSSKeyword_table_column_group = 543,
-        eCSSKeyword_table_footer_group = 544,
-        eCSSKeyword_table_header_group = 545,
-        eCSSKeyword_table_row = 546,
-        eCSSKeyword_table_row_group = 547,
-        eCSSKeyword_tabular_nums = 548,
-        eCSSKeyword_tailed = 549,
-        eCSSKeyword_tb = 550,
-        eCSSKeyword_tb_rl = 551,
-        eCSSKeyword_text = 552,
-        eCSSKeyword_text_bottom = 553,
-        eCSSKeyword_text_top = 554,
-        eCSSKeyword_thick = 555,
-        eCSSKeyword_thin = 556,
-        eCSSKeyword_threeddarkshadow = 557,
-        eCSSKeyword_threedface = 558,
-        eCSSKeyword_threedhighlight = 559,
-        eCSSKeyword_threedlightshadow = 560,
-        eCSSKeyword_threedshadow = 561,
-        eCSSKeyword_titling_caps = 562,
-        eCSSKeyword_toggle = 563,
-        eCSSKeyword_top = 564,
-        eCSSKeyword_top_outside = 565,
-        eCSSKeyword_trad_chinese_formal = 566,
-        eCSSKeyword_trad_chinese_informal = 567,
-        eCSSKeyword_traditional = 568,
-        eCSSKeyword_translate = 569,
-        eCSSKeyword_translate3d = 570,
-        eCSSKeyword_translatex = 571,
-        eCSSKeyword_translatey = 572,
-        eCSSKeyword_translatez = 573,
-        eCSSKeyword_transparent = 574,
-        eCSSKeyword_triangle = 575,
-        eCSSKeyword_tri_state = 576,
-        eCSSKeyword_ultra_condensed = 577,
-        eCSSKeyword_ultra_expanded = 578,
-        eCSSKeyword_under = 579,
-        eCSSKeyword_underline = 580,
-        eCSSKeyword_unicase = 581,
-        eCSSKeyword_unsafe = 582,
-        eCSSKeyword_unset = 583,
-        eCSSKeyword_uppercase = 584,
-        eCSSKeyword_upright = 585,
-        eCSSKeyword_vertical = 586,
-        eCSSKeyword_vertical_lr = 587,
-        eCSSKeyword_vertical_rl = 588,
-        eCSSKeyword_vertical_text = 589,
-        eCSSKeyword_view_box = 590,
-        eCSSKeyword_visible = 591,
-        eCSSKeyword_visiblefill = 592,
-        eCSSKeyword_visiblepainted = 593,
-        eCSSKeyword_visiblestroke = 594,
-        eCSSKeyword_w_resize = 595,
-        eCSSKeyword_wait = 596,
-        eCSSKeyword_wavy = 597,
-        eCSSKeyword_weight = 598,
-        eCSSKeyword_wider = 599,
-        eCSSKeyword_window = 600,
-        eCSSKeyword_windowframe = 601,
-        eCSSKeyword_windowtext = 602,
-        eCSSKeyword_words = 603,
-        eCSSKeyword_wrap = 604,
-        eCSSKeyword_wrap_reverse = 605,
-        eCSSKeyword_write_only = 606,
-        eCSSKeyword_x_large = 607,
-        eCSSKeyword_x_small = 608,
-        eCSSKeyword_xx_large = 609,
-        eCSSKeyword_xx_small = 610,
-        eCSSKeyword_zoom_in = 611,
-        eCSSKeyword_zoom_out = 612,
-        eCSSKeyword_radio = 613,
-        eCSSKeyword_checkbox = 614,
-        eCSSKeyword_button_bevel = 615,
-        eCSSKeyword_toolbox = 616,
-        eCSSKeyword_toolbar = 617,
-        eCSSKeyword_toolbarbutton = 618,
-        eCSSKeyword_toolbargripper = 619,
-        eCSSKeyword_dualbutton = 620,
-        eCSSKeyword_toolbarbutton_dropdown = 621,
-        eCSSKeyword_button_arrow_up = 622,
-        eCSSKeyword_button_arrow_down = 623,
-        eCSSKeyword_button_arrow_next = 624,
-        eCSSKeyword_button_arrow_previous = 625,
-        eCSSKeyword_separator = 626,
-        eCSSKeyword_splitter = 627,
-        eCSSKeyword_statusbar = 628,
-        eCSSKeyword_statusbarpanel = 629,
-        eCSSKeyword_resizerpanel = 630,
-        eCSSKeyword_resizer = 631,
-        eCSSKeyword_listbox = 632,
-        eCSSKeyword_listitem = 633,
-        eCSSKeyword_numbers = 634,
-        eCSSKeyword_number_input = 635,
-        eCSSKeyword_treeview = 636,
-        eCSSKeyword_treeitem = 637,
-        eCSSKeyword_treetwisty = 638,
-        eCSSKeyword_treetwistyopen = 639,
-        eCSSKeyword_treeline = 640,
-        eCSSKeyword_treeheader = 641,
-        eCSSKeyword_treeheadercell = 642,
-        eCSSKeyword_treeheadersortarrow = 643,
-        eCSSKeyword_progressbar = 644,
-        eCSSKeyword_progressbar_vertical = 645,
-        eCSSKeyword_progresschunk = 646,
-        eCSSKeyword_progresschunk_vertical = 647,
-        eCSSKeyword_tab = 648,
-        eCSSKeyword_tabpanels = 649,
-        eCSSKeyword_tabpanel = 650,
-        eCSSKeyword_tab_scroll_arrow_back = 651,
-        eCSSKeyword_tab_scroll_arrow_forward = 652,
-        eCSSKeyword_tooltip = 653,
-        eCSSKeyword_spinner = 654,
-        eCSSKeyword_spinner_upbutton = 655,
-        eCSSKeyword_spinner_downbutton = 656,
-        eCSSKeyword_spinner_textfield = 657,
-        eCSSKeyword_scrollbarbutton_up = 658,
-        eCSSKeyword_scrollbarbutton_down = 659,
-        eCSSKeyword_scrollbarbutton_left = 660,
-        eCSSKeyword_scrollbarbutton_right = 661,
-        eCSSKeyword_scrollbartrack_horizontal = 662,
-        eCSSKeyword_scrollbartrack_vertical = 663,
-        eCSSKeyword_scrollbarthumb_horizontal = 664,
-        eCSSKeyword_scrollbarthumb_vertical = 665,
-        eCSSKeyword_sheet = 666,
-        eCSSKeyword_textfield = 667,
-        eCSSKeyword_textfield_multiline = 668,
-        eCSSKeyword_caret = 669,
-        eCSSKeyword_searchfield = 670,
-        eCSSKeyword_menubar = 671,
-        eCSSKeyword_menupopup = 672,
-        eCSSKeyword_menuitem = 673,
-        eCSSKeyword_checkmenuitem = 674,
-        eCSSKeyword_radiomenuitem = 675,
-        eCSSKeyword_menucheckbox = 676,
-        eCSSKeyword_menuradio = 677,
-        eCSSKeyword_menuseparator = 678,
-        eCSSKeyword_menuarrow = 679,
-        eCSSKeyword_menuimage = 680,
-        eCSSKeyword_menuitemtext = 681,
-        eCSSKeyword_menulist = 682,
-        eCSSKeyword_menulist_button = 683,
-        eCSSKeyword_menulist_text = 684,
-        eCSSKeyword_menulist_textfield = 685,
-        eCSSKeyword_meterbar = 686,
-        eCSSKeyword_meterchunk = 687,
-        eCSSKeyword_minimal_ui = 688,
-        eCSSKeyword_range = 689,
-        eCSSKeyword_range_thumb = 690,
-        eCSSKeyword_sans_serif = 691,
-        eCSSKeyword_sans_serif_bold_italic = 692,
-        eCSSKeyword_sans_serif_italic = 693,
-        eCSSKeyword_scale_horizontal = 694,
-        eCSSKeyword_scale_vertical = 695,
-        eCSSKeyword_scalethumb_horizontal = 696,
-        eCSSKeyword_scalethumb_vertical = 697,
-        eCSSKeyword_scalethumbstart = 698,
-        eCSSKeyword_scalethumbend = 699,
-        eCSSKeyword_scalethumbtick = 700,
-        eCSSKeyword_groupbox = 701,
-        eCSSKeyword_checkbox_container = 702,
-        eCSSKeyword_radio_container = 703,
-        eCSSKeyword_checkbox_label = 704,
-        eCSSKeyword_radio_label = 705,
-        eCSSKeyword_button_focus = 706,
-        eCSSKeyword__moz_win_media_toolbox = 707,
-        eCSSKeyword__moz_win_communications_toolbox = 708,
-        eCSSKeyword__moz_win_browsertabbar_toolbox = 709,
-        eCSSKeyword__moz_win_accentcolor = 710,
-        eCSSKeyword__moz_win_accentcolortext = 711,
-        eCSSKeyword__moz_win_mediatext = 712,
-        eCSSKeyword__moz_win_communicationstext = 713,
-        eCSSKeyword__moz_win_glass = 714,
-        eCSSKeyword__moz_win_borderless_glass = 715,
-        eCSSKeyword__moz_window_titlebar = 716,
-        eCSSKeyword__moz_window_titlebar_maximized = 717,
-        eCSSKeyword__moz_window_frame_left = 718,
-        eCSSKeyword__moz_window_frame_right = 719,
-        eCSSKeyword__moz_window_frame_bottom = 720,
-        eCSSKeyword__moz_window_button_close = 721,
-        eCSSKeyword__moz_window_button_minimize = 722,
-        eCSSKeyword__moz_window_button_maximize = 723,
-        eCSSKeyword__moz_window_button_restore = 724,
-        eCSSKeyword__moz_window_button_box = 725,
-        eCSSKeyword__moz_window_button_box_maximized = 726,
-        eCSSKeyword__moz_mac_help_button = 727,
-        eCSSKeyword__moz_win_exclude_glass = 728,
-        eCSSKeyword__moz_mac_vibrancy_light = 729,
-        eCSSKeyword__moz_mac_vibrancy_dark = 730,
-        eCSSKeyword__moz_mac_disclosure_button_closed = 731,
-        eCSSKeyword__moz_mac_disclosure_button_open = 732,
-        eCSSKeyword__moz_mac_source_list = 733,
-        eCSSKeyword__moz_mac_source_list_selection = 734,
-        eCSSKeyword__moz_mac_active_source_list_selection = 735,
-        eCSSKeyword_alphabetic = 736,
-        eCSSKeyword_bevel = 737,
-        eCSSKeyword_butt = 738,
-        eCSSKeyword_central = 739,
-        eCSSKeyword_crispedges = 740,
-        eCSSKeyword_evenodd = 741,
-        eCSSKeyword_geometricprecision = 742,
-        eCSSKeyword_hanging = 743,
-        eCSSKeyword_ideographic = 744,
-        eCSSKeyword_linearrgb = 745,
-        eCSSKeyword_mathematical = 746,
-        eCSSKeyword_miter = 747,
-        eCSSKeyword_no_change = 748,
-        eCSSKeyword_non_scaling_stroke = 749,
-        eCSSKeyword_nonzero = 750,
-        eCSSKeyword_optimizelegibility = 751,
-        eCSSKeyword_optimizequality = 752,
-        eCSSKeyword_optimizespeed = 753,
-        eCSSKeyword_reset_size = 754,
-        eCSSKeyword_srgb = 755,
-        eCSSKeyword_symbolic = 756,
-        eCSSKeyword_symbols = 757,
-        eCSSKeyword_text_after_edge = 758,
-        eCSSKeyword_text_before_edge = 759,
-        eCSSKeyword_use_script = 760,
-        eCSSKeyword__moz_crisp_edges = 761,
-        eCSSKeyword_space = 762,
-        eCSSKeyword_COUNT = 763,
+        eCSSKeyword_discretionary_ligatures = 197,
+        eCSSKeyword_distribute = 198,
+        eCSSKeyword_dot = 199,
+        eCSSKeyword_dotted = 200,
+        eCSSKeyword_double = 201,
+        eCSSKeyword_double_circle = 202,
+        eCSSKeyword_double_struck = 203,
+        eCSSKeyword_drag = 204,
+        eCSSKeyword_drop_shadow = 205,
+        eCSSKeyword_e_resize = 206,
+        eCSSKeyword_ease = 207,
+        eCSSKeyword_ease_in = 208,
+        eCSSKeyword_ease_in_out = 209,
+        eCSSKeyword_ease_out = 210,
+        eCSSKeyword_economy = 211,
+        eCSSKeyword_element = 212,
+        eCSSKeyword_elements = 213,
+        eCSSKeyword_ellipse = 214,
+        eCSSKeyword_ellipsis = 215,
+        eCSSKeyword_em = 216,
+        eCSSKeyword_embed = 217,
+        eCSSKeyword_enabled = 218,
+        eCSSKeyword_end = 219,
+        eCSSKeyword_ex = 220,
+        eCSSKeyword_exact = 221,
+        eCSSKeyword_exclude = 222,
+        eCSSKeyword_exclusion = 223,
+        eCSSKeyword_expanded = 224,
+        eCSSKeyword_extends = 225,
+        eCSSKeyword_extra_condensed = 226,
+        eCSSKeyword_extra_expanded = 227,
+        eCSSKeyword_ew_resize = 228,
+        eCSSKeyword_fallback = 229,
+        eCSSKeyword_fantasy = 230,
+        eCSSKeyword_farthest_side = 231,
+        eCSSKeyword_farthest_corner = 232,
+        eCSSKeyword_fill = 233,
+        eCSSKeyword_filled = 234,
+        eCSSKeyword_fill_box = 235,
+        eCSSKeyword_first = 236,
+        eCSSKeyword_fit_content = 237,
+        eCSSKeyword_fixed = 238,
+        eCSSKeyword_flat = 239,
+        eCSSKeyword_flex = 240,
+        eCSSKeyword_flex_end = 241,
+        eCSSKeyword_flex_start = 242,
+        eCSSKeyword_flip = 243,
+        eCSSKeyword_flow_root = 244,
+        eCSSKeyword_forwards = 245,
+        eCSSKeyword_fraktur = 246,
+        eCSSKeyword_frames = 247,
+        eCSSKeyword_from_image = 248,
+        eCSSKeyword_full_width = 249,
+        eCSSKeyword_fullscreen = 250,
+        eCSSKeyword_grab = 251,
+        eCSSKeyword_grabbing = 252,
+        eCSSKeyword_grad = 253,
+        eCSSKeyword_grayscale = 254,
+        eCSSKeyword_graytext = 255,
+        eCSSKeyword_grid = 256,
+        eCSSKeyword_groove = 257,
+        eCSSKeyword_hard_light = 258,
+        eCSSKeyword_help = 259,
+        eCSSKeyword_hidden = 260,
+        eCSSKeyword_hide = 261,
+        eCSSKeyword_highlight = 262,
+        eCSSKeyword_highlighttext = 263,
+        eCSSKeyword_historical_forms = 264,
+        eCSSKeyword_historical_ligatures = 265,
+        eCSSKeyword_horizontal = 266,
+        eCSSKeyword_horizontal_tb = 267,
+        eCSSKeyword_hue = 268,
+        eCSSKeyword_hue_rotate = 269,
+        eCSSKeyword_hz = 270,
+        eCSSKeyword_icon = 271,
+        eCSSKeyword_ignore = 272,
+        eCSSKeyword_ignore_horizontal = 273,
+        eCSSKeyword_ignore_vertical = 274,
+        eCSSKeyword_in = 275,
+        eCSSKeyword_interlace = 276,
+        eCSSKeyword_inactive = 277,
+        eCSSKeyword_inactiveborder = 278,
+        eCSSKeyword_inactivecaption = 279,
+        eCSSKeyword_inactivecaptiontext = 280,
+        eCSSKeyword_infinite = 281,
+        eCSSKeyword_infobackground = 282,
+        eCSSKeyword_infotext = 283,
+        eCSSKeyword_inherit = 284,
+        eCSSKeyword_initial = 285,
+        eCSSKeyword_inline = 286,
+        eCSSKeyword_inline_axis = 287,
+        eCSSKeyword_inline_block = 288,
+        eCSSKeyword_inline_end = 289,
+        eCSSKeyword_inline_flex = 290,
+        eCSSKeyword_inline_grid = 291,
+        eCSSKeyword_inline_start = 292,
+        eCSSKeyword_inline_table = 293,
+        eCSSKeyword_inset = 294,
+        eCSSKeyword_inside = 295,
+        eCSSKeyword_inter_character = 296,
+        eCSSKeyword_inter_word = 297,
+        eCSSKeyword_interpolatematrix = 298,
+        eCSSKeyword_accumulatematrix = 299,
+        eCSSKeyword_intersect = 300,
+        eCSSKeyword_isolate = 301,
+        eCSSKeyword_isolate_override = 302,
+        eCSSKeyword_invert = 303,
+        eCSSKeyword_italic = 304,
+        eCSSKeyword_jis78 = 305,
+        eCSSKeyword_jis83 = 306,
+        eCSSKeyword_jis90 = 307,
+        eCSSKeyword_jis04 = 308,
+        eCSSKeyword_justify = 309,
+        eCSSKeyword_keep_all = 310,
+        eCSSKeyword_khz = 311,
+        eCSSKeyword_landscape = 312,
+        eCSSKeyword_large = 313,
+        eCSSKeyword_larger = 314,
+        eCSSKeyword_last = 315,
+        eCSSKeyword_last_baseline = 316,
+        eCSSKeyword_layout = 317,
+        eCSSKeyword_left = 318,
+        eCSSKeyword_legacy = 319,
+        eCSSKeyword_lighten = 320,
+        eCSSKeyword_lighter = 321,
+        eCSSKeyword_line_through = 322,
+        eCSSKeyword_linear = 323,
+        eCSSKeyword_lining_nums = 324,
+        eCSSKeyword_list_item = 325,
+        eCSSKeyword_local = 326,
+        eCSSKeyword_logical = 327,
+        eCSSKeyword_looped = 328,
+        eCSSKeyword_lowercase = 329,
+        eCSSKeyword_lr = 330,
+        eCSSKeyword_lr_tb = 331,
+        eCSSKeyword_ltr = 332,
+        eCSSKeyword_luminance = 333,
+        eCSSKeyword_luminosity = 334,
+        eCSSKeyword_mandatory = 335,
+        eCSSKeyword_manipulation = 336,
+        eCSSKeyword_manual = 337,
+        eCSSKeyword_margin_box = 338,
+        eCSSKeyword_markers = 339,
+        eCSSKeyword_match_parent = 340,
+        eCSSKeyword_match_source = 341,
+        eCSSKeyword_matrix = 342,
+        eCSSKeyword_matrix3d = 343,
+        eCSSKeyword_max_content = 344,
+        eCSSKeyword_medium = 345,
+        eCSSKeyword_menu = 346,
+        eCSSKeyword_menutext = 347,
+        eCSSKeyword_message_box = 348,
+        eCSSKeyword_middle = 349,
+        eCSSKeyword_min_content = 350,
+        eCSSKeyword_minmax = 351,
+        eCSSKeyword_mix = 352,
+        eCSSKeyword_mixed = 353,
+        eCSSKeyword_mm = 354,
+        eCSSKeyword_monospace = 355,
+        eCSSKeyword_move = 356,
+        eCSSKeyword_ms = 357,
+        eCSSKeyword_multiply = 358,
+        eCSSKeyword_n_resize = 359,
+        eCSSKeyword_narrower = 360,
+        eCSSKeyword_ne_resize = 361,
+        eCSSKeyword_nesw_resize = 362,
+        eCSSKeyword_no_clip = 363,
+        eCSSKeyword_no_close_quote = 364,
+        eCSSKeyword_no_common_ligatures = 365,
+        eCSSKeyword_no_contextual = 366,
+        eCSSKeyword_no_discretionary_ligatures = 367,
+        eCSSKeyword_no_drag = 368,
+        eCSSKeyword_no_drop = 369,
+        eCSSKeyword_no_historical_ligatures = 370,
+        eCSSKeyword_no_open_quote = 371,
+        eCSSKeyword_no_repeat = 372,
+        eCSSKeyword_none = 373,
+        eCSSKeyword_normal = 374,
+        eCSSKeyword_not_allowed = 375,
+        eCSSKeyword_nowrap = 376,
+        eCSSKeyword_numeric = 377,
+        eCSSKeyword_ns_resize = 378,
+        eCSSKeyword_nw_resize = 379,
+        eCSSKeyword_nwse_resize = 380,
+        eCSSKeyword_oblique = 381,
+        eCSSKeyword_oldstyle_nums = 382,
+        eCSSKeyword_opacity = 383,
+        eCSSKeyword_open = 384,
+        eCSSKeyword_open_quote = 385,
+        eCSSKeyword_optional = 386,
+        eCSSKeyword_ordinal = 387,
+        eCSSKeyword_ornaments = 388,
+        eCSSKeyword_outset = 389,
+        eCSSKeyword_outside = 390,
+        eCSSKeyword_over = 391,
+        eCSSKeyword_overlay = 392,
+        eCSSKeyword_overline = 393,
+        eCSSKeyword_paint = 394,
+        eCSSKeyword_padding_box = 395,
+        eCSSKeyword_painted = 396,
+        eCSSKeyword_pan_x = 397,
+        eCSSKeyword_pan_y = 398,
+        eCSSKeyword_paused = 399,
+        eCSSKeyword_pc = 400,
+        eCSSKeyword_perspective = 401,
+        eCSSKeyword_petite_caps = 402,
+        eCSSKeyword_physical = 403,
+        eCSSKeyword_plaintext = 404,
+        eCSSKeyword_pointer = 405,
+        eCSSKeyword_polygon = 406,
+        eCSSKeyword_portrait = 407,
+        eCSSKeyword_pre = 408,
+        eCSSKeyword_pre_wrap = 409,
+        eCSSKeyword_pre_line = 410,
+        eCSSKeyword_preserve_3d = 411,
+        eCSSKeyword_progress = 412,
+        eCSSKeyword_progressive = 413,
+        eCSSKeyword_proportional_nums = 414,
+        eCSSKeyword_proportional_width = 415,
+        eCSSKeyword_proximity = 416,
+        eCSSKeyword_pt = 417,
+        eCSSKeyword_px = 418,
+        eCSSKeyword_rad = 419,
+        eCSSKeyword_read_only = 420,
+        eCSSKeyword_read_write = 421,
+        eCSSKeyword_relative = 422,
+        eCSSKeyword_repeat = 423,
+        eCSSKeyword_repeat_x = 424,
+        eCSSKeyword_repeat_y = 425,
+        eCSSKeyword_reverse = 426,
+        eCSSKeyword_ridge = 427,
+        eCSSKeyword_right = 428,
+        eCSSKeyword_rl = 429,
+        eCSSKeyword_rl_tb = 430,
+        eCSSKeyword_rotate = 431,
+        eCSSKeyword_rotate3d = 432,
+        eCSSKeyword_rotatex = 433,
+        eCSSKeyword_rotatey = 434,
+        eCSSKeyword_rotatez = 435,
+        eCSSKeyword_round = 436,
+        eCSSKeyword_row = 437,
+        eCSSKeyword_row_resize = 438,
+        eCSSKeyword_row_reverse = 439,
+        eCSSKeyword_rtl = 440,
+        eCSSKeyword_ruby = 441,
+        eCSSKeyword_ruby_base = 442,
+        eCSSKeyword_ruby_base_container = 443,
+        eCSSKeyword_ruby_text = 444,
+        eCSSKeyword_ruby_text_container = 445,
+        eCSSKeyword_running = 446,
+        eCSSKeyword_s = 447,
+        eCSSKeyword_s_resize = 448,
+        eCSSKeyword_safe = 449,
+        eCSSKeyword_saturate = 450,
+        eCSSKeyword_saturation = 451,
+        eCSSKeyword_scale = 452,
+        eCSSKeyword_scale_down = 453,
+        eCSSKeyword_scale3d = 454,
+        eCSSKeyword_scalex = 455,
+        eCSSKeyword_scaley = 456,
+        eCSSKeyword_scalez = 457,
+        eCSSKeyword_screen = 458,
+        eCSSKeyword_script = 459,
+        eCSSKeyword_scroll = 460,
+        eCSSKeyword_scrollbar = 461,
+        eCSSKeyword_scrollbar_small = 462,
+        eCSSKeyword_scrollbar_horizontal = 463,
+        eCSSKeyword_scrollbar_vertical = 464,
+        eCSSKeyword_se_resize = 465,
+        eCSSKeyword_select_after = 466,
+        eCSSKeyword_select_all = 467,
+        eCSSKeyword_select_before = 468,
+        eCSSKeyword_select_menu = 469,
+        eCSSKeyword_select_same = 470,
+        eCSSKeyword_self_end = 471,
+        eCSSKeyword_self_start = 472,
+        eCSSKeyword_semi_condensed = 473,
+        eCSSKeyword_semi_expanded = 474,
+        eCSSKeyword_separate = 475,
+        eCSSKeyword_sepia = 476,
+        eCSSKeyword_serif = 477,
+        eCSSKeyword_sesame = 478,
+        eCSSKeyword_show = 479,
+        eCSSKeyword_sideways = 480,
+        eCSSKeyword_sideways_lr = 481,
+        eCSSKeyword_sideways_right = 482,
+        eCSSKeyword_sideways_rl = 483,
+        eCSSKeyword_simplified = 484,
+        eCSSKeyword_skew = 485,
+        eCSSKeyword_skewx = 486,
+        eCSSKeyword_skewy = 487,
+        eCSSKeyword_slashed_zero = 488,
+        eCSSKeyword_slice = 489,
+        eCSSKeyword_small = 490,
+        eCSSKeyword_small_caps = 491,
+        eCSSKeyword_small_caption = 492,
+        eCSSKeyword_smaller = 493,
+        eCSSKeyword_smooth = 494,
+        eCSSKeyword_soft = 495,
+        eCSSKeyword_soft_light = 496,
+        eCSSKeyword_solid = 497,
+        eCSSKeyword_space_around = 498,
+        eCSSKeyword_space_between = 499,
+        eCSSKeyword_space_evenly = 500,
+        eCSSKeyword_span = 501,
+        eCSSKeyword_spell_out = 502,
+        eCSSKeyword_square = 503,
+        eCSSKeyword_stacked_fractions = 504,
+        eCSSKeyword_start = 505,
+        eCSSKeyword_static = 506,
+        eCSSKeyword_standalone = 507,
+        eCSSKeyword_status_bar = 508,
+        eCSSKeyword_step_end = 509,
+        eCSSKeyword_step_start = 510,
+        eCSSKeyword_sticky = 511,
+        eCSSKeyword_stretch = 512,
+        eCSSKeyword_stretch_to_fit = 513,
+        eCSSKeyword_stretched = 514,
+        eCSSKeyword_strict = 515,
+        eCSSKeyword_stroke = 516,
+        eCSSKeyword_stroke_box = 517,
+        eCSSKeyword_style = 518,
+        eCSSKeyword_styleset = 519,
+        eCSSKeyword_stylistic = 520,
+        eCSSKeyword_sub = 521,
+        eCSSKeyword_subgrid = 522,
+        eCSSKeyword_subtract = 523,
+        eCSSKeyword_super = 524,
+        eCSSKeyword_sw_resize = 525,
+        eCSSKeyword_swash = 526,
+        eCSSKeyword_swap = 527,
+        eCSSKeyword_table = 528,
+        eCSSKeyword_table_caption = 529,
+        eCSSKeyword_table_cell = 530,
+        eCSSKeyword_table_column = 531,
+        eCSSKeyword_table_column_group = 532,
+        eCSSKeyword_table_footer_group = 533,
+        eCSSKeyword_table_header_group = 534,
+        eCSSKeyword_table_row = 535,
+        eCSSKeyword_table_row_group = 536,
+        eCSSKeyword_tabular_nums = 537,
+        eCSSKeyword_tailed = 538,
+        eCSSKeyword_tb = 539,
+        eCSSKeyword_tb_rl = 540,
+        eCSSKeyword_text = 541,
+        eCSSKeyword_text_bottom = 542,
+        eCSSKeyword_text_top = 543,
+        eCSSKeyword_thick = 544,
+        eCSSKeyword_thin = 545,
+        eCSSKeyword_threeddarkshadow = 546,
+        eCSSKeyword_threedface = 547,
+        eCSSKeyword_threedhighlight = 548,
+        eCSSKeyword_threedlightshadow = 549,
+        eCSSKeyword_threedshadow = 550,
+        eCSSKeyword_titling_caps = 551,
+        eCSSKeyword_toggle = 552,
+        eCSSKeyword_top = 553,
+        eCSSKeyword_top_outside = 554,
+        eCSSKeyword_traditional = 555,
+        eCSSKeyword_translate = 556,
+        eCSSKeyword_translate3d = 557,
+        eCSSKeyword_translatex = 558,
+        eCSSKeyword_translatey = 559,
+        eCSSKeyword_translatez = 560,
+        eCSSKeyword_transparent = 561,
+        eCSSKeyword_triangle = 562,
+        eCSSKeyword_tri_state = 563,
+        eCSSKeyword_ultra_condensed = 564,
+        eCSSKeyword_ultra_expanded = 565,
+        eCSSKeyword_under = 566,
+        eCSSKeyword_underline = 567,
+        eCSSKeyword_unicase = 568,
+        eCSSKeyword_unsafe = 569,
+        eCSSKeyword_unset = 570,
+        eCSSKeyword_uppercase = 571,
+        eCSSKeyword_upright = 572,
+        eCSSKeyword_vertical = 573,
+        eCSSKeyword_vertical_lr = 574,
+        eCSSKeyword_vertical_rl = 575,
+        eCSSKeyword_vertical_text = 576,
+        eCSSKeyword_view_box = 577,
+        eCSSKeyword_visible = 578,
+        eCSSKeyword_visiblefill = 579,
+        eCSSKeyword_visiblepainted = 580,
+        eCSSKeyword_visiblestroke = 581,
+        eCSSKeyword_w_resize = 582,
+        eCSSKeyword_wait = 583,
+        eCSSKeyword_wavy = 584,
+        eCSSKeyword_weight = 585,
+        eCSSKeyword_wider = 586,
+        eCSSKeyword_window = 587,
+        eCSSKeyword_windowframe = 588,
+        eCSSKeyword_windowtext = 589,
+        eCSSKeyword_words = 590,
+        eCSSKeyword_wrap = 591,
+        eCSSKeyword_wrap_reverse = 592,
+        eCSSKeyword_write_only = 593,
+        eCSSKeyword_x_large = 594,
+        eCSSKeyword_x_small = 595,
+        eCSSKeyword_xx_large = 596,
+        eCSSKeyword_xx_small = 597,
+        eCSSKeyword_zoom_in = 598,
+        eCSSKeyword_zoom_out = 599,
+        eCSSKeyword_radio = 600,
+        eCSSKeyword_checkbox = 601,
+        eCSSKeyword_button_bevel = 602,
+        eCSSKeyword_toolbox = 603,
+        eCSSKeyword_toolbar = 604,
+        eCSSKeyword_toolbarbutton = 605,
+        eCSSKeyword_toolbargripper = 606,
+        eCSSKeyword_dualbutton = 607,
+        eCSSKeyword_toolbarbutton_dropdown = 608,
+        eCSSKeyword_button_arrow_up = 609,
+        eCSSKeyword_button_arrow_down = 610,
+        eCSSKeyword_button_arrow_next = 611,
+        eCSSKeyword_button_arrow_previous = 612,
+        eCSSKeyword_separator = 613,
+        eCSSKeyword_splitter = 614,
+        eCSSKeyword_statusbar = 615,
+        eCSSKeyword_statusbarpanel = 616,
+        eCSSKeyword_resizerpanel = 617,
+        eCSSKeyword_resizer = 618,
+        eCSSKeyword_listbox = 619,
+        eCSSKeyword_listitem = 620,
+        eCSSKeyword_numbers = 621,
+        eCSSKeyword_number_input = 622,
+        eCSSKeyword_treeview = 623,
+        eCSSKeyword_treeitem = 624,
+        eCSSKeyword_treetwisty = 625,
+        eCSSKeyword_treetwistyopen = 626,
+        eCSSKeyword_treeline = 627,
+        eCSSKeyword_treeheader = 628,
+        eCSSKeyword_treeheadercell = 629,
+        eCSSKeyword_treeheadersortarrow = 630,
+        eCSSKeyword_progressbar = 631,
+        eCSSKeyword_progressbar_vertical = 632,
+        eCSSKeyword_progresschunk = 633,
+        eCSSKeyword_progresschunk_vertical = 634,
+        eCSSKeyword_tab = 635,
+        eCSSKeyword_tabpanels = 636,
+        eCSSKeyword_tabpanel = 637,
+        eCSSKeyword_tab_scroll_arrow_back = 638,
+        eCSSKeyword_tab_scroll_arrow_forward = 639,
+        eCSSKeyword_tooltip = 640,
+        eCSSKeyword_spinner = 641,
+        eCSSKeyword_spinner_upbutton = 642,
+        eCSSKeyword_spinner_downbutton = 643,
+        eCSSKeyword_spinner_textfield = 644,
+        eCSSKeyword_scrollbarbutton_up = 645,
+        eCSSKeyword_scrollbarbutton_down = 646,
+        eCSSKeyword_scrollbarbutton_left = 647,
+        eCSSKeyword_scrollbarbutton_right = 648,
+        eCSSKeyword_scrollbartrack_horizontal = 649,
+        eCSSKeyword_scrollbartrack_vertical = 650,
+        eCSSKeyword_scrollbarthumb_horizontal = 651,
+        eCSSKeyword_scrollbarthumb_vertical = 652,
+        eCSSKeyword_sheet = 653,
+        eCSSKeyword_textfield = 654,
+        eCSSKeyword_textfield_multiline = 655,
+        eCSSKeyword_caret = 656,
+        eCSSKeyword_searchfield = 657,
+        eCSSKeyword_menubar = 658,
+        eCSSKeyword_menupopup = 659,
+        eCSSKeyword_menuitem = 660,
+        eCSSKeyword_checkmenuitem = 661,
+        eCSSKeyword_radiomenuitem = 662,
+        eCSSKeyword_menucheckbox = 663,
+        eCSSKeyword_menuradio = 664,
+        eCSSKeyword_menuseparator = 665,
+        eCSSKeyword_menuarrow = 666,
+        eCSSKeyword_menuimage = 667,
+        eCSSKeyword_menuitemtext = 668,
+        eCSSKeyword_menulist = 669,
+        eCSSKeyword_menulist_button = 670,
+        eCSSKeyword_menulist_text = 671,
+        eCSSKeyword_menulist_textfield = 672,
+        eCSSKeyword_meterbar = 673,
+        eCSSKeyword_meterchunk = 674,
+        eCSSKeyword_minimal_ui = 675,
+        eCSSKeyword_range = 676,
+        eCSSKeyword_range_thumb = 677,
+        eCSSKeyword_sans_serif = 678,
+        eCSSKeyword_sans_serif_bold_italic = 679,
+        eCSSKeyword_sans_serif_italic = 680,
+        eCSSKeyword_scale_horizontal = 681,
+        eCSSKeyword_scale_vertical = 682,
+        eCSSKeyword_scalethumb_horizontal = 683,
+        eCSSKeyword_scalethumb_vertical = 684,
+        eCSSKeyword_scalethumbstart = 685,
+        eCSSKeyword_scalethumbend = 686,
+        eCSSKeyword_scalethumbtick = 687,
+        eCSSKeyword_groupbox = 688,
+        eCSSKeyword_checkbox_container = 689,
+        eCSSKeyword_radio_container = 690,
+        eCSSKeyword_checkbox_label = 691,
+        eCSSKeyword_radio_label = 692,
+        eCSSKeyword_button_focus = 693,
+        eCSSKeyword__moz_win_media_toolbox = 694,
+        eCSSKeyword__moz_win_communications_toolbox = 695,
+        eCSSKeyword__moz_win_browsertabbar_toolbox = 696,
+        eCSSKeyword__moz_win_accentcolor = 697,
+        eCSSKeyword__moz_win_accentcolortext = 698,
+        eCSSKeyword__moz_win_mediatext = 699,
+        eCSSKeyword__moz_win_communicationstext = 700,
+        eCSSKeyword__moz_win_glass = 701,
+        eCSSKeyword__moz_win_borderless_glass = 702,
+        eCSSKeyword__moz_window_titlebar = 703,
+        eCSSKeyword__moz_window_titlebar_maximized = 704,
+        eCSSKeyword__moz_window_frame_left = 705,
+        eCSSKeyword__moz_window_frame_right = 706,
+        eCSSKeyword__moz_window_frame_bottom = 707,
+        eCSSKeyword__moz_window_button_close = 708,
+        eCSSKeyword__moz_window_button_minimize = 709,
+        eCSSKeyword__moz_window_button_maximize = 710,
+        eCSSKeyword__moz_window_button_restore = 711,
+        eCSSKeyword__moz_window_button_box = 712,
+        eCSSKeyword__moz_window_button_box_maximized = 713,
+        eCSSKeyword__moz_mac_help_button = 714,
+        eCSSKeyword__moz_win_exclude_glass = 715,
+        eCSSKeyword__moz_mac_vibrancy_light = 716,
+        eCSSKeyword__moz_mac_vibrancy_dark = 717,
+        eCSSKeyword__moz_mac_disclosure_button_closed = 718,
+        eCSSKeyword__moz_mac_disclosure_button_open = 719,
+        eCSSKeyword__moz_mac_source_list = 720,
+        eCSSKeyword__moz_mac_source_list_selection = 721,
+        eCSSKeyword__moz_mac_active_source_list_selection = 722,
+        eCSSKeyword_alphabetic = 723,
+        eCSSKeyword_bevel = 724,
+        eCSSKeyword_butt = 725,
+        eCSSKeyword_central = 726,
+        eCSSKeyword_crispedges = 727,
+        eCSSKeyword_evenodd = 728,
+        eCSSKeyword_geometricprecision = 729,
+        eCSSKeyword_hanging = 730,
+        eCSSKeyword_ideographic = 731,
+        eCSSKeyword_linearrgb = 732,
+        eCSSKeyword_mathematical = 733,
+        eCSSKeyword_miter = 734,
+        eCSSKeyword_no_change = 735,
+        eCSSKeyword_non_scaling_stroke = 736,
+        eCSSKeyword_nonzero = 737,
+        eCSSKeyword_optimizelegibility = 738,
+        eCSSKeyword_optimizequality = 739,
+        eCSSKeyword_optimizespeed = 740,
+        eCSSKeyword_reset_size = 741,
+        eCSSKeyword_srgb = 742,
+        eCSSKeyword_symbolic = 743,
+        eCSSKeyword_symbols = 744,
+        eCSSKeyword_text_after_edge = 745,
+        eCSSKeyword_text_before_edge = 746,
+        eCSSKeyword_use_script = 747,
+        eCSSKeyword__moz_crisp_edges = 748,
+        eCSSKeyword_space = 749,
+        eCSSKeyword_COUNT = 750,
     }
     pub const nsCSSPropertyID_eCSSProperty_COUNT_no_shorthands:
               root::nsCSSPropertyID =
@@ -28615,11 +29259,6 @@ pub mod root {
                    [root::nsCSSProps_KTableEntry; 0usize];
     }
     extern "C" {
-        #[link_name = "_ZN10nsCSSProps16kListStyleKTableE"]
-        pub static mut nsCSSProps_kListStyleKTable:
-                   [root::nsCSSProps_KTableEntry; 0usize];
-    }
-    extern "C" {
         #[link_name = "_ZN10nsCSSProps15kMaskTypeKTableE"]
         pub static mut nsCSSProps_kMaskTypeKTable:
                    [root::nsCSSProps_KTableEntry; 0usize];
@@ -28959,6 +29598,28 @@ pub mod root {
     impl Clone for nsCSSProps {
         fn clone(&self) -> Self { *self }
     }
+    #[repr(C)]
+    #[derive(Debug, Copy)]
+    pub struct nsILabelableRunnable {
+        pub _base: root::nsISupports,
+    }
+    #[repr(C)]
+    #[derive(Debug, Copy, Clone)]
+    pub struct nsILabelableRunnable_COMTypeInfo {
+        pub _address: u8,
+    }
+    #[test]
+    fn bindgen_test_layout_nsILabelableRunnable() {
+        assert_eq!(::std::mem::size_of::<nsILabelableRunnable>() , 8usize ,
+                   concat ! (
+                   "Size of: " , stringify ! ( nsILabelableRunnable ) ));
+        assert_eq! (::std::mem::align_of::<nsILabelableRunnable>() , 8usize ,
+                    concat ! (
+                    "Alignment of " , stringify ! ( nsILabelableRunnable ) ));
+    }
+    impl Clone for nsILabelableRunnable {
+        fn clone(&self) -> Self { *self }
+    }
     /// Class to safely handle main-thread-only pointers off the main thread.
     ///
     /// Classes like XPCWrappedJS are main-thread-only, which means that it is
@@ -29024,7 +29685,7 @@ pub mod root {
         pub mRefCnt: root::nsAutoRefCnt,
         pub _mOwningThread: root::nsAutoOwningThread,
         pub mBehaviour: root::mozilla::UniquePtr<root::ProxyBehaviour>,
-        pub mURI: root::RefPtr<root::mozilla::image::ImageURL>,
+        pub mURI: root::RefPtr<root::imgRequestProxy_ImageURL>,
         pub mListener: *mut root::imgINotificationObserver,
         pub mLoadGroup: root::nsCOMPtr<root::nsILoadGroup>,
         pub mTabGroup: root::RefPtr<root::mozilla::dom::TabGroup>,
@@ -32203,7 +32864,7 @@ pub mod root {
     pub type RawGeckoPropertyValuePairList =
         root::nsTArray<root::mozilla::PropertyValuePair>;
     pub type RawGeckoComputedKeyframeValuesList =
-        root::nsTArray<root::nsTArray<root::mozilla::PropertyStyleAnimationValuePair>>;
+        root::nsTArray<root::mozilla::ComputedKeyframeValues>;
     pub type RawGeckoStyleAnimationList =
         root::nsStyleAutoArray<root::mozilla::StyleAnimation>;
     pub type RawGeckoFontFaceRuleList =
@@ -32876,46 +33537,46 @@ pub mod root {
         assert_eq! (::std::mem::align_of::<nsISMILAttr>() , 8usize , concat !
                     ( "Alignment of " , stringify ! ( nsISMILAttr ) ));
     }
-    pub const ELEMENT_SHARED_RESTYLE_BIT_1: root::_bindgen_ty_85 =
-        _bindgen_ty_85::ELEMENT_SHARED_RESTYLE_BIT_1;
-    pub const ELEMENT_SHARED_RESTYLE_BIT_2: root::_bindgen_ty_85 =
-        _bindgen_ty_85::ELEMENT_SHARED_RESTYLE_BIT_2;
-    pub const ELEMENT_SHARED_RESTYLE_BIT_3: root::_bindgen_ty_85 =
-        _bindgen_ty_85::ELEMENT_SHARED_RESTYLE_BIT_3;
-    pub const ELEMENT_SHARED_RESTYLE_BIT_4: root::_bindgen_ty_85 =
-        _bindgen_ty_85::ELEMENT_SHARED_RESTYLE_BIT_4;
-    pub const ELEMENT_HAS_DIRTY_DESCENDANTS_FOR_SERVO: root::_bindgen_ty_85 =
-        _bindgen_ty_85::ELEMENT_SHARED_RESTYLE_BIT_1;
+    pub const ELEMENT_SHARED_RESTYLE_BIT_1: root::_bindgen_ty_79 =
+        _bindgen_ty_79::ELEMENT_SHARED_RESTYLE_BIT_1;
+    pub const ELEMENT_SHARED_RESTYLE_BIT_2: root::_bindgen_ty_79 =
+        _bindgen_ty_79::ELEMENT_SHARED_RESTYLE_BIT_2;
+    pub const ELEMENT_SHARED_RESTYLE_BIT_3: root::_bindgen_ty_79 =
+        _bindgen_ty_79::ELEMENT_SHARED_RESTYLE_BIT_3;
+    pub const ELEMENT_SHARED_RESTYLE_BIT_4: root::_bindgen_ty_79 =
+        _bindgen_ty_79::ELEMENT_SHARED_RESTYLE_BIT_4;
+    pub const ELEMENT_HAS_DIRTY_DESCENDANTS_FOR_SERVO: root::_bindgen_ty_79 =
+        _bindgen_ty_79::ELEMENT_SHARED_RESTYLE_BIT_1;
     pub const ELEMENT_HAS_ANIMATION_ONLY_DIRTY_DESCENDANTS_FOR_SERVO:
-              root::_bindgen_ty_85 =
-        _bindgen_ty_85::ELEMENT_SHARED_RESTYLE_BIT_2;
-    pub const ELEMENT_HAS_SNAPSHOT: root::_bindgen_ty_85 =
-        _bindgen_ty_85::ELEMENT_SHARED_RESTYLE_BIT_3;
-    pub const ELEMENT_HANDLED_SNAPSHOT: root::_bindgen_ty_85 =
-        _bindgen_ty_85::ELEMENT_SHARED_RESTYLE_BIT_4;
-    pub const ELEMENT_HAS_PENDING_RESTYLE: root::_bindgen_ty_85 =
-        _bindgen_ty_85::ELEMENT_SHARED_RESTYLE_BIT_1;
-    pub const ELEMENT_IS_POTENTIAL_RESTYLE_ROOT: root::_bindgen_ty_85 =
-        _bindgen_ty_85::ELEMENT_SHARED_RESTYLE_BIT_2;
-    pub const ELEMENT_HAS_PENDING_ANIMATION_ONLY_RESTYLE: root::_bindgen_ty_85
+              root::_bindgen_ty_79 =
+        _bindgen_ty_79::ELEMENT_SHARED_RESTYLE_BIT_2;
+    pub const ELEMENT_HAS_SNAPSHOT: root::_bindgen_ty_79 =
+        _bindgen_ty_79::ELEMENT_SHARED_RESTYLE_BIT_3;
+    pub const ELEMENT_HANDLED_SNAPSHOT: root::_bindgen_ty_79 =
+        _bindgen_ty_79::ELEMENT_SHARED_RESTYLE_BIT_4;
+    pub const ELEMENT_HAS_PENDING_RESTYLE: root::_bindgen_ty_79 =
+        _bindgen_ty_79::ELEMENT_SHARED_RESTYLE_BIT_1;
+    pub const ELEMENT_IS_POTENTIAL_RESTYLE_ROOT: root::_bindgen_ty_79 =
+        _bindgen_ty_79::ELEMENT_SHARED_RESTYLE_BIT_2;
+    pub const ELEMENT_HAS_PENDING_ANIMATION_ONLY_RESTYLE: root::_bindgen_ty_79
               =
-        _bindgen_ty_85::ELEMENT_SHARED_RESTYLE_BIT_3;
+        _bindgen_ty_79::ELEMENT_SHARED_RESTYLE_BIT_3;
     pub const ELEMENT_IS_POTENTIAL_ANIMATION_ONLY_RESTYLE_ROOT:
-              root::_bindgen_ty_85 =
-        _bindgen_ty_85::ELEMENT_SHARED_RESTYLE_BIT_4;
-    pub const ELEMENT_IS_CONDITIONAL_RESTYLE_ANCESTOR: root::_bindgen_ty_85 =
-        _bindgen_ty_85::ELEMENT_IS_CONDITIONAL_RESTYLE_ANCESTOR;
-    pub const ELEMENT_PENDING_RESTYLE_FLAGS: root::_bindgen_ty_85 =
-        _bindgen_ty_85::ELEMENT_PENDING_RESTYLE_FLAGS;
-    pub const ELEMENT_POTENTIAL_RESTYLE_ROOT_FLAGS: root::_bindgen_ty_85 =
-        _bindgen_ty_85::ELEMENT_POTENTIAL_RESTYLE_ROOT_FLAGS;
-    pub const ELEMENT_ALL_RESTYLE_FLAGS: root::_bindgen_ty_85 =
-        _bindgen_ty_85::ELEMENT_ALL_RESTYLE_FLAGS;
-    pub const ELEMENT_TYPE_SPECIFIC_BITS_OFFSET: root::_bindgen_ty_85 =
-        _bindgen_ty_85::ELEMENT_TYPE_SPECIFIC_BITS_OFFSET;
+              root::_bindgen_ty_79 =
+        _bindgen_ty_79::ELEMENT_SHARED_RESTYLE_BIT_4;
+    pub const ELEMENT_IS_CONDITIONAL_RESTYLE_ANCESTOR: root::_bindgen_ty_79 =
+        _bindgen_ty_79::ELEMENT_IS_CONDITIONAL_RESTYLE_ANCESTOR;
+    pub const ELEMENT_PENDING_RESTYLE_FLAGS: root::_bindgen_ty_79 =
+        _bindgen_ty_79::ELEMENT_PENDING_RESTYLE_FLAGS;
+    pub const ELEMENT_POTENTIAL_RESTYLE_ROOT_FLAGS: root::_bindgen_ty_79 =
+        _bindgen_ty_79::ELEMENT_POTENTIAL_RESTYLE_ROOT_FLAGS;
+    pub const ELEMENT_ALL_RESTYLE_FLAGS: root::_bindgen_ty_79 =
+        _bindgen_ty_79::ELEMENT_ALL_RESTYLE_FLAGS;
+    pub const ELEMENT_TYPE_SPECIFIC_BITS_OFFSET: root::_bindgen_ty_79 =
+        _bindgen_ty_79::ELEMENT_TYPE_SPECIFIC_BITS_OFFSET;
     #[repr(u32)]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-    pub enum _bindgen_ty_85 {
+    pub enum _bindgen_ty_79 {
         ELEMENT_SHARED_RESTYLE_BIT_1 = 8388608,
         ELEMENT_SHARED_RESTYLE_BIT_2 = 16777216,
         ELEMENT_SHARED_RESTYLE_BIT_3 = 33554432,
@@ -33303,12 +33964,20 @@ pub mod root {
     pub const SERVO_CSS_PSEUDO_ELEMENT_FLAGS_mozPlaceholder: u32 = 8;
     pub const SERVO_CSS_PSEUDO_ELEMENT_FLAGS_placeholder: u32 = 8;
     pub const SERVO_CSS_PSEUDO_ELEMENT_FLAGS_mozColorSwatch: u32 = 12;
-    pub type nsBindingList = root::nsTArray<root::RefPtr<root::nsXBLBinding>>;
-    #[repr(C)]
-    #[derive(Debug, Copy, Clone)]
-    pub struct nsCSSFontFeatureValuesRule {
-        _unused: [u8; 0],
+    pub type nsCSSAnonBoxes_NonInheritingBase = u8;
+    #[repr(u8)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+    pub enum nsCSSAnonBoxes_NonInheriting {
+        oofPlaceholder = 0,
+        horizontalFramesetBorder = 1,
+        verticalFramesetBorder = 2,
+        framesetBlank = 3,
+        tableColGroup = 4,
+        tableCol = 5,
+        pageBreak = 6,
+        _Count = 7,
     }
+    pub type nsBindingList = root::nsTArray<root::RefPtr<root::nsXBLBinding>>;
     #[repr(C)]
     #[derive(Debug, Copy, Clone)]
     pub struct nsCSSPageRule {
@@ -33512,7 +34181,7 @@ pub mod root {
                     "::" , stringify ! ( mArray ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsCharTraits_open0_char16_t_close0_instantiation() {
+    fn __bindgen_test_layout_nsCharTraits_open0_nsStringRepr_char_type_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsCharTraits>() , 1usize ,
                    concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -33523,62 +34192,33 @@ pub mod root {
                    root::nsCharTraits ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsReadingIterator_open0_char16_t_close0_instantiation() {
-        assert_eq!(::std::mem::size_of::<root::nsReadingIterator<u16>>() ,
-                   24usize , concat ! (
-                   "Size of template specialization: " , stringify ! (
-                   root::nsReadingIterator<u16> ) ));
-        assert_eq!(::std::mem::align_of::<root::nsReadingIterator<u16>>() ,
-                   8usize , concat ! (
-                   "Alignment of template specialization: " , stringify ! (
-                   root::nsReadingIterator<u16> ) ));
-    }
-    #[test]
-    fn __bindgen_test_layout_nsWritingIterator_open0_char16_t_close0_instantiation() {
-        assert_eq!(::std::mem::size_of::<root::nsWritingIterator<u16>>() ,
-                   24usize , concat ! (
-                   "Size of template specialization: " , stringify ! (
-                   root::nsWritingIterator<u16> ) ));
-        assert_eq!(::std::mem::align_of::<root::nsWritingIterator<u16>>() ,
-                   8usize , concat ! (
-                   "Alignment of template specialization: " , stringify ! (
-                   root::nsWritingIterator<u16> ) ));
-    }
-    #[test]
-    fn __bindgen_test_layout_nsCharTraits_open0_char_close0_instantiation() {
-        assert_eq!(::std::mem::size_of::<root::nsCharTraits>() , 1usize ,
-                   concat ! (
-                   "Size of template specialization: " , stringify ! (
-                   root::nsCharTraits ) ));
-        assert_eq!(::std::mem::align_of::<root::nsCharTraits>() , 1usize ,
-                   concat ! (
-                   "Alignment of template specialization: " , stringify ! (
-                   root::nsCharTraits ) ));
-    }
-    #[test]
-    fn __bindgen_test_layout_nsReadingIterator_open0_char_close0_instantiation() {
-        assert_eq!(::std::mem::size_of::<root::nsReadingIterator<::std::os::raw::c_char>>()
+    fn __bindgen_test_layout_nsReadingIterator_open0_nsStringRepr_char_type_close0_instantiation() {
+        assert_eq!(::std::mem::size_of::<root::nsReadingIterator<root::mozilla::detail::nsStringRepr_char_type>>()
                    , 24usize , concat ! (
                    "Size of template specialization: " , stringify ! (
-                   root::nsReadingIterator<::std::os::raw::c_char> ) ));
-        assert_eq!(::std::mem::align_of::<root::nsReadingIterator<::std::os::raw::c_char>>()
+                   root::nsReadingIterator<root::mozilla::detail::nsStringRepr_char_type>
+                   ) ));
+        assert_eq!(::std::mem::align_of::<root::nsReadingIterator<root::mozilla::detail::nsStringRepr_char_type>>()
                    , 8usize , concat ! (
                    "Alignment of template specialization: " , stringify ! (
-                   root::nsReadingIterator<::std::os::raw::c_char> ) ));
+                   root::nsReadingIterator<root::mozilla::detail::nsStringRepr_char_type>
+                   ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsWritingIterator_open0_char_close0_instantiation() {
-        assert_eq!(::std::mem::size_of::<root::nsWritingIterator<::std::os::raw::c_char>>()
+    fn __bindgen_test_layout_nsWritingIterator_open0_nsStringRepr_char_type_close0_instantiation() {
+        assert_eq!(::std::mem::size_of::<root::nsWritingIterator<root::mozilla::detail::nsStringRepr_char_type>>()
                    , 24usize , concat ! (
                    "Size of template specialization: " , stringify ! (
-                   root::nsWritingIterator<::std::os::raw::c_char> ) ));
-        assert_eq!(::std::mem::align_of::<root::nsWritingIterator<::std::os::raw::c_char>>()
+                   root::nsWritingIterator<root::mozilla::detail::nsStringRepr_char_type>
+                   ) ));
+        assert_eq!(::std::mem::align_of::<root::nsWritingIterator<root::mozilla::detail::nsStringRepr_char_type>>()
                    , 8usize , concat ! (
                    "Alignment of template specialization: " , stringify ! (
-                   root::nsWritingIterator<::std::os::raw::c_char> ) ));
+                   root::nsWritingIterator<root::mozilla::detail::nsStringRepr_char_type>
+                   ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsCharTraits_open0_char16_t_close0_instantiation_1() {
+    fn __bindgen_test_layout_nsCharTraits_open0_nsCStringRepr_char_type_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsCharTraits>() , 1usize ,
                    concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -33589,7 +34229,44 @@ pub mod root {
                    root::nsCharTraits ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsCharTraits_open0_char_close0_instantiation_1() {
+    fn __bindgen_test_layout_nsReadingIterator_open0_nsCStringRepr_char_type_close0_instantiation() {
+        assert_eq!(::std::mem::size_of::<root::nsReadingIterator<root::mozilla::detail::nsCStringRepr_char_type>>()
+                   , 24usize , concat ! (
+                   "Size of template specialization: " , stringify ! (
+                   root::nsReadingIterator<root::mozilla::detail::nsCStringRepr_char_type>
+                   ) ));
+        assert_eq!(::std::mem::align_of::<root::nsReadingIterator<root::mozilla::detail::nsCStringRepr_char_type>>()
+                   , 8usize , concat ! (
+                   "Alignment of template specialization: " , stringify ! (
+                   root::nsReadingIterator<root::mozilla::detail::nsCStringRepr_char_type>
+                   ) ));
+    }
+    #[test]
+    fn __bindgen_test_layout_nsWritingIterator_open0_nsCStringRepr_char_type_close0_instantiation() {
+        assert_eq!(::std::mem::size_of::<root::nsWritingIterator<root::mozilla::detail::nsCStringRepr_char_type>>()
+                   , 24usize , concat ! (
+                   "Size of template specialization: " , stringify ! (
+                   root::nsWritingIterator<root::mozilla::detail::nsCStringRepr_char_type>
+                   ) ));
+        assert_eq!(::std::mem::align_of::<root::nsWritingIterator<root::mozilla::detail::nsCStringRepr_char_type>>()
+                   , 8usize , concat ! (
+                   "Alignment of template specialization: " , stringify ! (
+                   root::nsWritingIterator<root::mozilla::detail::nsCStringRepr_char_type>
+                   ) ));
+    }
+    #[test]
+    fn __bindgen_test_layout_nsCharTraits_open0_nsSubstringTuple_char_type_close0_instantiation() {
+        assert_eq!(::std::mem::size_of::<root::nsCharTraits>() , 1usize ,
+                   concat ! (
+                   "Size of template specialization: " , stringify ! (
+                   root::nsCharTraits ) ));
+        assert_eq!(::std::mem::align_of::<root::nsCharTraits>() , 1usize ,
+                   concat ! (
+                   "Alignment of template specialization: " , stringify ! (
+                   root::nsCharTraits ) ));
+    }
+    #[test]
+    fn __bindgen_test_layout_nsCharTraits_open0_nsCSubstringTuple_char_type_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsCharTraits>() , 1usize ,
                    concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -33690,26 +34367,26 @@ pub mod root {
                    root::nsTArray<root::mozilla::FontFamilyName> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0_unsigned_int_close0_instantiation() {
-        assert_eq!(::std::mem::size_of::<root::nsTArray<::std::os::raw::c_uint>>()
-                   , 8usize , concat ! (
+    fn __bindgen_test_layout_nsTArray_open0_uint32_t_close0_instantiation() {
+        assert_eq!(::std::mem::size_of::<root::nsTArray<u32>>() , 8usize ,
+                   concat ! (
                    "Size of template specialization: " , stringify ! (
-                   root::nsTArray<::std::os::raw::c_uint> ) ));
-        assert_eq!(::std::mem::align_of::<root::nsTArray<::std::os::raw::c_uint>>()
-                   , 8usize , concat ! (
+                   root::nsTArray<u32> ) ));
+        assert_eq!(::std::mem::align_of::<root::nsTArray<u32>>() , 8usize ,
+                   concat ! (
                    "Alignment of template specialization: " , stringify ! (
-                   root::nsTArray<::std::os::raw::c_uint> ) ));
+                   root::nsTArray<u32> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0_unsigned_int_close0_instantiation_1() {
-        assert_eq!(::std::mem::size_of::<root::nsTArray<::std::os::raw::c_uint>>()
-                   , 8usize , concat ! (
+    fn __bindgen_test_layout_nsTArray_open0_uint32_t_close0_instantiation_1() {
+        assert_eq!(::std::mem::size_of::<root::nsTArray<u32>>() , 8usize ,
+                   concat ! (
                    "Size of template specialization: " , stringify ! (
-                   root::nsTArray<::std::os::raw::c_uint> ) ));
-        assert_eq!(::std::mem::align_of::<root::nsTArray<::std::os::raw::c_uint>>()
-                   , 8usize , concat ! (
+                   root::nsTArray<u32> ) ));
+        assert_eq!(::std::mem::align_of::<root::nsTArray<u32>>() , 8usize ,
+                   concat ! (
                    "Alignment of template specialization: " , stringify ! (
-                   root::nsTArray<::std::os::raw::c_uint> ) ));
+                   root::nsTArray<u32> ) ));
     }
     #[test]
     fn __bindgen_test_layout_nsTArray_open0_gfxFontFeatureValueSet_ValueList_close0_instantiation() {
@@ -33725,26 +34402,37 @@ pub mod root {
                    ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0_unsigned_int_close0_instantiation_2() {
-        assert_eq!(::std::mem::size_of::<root::nsTArray<::std::os::raw::c_uint>>()
-                   , 8usize , concat ! (
+    fn __bindgen_test_layout_nsTArray_open0_uint32_t_close0_instantiation_2() {
+        assert_eq!(::std::mem::size_of::<root::nsTArray<u32>>() , 8usize ,
+                   concat ! (
                    "Size of template specialization: " , stringify ! (
-                   root::nsTArray<::std::os::raw::c_uint> ) ));
-        assert_eq!(::std::mem::align_of::<root::nsTArray<::std::os::raw::c_uint>>()
-                   , 8usize , concat ! (
+                   root::nsTArray<u32> ) ));
+        assert_eq!(::std::mem::align_of::<root::nsTArray<u32>>() , 8usize ,
+                   concat ! (
                    "Alignment of template specialization: " , stringify ! (
-                   root::nsTArray<::std::os::raw::c_uint> ) ));
+                   root::nsTArray<u32> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0_unsigned_int_close0_instantiation_3() {
-        assert_eq!(::std::mem::size_of::<root::nsTArray<::std::os::raw::c_uint>>()
-                   , 8usize , concat ! (
+    fn __bindgen_test_layout_nsTArray_open0_uint32_t_close0_instantiation_3() {
+        assert_eq!(::std::mem::size_of::<root::nsTArray<u32>>() , 8usize ,
+                   concat ! (
                    "Size of template specialization: " , stringify ! (
-                   root::nsTArray<::std::os::raw::c_uint> ) ));
-        assert_eq!(::std::mem::align_of::<root::nsTArray<::std::os::raw::c_uint>>()
-                   , 8usize , concat ! (
+                   root::nsTArray<u32> ) ));
+        assert_eq!(::std::mem::align_of::<root::nsTArray<u32>>() , 8usize ,
+                   concat ! (
                    "Alignment of template specialization: " , stringify ! (
-                   root::nsTArray<::std::os::raw::c_uint> ) ));
+                   root::nsTArray<u32> ) ));
+    }
+    #[test]
+    fn __bindgen_test_layout_nsTArray_open0_uint32_t_close0_instantiation_4() {
+        assert_eq!(::std::mem::size_of::<root::nsTArray<u32>>() , 8usize ,
+                   concat ! (
+                   "Size of template specialization: " , stringify ! (
+                   root::nsTArray<u32> ) ));
+        assert_eq!(::std::mem::align_of::<root::nsTArray<u32>>() , 8usize ,
+                   concat ! (
+                   "Alignment of template specialization: " , stringify ! (
+                   root::nsTArray<u32> ) ));
     }
     #[test]
     fn __bindgen_test_layout_nsTArray_open0_gfxAlternateValue_close0_instantiation() {
@@ -33780,18 +34468,18 @@ pub mod root {
                    root::nsTArray<root::gfxFontFeature> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0_FontVariation_close0_instantiation() {
-        assert_eq!(::std::mem::size_of::<root::nsTArray<root::mozilla::gfx::FontVariation>>()
+    fn __bindgen_test_layout_nsTArray_open0_gfxFontVariation_close0_instantiation() {
+        assert_eq!(::std::mem::size_of::<root::nsTArray<root::gfxFontVariation>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
-                   root::nsTArray<root::mozilla::gfx::FontVariation> ) ));
-        assert_eq!(::std::mem::align_of::<root::nsTArray<root::mozilla::gfx::FontVariation>>()
+                   root::nsTArray<root::gfxFontVariation> ) ));
+        assert_eq!(::std::mem::align_of::<root::nsTArray<root::gfxFontVariation>>()
                    , 8usize , concat ! (
                    "Alignment of template specialization: " , stringify ! (
-                   root::nsTArray<root::mozilla::gfx::FontVariation> ) ));
+                   root::nsTArray<root::gfxFontVariation> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_228717_close0_instantiation() {
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_205354_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::nsCSSSelector>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -34147,7 +34835,7 @@ pub mod root {
                    root::mozilla::binding_danger::TErrorResult ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_230548_close0_instantiation() {
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_207182_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::mozilla::StyleSheet>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -34202,27 +34890,29 @@ pub mod root {
                    root::nsTArray<root::mozilla::StyleSetHandle> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_RefPtr_open0_nsChildContentList_close0_instantiation() {
-        assert_eq!(::std::mem::size_of::<root::RefPtr<root::nsChildContentList>>()
+    fn __bindgen_test_layout_RefPtr_open0_nsAttrChildContentList_close0_instantiation() {
+        assert_eq!(::std::mem::size_of::<root::RefPtr<root::nsAttrChildContentList>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
-                   root::RefPtr<root::nsChildContentList> ) ));
-        assert_eq!(::std::mem::align_of::<root::RefPtr<root::nsChildContentList>>()
+                   root::RefPtr<root::nsAttrChildContentList> ) ));
+        assert_eq!(::std::mem::align_of::<root::RefPtr<root::nsAttrChildContentList>>()
                    , 8usize , concat ! (
                    "Alignment of template specialization: " , stringify ! (
-                   root::RefPtr<root::nsChildContentList> ) ));
+                   root::RefPtr<root::nsAttrChildContentList> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_UniquePtr_open0_nsTHashtable_open1_nsPtrHashKey_open2_nsRange_close2_close1_DefaultDelete_open1_nsTHashtable_open2_nsPtrHashKey_open3_nsRange_close3_close2_close1_close0_instantiation() {
-        assert_eq!(::std::mem::size_of::<u64>() , 8usize , concat ! (
-                   "Size of template specialization: " , stringify ! ( u64 )
-                   ));
-        assert_eq!(::std::mem::align_of::<u64>() , 8usize , concat ! (
+    fn __bindgen_test_layout_UniquePtr_open0_LinkedList_open1_nsRange_close1_DefaultDelete_open1_LinkedList_open2_nsRange_close2_close1_close0_instantiation() {
+        assert_eq!(::std::mem::size_of::<root::mozilla::UniquePtr<root::mozilla::LinkedList>>()
+                   , 8usize , concat ! (
+                   "Size of template specialization: " , stringify ! (
+                   root::mozilla::UniquePtr<root::mozilla::LinkedList> ) ));
+        assert_eq!(::std::mem::align_of::<root::mozilla::UniquePtr<root::mozilla::LinkedList>>()
+                   , 8usize , concat ! (
                    "Alignment of template specialization: " , stringify ! (
-                   u64 ) ));
+                   root::mozilla::UniquePtr<root::mozilla::LinkedList> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_DefaultDelete_open0_nsTHashtable_open1_nsPtrHashKey_open2_nsRange_close2_close1_close0_instantiation() {
+    fn __bindgen_test_layout_DefaultDelete_open0_LinkedList_open1_nsRange_close1_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::mozilla::DefaultDelete>() ,
                    1usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -34233,16 +34923,18 @@ pub mod root {
                    root::mozilla::DefaultDelete ) ));
     }
     #[test]
-    fn __bindgen_test_layout_UniquePtr_open0_nsTHashtable_open1_nsPtrHashKey_open2_nsRange_close2_close1_DefaultDelete_open1_nsTHashtable_open2_nsPtrHashKey_open3_nsRange_close3_close2_close1_close0_instantiation_1() {
-        assert_eq!(::std::mem::size_of::<u64>() , 8usize , concat ! (
-                   "Size of template specialization: " , stringify ! ( u64 )
-                   ));
-        assert_eq!(::std::mem::align_of::<u64>() , 8usize , concat ! (
+    fn __bindgen_test_layout_UniquePtr_open0_LinkedList_open1_nsRange_close1_DefaultDelete_open1_LinkedList_open2_nsRange_close2_close1_close0_instantiation_1() {
+        assert_eq!(::std::mem::size_of::<root::mozilla::UniquePtr<root::mozilla::LinkedList>>()
+                   , 8usize , concat ! (
+                   "Size of template specialization: " , stringify ! (
+                   root::mozilla::UniquePtr<root::mozilla::LinkedList> ) ));
+        assert_eq!(::std::mem::align_of::<root::mozilla::UniquePtr<root::mozilla::LinkedList>>()
+                   , 8usize , concat ! (
                    "Alignment of template specialization: " , stringify ! (
-                   u64 ) ));
+                   root::mozilla::UniquePtr<root::mozilla::LinkedList> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_DefaultDelete_open0_nsTHashtable_open1_nsPtrHashKey_open2_nsRange_close2_close1_close0_instantiation_1() {
+    fn __bindgen_test_layout_DefaultDelete_open0_LinkedList_open1_nsRange_close1_close0_instantiation_1() {
         assert_eq!(::std::mem::size_of::<root::mozilla::DefaultDelete>() ,
                    1usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -34308,7 +35000,7 @@ pub mod root {
                    root::JS::DeletePolicy ) ));
     }
     #[test]
-    fn __bindgen_test_layout_iterator_open0_input_iterator_tag_UniquePtr_open1_JSErrorNotes_Note_DeletePolicy_open2_JSErrorNotes_Note_close2_close1_long__bindgen_ty_id_236167__bindgen_ty_id_236174_close0_instantiation() {
+    fn __bindgen_test_layout_iterator_open0_input_iterator_tag_UniquePtr_open1_JSErrorNotes_Note_DeletePolicy_open2_JSErrorNotes_Note_close2_close1_long__bindgen_ty_id_212773__bindgen_ty_id_212780_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::std::iterator>() , 1usize ,
                    concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -34556,15 +35248,15 @@ pub mod root {
                    root::RefPtr<root::mozilla::StyleSheet> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_238666_close0_instantiation() {
-        assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::mozilla::dom::Element>>()
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_215281_close0_instantiation() {
+        assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::nsIDocument_Element>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
-                   root::nsTArray<*mut root::mozilla::dom::Element> ) ));
-        assert_eq!(::std::mem::align_of::<root::nsTArray<*mut root::mozilla::dom::Element>>()
+                   root::nsTArray<*mut root::nsIDocument_Element> ) ));
+        assert_eq!(::std::mem::align_of::<root::nsTArray<*mut root::nsIDocument_Element>>()
                    , 8usize , concat ! (
                    "Alignment of template specialization: " , stringify ! (
-                   root::nsTArray<*mut root::mozilla::dom::Element> ) ));
+                   root::nsTArray<*mut root::nsIDocument_Element> ) ));
     }
     #[test]
     fn __bindgen_test_layout_nsTArray_open0_RefPtr_open1_Element_close1_close0_instantiation() {
@@ -34624,15 +35316,15 @@ pub mod root {
                    root::nsCOMPtr<root::nsIObserver> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_238968_close0_instantiation() {
-        assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::mozilla::dom::Element>>()
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_215586_close0_instantiation() {
+        assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::nsIDocument_Element>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
-                   root::nsTArray<*mut root::mozilla::dom::Element> ) ));
-        assert_eq!(::std::mem::align_of::<root::nsTArray<*mut root::mozilla::dom::Element>>()
+                   root::nsTArray<*mut root::nsIDocument_Element> ) ));
+        assert_eq!(::std::mem::align_of::<root::nsTArray<*mut root::nsIDocument_Element>>()
                    , 8usize , concat ! (
                    "Alignment of template specialization: " , stringify ! (
-                   root::nsTArray<*mut root::mozilla::dom::Element> ) ));
+                   root::nsTArray<*mut root::nsIDocument_Element> ) ));
     }
     #[test]
     fn __bindgen_test_layout_nsTArray_open0_RefPtr_open1_Element_close1_close0_instantiation_1() {
@@ -34736,16 +35428,16 @@ pub mod root {
                    root::RefPtr<root::mozilla::URLExtraData> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_NotNull_open0__bindgen_ty_id_239510_close0_instantiation() {
-        assert_eq!(::std::mem::size_of::<root::mozilla::NotNull<*const root::mozilla::Encoding>>()
+    fn __bindgen_test_layout_NotNull_open0__bindgen_ty_id_216135_close0_instantiation() {
+        assert_eq!(::std::mem::size_of::<root::mozilla::NotNull<*const root::nsIDocument_Encoding>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
-                   root::mozilla::NotNull<*const root::mozilla::Encoding> )
+                   root::mozilla::NotNull<*const root::nsIDocument_Encoding> )
                    ));
-        assert_eq!(::std::mem::align_of::<root::mozilla::NotNull<*const root::mozilla::Encoding>>()
+        assert_eq!(::std::mem::align_of::<root::mozilla::NotNull<*const root::nsIDocument_Encoding>>()
                    , 8usize , concat ! (
                    "Alignment of template specialization: " , stringify ! (
-                   root::mozilla::NotNull<*const root::mozilla::Encoding> )
+                   root::mozilla::NotNull<*const root::nsIDocument_Encoding> )
                    ));
     }
     #[test]
@@ -34947,28 +35639,15 @@ pub mod root {
                    root::nsCOMPtr<root::nsIDocument> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0_nsCOMPtr_open1_nsIWeakReference_close1_close0_instantiation() {
-        assert_eq!(::std::mem::size_of::<root::nsTArray<root::nsCOMPtr<root::nsIWeakReference>>>()
-                   , 8usize , concat ! (
+    fn __bindgen_test_layout_nsTArray_open0_nsWeakPtr_close0_instantiation() {
+        assert_eq!(::std::mem::size_of::<root::nsTArray<root::nsWeakPtr>>() ,
+                   8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
-                   root::nsTArray<root::nsCOMPtr<root::nsIWeakReference>> )
-                   ));
-        assert_eq!(::std::mem::align_of::<root::nsTArray<root::nsCOMPtr<root::nsIWeakReference>>>()
-                   , 8usize , concat ! (
+                   root::nsTArray<root::nsWeakPtr> ) ));
+        assert_eq!(::std::mem::align_of::<root::nsTArray<root::nsWeakPtr>>() ,
+                   8usize , concat ! (
                    "Alignment of template specialization: " , stringify ! (
-                   root::nsTArray<root::nsCOMPtr<root::nsIWeakReference>> )
-                   ));
-    }
-    #[test]
-    fn __bindgen_test_layout_nsCOMPtr_open0_nsIWeakReference_close0_instantiation() {
-        assert_eq!(::std::mem::size_of::<root::nsCOMPtr<root::nsIWeakReference>>()
-                   , 8usize , concat ! (
-                   "Size of template specialization: " , stringify ! (
-                   root::nsCOMPtr<root::nsIWeakReference> ) ));
-        assert_eq!(::std::mem::align_of::<root::nsCOMPtr<root::nsIWeakReference>>()
-                   , 8usize , concat ! (
-                   "Alignment of template specialization: " , stringify ! (
-                   root::nsCOMPtr<root::nsIWeakReference> ) ));
+                   root::nsTArray<root::nsWeakPtr> ) ));
     }
     #[test]
     fn __bindgen_test_layout_nsCOMPtr_open0_nsIDocumentEncoder_close0_instantiation() {
@@ -35083,6 +35762,17 @@ pub mod root {
                    root::nsCOMPtr<root::nsIRunnable> ) ));
     }
     #[test]
+    fn __bindgen_test_layout_nsCOMPtr_open0_nsINode_close0_instantiation() {
+        assert_eq!(::std::mem::size_of::<root::nsCOMPtr<root::nsINode>>() ,
+                   8usize , concat ! (
+                   "Size of template specialization: " , stringify ! (
+                   root::nsCOMPtr<root::nsINode> ) ));
+        assert_eq!(::std::mem::align_of::<root::nsCOMPtr<root::nsINode>>() ,
+                   8usize , concat ! (
+                   "Alignment of template specialization: " , stringify ! (
+                   root::nsCOMPtr<root::nsINode> ) ));
+    }
+    #[test]
     fn __bindgen_test_layout_RefPtr_open0_CSSRuleListImpl_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::RefPtr<root::CSSRuleListImpl>>()
                    , 8usize , concat ! (
@@ -35140,7 +35830,7 @@ pub mod root {
                    root::RefPtr<root::mozilla::StyleSheet> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_239931_close0_instantiation() {
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_216557_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::mozilla::StyleSheet>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -35230,7 +35920,20 @@ pub mod root {
                    ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_240330_close0_instantiation() {
+    fn __bindgen_test_layout_nsTArray_open0_RefPtr_open1_ServoStyleSheet_close1_close0_instantiation_1() {
+        assert_eq!(::std::mem::size_of::<root::nsTArray<root::RefPtr<root::mozilla::ServoStyleSheet>>>()
+                   , 8usize , concat ! (
+                   "Size of template specialization: " , stringify ! (
+                   root::nsTArray<root::RefPtr<root::mozilla::ServoStyleSheet>>
+                   ) ));
+        assert_eq!(::std::mem::align_of::<root::nsTArray<root::RefPtr<root::mozilla::ServoStyleSheet>>>()
+                   , 8usize , concat ! (
+                   "Alignment of template specialization: " , stringify ! (
+                   root::nsTArray<root::RefPtr<root::mozilla::ServoStyleSheet>>
+                   ) ));
+    }
+    #[test]
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_216977_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::mozilla::StyleSheet>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -35274,7 +35977,7 @@ pub mod root {
                    root::mozilla::DefaultDelete ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0_RefPtr_open1_ServoStyleSheet_close1_close0_instantiation_1() {
+    fn __bindgen_test_layout_nsTArray_open0_RefPtr_open1_ServoStyleSheet_close1_close0_instantiation_2() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<root::RefPtr<root::mozilla::ServoStyleSheet>>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -35287,6 +35990,17 @@ pub mod root {
                    ) ));
     }
     #[test]
+    fn __bindgen_test_layout_RefPtr_open0_ServoStyleContext_close0_instantiation_2() {
+        assert_eq!(::std::mem::size_of::<root::RefPtr<root::mozilla::ServoStyleContext>>()
+                   , 8usize , concat ! (
+                   "Size of template specialization: " , stringify ! (
+                   root::RefPtr<root::mozilla::ServoStyleContext> ) ));
+        assert_eq!(::std::mem::align_of::<root::RefPtr<root::mozilla::ServoStyleContext>>()
+                   , 8usize , concat ! (
+                   "Alignment of template specialization: " , stringify ! (
+                   root::RefPtr<root::mozilla::ServoStyleContext> ) ));
+    }
+    #[test]
     fn __bindgen_test_layout_nsTArray_open0_PostTraversalTask_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<root::mozilla::PostTraversalTask>>()
                    , 8usize , concat ! (
@@ -35296,6 +36010,28 @@ pub mod root {
                    , 8usize , concat ! (
                    "Alignment of template specialization: " , stringify ! (
                    root::nsTArray<root::mozilla::PostTraversalTask> ) ));
+    }
+    #[test]
+    fn __bindgen_test_layout_RefPtr_open0_ServoStyleRuleMap_close0_instantiation() {
+        assert_eq!(::std::mem::size_of::<root::RefPtr<root::mozilla::ServoStyleRuleMap>>()
+                   , 8usize , concat ! (
+                   "Size of template specialization: " , stringify ! (
+                   root::RefPtr<root::mozilla::ServoStyleRuleMap> ) ));
+        assert_eq!(::std::mem::align_of::<root::RefPtr<root::mozilla::ServoStyleRuleMap>>()
+                   , 8usize , concat ! (
+                   "Alignment of template specialization: " , stringify ! (
+                   root::RefPtr<root::mozilla::ServoStyleRuleMap> ) ));
+    }
+    #[test]
+    fn __bindgen_test_layout_RefPtr_open0_nsBindingManager_close0_instantiation() {
+        assert_eq!(::std::mem::size_of::<root::RefPtr<root::nsBindingManager>>()
+                   , 8usize , concat ! (
+                   "Size of template specialization: " , stringify ! (
+                   root::RefPtr<root::nsBindingManager> ) ));
+        assert_eq!(::std::mem::align_of::<root::RefPtr<root::nsBindingManager>>()
+                   , 8usize , concat ! (
+                   "Alignment of template specialization: " , stringify ! (
+                   root::RefPtr<root::nsBindingManager> ) ));
     }
     #[test]
     fn __bindgen_test_layout_UniquePtr_open0_nsISMILAttr_DefaultDelete_open1_nsISMILAttr_close1_close0_instantiation() {
@@ -35331,7 +36067,7 @@ pub mod root {
                    root::nsTArray<::nsstring::nsStringRepr> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_241301_close0_instantiation() {
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_217952_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::mozilla::StyleSheet>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -35362,13 +36098,17 @@ pub mod root {
                    root::nsRefPtrHashKey<root::nsIContent> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsAutoPtr_open0_nsInterfaceHashtable_open1_nsISupportsHashKey_nsIXPConnectWrappedJS_close1_close0_instantiation() {
-        assert_eq!(::std::mem::size_of::<u64>() , 8usize , concat ! (
-                   "Size of template specialization: " , stringify ! ( u64 )
+    fn __bindgen_test_layout_nsAutoPtr_open0_nsBindingManager_WrapperHashtable_close0_instantiation() {
+        assert_eq!(::std::mem::size_of::<root::nsAutoPtr<root::nsBindingManager_WrapperHashtable>>()
+                   , 8usize , concat ! (
+                   "Size of template specialization: " , stringify ! (
+                   root::nsAutoPtr<root::nsBindingManager_WrapperHashtable> )
                    ));
-        assert_eq!(::std::mem::align_of::<u64>() , 8usize , concat ! (
+        assert_eq!(::std::mem::align_of::<root::nsAutoPtr<root::nsBindingManager_WrapperHashtable>>()
+                   , 8usize , concat ! (
                    "Alignment of template specialization: " , stringify ! (
-                   u64 ) ));
+                   root::nsAutoPtr<root::nsBindingManager_WrapperHashtable> )
+                   ));
     }
     #[test]
     fn __bindgen_test_layout_nsAutoPtr_open0_nsRefPtrHashtable_open1_nsURIHashKey_nsXBLDocumentInfo_close1_close0_instantiation() {
@@ -35420,7 +36160,7 @@ pub mod root {
                    root::RefPtr<root::nsCSSFontFaceRule> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_241606_close0_instantiation() {
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_218261_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::nsIContent>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -35431,7 +36171,7 @@ pub mod root {
                    root::nsTArray<*mut root::nsIContent> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_241611_close0_instantiation() {
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_218266_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::nsIContent>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -35488,7 +36228,7 @@ pub mod root {
                    root::RefPtr<root::mozilla::CSSStyleSheet> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_242102_close0_instantiation() {
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_218759_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::mozilla::StyleSheet>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -35668,6 +36408,17 @@ pub mod root {
                    root::nsCOMPtr<root::nsIAtom> ) ));
     }
     #[test]
+    fn __bindgen_test_layout_RefPtr_open0_gfxFontFeatureValueSet_close0_instantiation_1() {
+        assert_eq!(::std::mem::size_of::<root::RefPtr<root::gfxFontFeatureValueSet>>()
+                   , 8usize , concat ! (
+                   "Size of template specialization: " , stringify ! (
+                   root::RefPtr<root::gfxFontFeatureValueSet> ) ));
+        assert_eq!(::std::mem::align_of::<root::RefPtr<root::gfxFontFeatureValueSet>>()
+                   , 8usize , concat ! (
+                   "Alignment of template specialization: " , stringify ! (
+                   root::RefPtr<root::gfxFontFeatureValueSet> ) ));
+    }
+    #[test]
     fn __bindgen_test_layout_nsCOMPtr_open0_nsIAtom_close0_instantiation_5() {
         assert_eq!(::std::mem::size_of::<root::nsCOMPtr<root::nsIAtom>>() ,
                    8usize , concat ! (
@@ -35822,7 +36573,7 @@ pub mod root {
                    root::nsCOMPtr<root::nsIPrincipal> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_RefPtr_open0_nsBindingManager_close0_instantiation() {
+    fn __bindgen_test_layout_RefPtr_open0_nsBindingManager_close0_instantiation_1() {
         assert_eq!(::std::mem::size_of::<root::RefPtr<root::nsBindingManager>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -35866,15 +36617,15 @@ pub mod root {
                    root::nsTArray<::nsstring::nsStringRepr> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsCOMPtr_open0_Element_close0_instantiation() {
-        assert_eq!(::std::mem::size_of::<root::nsCOMPtr<root::mozilla::dom::Element>>()
+    fn __bindgen_test_layout_nsCOMPtr_open0_nsDOMAttributeMap_Element_close0_instantiation() {
+        assert_eq!(::std::mem::size_of::<root::nsCOMPtr<root::nsDOMAttributeMap_Element>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
-                   root::nsCOMPtr<root::mozilla::dom::Element> ) ));
-        assert_eq!(::std::mem::align_of::<root::nsCOMPtr<root::mozilla::dom::Element>>()
+                   root::nsCOMPtr<root::nsDOMAttributeMap_Element> ) ));
+        assert_eq!(::std::mem::align_of::<root::nsCOMPtr<root::nsDOMAttributeMap_Element>>()
                    , 8usize , concat ! (
                    "Alignment of template specialization: " , stringify ! (
-                   root::nsCOMPtr<root::mozilla::dom::Element> ) ));
+                   root::nsCOMPtr<root::nsDOMAttributeMap_Element> ) ));
     }
     #[test]
     fn __bindgen_test_layout_nsTArray_open0_RefPtr_open1_StyleSheet_close1_close0_instantiation_3() {
@@ -36125,7 +36876,7 @@ pub mod root {
                    root::nsCOMPtr<root::nsIPrincipal> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsCOMPtr_open0_nsIWeakReference_close0_instantiation_1() {
+    fn __bindgen_test_layout_nsCOMPtr_open0_nsIWeakReference_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsCOMPtr<root::nsIWeakReference>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -36136,7 +36887,7 @@ pub mod root {
                    root::nsCOMPtr<root::nsIWeakReference> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_244958_close0_instantiation() {
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_221602_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<*mut ::std::os::raw::c_void>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -36215,7 +36966,7 @@ pub mod root {
                    root::mozilla::DefaultDelete ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_251248_close0_instantiation() {
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_227828_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::mozilla::dom::AudioContext>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -36248,7 +36999,7 @@ pub mod root {
                    root::RefPtr<root::mozilla::dom::CallbackObject> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_Heap_open0__bindgen_ty_id_252417_close0_instantiation() {
+    fn __bindgen_test_layout_Heap_open0__bindgen_ty_id_228997_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::JS::Heap<*mut root::JSObject>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -36259,7 +37010,7 @@ pub mod root {
                    root::JS::Heap<*mut root::JSObject> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_Heap_open0__bindgen_ty_id_252421_close0_instantiation() {
+    fn __bindgen_test_layout_Heap_open0__bindgen_ty_id_229001_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::JS::Heap<*mut root::JSObject>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -36281,7 +37032,7 @@ pub mod root {
                    root::nsCOMPtr<root::nsIGlobalObject> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_TenuredHeap_open0__bindgen_ty_id_252428_close0_instantiation() {
+    fn __bindgen_test_layout_TenuredHeap_open0__bindgen_ty_id_229008_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::JS::TenuredHeap>() , 8usize ,
                    concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -36360,7 +37111,7 @@ pub mod root {
                    ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_253533_close0_instantiation() {
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_230187_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::nsISupports>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -36555,7 +37306,7 @@ pub mod root {
                    root::nsTArray<f64> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_254981_close0_instantiation() {
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_231631_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::mozilla::dom::Element>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -36660,7 +37411,7 @@ pub mod root {
                    root::nsRefPtrHashKey<root::nsIAtom> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_257410_close0_instantiation() {
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_234035_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::mozilla::CounterStyle>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -36761,6 +37512,72 @@ pub mod root {
                    root::mozilla::UniquePtr<::std::os::raw::c_char> ) ));
     }
     #[test]
+    fn __bindgen_test_layout_RefPtr_open0_SchedulerGroup_close0_instantiation() {
+        assert_eq!(::std::mem::size_of::<root::RefPtr<root::mozilla::SchedulerGroup>>()
+                   , 8usize , concat ! (
+                   "Size of template specialization: " , stringify ! (
+                   root::RefPtr<root::mozilla::SchedulerGroup> ) ));
+        assert_eq!(::std::mem::align_of::<root::RefPtr<root::mozilla::SchedulerGroup>>()
+                   , 8usize , concat ! (
+                   "Alignment of template specialization: " , stringify ! (
+                   root::RefPtr<root::mozilla::SchedulerGroup> ) ));
+    }
+    #[test]
+    fn __bindgen_test_layout_nsCOMPtr_open0_nsIRunnable_close0_instantiation_5() {
+        assert_eq!(::std::mem::size_of::<root::nsCOMPtr<root::nsIRunnable>>()
+                   , 8usize , concat ! (
+                   "Size of template specialization: " , stringify ! (
+                   root::nsCOMPtr<root::nsIRunnable> ) ));
+        assert_eq!(::std::mem::align_of::<root::nsCOMPtr<root::nsIRunnable>>()
+                   , 8usize , concat ! (
+                   "Alignment of template specialization: " , stringify ! (
+                   root::nsCOMPtr<root::nsIRunnable> ) ));
+    }
+    #[test]
+    fn __bindgen_test_layout_RefPtr_open0_SchedulerGroup_close0_instantiation_1() {
+        assert_eq!(::std::mem::size_of::<root::RefPtr<root::mozilla::SchedulerGroup>>()
+                   , 8usize , concat ! (
+                   "Size of template specialization: " , stringify ! (
+                   root::RefPtr<root::mozilla::SchedulerGroup> ) ));
+        assert_eq!(::std::mem::align_of::<root::RefPtr<root::mozilla::SchedulerGroup>>()
+                   , 8usize , concat ! (
+                   "Alignment of template specialization: " , stringify ! (
+                   root::RefPtr<root::mozilla::SchedulerGroup> ) ));
+    }
+    #[test]
+    fn __bindgen_test_layout_nsCOMPtr_open0_nsISerialEventTarget_close0_instantiation() {
+        assert_eq!(::std::mem::size_of::<root::nsCOMPtr<root::nsISerialEventTarget>>()
+                   , 8usize , concat ! (
+                   "Size of template specialization: " , stringify ! (
+                   root::nsCOMPtr<root::nsISerialEventTarget> ) ));
+        assert_eq!(::std::mem::align_of::<root::nsCOMPtr<root::nsISerialEventTarget>>()
+                   , 8usize , concat ! (
+                   "Alignment of template specialization: " , stringify ! (
+                   root::nsCOMPtr<root::nsISerialEventTarget> ) ));
+    }
+    #[test]
+    fn __bindgen_test_layout_RefPtr_open0_AbstractThread_close0_instantiation() {
+        assert_eq!(::std::mem::size_of::<root::RefPtr<root::mozilla::AbstractThread>>()
+                   , 8usize , concat ! (
+                   "Size of template specialization: " , stringify ! (
+                   root::RefPtr<root::mozilla::AbstractThread> ) ));
+        assert_eq!(::std::mem::align_of::<root::RefPtr<root::mozilla::AbstractThread>>()
+                   , 8usize , concat ! (
+                   "Alignment of template specialization: " , stringify ! (
+                   root::RefPtr<root::mozilla::AbstractThread> ) ));
+    }
+    #[test]
+    fn __bindgen_test_layout_RefPtr_open0_SchedulerGroup_close0_instantiation_2() {
+        assert_eq!(::std::mem::size_of::<root::RefPtr<root::mozilla::SchedulerGroup>>()
+                   , 8usize , concat ! (
+                   "Size of template specialization: " , stringify ! (
+                   root::RefPtr<root::mozilla::SchedulerGroup> ) ));
+        assert_eq!(::std::mem::align_of::<root::RefPtr<root::mozilla::SchedulerGroup>>()
+                   , 8usize , concat ! (
+                   "Alignment of template specialization: " , stringify ! (
+                   root::RefPtr<root::mozilla::SchedulerGroup> ) ));
+    }
+    #[test]
     fn __bindgen_test_layout_nsCOMPtr_open0_nsIEventTarget_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsCOMPtr<root::nsIEventTarget>>()
                    , 8usize , concat ! (
@@ -36805,15 +37622,15 @@ pub mod root {
                    root::mozilla::DefaultDelete ) ));
     }
     #[test]
-    fn __bindgen_test_layout_RefPtr_open0_ImageURL_close0_instantiation() {
-        assert_eq!(::std::mem::size_of::<root::RefPtr<root::mozilla::image::ImageURL>>()
+    fn __bindgen_test_layout_RefPtr_open0_imgRequestProxy_ImageURL_close0_instantiation() {
+        assert_eq!(::std::mem::size_of::<root::RefPtr<root::imgRequestProxy_ImageURL>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
-                   root::RefPtr<root::mozilla::image::ImageURL> ) ));
-        assert_eq!(::std::mem::align_of::<root::RefPtr<root::mozilla::image::ImageURL>>()
+                   root::RefPtr<root::imgRequestProxy_ImageURL> ) ));
+        assert_eq!(::std::mem::align_of::<root::RefPtr<root::imgRequestProxy_ImageURL>>()
                    , 8usize , concat ! (
                    "Alignment of template specialization: " , stringify ! (
-                   root::RefPtr<root::mozilla::image::ImageURL> ) ));
+                   root::RefPtr<root::imgRequestProxy_ImageURL> ) ));
     }
     #[test]
     fn __bindgen_test_layout_nsCOMPtr_open0_nsILoadGroup_close0_instantiation() {
@@ -37361,7 +38178,7 @@ pub mod root {
                    root::RefPtr<root::nsStyleImageRequest> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_259968_close0_instantiation() {
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_236601_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::nsISupports>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -37598,7 +38415,7 @@ pub mod root {
                    root::nsCOMPtr<root::nsIURI> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_267780_close0_instantiation() {
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_244297_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::nsIContent>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -37609,7 +38426,7 @@ pub mod root {
                    root::nsTArray<*mut root::nsIContent> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_267785_close0_instantiation() {
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_244302_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::nsIContent>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -37697,7 +38514,7 @@ pub mod root {
                    root::RefPtr<root::mozilla::dom::ShadowRoot> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_267898_close0_instantiation() {
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_244415_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::nsIContent>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -37984,7 +38801,7 @@ pub mod root {
                    ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_269484_close0_instantiation() {
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_246012_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::nsIContent>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -38006,7 +38823,7 @@ pub mod root {
                    root::RefPtr<root::mozilla::dom::Element> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_269646_close0_instantiation() {
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_246172_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::nsIContent>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -38017,7 +38834,7 @@ pub mod root {
                    root::nsTArray<*mut root::nsIContent> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_269651_close0_instantiation() {
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_246177_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::nsIContent>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -38026,20 +38843,20 @@ pub mod root {
                    , 8usize , concat ! (
                    "Alignment of template specialization: " , stringify ! (
                    root::nsTArray<*mut root::nsIContent> ) ));
+    }
+    #[test]
+    fn __bindgen_test_layout_nsTArray_open0_unsigned_int_close0_instantiation() {
+        assert_eq!(::std::mem::size_of::<root::nsTArray<::std::os::raw::c_uint>>()
+                   , 8usize , concat ! (
+                   "Size of template specialization: " , stringify ! (
+                   root::nsTArray<::std::os::raw::c_uint> ) ));
+        assert_eq!(::std::mem::align_of::<root::nsTArray<::std::os::raw::c_uint>>()
+                   , 8usize , concat ! (
+                   "Alignment of template specialization: " , stringify ! (
+                   root::nsTArray<::std::os::raw::c_uint> ) ));
     }
     #[test]
     fn __bindgen_test_layout_nsTArray_open0_nsString_close0_instantiation_16() {
-        assert_eq!(::std::mem::size_of::<root::nsTArray<::nsstring::nsStringRepr>>() ,
-                   8usize , concat ! (
-                   "Size of template specialization: " , stringify ! (
-                   root::nsTArray<::nsstring::nsStringRepr> ) ));
-        assert_eq!(::std::mem::align_of::<root::nsTArray<::nsstring::nsStringRepr>>() ,
-                   8usize , concat ! (
-                   "Alignment of template specialization: " , stringify ! (
-                   root::nsTArray<::nsstring::nsStringRepr> ) ));
-    }
-    #[test]
-    fn __bindgen_test_layout_nsTArray_open0_nsString_close0_instantiation_17() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<::nsstring::nsStringRepr>>() ,
                    8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -38138,18 +38955,18 @@ pub mod root {
                    root::nsTArray<root::gfxFontFeature> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0_FontVariation_close0_instantiation_1() {
-        assert_eq!(::std::mem::size_of::<root::nsTArray<root::mozilla::gfx::FontVariation>>()
+    fn __bindgen_test_layout_nsTArray_open0_gfxFontVariation_close0_instantiation_1() {
+        assert_eq!(::std::mem::size_of::<root::nsTArray<root::gfxFontVariation>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
-                   root::nsTArray<root::mozilla::gfx::FontVariation> ) ));
-        assert_eq!(::std::mem::align_of::<root::nsTArray<root::mozilla::gfx::FontVariation>>()
+                   root::nsTArray<root::gfxFontVariation> ) ));
+        assert_eq!(::std::mem::align_of::<root::nsTArray<root::gfxFontVariation>>()
                    , 8usize , concat ! (
                    "Alignment of template specialization: " , stringify ! (
-                   root::nsTArray<root::mozilla::gfx::FontVariation> ) ));
+                   root::nsTArray<root::gfxFontVariation> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_272182_close0_instantiation() {
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_248457_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::mozilla::css::DocumentRule>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (
@@ -38160,7 +38977,7 @@ pub mod root {
                    root::nsTArray<*mut root::mozilla::css::DocumentRule> ) ));
     }
     #[test]
-    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_272190_close0_instantiation() {
+    fn __bindgen_test_layout_nsTArray_open0__bindgen_ty_id_248465_close0_instantiation() {
         assert_eq!(::std::mem::size_of::<root::nsTArray<*mut root::mozilla::css::DocumentRule>>()
                    , 8usize , concat ! (
                    "Size of template specialization: " , stringify ! (

@@ -224,7 +224,7 @@ var ProcessHangMonitor = {
    * Find a active hang report for the given <browser> element.
    */
   findActiveReport(browser) {
-    let frameLoader = browser.QueryInterface(Ci.nsIFrameLoaderOwner).frameLoader;
+    let frameLoader = browser.frameLoader;
     for (let report of this._activeReports) {
       if (report.isReportForBrowser(frameLoader)) {
         return report;
@@ -237,7 +237,7 @@ var ProcessHangMonitor = {
    * Find a paused hang report for the given <browser> element.
    */
   findPausedReport(browser) {
-    let frameLoader = browser.QueryInterface(Ci.nsIFrameLoaderOwner).frameLoader;
+    let frameLoader = browser.frameLoader;
     for (let [report, ] of this._pausedReports) {
       if (report.isReportForBrowser(frameLoader)) {
         return report;
@@ -342,7 +342,7 @@ var ProcessHangMonitor = {
                                             [addonName, brandBundle.getString("brandShortName")]);
 
       let linkText = bundle.getString("processHang.add-on.learn-more.text");
-      let linkURL = bundle.getString("processHang.add-on.learn-more.url");
+      let linkURL = "https://support.mozilla.org/kb/warning-unresponsive-script#w_other-causes";
 
       let link = doc.createElement("label");
       link.setAttribute("class", "text-link");

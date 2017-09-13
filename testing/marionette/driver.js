@@ -5,9 +5,9 @@
 "use strict";
 /* global XPCNativeWrapper */
 
-var {classes: Cc, interfaces: Ci, utils: Cu, results: Cr} = Components;
+const {classes: Cc, interfaces: Ci, utils: Cu, results: Cr} = Components;
 
-var loader = Cc["@mozilla.org/moz/jssubscript-loader;1"]
+const loader = Cc["@mozilla.org/moz/jssubscript-loader;1"]
     .getService(Ci.mozIJSSubScriptLoader);
 
 Cu.import("resource://gre/modules/Log.jsm");
@@ -57,12 +57,11 @@ Cu.importGlobalProperties(["URL"]);
 
 this.EXPORTED_SYMBOLS = ["GeckoDriver", "Context"];
 
-var FRAME_SCRIPT = "chrome://marionette/content/listener.js";
+const FRAME_SCRIPT = "chrome://marionette/content/listener.js";
+const XUL_NS = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
 
 const CLICK_TO_START_PREF = "marionette.debugging.clicktostart";
 const CONTENT_LISTENER_PREF = "marionette.contentListener";
-
-const XUL_NS = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
 
 const SUPPORTED_STRATEGIES = new Set([
   element.Strategy.ClassName,
@@ -85,15 +84,6 @@ const globalMessageManager = Cc["@mozilla.org/globalmessagemanager;1"]
  * @see {@link https://w3c.github.io/webdriver/webdriver-spec.html}
  * @namespace driver
  */
-
-// This is used to prevent newSession from returning before the telephony
-// API's are ready; see bug 792647.  This assumes that marionette-server.js
-// will be loaded before the 'system-message-listener-ready' message
-// is fired.  If this stops being true, this approach will have to change.
-var systemMessageListenerReady = false;
-Services.obs.addObserver(function() {
-  systemMessageListenerReady = true;
-}, "system-message-listener-ready");
 
 /**
  * @enum
@@ -356,7 +346,7 @@ GeckoDriver.prototype.sendAsync = function(name, data, commandID) {
   // is used for all chrome <-> content communication
   // this can be removed.
   if (commandID) {
-    payload.command_id = commandID;
+    payload.commandID = commandID;
   }
 
   if (!this.curBrowser.frameManager.currentRemoteFrame) {
@@ -461,22 +451,22 @@ GeckoDriver.prototype.addFrameCloseListener = function(action) {
 /**
  * Create a new browsing context for window and add to known browsers.
  *
- * @param {nsIDOMWindow} win
+ * @param {ChromeWindow} win
  *     Window for which we will create a browsing context.
  *
  * @return {string}
  *     Returns the unique server-assigned ID of the window.
  */
-GeckoDriver.prototype.addBrowser = function(win) {
-  let bc = new browser.Context(win, this);
-  let winId = getOuterWindowId(win);
+GeckoDriver.prototype.addBrowser = function(window) {
+  let bc = new browser.Context(window, this);
+  let winId = getOuterWindowId(window);
 
   this.browsers[winId] = bc;
   this.curBrowser = this.browsers[winId];
   if (!this.wins.has(winId)) {
     // add this to seenItems so we can guarantee
     // the user will get winId as this window's id
-    this.wins.set(winId, win);
+    this.wins.set(winId, window);
   }
 };
 
@@ -487,30 +477,30 @@ GeckoDriver.prototype.addBrowser = function(win) {
  * frame script will be loaded into it.  If isNewSession is true, we will
  * switch focus to the start frame when it registers.
  *
- * @param {nsIDOMWindow} win
+ * @param {ChromeWindow} win
  *     Window whose browser we need to access.
  * @param {boolean=} [false] isNewSession
  *     True if this is the first time we're talking to this browser.
  */
-GeckoDriver.prototype.startBrowser = function(win, isNewSession = false) {
-  this.mainFrame = win;
+GeckoDriver.prototype.startBrowser = function(window, isNewSession = false) {
+  this.mainFrame = window;
   this.curFrame = null;
-  this.addBrowser(win);
+  this.addBrowser(window);
   this.curBrowser.isNewSession = isNewSession;
-  this.whenBrowserStarted(win, isNewSession);
+  this.whenBrowserStarted(window, isNewSession);
 };
 
 /**
  * Callback invoked after a new session has been started in a browser.
  * Loads the Marionette frame script into the browser if needed.
  *
- * @param {nsIDOMWindow} win
+ * @param {ChromeWindow} window
  *     Window whose browser we need to access.
  * @param {boolean} isNewSession
  *     True if this is the first time we're talking to this browser.
  */
-GeckoDriver.prototype.whenBrowserStarted = function(win, isNewSession) {
-  let mm = win.window.messageManager;
+GeckoDriver.prototype.whenBrowserStarted = function(window, isNewSession) {
+  let mm = window.messageManager;
   if (mm) {
     if (!isNewSession) {
       // Loading the frame script corresponds to a situation we need to
@@ -539,15 +529,14 @@ GeckoDriver.prototype.whenBrowserStarted = function(win, isNewSession) {
       Preferences.set(CONTENT_LISTENER_PREF, true);
     }
   } else {
-    logger.error(
-        `Could not load listener into content for page ${win.location.href}`);
+    logger.error("Unable to load content frame script");
   }
 };
 
 /**
  * Recursively get all labeled text.
  *
- * @param {nsIDOMElement} el
+ * @param {Element} el
  *     The parent element.
  * @param {Array.<string>} lines
  *      Array that holds the text lines.
@@ -684,12 +673,11 @@ GeckoDriver.prototype.listeningPromise = function() {
  *  <dt><code>proxy</code> (Proxy object)
  *  <dd>Defines the proxy configuration.
  *
- *  <dt><code>specificationLevel</code> (number)
- *  <dd>If set to 1, a WebDriver conforming <i>WebDriver::ElementClick</i>
- *   implementation will be used.
- *
  *  <dt><code>moz:accessibilityChecks</code> (boolean)
  *  <dd>Run a11y checks when clicking elements.
+ *
+ *  <dt><code>moz:webdriverClick</code> (boolean)
+ *  <dd>Use a WebDriver conforming <i>WebDriver::ElementClick</i>.
  * </dl>
  *
  * <h4>Timeouts object</h4>
@@ -773,20 +761,21 @@ GeckoDriver.prototype.newSession = async function(cmd, resp) {
   }
   this.sessionID = element.generateUUID();
   this.newSessionCommandId = cmd.id;
+
   try {
     this.capabilities = session.Capabilities.fromJSON(cmd.parameters);
+
+    if (!this.secureTLS) {
+      logger.warn("TLS certificate errors will be ignored for this session");
+      let acceptAllCerts = new cert.InsecureSweepingOverride();
+      cert.installOverride(acceptAllCerts);
+    }
+
+    if (this.proxy.init()) {
+      logger.info("Proxy settings initialised: " + JSON.stringify(this.proxy));
+    }
   } catch (e) {
     throw new SessionNotCreatedError(e);
-  }
-
-  if (!this.secureTLS) {
-    logger.warn("TLS certificate errors will be ignored for this session");
-    let acceptAllCerts = new cert.InsecureSweepingOverride();
-    cert.installOverride(acceptAllCerts);
-  }
-
-  if (this.proxy.init()) {
-    logger.info("Proxy settings initialised: " + JSON.stringify(this.proxy));
   }
 
   // If we are testing accessibility with marionette, start a11y service in
@@ -1118,7 +1107,7 @@ GeckoDriver.prototype.get = async function(cmd, resp) {
   this.curBrowser.pendingCommands.push(() => {
     let parameters = {
       // TODO(ato): Bug 1242595
-      command_id: this.listener.activeMessageId,
+      commandID: this.listener.activeMessageId,
       pageTimeout: this.timeouts.pageLoad,
       startTime: new Date().getTime(),
     };
@@ -1237,7 +1226,7 @@ GeckoDriver.prototype.goBack = async function(cmd, resp) {
   this.curBrowser.pendingCommands.push(() => {
     let parameters = {
       // TODO(ato): Bug 1242595
-      command_id: this.listener.activeMessageId,
+      commandID: this.listener.activeMessageId,
       lastSeenURL: lastURL.toString(),
       pageTimeout: this.timeouts.pageLoad,
       startTime: new Date().getTime(),
@@ -1281,7 +1270,7 @@ GeckoDriver.prototype.goForward = async function(cmd, resp) {
   this.curBrowser.pendingCommands.push(() => {
     let parameters = {
       // TODO(ato): Bug 1242595
-      command_id: this.listener.activeMessageId,
+      commandID: this.listener.activeMessageId,
       lastSeenURL: lastURL.toString(),
       pageTimeout: this.timeouts.pageLoad,
       startTime: new Date().getTime(),
@@ -1319,7 +1308,7 @@ GeckoDriver.prototype.refresh = async function(cmd, resp) {
   this.curBrowser.pendingCommands.push(() => {
     let parameters = {
       // TODO(ato): Bug 1242595
-      command_id: this.listener.activeMessageId,
+      commandID: this.listener.activeMessageId,
       pageTimeout: this.timeouts.pageLoad,
       startTime: new Date().getTime(),
     };
@@ -1491,26 +1480,26 @@ GeckoDriver.prototype.setWindowRect = async function(cmd, resp) {
   let {x, y, width, height} = cmd.parameters;
   let origRect = this.curBrowser.rect;
 
-  // Throttle resize event by forcing the event queue to flush and delay
-  // until the main thread is idle.
-  function optimisedResize(resolve) {
-    return () => Services.tm.idleDispatchToMainThread(() => {
-      win.requestAnimationFrame(resolve);
-    });
-  }
-
   // Exit fullscreen and wait for window to resize.
   async function exitFullscreen() {
     return new Promise(resolve => {
-      win.addEventListener("sizemodechange", optimisedResize(resolve), {once: true});
+      win.addEventListener("sizemodechange", whenIdle(win, resolve), {once: true});
       win.fullScreen = false;
+    });
+  }
+
+  // Restore window and wait for the window state to change.
+  async function restoreWindow() {
+    return new Promise(resolve => {
+      win.addEventListener("sizemodechange", whenIdle(win, resolve), {once: true});
+      win.restore();
     });
   }
 
   // Synchronous resize to |width| and |height| dimensions.
   async function resizeWindow(width, height) {
     return new Promise(resolve => {
-      win.addEventListener("resize", optimisedResize(resolve), {once: true});
+      win.addEventListener("resize", whenIdle(win, resolve), {once: true});
       win.resizeTo(width, height);
     });
   }
@@ -1542,8 +1531,14 @@ GeckoDriver.prototype.setWindowRect = async function(cmd, resp) {
     });
   }
 
-  if (win.windowState == win.STATE_FULLSCREEN) {
-    await exitFullscreen();
+  switch (win.windowState) {
+    case win.STATE_FULLSCREEN:
+      await exitFullscreen();
+      break;
+
+    case win.STATE_MINIMIZED:
+      await restoreWindow();
+      break;
   }
 
   if (height != null && width != null) {
@@ -1793,8 +1788,7 @@ GeckoDriver.prototype.switchToFrame = async function(cmd, resp) {
     // by element
     if (this.curBrowser.seenEls.has(element)) {
       // HTMLIFrameElement
-      let wantedFrame = this.curBrowser.seenEls.get(
-          element, {frame: curWindow});
+      let wantedFrame = this.curBrowser.seenEls.get(element);
       // Deal with an embedded xul:browser case
       if (wantedFrame.tagName == "xul:browser" ||
           wantedFrame.tagName == "browser") {
@@ -1904,7 +1898,7 @@ GeckoDriver.prototype.switchToFrame = async function(cmd, resp) {
       // listener.
       this.switchToGlobalMessageManager();
     }
-    cmd.command_id = cmd.id;
+    cmd.commandID = cmd.id;
 
     let res = await this.listener.switchToFrame(cmd.parameters);
     if (res) {
@@ -2063,7 +2057,7 @@ GeckoDriver.prototype.multiAction = async function(cmd, resp) {
   assert.window(this.getCurrentWindow());
   assert.noUserPrompt(this.dialog);
 
-  let {value, max_length} = cmd.parameters;
+  let {value, max_length} = cmd.parameters;  // eslint-disable-line camelcase
 
   this.addFrameCloseListener("multi action chain");
   await this.listener.multiAction(value, max_length);
@@ -2102,8 +2096,7 @@ GeckoDriver.prototype.findElement = async function(cmd, resp) {
 
       let container = {frame: win};
       if (opts.startNode) {
-        opts.startNode = this.curBrowser.seenEls.get(
-            opts.startNode, container);
+        opts.startNode = this.curBrowser.seenEls.get(opts.startNode);
       }
       let el = await element.find(container, strategy, expr, opts);
       let elRef = this.curBrowser.seenEls.add(el);
@@ -2148,8 +2141,7 @@ GeckoDriver.prototype.findElements = async function(cmd, resp) {
 
       let container = {frame: win};
       if (opts.startNode) {
-        opts.startNode = this.curBrowser.seenEls.get(
-            opts.startNode, container);
+        opts.startNode = this.curBrowser.seenEls.get(opts.startNode);
       }
       let els = await element.find(container, strategy, expr, opts);
 
@@ -2200,14 +2192,14 @@ GeckoDriver.prototype.getActiveElement = async function(cmd, resp) {
  *     A modal dialog is open, blocking this operation.
  */
 GeckoDriver.prototype.clickElement = async function(cmd, resp) {
-  const win = assert.window(this.getCurrentWindow());
+  assert.window(this.getCurrentWindow());
   assert.noUserPrompt(this.dialog);
 
   let id = cmd.parameters.id;
 
   switch (this.context) {
     case Context.CHROME:
-      let el = this.curBrowser.seenEls.get(id, {frame: win});
+      let el = this.curBrowser.seenEls.get(id);
       await interaction.clickElement(el, this.a11yChecks);
       break;
 
@@ -2228,7 +2220,7 @@ GeckoDriver.prototype.clickElement = async function(cmd, resp) {
       this.curBrowser.pendingCommands.push(() => {
         let parameters = {
           // TODO(ato): Bug 1242595
-          command_id: this.listener.activeMessageId,
+          commandID: this.listener.activeMessageId,
           pageTimeout: this.timeouts.pageLoad,
           startTime: new Date().getTime(),
         };
@@ -2259,14 +2251,14 @@ GeckoDriver.prototype.clickElement = async function(cmd, resp) {
  *     A modal dialog is open, blocking this operation.
  */
 GeckoDriver.prototype.getElementAttribute = async function(cmd, resp) {
-  const win = assert.window(this.getCurrentWindow());
+  assert.window(this.getCurrentWindow());
   assert.noUserPrompt(this.dialog);
 
   let {id, name} = cmd.parameters;
 
   switch (this.context) {
     case Context.CHROME:
-      let el = this.curBrowser.seenEls.get(id, {frame: win});
+      let el = this.curBrowser.seenEls.get(id);
       resp.body.value = el.getAttribute(name);
       break;
 
@@ -2293,14 +2285,14 @@ GeckoDriver.prototype.getElementAttribute = async function(cmd, resp) {
  *     A modal dialog is open, blocking this operation.
  */
 GeckoDriver.prototype.getElementProperty = async function(cmd, resp) {
-  const win = assert.window(this.getCurrentWindow());
+  assert.window(this.getCurrentWindow());
   assert.noUserPrompt(this.dialog);
 
   let {id, name} = cmd.parameters;
 
   switch (this.context) {
     case Context.CHROME:
-      let el = this.curBrowser.seenEls.get(id, {frame: win});
+      let el = this.curBrowser.seenEls.get(id);
       resp.body.value = el[name];
       break;
 
@@ -2326,7 +2318,7 @@ GeckoDriver.prototype.getElementProperty = async function(cmd, resp) {
  *     A modal dialog is open, blocking this operation.
  */
 GeckoDriver.prototype.getElementText = async function(cmd, resp) {
-  const win = assert.window(this.getCurrentWindow());
+  assert.window(this.getCurrentWindow());
   assert.noUserPrompt(this.dialog);
 
   let id = cmd.parameters.id;
@@ -2334,7 +2326,7 @@ GeckoDriver.prototype.getElementText = async function(cmd, resp) {
   switch (this.context) {
     case Context.CHROME:
       // for chrome, we look at text nodes, and any node with a "label" field
-      let el = this.curBrowser.seenEls.get(id, {frame: win});
+      let el = this.curBrowser.seenEls.get(id);
       let lines = [];
       this.getVisibleText(el, lines);
       resp.body.value = lines.join("\n");
@@ -2361,14 +2353,14 @@ GeckoDriver.prototype.getElementText = async function(cmd, resp) {
  *     A modal dialog is open, blocking this operation.
  */
 GeckoDriver.prototype.getElementTagName = async function(cmd, resp) {
-  const win = assert.window(this.getCurrentWindow());
+  assert.window(this.getCurrentWindow());
   assert.noUserPrompt(this.dialog);
 
   let id = cmd.parameters.id;
 
   switch (this.context) {
     case Context.CHROME:
-      let el = this.curBrowser.seenEls.get(id, {frame: win});
+      let el = this.curBrowser.seenEls.get(id);
       resp.body.value = el.tagName.toLowerCase();
       break;
 
@@ -2393,14 +2385,14 @@ GeckoDriver.prototype.getElementTagName = async function(cmd, resp) {
  *     A modal dialog is open, blocking this operation.
  */
 GeckoDriver.prototype.isElementDisplayed = async function(cmd, resp) {
-  const win = assert.window(this.getCurrentWindow());
+  assert.window(this.getCurrentWindow());
   assert.noUserPrompt(this.dialog);
 
   let id = cmd.parameters.id;
 
   switch (this.context) {
     case Context.CHROME:
-      let el = this.curBrowser.seenEls.get(id, {frame: win});
+      let el = this.curBrowser.seenEls.get(id);
       resp.body.value = await interaction.isElementDisplayed(
           el, this.a11yChecks);
       break;
@@ -2436,7 +2428,7 @@ GeckoDriver.prototype.getElementValueOfCssProperty = async function(
 
   switch (this.context) {
     case Context.CHROME:
-      let el = this.curBrowser.seenEls.get(id, {frame: win});
+      let el = this.curBrowser.seenEls.get(id);
       let sty = win.document.defaultView.getComputedStyle(el);
       resp.body.value = sty.getPropertyValue(prop);
       break;
@@ -2463,7 +2455,7 @@ GeckoDriver.prototype.getElementValueOfCssProperty = async function(
  *     A modal dialog is open, blocking this operation.
  */
 GeckoDriver.prototype.isElementEnabled = async function(cmd, resp) {
-  const win = assert.window(this.getCurrentWindow());
+  assert.window(this.getCurrentWindow());
   assert.noUserPrompt(this.dialog);
 
   let id = cmd.parameters.id;
@@ -2471,7 +2463,7 @@ GeckoDriver.prototype.isElementEnabled = async function(cmd, resp) {
   switch (this.context) {
     case Context.CHROME:
       // Selenium atom doesn't quite work here
-      let el = this.curBrowser.seenEls.get(id, {frame: win});
+      let el = this.curBrowser.seenEls.get(id);
       resp.body.value = await interaction.isElementEnabled(
           el, this.a11yChecks);
       break;
@@ -2497,7 +2489,7 @@ GeckoDriver.prototype.isElementEnabled = async function(cmd, resp) {
  *     A modal dialog is open, blocking this operation.
  */
 GeckoDriver.prototype.isElementSelected = async function(cmd, resp) {
-  const win = assert.window(this.getCurrentWindow());
+  assert.window(this.getCurrentWindow());
   assert.noUserPrompt(this.dialog);
 
   let id = cmd.parameters.id;
@@ -2505,7 +2497,7 @@ GeckoDriver.prototype.isElementSelected = async function(cmd, resp) {
   switch (this.context) {
     case Context.CHROME:
       // Selenium atom doesn't quite work here
-      let el = this.curBrowser.seenEls.get(id, {frame: win});
+      let el = this.curBrowser.seenEls.get(id);
       resp.body.value = await interaction.isElementSelected(
           el, this.a11yChecks);
       break;
@@ -2530,7 +2522,7 @@ GeckoDriver.prototype.getElementRect = async function(cmd, resp) {
 
   switch (this.context) {
     case Context.CHROME:
-      let el = this.curBrowser.seenEls.get(id, {frame: win});
+      let el = this.curBrowser.seenEls.get(id);
       let rect = el.getBoundingClientRect();
       resp.body = {
         x: rect.x + win.pageXOffset,
@@ -2560,7 +2552,7 @@ GeckoDriver.prototype.getElementRect = async function(cmd, resp) {
  *     A modal dialog is open, blocking this operation.
  */
 GeckoDriver.prototype.sendKeysToElement = async function(cmd, resp) {
-  const win = assert.window(this.getCurrentWindow());
+  assert.window(this.getCurrentWindow());
   assert.noUserPrompt(this.dialog);
 
   let {id, text} = cmd.parameters;
@@ -2568,7 +2560,7 @@ GeckoDriver.prototype.sendKeysToElement = async function(cmd, resp) {
 
   switch (this.context) {
     case Context.CHROME:
-      let el = this.curBrowser.seenEls.get(id, {frame: win});
+      let el = this.curBrowser.seenEls.get(id);
       await interaction.sendKeysToElement(
           el, text, true, this.a11yChecks);
       break;
@@ -2591,7 +2583,7 @@ GeckoDriver.prototype.sendKeysToElement = async function(cmd, resp) {
  *     A modal dialog is open, blocking this operation.
  */
 GeckoDriver.prototype.clearElement = async function(cmd, resp) {
-  const win = assert.window(this.getCurrentWindow());
+  assert.window(this.getCurrentWindow());
   assert.noUserPrompt(this.dialog);
 
   let id = cmd.parameters.id;
@@ -2599,7 +2591,7 @@ GeckoDriver.prototype.clearElement = async function(cmd, resp) {
   switch (this.context) {
     case Context.CHROME:
       // the selenium atom doesn't work here
-      let el = this.curBrowser.seenEls.get(id, {frame: win});
+      let el = this.curBrowser.seenEls.get(id);
       if (el.nodeName == "textbox") {
         el.value = "";
       } else if (el.nodeName == "checkbox") {
@@ -2917,23 +2909,21 @@ GeckoDriver.prototype.takeScreenshot = function(cmd, resp) {
 
   switch (this.context) {
     case Context.CHROME:
-      let container = {frame: win.document.defaultView};
-
       let highlightEls = highlights.map(
-          ref => this.curBrowser.seenEls.get(ref, container));
+          ref => this.curBrowser.seenEls.get(ref));
 
       // viewport
       let canvas;
       if (!id && !full) {
-        canvas = capture.viewport(container.frame, highlightEls);
+        canvas = capture.viewport(win, highlightEls);
 
       // element or full document element
       } else {
         let node;
         if (id) {
-          node = this.curBrowser.seenEls.get(id, container);
+          node = this.curBrowser.seenEls.get(id);
         } else {
-          node = container.frame.document.documentElement;
+          node = win.document.documentElement;
         }
 
         canvas = capture.element(node, highlightEls);
@@ -3004,7 +2994,9 @@ GeckoDriver.prototype.setScreenOrientation = function(cmd, resp) {
 
 /**
  * Synchronously minimizes the user agent window as if the user pressed
- * the minimize button, or restores it if it is already minimized.
+ * the minimize button.
+ *
+ * No action is taken if the window is already minimized.
  *
  * Not supported on Fennec.
  *
@@ -3023,22 +3015,22 @@ GeckoDriver.prototype.minimizeWindow = async function(cmd, resp) {
   const win = assert.window(this.getCurrentWindow());
   assert.noUserPrompt(this.dialog);
 
-  await new Promise(resolve => {
-    win.addEventListener("sizemodechange", resolve, {once: true});
-
-    if (win.windowState == win.STATE_MINIMIZED) {
-      win.restore();
-    } else {
+  let state = WindowState.from(win.windowState);
+  if (state != WindowState.Minimized) {
+    await new Promise(resolve => {
+      win.addEventListener("sizemodechange", whenIdle(win, resolve), {once: true});
       win.minimize();
-    }
-  });
+    });
+  }
 
   return this.curBrowser.rect;
 };
 
 /**
  * Synchronously maximizes the user agent window as if the user pressed
- * the maximize button, or restores it if it is already maximized.
+ * the maximize button.
+ *
+ * No action is taken if the window is already maximized.
  *
  * Not supported on Fennec.
  *
@@ -3078,48 +3070,44 @@ GeckoDriver.prototype.maximizeWindow = async function(cmd, resp) {
     });
   }
 
-  let modeChangeEv;
-  await new TimedPromise(resolve => {
-    modeChangeEv = resolve;
-    win.addEventListener("sizemodechange", modeChangeEv, {once: true});
-
-    if (win.windowState == win.STATE_MAXIMIZED) {
-      win.restore();
-    } else {
+  let state = WindowState.from(win.windowState);
+  if (state != WindowState.Maximized) {
+    await new TimedPromise(resolve => {
+      win.addEventListener("sizemodechange", resolve, {once: true});
       win.maximize();
-    }
-  }, {throws: null});
-  win.removeEventListener("sizemodechange", modeChangeEv);
+    }, {throws: null});
 
-  // Transitioning into a window state is asynchronous on Linux, and we
-  // cannot rely on sizemodechange to accurately tell us when the
-  // transition has completed.
-  //
-  // To counter for this we wait for the window size to change, which
-  // it usually will.  On platforms where the transition is synchronous,
-  // the wait will have the cost of one iteration because the size will
-  // have changed as part of the transition.  Where the platform
-  // is asynchronous, the cost may be greater as we have to poll
-  // continuously until we see a change, but it ensures conformity in
-  // behaviour.
-  //
-  // Certain window managers, however, do not have a concept of maximised
-  // windows and here sizemodechange may never fire.  Indeed, if the
-  // window covers the maximum available screen real estate, the window
-  // size may also not change.  In this circumstance, which admittedly
-  // is a somewhat bizarre edge case, we assume that the timeout of
-  // waiting for sizemodechange to fire is sufficient to give the window
-  // enough time to transition itself into whatever form or shape the
-  // WM is programmed to give it.
-  await windowSizeChange();
+    // Transitioning into a window state is asynchronous on Linux,
+    // and we cannot rely on sizemodechange to accurately tell us when
+    // the transition has completed.
+    //
+    // To counter for this we wait for the window size to change, which
+    // it usually will.  On platforms where the transition is synchronous,
+    // the wait will have the cost of one iteration because the size
+    // will have changed as part of the transition.  Where the platform is
+    // asynchronous, the cost may be greater as we have to poll
+    // continuously until we see a change, but it ensures conformity in
+    // behaviour.
+    //
+    // Certain window managers, however, do not have a concept of
+    // maximised windows and here sizemodechange may never fire.  Indeed,
+    // if the window covers the maximum available screen real estate,
+    // the window size may also not change.  In this circumstance,
+    // which admittedly is a somewhat bizarre edge case, we assume that
+    // the timeout of waiting for sizemodechange to fire is sufficient
+    // to give the window enough time to transition itself into whatever
+    // form or shape the WM is programmed to give it.
+    await windowSizeChange();
+  }
 
   return this.curBrowser.rect;
 };
 
 /**
  * Synchronously sets the user agent window to full screen as if the user
- * had done "View > Enter Full Screen", or restores it if it is already
- * in full screen.
+ * had done "View > Enter Full Screen".
+ *
+ * No action is taken if the window is already in full screen mode.
  *
  * Not supported on Fennec.
  *
@@ -3133,15 +3121,18 @@ GeckoDriver.prototype.maximizeWindow = async function(cmd, resp) {
  * @throws {UnexpectedAlertOpenError}
  *     A modal dialog is open, blocking this operation.
  */
-GeckoDriver.prototype.fullscreen = async function(cmd, resp) {
+GeckoDriver.prototype.fullscreenWindow = async function(cmd, resp) {
   assert.firefox();
   const win = assert.window(this.getCurrentWindow());
   assert.noUserPrompt(this.dialog);
 
-  await new Promise(resolve => {
-    win.addEventListener("sizemodechange", resolve, {once: true});
-    win.fullScreen = !win.fullScreen;
-  });
+  let state = WindowState.from(win.windowState);
+  if (state != WindowState.Fullscreen) {
+    await new Promise(resolve => {
+      win.addEventListener("sizemodechange", resolve, {once: true});
+      win.fullScreen = true;
+    });
+  }
 
   return this.curBrowser.rect;
 };
@@ -3579,7 +3570,7 @@ GeckoDriver.prototype.commands = {
   "WebDriver:FindElement": GeckoDriver.prototype.findElement,
   "WebDriver:FindElements": GeckoDriver.prototype.findElements,
   "WebDriver:Forward": GeckoDriver.prototype.goForward,
-  "WebDriver:FullscreenWindow": GeckoDriver.prototype.fullscreen,
+  "WebDriver:FullscreenWindow": GeckoDriver.prototype.fullscreenWindow,
   "WebDriver:GetActiveElement": GeckoDriver.prototype.getActiveElement,
   "WebDriver:GetActiveFrame": GeckoDriver.prototype.getActiveFrame,
   "WebDriver:GetAlertText": GeckoDriver.prototype.getTextFromDialog,
@@ -3639,7 +3630,7 @@ GeckoDriver.prototype.commands = {
   "executeScript": GeckoDriver.prototype.executeScript,
   "findElement": GeckoDriver.prototype.findElement,
   "findElements": GeckoDriver.prototype.findElements,
-  "fullscreen": GeckoDriver.prototype.fullscreen,
+  "fullscreen": GeckoDriver.prototype.fullscreenWindow,
   "getActiveElement": GeckoDriver.prototype.getActiveElement,
   "getActiveFrame": GeckoDriver.prototype.getActiveFrame,
   "getChromeWindowHandle": GeckoDriver.prototype.getChromeWindowHandle,
@@ -3701,17 +3692,28 @@ function copy(obj) {
   return obj;
 }
 
-/**
- * Get the outer window ID for the specified window.
- *
- * @param {nsIDOMWindow} win
- *     Window whose browser we need to access.
- *
- * @return {string}
- *     Returns the unique window ID.
- */
 function getOuterWindowId(win) {
   return win.QueryInterface(Ci.nsIInterfaceRequestor)
       .getInterface(Ci.nsIDOMWindowUtils)
       .outerWindowID;
+}
+
+/**
+ * Throttle <var>callback</var> until the main thread is idle and
+ * <var>window</var> has performed an animation frame.
+ *
+ * @param {ChromeWindow} window
+ *     Window to request the animation frame from.
+ * @param {function()} callback
+ *     Called when done.
+ *
+ * @return {function()}
+ *     Anonymous function that when invoked will wait for the main
+ *     thread to clear up and request an animation frame before calling
+ *     <var>callback</var>.
+ */
+function whenIdle(window, callback) {
+  return () => Services.tm.idleDispatchToMainThread(() => {
+    window.requestAnimationFrame(callback);
+  });
 }

@@ -7,21 +7,21 @@
 use atomic_refcell::{AtomicRef, AtomicRefCell, AtomicRefMut};
 use dom::TElement;
 use gecko_bindings::bindings::{self, RawServoStyleSet};
-use gecko_bindings::structs::{ServoStyleSheet, StyleSheetInfo, ServoStyleSheetInner};
-use gecko_bindings::structs::RawGeckoPresContextOwned;
+use gecko_bindings::structs::{RawGeckoPresContextOwned, ServoStyleSetSizes, ServoStyleSheet};
+use gecko_bindings::structs::{StyleSheetInfo, ServoStyleSheetInner};
 use gecko_bindings::structs::nsIDocument;
 use gecko_bindings::sugar::ownership::{HasArcFFI, HasBoxFFI, HasFFI, HasSimpleFFI};
 use invalidation::media_queries::{MediaListKey, ToMediaListKey};
+use malloc_size_of::{MallocSizeOf, MallocSizeOfOps};
 use media_queries::{Device, MediaList};
 use properties::ComputedValues;
 use servo_arc::Arc;
 use shared_lock::{Locked, StylesheetGuards, SharedRwLockReadGuard};
-use stylesheet_set::StylesheetSet;
 use stylesheets::{PerOrigin, StylesheetContents, StylesheetInDocument};
 use stylist::{ExtraStyleData, Stylist};
 
 /// Little wrapper to a Gecko style sheet.
-#[derive(PartialEq, Eq, Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct GeckoStyleSheet(*const ServoStyleSheet);
 
 impl ToMediaListKey for ::gecko::data::GeckoStyleSheet {
@@ -114,9 +114,6 @@ pub struct PerDocumentStyleDataImpl {
     /// Rule processor.
     pub stylist: Stylist,
 
-    /// List of stylesheets, mirrored from Gecko.
-    pub stylesheets: StylesheetSet<GeckoStyleSheet>,
-
     /// List of effective @font-face and @counter-style rules.
     pub extra_style_data: PerOrigin<ExtraStyleData>,
 }
@@ -135,7 +132,6 @@ impl PerDocumentStyleData {
 
         PerDocumentStyleData(AtomicRefCell::new(PerDocumentStyleDataImpl {
             stylist: Stylist::new(device, quirks_mode.into()),
-            stylesheets: StylesheetSet::new(),
             extra_style_data: Default::default(),
         }))
     }
@@ -153,26 +149,20 @@ impl PerDocumentStyleData {
 
 impl PerDocumentStyleDataImpl {
     /// Recreate the style data if the stylesheets have changed.
-    pub fn flush_stylesheets<E>(&mut self,
-                                guard: &SharedRwLockReadGuard,
-                                document_element: Option<E>)
-        where E: TElement,
+    pub fn flush_stylesheets<E>(
+        &mut self,
+        guard: &SharedRwLockReadGuard,
+        document_element: Option<E>,
+    ) -> bool
+    where
+        E: TElement,
     {
-        if !self.stylesheets.has_changed() {
-            return;
-        }
-
-        let author_style_disabled = self.stylesheets.author_style_disabled();
-
-        let (iter, dirty_origins) = self.stylesheets.flush(document_element);
-        self.stylist.rebuild(
-            iter,
+        self.stylist.flush(
             &StylesheetGuards::same(guard),
             /* ua_sheets = */ None,
-            author_style_disabled,
             &mut self.extra_style_data,
-            dirty_origins,
-        );
+            document_element,
+        )
     }
 
     /// Returns whether private browsing is enabled.
@@ -194,6 +184,12 @@ impl PerDocumentStyleDataImpl {
     /// Returns whether visited styles are enabled.
     pub fn visited_styles_enabled(&self) -> bool {
         self.visited_links_enabled() && !self.is_private_browsing_enabled()
+    }
+
+    /// Measure heap usage.
+    pub fn add_size_of_children(&self, ops: &mut MallocSizeOfOps, sizes: &mut ServoStyleSetSizes) {
+        self.stylist.add_size_of_children(ops, sizes);
+        sizes.mStylistOther += self.extra_style_data.size_of(ops);
     }
 }
 

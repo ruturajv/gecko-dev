@@ -24,11 +24,8 @@ bitflags! {
         /// pre-traversal. A forgetful traversal is usually the right thing if you
         /// aren't going to do a post-traversal.
         const Forgetful = 1 << 3,
-        /// Actively seeks out and clears change hints that may have been posted into
-        /// the tree. Nonsensical without also passing Forgetful.
-        const AggressivelyForgetful = 1 << 4,
-        /// Clears the dirty descendants bit in the subtree.
-        const ClearDirtyDescendants = 1 << 5,
+        /// Clears all the dirty bits on the elements traversed.
+        const ClearDirtyBits = 1 << 5,
         /// Clears the animation-only dirty descendants bit in the subtree.
         const ClearAnimationOnlyDirtyDescendants = 1 << 6,
         /// Allows the traversal to run in parallel if there are sufficient cores on
@@ -66,8 +63,7 @@ pub fn assert_traversal_flags_match() {
         ServoTraversalFlags_ForCSSRuleChanges => ForCSSRuleChanges,
         ServoTraversalFlags_UnstyledOnly => UnstyledOnly,
         ServoTraversalFlags_Forgetful => Forgetful,
-        ServoTraversalFlags_AggressivelyForgetful => AggressivelyForgetful,
-        ServoTraversalFlags_ClearDirtyDescendants => ClearDirtyDescendants,
+        ServoTraversalFlags_ClearDirtyBits => ClearDirtyBits,
         ServoTraversalFlags_ClearAnimationOnlyDirtyDescendants =>
             ClearAnimationOnlyDirtyDescendants,
         ServoTraversalFlags_ParallelTraversal => ParallelTraversal,
@@ -77,6 +73,7 @@ pub fn assert_traversal_flags_match() {
 
 impl TraversalFlags {
     /// Returns true if the traversal is for animation-only restyles.
+    #[inline]
     pub fn for_animation_only(&self) -> bool {
         self.contains(AnimationOnly)
     }

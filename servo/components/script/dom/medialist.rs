@@ -74,13 +74,14 @@ impl MediaListMethods for MediaList {
         let mut input = ParserInput::new(&value);
         let mut parser = Parser::new(&mut input);
         let global = self.global();
-        let win = global.as_window();
-        let url = win.get_url();
-        let quirks_mode = win.Document().quirks_mode();
-        let context = ParserContext::new_for_cssom(&url, win.css_error_reporter(), Some(CssRuleType::Media),
+        let window = global.as_window();
+        let url = window.get_url();
+        let quirks_mode = window.Document().quirks_mode();
+        let context = ParserContext::new_for_cssom(&url, Some(CssRuleType::Media),
                                                    PARSING_MODE_DEFAULT,
                                                    quirks_mode);
-        *media_queries = parse_media_query_list(&context, &mut parser);
+        *media_queries = parse_media_query_list(&context, &mut parser,
+                                                window.css_error_reporter());
     }
 
     // https://drafts.csswg.org/cssom/#dom-medialist-length
@@ -114,7 +115,7 @@ impl MediaListMethods for MediaList {
         let win = global.as_window();
         let url = win.get_url();
         let quirks_mode = win.Document().quirks_mode();
-        let context = ParserContext::new_for_cssom(&url, win.css_error_reporter(), Some(CssRuleType::Media),
+        let context = ParserContext::new_for_cssom(&url, Some(CssRuleType::Media),
                                                    PARSING_MODE_DEFAULT,
                                                    quirks_mode);
         let m = MediaQuery::parse(&context, &mut parser);
@@ -143,7 +144,7 @@ impl MediaListMethods for MediaList {
         let win = global.as_window();
         let url = win.get_url();
         let quirks_mode = win.Document().quirks_mode();
-        let context = ParserContext::new_for_cssom(&url, win.css_error_reporter(), Some(CssRuleType::Media),
+        let context = ParserContext::new_for_cssom(&url, Some(CssRuleType::Media),
                                                    PARSING_MODE_DEFAULT,
                                                    quirks_mode);
         let m = MediaQuery::parse(&context, &mut parser);

@@ -4,16 +4,19 @@
 
 //! Computed angles.
 
-use properties::animated_properties::Animatable;
+use euclid::Radians;
 use std::{f32, f64, fmt};
 use std::f64::consts::PI;
 use style_traits::ToCss;
 use values::CSSFloat;
+use values::animated::{Animate, Procedure};
 use values::distance::{ComputeSquaredDistance, SquaredDistance};
 
 /// A computed angle.
+#[animate(fallback = "Self::animate_fallback")]
 #[cfg_attr(feature = "servo", derive(HeapSizeOf, Deserialize, Serialize))]
-#[derive(Clone, Copy, Debug, HasViewportPercentage, PartialEq, PartialOrd)]
+#[derive(Animate, Clone, Copy, Debug, PartialEq)]
+#[derive(PartialOrd, ToAnimatedZero)]
 pub enum Angle {
     /// An angle with degree unit.
     Degree(CSSFloat),
@@ -62,28 +65,11 @@ impl Angle {
     pub fn zero() -> Self {
         Angle::Radian(0.0)
     }
-}
 
-/// https://drafts.csswg.org/css-transitions/#animtype-number
-impl Animatable for Angle {
+    /// https://drafts.csswg.org/css-transitions/#animtype-number
     #[inline]
-    fn add_weighted(&self, other: &Self, self_portion: f64, other_portion: f64) -> Result<Self, ()> {
-        match (self, other) {
-            (&Angle::Degree(ref this), &Angle::Degree(ref other)) => {
-                Ok(Angle::Degree(this.add_weighted(other, self_portion, other_portion)?))
-            },
-            (&Angle::Gradian(ref this), &Angle::Gradian(ref other)) => {
-                Ok(Angle::Gradian(this.add_weighted(other, self_portion, other_portion)?))
-            },
-            (&Angle::Turn(ref this), &Angle::Turn(ref other)) => {
-                Ok(Angle::Turn(this.add_weighted(other, self_portion, other_portion)?))
-            },
-            _ => {
-                self.radians()
-                    .add_weighted(&other.radians(), self_portion, other_portion)
-                    .map(Angle::from_radians)
-            }
-        }
+    fn animate_fallback(&self, other: &Self, procedure: Procedure) -> Result<Self, ()> {
+        Ok(Angle::from_radians(self.radians().animate(&other.radians(), procedure)?))
     }
 }
 
@@ -112,5 +98,12 @@ impl ToCss for Angle {
             Angle::Radian(val) => write(val, "rad"),
             Angle::Turn(val) => write(val, "turn"),
         }
+    }
+}
+
+impl From<Angle> for Radians<CSSFloat> {
+    #[inline]
+    fn from(a: Angle) -> Self {
+        Radians::new(a.radians())
     }
 }

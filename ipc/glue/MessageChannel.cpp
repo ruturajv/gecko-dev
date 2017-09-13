@@ -672,7 +672,7 @@ MessageChannel::CanSend() const
 void
 MessageChannel::WillDestroyCurrentMessageLoop()
 {
-#if defined(DEBUG) && !defined(ANDROID)
+#if !defined(ANDROID)
 #if defined(MOZ_CRASHREPORTER)
     CrashReporter::AnnotateCrashReport(NS_LITERAL_CSTRING("ProtocolName"),
                                        nsDependentCString(mName));
@@ -1845,16 +1845,25 @@ MessageChannel::RunMessage(MessageTask& aTask)
     }
 
     // Check that we're going to run the first message that's valid to run.
+#if 0
 #ifdef DEBUG
+    nsCOMPtr<nsIEventTarget> messageTarget =
+        mListener->GetMessageEventTarget(msg);
+
     for (MessageTask* task : mPending) {
         if (task == &aTask) {
             break;
         }
 
+        nsCOMPtr<nsIEventTarget> taskTarget =
+            mListener->GetMessageEventTarget(task->Msg());
+
         MOZ_ASSERT(!ShouldRunMessage(task->Msg()) ||
+                   taskTarget != messageTarget ||
                    aTask.Msg().priority() != task->Msg().priority());
 
     }
+#endif
 #endif
 
     if (!mDeferred.empty()) {
@@ -1986,6 +1995,17 @@ MessageChannel::MessageTask::GetPriority(uint32_t* aPriority)
     break;
   }
   return NS_OK;
+}
+
+bool
+MessageChannel::MessageTask::GetAffectedSchedulerGroups(nsTArray<RefPtr<SchedulerGroup>>& aGroups)
+{
+    if (!mChannel) {
+        return false;
+    }
+
+    mChannel->AssertWorkerThread();
+    return mChannel->mListener->GetMessageSchedulerGroups(mMessage, aGroups);
 }
 
 void

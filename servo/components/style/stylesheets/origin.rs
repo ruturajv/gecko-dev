@@ -10,7 +10,7 @@ use std::ops::BitOrAssign;
 /// Each style rule has an origin, which determines where it enters the cascade.
 ///
 /// https://drafts.csswg.org/css-cascade/#cascading-origins
-#[derive(Clone, PartialEq, Eq, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
 pub enum Origin {
@@ -40,6 +40,7 @@ impl Origin {
 
 bitflags! {
     /// A set of origins. This is equivalent to Gecko's OriginFlags.
+    #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
     pub flags OriginSet: u8 {
         /// https://drafts.csswg.org/css-cascade/#cascade-origin-user-agent
         const ORIGIN_USER_AGENT = Origin::UserAgent as u8,
@@ -102,6 +103,7 @@ impl Iterator for OriginSetIterator {
 }
 
 /// An object that stores a `T` for each origin of the CSS cascade.
+#[cfg_attr(feature = "gecko", derive(MallocSizeOf))]
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
 #[derive(Debug, Default)]
 pub struct PerOrigin<T> {

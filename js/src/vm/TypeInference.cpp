@@ -2522,7 +2522,6 @@ js::ClassCanHaveExtraProperties(const Class* clasp)
     if (clasp == &UnboxedPlainObject::class_ || clasp == &UnboxedArrayObject::class_)
         return false;
     return clasp->getResolve()
-        || clasp->getGetProperty()
         || clasp->getOpsLookupProperty()
         || clasp->getOpsGetProperty()
         || IsTypedArrayClass(clasp);
@@ -2903,6 +2902,9 @@ ObjectGroup::markStateChange(JSContext* cx)
 void
 ObjectGroup::setFlags(JSContext* cx, ObjectGroupFlags flags)
 {
+    MOZ_ASSERT(!(flags & OBJECT_FLAG_UNKNOWN_PROPERTIES),
+               "Should use markUnknown to set unknownProperties");
+
     if (hasAllFlags(flags))
         return;
 

@@ -35,6 +35,7 @@
 #include "VRManager.h"                  // for VRManager
 #include "mozilla/ipc/Transport.h"      // for Transport
 #include "mozilla/gfx/gfxVars.h"
+#include "mozilla/gfx/GPUParent.h"
 #include "mozilla/layers/AnimationHelper.h" // for CompositorAnimationStorage
 #include "mozilla/layers/APZCTreeManager.h"  // for APZCTreeManager
 #include "mozilla/layers/APZCTreeManagerParent.h"  // for APZCTreeManagerParent
@@ -260,11 +261,6 @@ CompositorBridgeParent::Setup()
 
   MOZ_ASSERT(!sCompositorMap);
   sCompositorMap = new CompositorMap;
-
-  gfxPrefs::SetWebRenderProfilerEnabledChangeCallback(
-    [](const GfxPrefValue& aValue) -> void {
-      CompositorBridgeParent::SetWebRenderProfilerEnabled(aValue.get_bool());
-  });
 }
 
 void
@@ -273,7 +269,6 @@ CompositorBridgeParent::Shutdown()
   MOZ_ASSERT(sCompositorMap);
   MOZ_ASSERT(sCompositorMap->empty());
   sCompositorMap = nullptr;
-  gfxPrefs::SetWebRenderProfilerEnabledChangeCallback(nullptr);
 }
 
 void
@@ -1701,10 +1696,9 @@ CompositorBridgeParent::AllocPWebRenderBridgeParent(const wr::PipelineId& aPipel
 
   MOZ_ASSERT(mWidget);
   RefPtr<widget::CompositorWidget> widget = mWidget;
-  RefPtr<wr::WebRenderAPI> api = wr::WebRenderAPI::Create(
-    gfxPrefs::WebRenderProfilerEnabled(), this, Move(widget), aSize);
+  RefPtr<wr::WebRenderAPI> api = wr::WebRenderAPI::Create(this, Move(widget), aSize);
   if (!api) {
-    mWrBridge = WebRenderBridgeParent::CreateDestroyed();
+    mWrBridge = WebRenderBridgeParent::CreateDestroyed(aPipelineId);
     mWrBridge.get()->AddRef(); // IPDL reference
     *aIdNamespace = mWrBridge->GetIdNamespace();
     *aTextureFactoryIdentifier = TextureFactoryIdentifier(LayersBackend::LAYERS_NONE);
@@ -1757,18 +1751,6 @@ Maybe<TimeStamp>
 CompositorBridgeParent::GetTestingTimeStamp() const
 {
   return mIsTesting ? Some(mTestTime) : Nothing();
-}
-
-void
-CompositorBridgeParent::SetWebRenderProfilerEnabled(bool aEnabled)
-{
-  MonitorAutoLock lock(*sIndirectLayerTreesLock);
-  for (auto it = sIndirectLayerTrees.begin(); it != sIndirectLayerTrees.end(); it++) {
-    LayerTreeState* state = &it->second;
-    if (state->mWrBridge) {
-      state->mWrBridge->SetWebRenderProfilerEnabled(aEnabled);
-    }
-  }
 }
 
 void
@@ -2136,6 +2118,13 @@ bool
 CompositorBridgeParent::IsSameProcess() const
 {
   return OtherPid() == base::GetCurrentProcId();
+}
+
+void
+CompositorBridgeParent::NotifyWebRenderError(wr::WebRenderError aError)
+{
+  MOZ_ASSERT(CompositorLoop() == MessageLoop::current());
+  Unused << SendNotifyWebRenderError(aError);
 }
 
 #if defined(XP_WIN) || defined(MOZ_WIDGET_GTK)

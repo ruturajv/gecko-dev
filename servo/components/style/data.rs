@@ -4,9 +4,12 @@
 
 //! Per-node data used in style calculation.
 
-use context::SharedStyleContext;
+use context::{SharedStyleContext, StackLimitChecker};
 use dom::TElement;
+use invalidation::element::invalidator::InvalidationResult;
 use invalidation::element::restyle_hints::RestyleHint;
+#[cfg(feature = "gecko")]
+use malloc_size_of::MallocSizeOfOps;
 use properties::ComputedValues;
 use properties::longhands::display::computed_value as display;
 use rule_tree::StrongRuleNode;
@@ -15,8 +18,6 @@ use servo_arc::Arc;
 use shared_lock::StylesheetGuards;
 use std::fmt;
 use std::ops::{Deref, DerefMut};
-#[cfg(feature = "gecko")]
-use stylesheets::SizeOfState;
 
 bitflags! {
     flags RestyleFlags: u8 {
@@ -72,6 +73,7 @@ impl RestyleData {
     ///
     /// FIXME(bholley): The only caller of this should probably just assert that
     /// the hint is empty and call clear_flags_and_damage().
+    #[inline]
     fn clear_restyle_state(&mut self) {
         self.clear_restyle_flags_and_damage();
         self.hint = RestyleHint::empty();
@@ -83,6 +85,7 @@ impl RestyleData {
     /// set to the correct value on each traversal. There's no reason anyone
     /// needs to clear it, and clearing it accidentally mid-traversal could
     /// cause incorrect style sharing behavior.
+    #[inline]
     fn clear_restyle_flags_and_damage(&mut self) {
         self.damage = RestyleDamage::empty();
         self.flags = self.flags & TRAVERSED_WITHOUT_STYLING;
@@ -124,6 +127,7 @@ impl RestyleData {
     }
 
     /// Returns true if this element was restyled.
+    #[inline]
     pub fn is_restyle(&self) -> bool {
         self.flags.contains(WAS_RESTYLED)
     }
@@ -140,6 +144,7 @@ impl RestyleData {
     }
 
     /// Returns whether this element has been part of a restyle.
+    #[inline]
     pub fn contains_restyle_data(&self) -> bool {
         self.is_restyle() || !self.hint.is_empty() || !self.damage.is_empty()
     }
@@ -267,7 +272,7 @@ impl ElementStyles {
     }
 
     #[cfg(feature = "gecko")]
-    fn malloc_size_of_children_excluding_cvs(&self, _state: &mut SizeOfState) -> usize {
+    fn size_of_excluding_cvs(&self, _ops: &mut MallocSizeOfOps) -> usize {
         // As the method name suggests, we don't measures the ComputedValues
         // here, because they are measured on the C++ side.
 
@@ -323,11 +328,12 @@ impl ElementData {
     pub fn invalidate_style_if_needed<'a, E: TElement>(
         &mut self,
         element: E,
-        shared_context: &SharedStyleContext)
-    {
+        shared_context: &SharedStyleContext,
+        stack_limit_checker: Option<&StackLimitChecker>,
+    ) -> InvalidationResult {
         // In animation-only restyle we shouldn't touch snapshot at all.
         if shared_context.traversal_flags.for_animation_only() {
-            return;
+            return InvalidationResult::empty();
         }
 
         use invalidation::element::invalidator::TreeStyleInvalidator;
@@ -340,19 +346,24 @@ impl ElementData {
                 element.handled_snapshot(),
                 element.implemented_pseudo_element());
 
-        if element.has_snapshot() && !element.handled_snapshot() {
-            let invalidator = TreeStyleInvalidator::new(
-                element,
-                Some(self),
-                shared_context,
-            );
-            invalidator.invalidate();
-            unsafe { element.set_handled_snapshot() }
-            debug_assert!(element.handled_snapshot());
+        if !element.has_snapshot() || element.handled_snapshot() {
+            return InvalidationResult::empty();
         }
+
+        let invalidator = TreeStyleInvalidator::new(
+            element,
+            Some(self),
+            shared_context,
+            stack_limit_checker,
+        );
+        let result = invalidator.invalidate();
+        unsafe { element.set_handled_snapshot() }
+        debug_assert!(element.handled_snapshot());
+        result
     }
 
     /// Returns true if this element has styles.
+    #[inline]
     pub fn has_styles(&self) -> bool {
         self.styles.primary.is_some()
     }
@@ -429,19 +440,21 @@ impl ElementData {
     }
 
     /// Drops any restyle state from the element.
+    #[inline]
     pub fn clear_restyle_state(&mut self) {
         self.restyle.clear_restyle_state();
     }
 
     /// Drops restyle flags and damage from the element.
+    #[inline]
     pub fn clear_restyle_flags_and_damage(&mut self) {
         self.restyle.clear_restyle_flags_and_damage();
     }
 
     /// Measures memory usage.
     #[cfg(feature = "gecko")]
-    pub fn malloc_size_of_children_excluding_cvs(&self, state: &mut SizeOfState) -> usize {
-        let n = self.styles.malloc_size_of_children_excluding_cvs(state);
+    pub fn size_of_excluding_cvs(&self, ops: &mut MallocSizeOfOps) -> usize {
+        let n = self.styles.size_of_excluding_cvs(ops);
 
         // We may measure more fields in the future if DMD says it's worth it.
 

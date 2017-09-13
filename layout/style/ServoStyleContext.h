@@ -18,7 +18,7 @@ namespace dom {
 class Element;
 } // namespace dom
 
-MOZ_DEFINE_MALLOC_SIZE_OF(ServoComputedValuesMallocSizeOf)
+MOZ_DEFINE_MALLOC_ENCLOSING_SIZE_OF(ServoComputedValuesMallocEnclosingSizeOf)
 
 class ServoStyleContext final : public nsStyleContext
 {
@@ -100,27 +100,27 @@ public:
    */
   inline void ResolveSameStructsAs(const ServoStyleContext* aOther);
 
-  void AddSizeOfIncludingThis(SizeOfState& aState, nsStyleSizes& aSizes,
-                              bool aIsDOM) const
+  // The |aCVsSize| outparam on this function is where the actual CVs size
+  // value is added. It's done that way because the callers know which value
+  // the size should be added to.
+  void AddSizeOfIncludingThis(nsWindowSizes& aSizes, size_t* aCVsSize) const
   {
-    // XXX WARNING: similar to ServoComputedData::AddSizeOfExcludingThis(),
-    // but here we need to step back 4 or 8 bytes to get past the servo_arc::Arc
-    // refcount to the base pointer.
-    static_assert(alignof(ServoStyleContext) == 4 ||
-                  alignof(ServoStyleContext) == 8,
-                  "alignment will break AddSizeOfExcludingThis()");
-    const char* p = reinterpret_cast<const char*>(this);
-    p -= std::max(sizeof(size_t), alignof(ServoStyleContext));
+    // Note: |this| sits within a servo_arc::Arc, i.e. it is preceded by a
+    // refcount. So we need to measure it with a function that can handle an
+    // interior pointer. We use ServoComputedValuesMallocEnclosingSizeOf to
+    // clearly identify in DMD's output the memory measured here.
+    *aCVsSize += ServoComputedValuesMallocEnclosingSizeOf(this);
+    mSource.AddSizeOfExcludingThis(aSizes);
 
-    // We use ServoComputedValuesMallocSizeOf rather than
-    // |aState.mMallocSizeOf| to better distinguish in DMD's output the memory
-    // measured here.
-    if (aIsDOM) {
-      aSizes.mComputedValuesDom += ServoComputedValuesMallocSizeOf(p);
-    } else {
-      aSizes.mComputedValuesNonDom += ServoComputedValuesMallocSizeOf(p);
+    if (mNextInheritingAnonBoxStyle &&
+        !aSizes.mState.HaveSeenPtr(mNextInheritingAnonBoxStyle)) {
+      mNextInheritingAnonBoxStyle->AddSizeOfIncludingThis(aSizes, aCVsSize);
     }
-    mSource.AddSizeOfExcludingThis(aState, aSizes);
+
+    if (mNextLazyPseudoStyle &&
+        !aSizes.mState.HaveSeenPtr(mNextLazyPseudoStyle)) {
+      mNextLazyPseudoStyle->AddSizeOfIncludingThis(aSizes, aCVsSize);
+    }
   }
 
 private:

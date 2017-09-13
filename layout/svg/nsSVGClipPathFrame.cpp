@@ -85,11 +85,8 @@ already_AddRefed<DrawTarget>
 nsSVGClipPathFrame::CreateClipMask(gfxContext& aReferenceContext,
                                    IntPoint& aOffset)
 {
-  gfxContextMatrixAutoSaveRestore autoRestoreMatrix(&aReferenceContext);
-
-  aReferenceContext.SetMatrix(gfxMatrix());
-  gfxRect rect = aReferenceContext.GetClipExtents();
-  IntRect bounds = RoundedOut(ToRect(rect));
+  IntRect bounds =
+    RoundedOut(ToRect(aReferenceContext.GetClipExtents(gfxContext::eDeviceSpace)));
   if (bounds.IsEmpty()) {
     // We don't need to create a mask surface, all drawing is clipped anyway.
     return nullptr;
@@ -458,7 +455,7 @@ nsSVGClipPathFrame::GetCanvasTM()
 gfxMatrix
 nsSVGClipPathFrame::GetClipPathTransform(nsIFrame* aClippedFrame)
 {
-  SVGClipPathElement *content = static_cast<SVGClipPathElement*>(mContent);
+  SVGClipPathElement *content = static_cast<SVGClipPathElement*>(GetContent());
 
   gfxMatrix tm = content->PrependLocalTransformsTo(gfxMatrix());
 

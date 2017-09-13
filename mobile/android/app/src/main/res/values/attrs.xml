@@ -79,6 +79,11 @@
         <attr name="entryKeys" format="string"/>
     </declare-styleable>
 
+    <declare-styleable name="SwitchPreferenceView">
+        <attr name="androidPreferenceKey" format="string"/>
+        <attr name="defaultValue" format="boolean"/>
+    </declare-styleable>
+
     <declare-styleable name="TabsLayout">
         <attr name="tabs">
             <flag name="tabs_normal" value="0x00" />
@@ -179,6 +184,12 @@
     <declare-styleable name="NavButton">
         <attr name="borderColor" format="color" />
         <attr name="borderColorPrivate" format="color" />
+    </declare-styleable>
+
+    <declare-styleable name="AnimatedProgressBar">
+        <attr name="wrapShiftDrawable" format="boolean" />
+        <attr name="shiftDuration" format="reference" />
+        <attr name="shiftInterpolator" format="reference" />
     </declare-styleable>
 
 </resources>

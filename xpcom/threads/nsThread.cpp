@@ -28,8 +28,10 @@
 #include "mozilla/IOInterposer.h"
 #include "mozilla/ipc/MessageChannel.h"
 #include "mozilla/ipc/BackgroundChild.h"
+#include "mozilla/Scheduler.h"
 #include "mozilla/SchedulerGroup.h"
 #include "mozilla/Services.h"
+#include "mozilla/SystemGroup.h"
 #include "nsXPCOMPrivate.h"
 #include "mozilla/ChaosMode.h"
 #include "mozilla/Telemetry.h"
@@ -241,6 +243,7 @@ struct nsThreadShutdownContext
     : mTerminatingThread(aTerminatingThread)
     , mJoiningThread(aJoiningThread)
     , mAwaitingShutdownAck(aAwaitingShutdownAck)
+    , mIsMainThreadJoining(NS_IsMainThread())
   {
     MOZ_COUNT_CTOR(nsThreadShutdownContext);
   }
@@ -254,6 +257,7 @@ struct nsThreadShutdownContext
   NotNull<nsThread*> MOZ_UNSAFE_REF("Thread manager is holding reference to joining thread")
     mJoiningThread;
   bool mAwaitingShutdownAck;
+  bool mIsMainThreadJoining;
 };
 
 // This event is responsible for notifying nsThread::Shutdown that it is time
@@ -328,7 +332,7 @@ SetThreadAffinity(unsigned int cpu)
   MOZ_ALWAYS_TRUE(thread_policy_set(mach_thread_self(), THREAD_AFFINITY_POLICY,
                                     &policy.affinity_tag, 1) == KERN_SUCCESS);
 #elif defined(XP_WIN)
-  MOZ_ALWAYS_TRUE(SetThreadIdealProcessor(GetCurrentThread(), cpu) != -1);
+  MOZ_ALWAYS_TRUE(SetThreadIdealProcessor(GetCurrentThread(), cpu) != (DWORD)-1);
 #endif
 }
 
@@ -456,7 +460,11 @@ nsThread::ThreadFunc(void* aArg)
     WrapNotNull(self->mShutdownContext);
   MOZ_ASSERT(context->mTerminatingThread == self);
   event = do_QueryObject(new nsThreadShutdownAckEvent(context));
-  context->mJoiningThread->Dispatch(event, NS_DISPATCH_NORMAL);
+  if (context->mIsMainThreadJoining) {
+    SystemGroup::Dispatch(TaskCategory::Other, event.forget());
+  } else {
+    context->mJoiningThread->Dispatch(event, NS_DISPATCH_NORMAL);
+  }
 
   // Release any observer of the thread here.
   self->SetObserver(nullptr);
@@ -814,12 +822,6 @@ nsThread::HasPendingEvents(bool* aResult)
 NS_IMETHODIMP
 nsThread::IdleDispatch(already_AddRefed<nsIRunnable> aEvent)
 {
-  // Currently the only supported idle dispatch is from the same
-  // thread. To support idle dispatch from another thread we need to
-  // support waking threads that are waiting for an event queue that
-  // isn't mIdleEvents.
-  MOZ_ASSERT(PR_GetCurrentThread() == mThread);
-
   nsCOMPtr<nsIRunnable> event = aEvent;
 
   if (NS_WARN_IF(!event)) {
@@ -873,11 +875,11 @@ void canary_alarm_handler(int signum)
 
 #endif
 
-#define NOTIFY_EVENT_OBSERVERS(func_, params_)                                 \
+#define NOTIFY_EVENT_OBSERVERS(observers_, func_, params_)                     \
   do {                                                                         \
-    if (!mEventObservers.IsEmpty()) {                                          \
-      nsAutoTObserverArray<NotNull<nsCOMPtr<nsIThreadObserver>>, 2>::ForwardIterator \
-        iter_(mEventObservers);                                                \
+    if (!observers_.IsEmpty()) {                                               \
+      nsTObserverArray<nsCOMPtr<nsIThreadObserver>>::ForwardIterator           \
+        iter_(observers_);                                                     \
       nsCOMPtr<nsIThreadObserver> obs_;                                        \
       while (iter_.HasMore()) {                                                \
         obs_ = iter_.GetNext();                                                \
@@ -927,10 +929,10 @@ nsThread::ProcessNextEvent(bool aMayWait, bool* aResult)
   // and repeat the nested event loop since its state change hasn't happened yet.
   bool reallyWait = aMayWait && (mNestedEventLoopDepth > 0 || !ShuttingDown());
 
-  Maybe<SchedulerGroup::AutoProcessEvent> ape;
+  Maybe<Scheduler::EventLoopActivation> activation;
   if (mIsMainThread == MAIN_THREAD) {
     DoMainThreadSpecificProcessing(reallyWait);
-    ape.emplace();
+    activation.emplace();
   }
 
   ++mNestedEventLoopDepth;
@@ -950,7 +952,7 @@ nsThread::ProcessNextEvent(bool aMayWait, bool* aResult)
     obs->OnProcessNextEvent(this, reallyWait);
   }
 
-  NOTIFY_EVENT_OBSERVERS(OnProcessNextEvent, (this, reallyWait));
+  NOTIFY_EVENT_OBSERVERS(EventQueue()->EventObservers(), OnProcessNextEvent, (this, reallyWait));
 
 #ifdef MOZ_CANARY
   Canary canary;
@@ -963,6 +965,10 @@ nsThread::ProcessNextEvent(bool aMayWait, bool* aResult)
     // also do work.
     EventPriority priority;
     nsCOMPtr<nsIRunnable> event = mEvents->GetEvent(reallyWait, &priority);
+
+    if (activation.isSome()) {
+      activation.ref().SetEvent(event, priority);
+    }
 
     *aResult = (event.get() != nullptr);
 
@@ -1038,7 +1044,7 @@ nsThread::ProcessNextEvent(bool aMayWait, bool* aResult)
     }
   }
 
-  NOTIFY_EVENT_OBSERVERS(AfterProcessNextEvent, (this, *aResult));
+  NOTIFY_EVENT_OBSERVERS(EventQueue()->EventObservers(), AfterProcessNextEvent, (this, *aResult));
 
   if (obs) {
     obs->AfterProcessNextEvent(this, *aResult);
@@ -1145,13 +1151,7 @@ nsThread::AddObserver(nsIThreadObserver* aObserver)
     return NS_ERROR_NOT_SAME_THREAD;
   }
 
-  NS_WARNING_ASSERTION(!mEventObservers.Contains(aObserver),
-                       "Adding an observer twice!");
-
-  if (!mEventObservers.AppendElement(WrapNotNull(aObserver))) {
-    NS_WARNING("Out of memory!");
-    return NS_ERROR_OUT_OF_MEMORY;
-  }
+  EventQueue()->AddObserver(aObserver);
 
   return NS_OK;
 }
@@ -1163,9 +1163,7 @@ nsThread::RemoveObserver(nsIThreadObserver* aObserver)
     return NS_ERROR_NOT_SAME_THREAD;
   }
 
-  if (aObserver && !mEventObservers.RemoveElement(aObserver)) {
-    NS_WARNING("Removing an observer that was never added!");
-  }
+  EventQueue()->RemoveObserver(aObserver);
 
   return NS_OK;
 }

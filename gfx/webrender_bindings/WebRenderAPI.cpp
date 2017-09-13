@@ -13,7 +13,7 @@
 #include "mozilla/layers/SynchronousTask.h"
 
 #define WRDL_LOG(...)
-//#define WRDL_LOG(...) printf_stderr("WRDL: " __VA_ARGS__)
+//#define WRDL_LOG(...) printf_stderr("WRDL(%p): " __VA_ARGS__)
 
 namespace mozilla {
 namespace wr {
@@ -28,7 +28,6 @@ public:
               bool* aUseANGLE,
               RefPtr<widget::CompositorWidget>&& aWidget,
               layers::SynchronousTask* aTask,
-              bool aEnableProfiler,
               LayoutDeviceIntSize aSize,
               layers::SyncHandle* aHandle)
     : mDocHandle(aDocHandle)
@@ -37,7 +36,6 @@ public:
     , mBridge(aBridge)
     , mCompositorWidget(Move(aWidget))
     , mTask(aTask)
-    , mEnableProfiler(aEnableProfiler)
     , mSize(aSize)
     , mSyncHandle(aHandle)
   {
@@ -74,7 +72,7 @@ public:
     wr::Renderer* wrRenderer = nullptr;
     if (!wr_window_new(aWindowId, mSize.width, mSize.height, gl.get(),
                        aRenderThread.ThreadPool().Raw(),
-                       this->mEnableProfiler, mDocHandle, &wrRenderer,
+                       mDocHandle, &wrRenderer,
                        mMaxTextureSize)) {
       // wr_window_new puts a message into gfxCriticalNote if it returns false
       return;
@@ -110,7 +108,6 @@ private:
   layers::CompositorBridgeParentBase* mBridge;
   RefPtr<widget::CompositorWidget> mCompositorWidget;
   layers::SynchronousTask* mTask;
-  bool mEnableProfiler;
   LayoutDeviceIntSize mSize;
   layers::SyncHandle* mSyncHandle;
 };
@@ -142,8 +139,7 @@ private:
 
 //static
 already_AddRefed<WebRenderAPI>
-WebRenderAPI::Create(bool aEnableProfiler,
-                     layers::CompositorBridgeParentBase* aBridge,
+WebRenderAPI::Create(layers::CompositorBridgeParentBase* aBridge,
                      RefPtr<widget::CompositorWidget>&& aWidget,
                      LayoutDeviceIntSize aSize)
 {
@@ -163,7 +159,7 @@ WebRenderAPI::Create(bool aEnableProfiler,
   // the next time we need to access the DocumentHandle object.
   layers::SynchronousTask task("Create Renderer");
   auto event = MakeUnique<NewRenderer>(&docHandle, aBridge, &maxTextureSize, &useANGLE,
-                                       Move(aWidget), &task, aEnableProfiler, aSize,
+                                       Move(aWidget), &task, aSize,
                                        &syncHandle);
   RenderThread::Get()->RunEvent(id, Move(event));
 
@@ -232,31 +228,32 @@ WebRenderAPI::GenerateFrame(const nsTArray<wr::WrOpacityProperty>& aOpacityArray
 }
 
 void
-WebRenderAPI::SetRootDisplayList(gfx::Color aBgColor,
-                                 Epoch aEpoch,
-                                 mozilla::LayerSize aViewportSize,
-                                 wr::WrPipelineId pipeline_id,
-                                 const LayoutSize& content_size,
-                                 wr::BuiltDisplayListDescriptor dl_descriptor,
-                                 uint8_t *dl_data,
-                                 size_t dl_size)
+WebRenderAPI::SetDisplayList(gfx::Color aBgColor,
+                             Epoch aEpoch,
+                             mozilla::LayerSize aViewportSize,
+                             wr::WrPipelineId pipeline_id,
+                             const LayoutSize& content_size,
+                             wr::BuiltDisplayListDescriptor dl_descriptor,
+                             uint8_t *dl_data,
+                             size_t dl_size,
+                             ResourceUpdateQueue& aResources)
 {
-    wr_api_set_root_display_list(mDocHandle,
-                                 ToColorF(aBgColor),
-                                 aEpoch,
-                                 aViewportSize.width, aViewportSize.height,
-                                 pipeline_id,
-                                 content_size,
-                                 dl_descriptor,
-                                 dl_data,
-                                 dl_size);
+  wr_api_set_display_list(mDocHandle,
+                          ToColorF(aBgColor),
+                          aEpoch,
+                          aViewportSize.width, aViewportSize.height,
+                          pipeline_id,
+                          content_size,
+                          dl_descriptor,
+                          dl_data,
+                          dl_size,
+                          aResources.Raw());
 }
 
 void
-WebRenderAPI::ClearRootDisplayList(Epoch aEpoch,
-                                   wr::WrPipelineId pipeline_id)
+WebRenderAPI::ClearDisplayList(Epoch aEpoch, wr::WrPipelineId pipeline_id)
 {
-  wr_api_clear_root_display_list(mDocHandle, aEpoch, pipeline_id);
+  wr_api_clear_display_list(mDocHandle, aEpoch, pipeline_id);
 }
 
 void
@@ -428,44 +425,100 @@ WebRenderAPI::SetRootPipeline(PipelineId aPipeline)
 }
 
 void
-WebRenderAPI::AddImage(ImageKey key, const ImageDescriptor& aDescriptor,
-                       Range<uint8_t> aBytes)
+WebRenderAPI::UpdateResources(ResourceUpdateQueue& aUpdates)
 {
-  wr_api_add_image(mDocHandle,
-                   key,
-                   &aDescriptor,
-                   RangeToByteSlice(aBytes));
+  wr_api_update_resources(mDocHandle, aUpdates.Raw());
+}
+
+ResourceUpdateQueue::ResourceUpdateQueue()
+{
+  mUpdates = wr_resource_updates_new();
+}
+
+ResourceUpdateQueue::ResourceUpdateQueue(ResourceUpdateQueue&& aFrom)
+{
+  mUpdates = aFrom.mUpdates;
+  aFrom.mUpdates = nullptr;
+}
+
+ResourceUpdateQueue&
+ResourceUpdateQueue::operator=(ResourceUpdateQueue&& aFrom)
+{
+  mUpdates = aFrom.mUpdates;
+  aFrom.mUpdates = nullptr;
+  return *this;
+}
+
+ResourceUpdateQueue::~ResourceUpdateQueue()
+{
+  if (mUpdates) {
+    wr_resource_updates_delete(mUpdates);
+  }
+}
+
+ByteBuffer
+ResourceUpdateQueue::Serialize()
+{
+  VecU8 data;
+  wr_resource_updates_serialize(mUpdates, &data);
+  ByteBuffer result(Move(data));
+  return result;
+}
+
+//static
+ResourceUpdateQueue
+ResourceUpdateQueue::Deserialize(Range<uint8_t> aData)
+{
+  auto slice = wr::RangeToByteSlice(aData);
+  ResourceUpdateQueue result(wr_resource_updates_deserialize(slice));
+  return result;
 }
 
 void
-WebRenderAPI::AddBlobImage(ImageKey key, const ImageDescriptor& aDescriptor,
-                           Range<uint8_t> aBytes)
+ResourceUpdateQueue::Clear()
 {
-  wr_api_add_blob_image(mDocHandle,
-                        key,
-                        &aDescriptor,
-                        RangeToByteSlice(aBytes));
+  wr_resource_updates_clear(mUpdates);
 }
 
 void
-WebRenderAPI::AddExternalImage(ImageKey key,
-                               const ImageDescriptor& aDescriptor,
-                               ExternalImageId aExtID,
-                               wr::WrExternalImageBufferType aBufferType,
-                               uint8_t aChannelIndex)
+ResourceUpdateQueue::AddImage(ImageKey key, const ImageDescriptor& aDescriptor,
+                              Range<uint8_t> aBytes)
 {
-  wr_api_add_external_image(mDocHandle,
-                            key,
-                            &aDescriptor,
-                            aExtID,
-                            aBufferType,
-                            aChannelIndex);
+  wr_resource_updates_add_image(mUpdates,
+                                key,
+                                &aDescriptor,
+                                RangeToByteSlice(aBytes));
 }
 
 void
-WebRenderAPI::AddExternalImageBuffer(ImageKey aKey,
-                                     const ImageDescriptor& aDescriptor,
-                                     ExternalImageId aHandle)
+ResourceUpdateQueue::AddBlobImage(ImageKey key, const ImageDescriptor& aDescriptor,
+                                  Range<uint8_t> aBytes)
+{
+  wr_resource_updates_add_blob_image(mUpdates,
+                                     key,
+                                     &aDescriptor,
+                                     RangeToByteSlice(aBytes));
+}
+
+void
+ResourceUpdateQueue::AddExternalImage(ImageKey key,
+                                      const ImageDescriptor& aDescriptor,
+                                      ExternalImageId aExtID,
+                                      wr::WrExternalImageBufferType aBufferType,
+                                      uint8_t aChannelIndex)
+{
+  wr_resource_updates_add_external_image(mUpdates,
+                                         key,
+                                         &aDescriptor,
+                                         aExtID,
+                                         aBufferType,
+                                         aChannelIndex);
+}
+
+void
+ResourceUpdateQueue::AddExternalImageBuffer(ImageKey aKey,
+                                            const ImageDescriptor& aDescriptor,
+                                            ExternalImageId aHandle)
 {
   auto channelIndex = 0;
   AddExternalImage(aKey, aDescriptor, aHandle,
@@ -474,91 +527,75 @@ WebRenderAPI::AddExternalImageBuffer(ImageKey aKey,
 }
 
 void
-WebRenderAPI::UpdateImageBuffer(ImageKey aKey,
-                                const ImageDescriptor& aDescriptor,
-                                Range<uint8_t> aBytes)
+ResourceUpdateQueue::UpdateImageBuffer(ImageKey aKey,
+                                       const ImageDescriptor& aDescriptor,
+                                       Range<uint8_t> aBytes)
 {
-  wr_api_update_image(mDocHandle,
-                      aKey,
-                      &aDescriptor,
-                      RangeToByteSlice(aBytes));
+  wr_resource_updates_update_image(mUpdates,
+                                   aKey,
+                                   &aDescriptor,
+                                   RangeToByteSlice(aBytes));
 }
 
 void
-WebRenderAPI::UpdateBlobImage(ImageKey aKey,
-                              const ImageDescriptor& aDescriptor,
-                              Range<uint8_t> aBytes)
+ResourceUpdateQueue::UpdateBlobImage(ImageKey aKey,
+                                     const ImageDescriptor& aDescriptor,
+                                     Range<uint8_t> aBytes)
 {
-  wr_api_update_blob_image(mDocHandle,
-                           aKey,
-                           &aDescriptor,
-                           RangeToByteSlice(aBytes));
+  wr_resource_updates_update_blob_image(mUpdates,
+                                        aKey,
+                                        &aDescriptor,
+                                        RangeToByteSlice(aBytes));
 }
 
 void
-WebRenderAPI::UpdateExternalImage(ImageKey aKey,
-                                  const ImageDescriptor& aDescriptor,
-                                  ExternalImageId aExtID,
-                                  wr::WrExternalImageBufferType aBufferType,
-                                  uint8_t aChannelIndex)
+ResourceUpdateQueue::UpdateExternalImage(ImageKey aKey,
+                                         const ImageDescriptor& aDescriptor,
+                                         ExternalImageId aExtID,
+                                         wr::WrExternalImageBufferType aBufferType,
+                                         uint8_t aChannelIndex)
 {
-  wr_api_update_external_image(mDocHandle,
-                               aKey,
-                               &aDescriptor,
-                               aExtID,
-                               aBufferType,
-                               aChannelIndex);
+  wr_resource_updates_update_external_image(mUpdates,
+                                            aKey,
+                                            &aDescriptor,
+                                            aExtID,
+                                            aBufferType,
+                                            aChannelIndex);
 }
 
 void
-WebRenderAPI::DeleteImage(ImageKey aKey)
+ResourceUpdateQueue::DeleteImage(ImageKey aKey)
 {
-  wr_api_delete_image(mDocHandle, aKey);
+  wr_resource_updates_delete_image(mUpdates, aKey);
 }
 
 void
-WebRenderAPI::AddRawFont(wr::FontKey aKey, Range<uint8_t> aBytes, uint32_t aIndex)
+ResourceUpdateQueue::AddRawFont(wr::FontKey aKey, Range<uint8_t> aBytes, uint32_t aIndex)
 {
-  wr_api_add_raw_font(mDocHandle, aKey, &aBytes[0], aBytes.length(), aIndex);
+  wr_resource_updates_add_raw_font(mUpdates, aKey, &aBytes[0], aBytes.length(), aIndex);
 }
 
 void
-WebRenderAPI::DeleteFont(wr::FontKey aKey)
+ResourceUpdateQueue::DeleteFont(wr::FontKey aKey)
 {
-  wr_api_delete_font(mDocHandle, aKey);
+  wr_resource_updates_delete_font(mUpdates, aKey);
 }
 
-class EnableProfiler : public RendererEvent
+void
+ResourceUpdateQueue::AddFontInstance(wr::FontInstanceKey aKey,
+                                     wr::FontKey aFontKey,
+                                     float aGlyphSize,
+                                     const wr::FontInstanceOptions* aOptions,
+                                     const wr::FontInstancePlatformOptions* aPlatformOptions)
 {
-public:
-  explicit EnableProfiler(bool aEnabled)
-    : mEnabled(aEnabled)
-  {
-    MOZ_COUNT_CTOR(EnableProfiler);
-  }
-
-  ~EnableProfiler()
-  {
-    MOZ_COUNT_DTOR(EnableProfiler);
-  }
-
-  virtual void Run(RenderThread& aRenderThread, WindowId aWindowId) override
-  {
-    auto renderer = aRenderThread.GetRenderer(aWindowId);
-    if (renderer) {
-      renderer->SetProfilerEnabled(mEnabled);
-    }
-  }
-
-private:
-  bool mEnabled;
-};
+  wr_resource_updates_add_font_instance(mUpdates, aKey, aFontKey, aGlyphSize,
+                                        aOptions, aPlatformOptions);
+}
 
 void
-WebRenderAPI::SetProfilerEnabled(bool aEnabled)
+ResourceUpdateQueue::DeleteFontInstance(wr::FontInstanceKey aKey)
 {
-  auto event = MakeUnique<EnableProfiler>(aEnabled);
-  RunOnRenderThread(Move(event));
+  wr_resource_updates_delete_font_instance(mUpdates, aKey);
 }
 
 class FrameStartTime : public RendererEvent
@@ -656,7 +693,7 @@ DisplayListBuilder::PushStackingContext(const wr::LayoutRect& aBounds,
     perspective = ToLayoutTransform(*aPerspective);
   }
   const wr::LayoutTransform* maybePerspective = aPerspective ? &perspective : nullptr;
-  WRDL_LOG("PushStackingContext b=%s t=%s\n", Stringify(aBounds).c_str(),
+  WRDL_LOG("PushStackingContext b=%s t=%s\n", mWrState, Stringify(aBounds).c_str(),
       aTransform ? Stringify(*aTransform).c_str() : "none");
   wr_dp_push_stacking_context(mWrState, aBounds, aAnimationId, aOpacity,
                               maybeTransform, aTransformStyle, maybePerspective,
@@ -666,7 +703,7 @@ DisplayListBuilder::PushStackingContext(const wr::LayoutRect& aBounds,
 void
 DisplayListBuilder::PopStackingContext()
 {
-  WRDL_LOG("PopStackingContext\n");
+  WRDL_LOG("PopStackingContext\n", mWrState);
   wr_dp_pop_stacking_context(mWrState);
 }
 
@@ -679,8 +716,8 @@ DisplayListBuilder::DefineClip(const wr::LayoutRect& aClipRect,
       aComplex ? aComplex->Elements() : nullptr,
       aComplex ? aComplex->Length() : 0,
       aMask);
-  WRDL_LOG("DefineClip id=%" PRIu64 " r=%s m=%p b=%s complex=%d\n", clip_id,
-      Stringify(aClipRect).c_str(), aMask,
+  WRDL_LOG("DefineClip id=%" PRIu64 " r=%s m=%p b=%s complex=%zu\n", mWrState,
+      clip_id, Stringify(aClipRect).c_str(), aMask,
       aMask ? Stringify(aMask->rect).c_str() : "none",
       aComplex ? aComplex->Length() : 0);
   return wr::WrClipId { clip_id };
@@ -690,7 +727,7 @@ void
 DisplayListBuilder::PushClip(const wr::WrClipId& aClipId, bool aRecordInStack)
 {
   wr_dp_push_clip(mWrState, aClipId.id);
-  WRDL_LOG("PushClip id=%" PRIu64 "\n", aClipId.id);
+  WRDL_LOG("PushClip id=%" PRIu64 "\n", mWrState, aClipId.id);
   if (aRecordInStack) {
     mClipIdStack.push_back(aClipId);
   }
@@ -699,7 +736,7 @@ DisplayListBuilder::PushClip(const wr::WrClipId& aClipId, bool aRecordInStack)
 void
 DisplayListBuilder::PopClip(bool aRecordInStack)
 {
-  WRDL_LOG("PopClip id=%" PRIu64 "\n", mClipIdStack.back().id);
+  WRDL_LOG("PopClip id=%" PRIu64 "\n", mWrState, mClipIdStack.back().id);
   if (aRecordInStack) {
     mClipIdStack.pop_back();
   }
@@ -709,33 +746,52 @@ DisplayListBuilder::PopClip(bool aRecordInStack)
 void
 DisplayListBuilder::PushBuiltDisplayList(BuiltDisplayList &dl)
 {
+  WRDL_LOG("PushBuiltDisplayList\n", mWrState);
   wr_dp_push_built_display_list(mWrState,
                                 dl.dl_desc,
                                 &dl.dl.inner);
 }
 
-void
-DisplayListBuilder::PushScrollLayer(const layers::FrameMetrics::ViewID& aScrollId,
-                                    const wr::LayoutRect& aContentRect,
-                                    const wr::LayoutRect& aClipRect)
+bool
+DisplayListBuilder::IsScrollLayerDefined(layers::FrameMetrics::ViewID aScrollId) const
 {
-  WRDL_LOG("PushScrollLayer id=%" PRIu64 " co=%s cl=%s\n",
+  return mScrollParents.find(aScrollId) != mScrollParents.end();
+}
+
+void
+DisplayListBuilder::DefineScrollLayer(const layers::FrameMetrics::ViewID& aScrollId,
+                                      const wr::LayoutRect& aContentRect,
+                                      const wr::LayoutRect& aClipRect)
+{
+  WRDL_LOG("DefineScrollLayer id=%" PRIu64 " co=%s cl=%s\n", mWrState,
       aScrollId, Stringify(aContentRect).c_str(), Stringify(aClipRect).c_str());
-  wr_dp_push_scroll_layer(mWrState, aScrollId, aContentRect, aClipRect);
-  if (!mScrollIdStack.empty()) {
-    auto it = mScrollParents.insert({aScrollId, mScrollIdStack.back()});
-    if (!it.second) { // aScrollId was already a key in mScrollParents
-                      // so check that the parent value is the same.
-      MOZ_ASSERT(it.first->second == mScrollIdStack.back());
-    }
+
+  Maybe<layers::FrameMetrics::ViewID> parent =
+      mScrollIdStack.empty() ? Nothing() : Some(mScrollIdStack.back());
+  auto it = mScrollParents.insert({aScrollId, parent});
+  if (it.second) {
+    // An insertion took place, which means we haven't defined aScrollId before.
+    // So let's define it now.
+    wr_dp_define_scroll_layer(mWrState, aScrollId, aContentRect, aClipRect);
+  } else {
+    // aScrollId was already a key in mScrollParents so check that the parent
+    // value is the same.
+    MOZ_ASSERT(it.first->second == parent);
   }
+}
+
+void
+DisplayListBuilder::PushScrollLayer(const layers::FrameMetrics::ViewID& aScrollId)
+{
+  WRDL_LOG("PushScrollLayer id=%" PRIu64 "\n", mWrState, aScrollId);
+  wr_dp_push_scroll_layer(mWrState, aScrollId);
   mScrollIdStack.push_back(aScrollId);
 }
 
 void
 DisplayListBuilder::PopScrollLayer()
 {
-  WRDL_LOG("PopScrollLayer id=%" PRIu64 "\n", mScrollIdStack.back());
+  WRDL_LOG("PopScrollLayer id=%" PRIu64 "\n", mWrState, mScrollIdStack.back());
   mScrollIdStack.pop_back();
   wr_dp_pop_scroll_layer(mWrState);
 }
@@ -744,7 +800,7 @@ void
 DisplayListBuilder::PushClipAndScrollInfo(const layers::FrameMetrics::ViewID& aScrollId,
                                           const wr::WrClipId* aClipId)
 {
-  WRDL_LOG("PushClipAndScroll s=%" PRIu64 " c=%s\n", aScrollId,
+  WRDL_LOG("PushClipAndScroll s=%" PRIu64 " c=%s\n", mWrState, aScrollId,
       aClipId ? Stringify(aClipId->id).c_str() : "none");
   wr_dp_push_clip_and_scroll_info(mWrState, aScrollId,
       aClipId ? &(aClipId->id) : nullptr);
@@ -754,7 +810,7 @@ DisplayListBuilder::PushClipAndScrollInfo(const layers::FrameMetrics::ViewID& aS
 void
 DisplayListBuilder::PopClipAndScrollInfo()
 {
-  WRDL_LOG("PopClipAndScroll\n");
+  WRDL_LOG("PopClipAndScroll\n", mWrState);
   mScrollIdStack.pop_back();
   wr_dp_pop_clip_and_scroll_info(mWrState);
 }
@@ -764,7 +820,7 @@ DisplayListBuilder::PushRect(const wr::LayoutRect& aBounds,
                              const wr::LayoutRect& aClip,
                              const wr::ColorF& aColor)
 {
-  WRDL_LOG("PushRect b=%s cl=%s c=%s\n",
+  WRDL_LOG("PushRect b=%s cl=%s c=%s\n", mWrState,
       Stringify(aBounds).c_str(),
       Stringify(aClip).c_str(),
       Stringify(aColor).c_str());
@@ -827,7 +883,8 @@ DisplayListBuilder::PushImage(const wr::LayoutRect& aBounds,
                               wr::ImageRendering aFilter,
                               wr::ImageKey aImage)
 {
-  WRDL_LOG("PushImage b=%s cl=%s s=%s t=%s\n", Stringify(aBounds).c_str(),
+  WRDL_LOG("PushImage b=%s cl=%s s=%s t=%s\n", mWrState,
+      Stringify(aBounds).c_str(),
       Stringify(aClip).c_str(), Stringify(aStretchSize).c_str(),
       Stringify(aTileSpacing).c_str());
   wr_dp_push_image(mWrState, aBounds, aClip, aStretchSize, aTileSpacing, aFilter, aImage);
@@ -957,15 +1014,15 @@ void
 DisplayListBuilder::PushText(const wr::LayoutRect& aBounds,
                              const wr::LayoutRect& aClip,
                              const gfx::Color& aColor,
-                             wr::FontKey aFontKey,
+                             wr::FontInstanceKey aFontKey,
                              Range<const wr::GlyphInstance> aGlyphBuffer,
-                             float aGlyphSize)
+                             const wr::GlyphOptions* aGlyphOptions)
 {
   wr_dp_push_text(mWrState, aBounds, aClip,
                   ToColorF(aColor),
                   aFontKey,
                   &aGlyphBuffer[0], aGlyphBuffer.length(),
-                  aGlyphSize);
+                  aGlyphOptions);
 }
 
 void
@@ -1033,20 +1090,20 @@ DisplayListBuilder::TopmostClipId()
   return Some(mClipIdStack.back());
 }
 
-Maybe<layers::FrameMetrics::ViewID>
+layers::FrameMetrics::ViewID
 DisplayListBuilder::TopmostScrollId()
 {
   if (mScrollIdStack.empty()) {
-    return Nothing();
+    return layers::FrameMetrics::NULL_SCROLL_ID;
   }
-  return Some(mScrollIdStack.back());
+  return mScrollIdStack.back();
 }
 
 Maybe<layers::FrameMetrics::ViewID>
 DisplayListBuilder::ParentScrollIdFor(layers::FrameMetrics::ViewID aScrollId)
 {
   auto it = mScrollParents.find(aScrollId);
-  return (it == mScrollParents.end() ? Nothing() : Some(it->second));
+  return (it == mScrollParents.end() ? Nothing() : it->second);
 }
 
 } // namespace wr

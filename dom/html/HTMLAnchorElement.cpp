@@ -58,14 +58,10 @@ HTMLAnchorElement::IsInteractiveHTMLContent(bool aIgnoreTabindex) const
          nsGenericHTMLElement::IsInteractiveHTMLContent(aIgnoreTabindex);
 }
 
-NS_INTERFACE_TABLE_HEAD_CYCLE_COLLECTION_INHERITED(HTMLAnchorElement)
-  NS_INTERFACE_TABLE_INHERITED(HTMLAnchorElement,
-                               nsIDOMHTMLAnchorElement,
-                               Link)
-NS_INTERFACE_TABLE_TAIL_INHERITING(nsGenericHTMLElement)
-
-NS_IMPL_ADDREF_INHERITED(HTMLAnchorElement, Element)
-NS_IMPL_RELEASE_INHERITED(HTMLAnchorElement, Element)
+NS_IMPL_ISUPPORTS_CYCLE_COLLECTION_INHERITED(HTMLAnchorElement,
+                                             nsGenericHTMLElement,
+                                             nsIDOMHTMLAnchorElement,
+                                             Link)
 
 NS_IMPL_CYCLE_COLLECTION_CLASS(HTMLAnchorElement)
 
@@ -406,12 +402,11 @@ HTMLAnchorElement::IntrinsicState() const
 }
 
 void
-HTMLAnchorElement::AddSizeOfExcludingThis(SizeOfState& aState,
-                                          nsStyleSizes& aSizes,
+HTMLAnchorElement::AddSizeOfExcludingThis(nsWindowSizes& aSizes,
                                           size_t* aNodeSize) const
 {
-  nsGenericHTMLElement::AddSizeOfExcludingThis(aState, aSizes, aNodeSize);
-  *aNodeSize += Link::SizeOfExcludingThis(aState);
+  nsGenericHTMLElement::AddSizeOfExcludingThis(aSizes, aNodeSize);
+  *aNodeSize += Link::SizeOfExcludingThis(aSizes.mState);
 }
 
 } // namespace dom

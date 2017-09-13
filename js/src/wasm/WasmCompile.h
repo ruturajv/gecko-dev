@@ -67,32 +67,13 @@ typedef RefPtr<const CompileArgs> SharedCompileArgs;
 //  - *error is null and the caller should report out-of-memory.
 
 SharedModule
-Compile(const ShareableBytes& bytecode, const CompileArgs& args, UniqueChars* error);
+CompileInitialTier(const ShareableBytes& bytecode, const CompileArgs& args, UniqueChars* error);
 
-// Select whether debugging is available based on the available compilers, the
-// configuration options, and the nature of the module.  Note debugging can be
-// unavailable even if selected, if Rabaldr is unavailable or the module is not
-// compilable by Rabaldr.
+// Attempt to compile the second tier of the given wasm::Module, returning whether
+// tier-2 compilation succeeded and Module::finishTier2 was called.
 
 bool
-GetDebugEnabled(const CompileArgs& args, ModuleKind kind = ModuleKind::Wasm);
-
-// Select the mode for the initial compilation of a module.  The mode is "Tier1"
-// precisely if both compilers are available, we're not debugging, and it is
-// possible to compile in the background, and in that case, we'll compile twice,
-// with the mode set to "Tier2" during the second (background) compilation.
-// Otherwise, the tier is "Once" and we'll compile once, with the appropriate
-// compiler.
-
-CompileMode
-GetInitialCompileMode(const CompileArgs& args, ModuleKind kind = ModuleKind::Wasm);
-
-// Select the tier for a compilation.  The tier is Tier::Baseline if we're
-// debugging, if Baldr is not available, or if both compilers are are available
-// and the compileMode is Tier1; otherwise the tier is Tier::Ion.
-
-Tier
-GetTier(const CompileArgs& args, CompileMode compileMode, ModuleKind kind = ModuleKind::Wasm);
+CompileTier2(Module& module, const CompileArgs& args, Atomic<bool>* cancelled);
 
 }  // namespace wasm
 }  // namespace js

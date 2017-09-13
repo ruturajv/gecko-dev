@@ -10,7 +10,7 @@ use std::ascii::AsciiExt;
 use std::fmt;
 use style_traits::{ParseError, ToCss};
 use style_traits::values::specified::AllowedNumericType;
-use values::CSSFloat;
+use values::{CSSFloat, serialize_percentage};
 use values::computed::{Context, ToComputedValue};
 use values::computed::percentage::Percentage as ComputedPercentage;
 use values::specified::calc::CalcNode;
@@ -28,7 +28,6 @@ pub struct Percentage {
     calc_clamping_mode: Option<AllowedNumericType>,
 }
 
-no_viewport_percentage!(Percentage);
 
 impl ToCss for Percentage {
     fn to_css<W>(&self, dest: &mut W) -> fmt::Result
@@ -38,7 +37,7 @@ impl ToCss for Percentage {
             dest.write_str("calc(")?;
         }
 
-        write!(dest, "{}%", self.value * 100.)?;
+        serialize_percentage(self.value, dest)?;
 
         if self.calc_clamping_mode.is_some() {
             dest.write_str(")")?;

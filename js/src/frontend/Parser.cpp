@@ -2314,8 +2314,7 @@ Parser<FullParseHandler, char16_t>::moduleBody(ModuleSharedContext* modulesc)
             if (!AtomToPrintableString(context, name, &str))
                 return null();
 
-            JS_ReportErrorNumberLatin1(context, GetErrorMessage, nullptr,
-                                       JSMSG_MISSING_EXPORT, str.ptr());
+            errorAt(TokenStream::NoOffset, JSMSG_MISSING_EXPORT, str.ptr());
             return null();
         }
 
@@ -4036,6 +4035,12 @@ Parser<SyntaxParseHandler, char16_t>::asmJS(Node list)
     // encountered so that asm.js is always validated/compiled exactly once
     // during a full parse.
     JS_ALWAYS_FALSE(abortIfSyntaxParser());
+
+    // Record that the current script source constains some AsmJS, to disable
+    // any incremental encoder, as AsmJS cannot be encoded with XDR at the
+    // moment.
+    if (ss)
+        ss->setContainsAsmJS();
     return false;
 }
 
@@ -4058,6 +4063,7 @@ Parser<FullParseHandler, char16_t>::asmJS(Node list)
     if (ss == nullptr)
         return true;
 
+    ss->setContainsAsmJS();
     pc->functionBox()->useAsm = true;
 
     // Attempt to validate and compile this asm.js module. On success, the
@@ -5182,7 +5188,7 @@ Parser<FullParseHandler, char16_t>::namedImportsOrNamespaceImport(TokenKind tt, 
         // Namespace imports are are not indirect bindings but lexical
         // definitions that hold a module namespace object. They are treated
         // as const variables which are initialized during the
-        // ModuleDeclarationInstantiation step.
+        // ModuleInstantiate step.
         RootedPropertyName bindingName(context, importedBinding());
         if (!bindingName)
             return false;
@@ -6298,7 +6304,10 @@ Parser<ParseHandler, CharT>::forStatement(YieldHandling yieldHandling)
         }
     }
 
-    MUST_MATCH_TOKEN(TOK_LP, JSMSG_PAREN_AFTER_FOR);
+    MUST_MATCH_TOKEN_MOD_WITH_REPORT(TOK_LP, TokenStream::None,
+                                     error((token == TOK_AWAIT && !pc->isAsync())
+                                           ? JSMSG_FOR_AWAIT_OUTSIDE_ASYNC
+                                           : JSMSG_PAREN_AFTER_FOR));
 
     // PNK_FORHEAD, PNK_FORIN, or PNK_FOROF depending on the loop type.
     ParseNodeKind headKind;
@@ -9470,68 +9479,97 @@ Parser<SyntaxParseHandler, char16_t>::newRegExp()
     return handler.newRegExp(SyntaxParseHandler::NodeGeneric, pos(), *this);
 }
 
+// |exprPossibleError| is the PossibleError state within |expr|,
+// |possibleError| is the surrounding PossibleError state.
 template <class ParseHandler, typename CharT>
-void
+bool
 Parser<ParseHandler, CharT>::checkDestructuringAssignmentTarget(Node expr, TokenPos exprPos,
+                                                                PossibleError* exprPossibleError,
                                                                 PossibleError* possibleError,
                                                                 TargetBehavior behavior)
 {
+    // Report any pending expression error if we're definitely not in a
+    // destructuring context or the possible destructuring target is a
+    // property accessor.
+    if (!possibleError || handler.isPropertyAccess(expr))
+        return exprPossibleError->checkForExpressionError();
+
+    // |expr| may end up as a destructuring assignment target, so we need to
+    // validate it's either a name or can be parsed as a nested destructuring
+    // pattern. Property accessors are also valid assignment targets, but
+    // those are already handled above.
+
+    exprPossibleError->transferErrorsTo(possibleError);
+
+    // Return early if a pending destructuring error is already present.
+    if (possibleError->hasPendingDestructuringError())
+        return true;
+
+    if (handler.isNameAnyParentheses(expr)) {
+        checkDestructuringAssignmentName(expr, exprPos, possibleError);
+        return true;
+    }
+
+    if (handler.isUnparenthesizedDestructuringPattern(expr)) {
+        if (behavior == TargetBehavior::ForbidAssignmentPattern)
+            possibleError->setPendingDestructuringErrorAt(exprPos, JSMSG_BAD_DESTRUCT_TARGET);
+        return true;
+    }
+
+    // Parentheses are forbidden around destructuring *patterns* (but allowed
+    // around names). Use our nicer error message for parenthesized, nested
+    // patterns if nested destructuring patterns are allowed.
+    if (handler.isParenthesizedDestructuringPattern(expr) &&
+        behavior != TargetBehavior::ForbidAssignmentPattern)
+    {
+        possibleError->setPendingDestructuringErrorAt(exprPos, JSMSG_BAD_DESTRUCT_PARENS);
+    } else {
+        possibleError->setPendingDestructuringErrorAt(exprPos, JSMSG_BAD_DESTRUCT_TARGET);
+    }
+
+    return true;
+}
+
+template <class ParseHandler, typename CharT>
+void
+Parser<ParseHandler, CharT>::checkDestructuringAssignmentName(Node name, TokenPos namePos,
+                                                              PossibleError* possibleError)
+{
+    MOZ_ASSERT(handler.isNameAnyParentheses(name));
+
     // Return early if a pending destructuring error is already present.
     if (possibleError->hasPendingDestructuringError())
         return;
 
     if (pc->sc()->needStrictChecks()) {
-        if (handler.isArgumentsAnyParentheses(expr, context)) {
+        if (handler.isArgumentsAnyParentheses(name, context)) {
             if (pc->sc()->strict()) {
-                possibleError->setPendingDestructuringErrorAt(exprPos,
+                possibleError->setPendingDestructuringErrorAt(namePos,
                                                               JSMSG_BAD_STRICT_ASSIGN_ARGUMENTS);
             } else {
-                possibleError->setPendingDestructuringWarningAt(exprPos,
+                possibleError->setPendingDestructuringWarningAt(namePos,
                                                                 JSMSG_BAD_STRICT_ASSIGN_ARGUMENTS);
             }
             return;
         }
 
-        if (handler.isEvalAnyParentheses(expr, context)) {
+        if (handler.isEvalAnyParentheses(name, context)) {
             if (pc->sc()->strict()) {
-                possibleError->setPendingDestructuringErrorAt(exprPos,
+                possibleError->setPendingDestructuringErrorAt(namePos,
                                                               JSMSG_BAD_STRICT_ASSIGN_EVAL);
             } else {
-                possibleError->setPendingDestructuringWarningAt(exprPos,
+                possibleError->setPendingDestructuringWarningAt(namePos,
                                                                 JSMSG_BAD_STRICT_ASSIGN_EVAL);
             }
             return;
         }
     }
-
-    if (behavior == TargetBehavior::ForbidAssignmentPattern) {
-        if (handler.isUnparenthesizedDestructuringPattern(expr) ||
-            handler.isParenthesizedDestructuringPattern(expr))
-        {
-            possibleError->setPendingDestructuringErrorAt(exprPos, JSMSG_BAD_DESTRUCT_TARGET);
-            return;
-        }
-    }
-
-    // The expression must be either a simple assignment target, i.e. a name
-    // or a property accessor, or a nested destructuring pattern.
-    if (!handler.isUnparenthesizedDestructuringPattern(expr) &&
-        !handler.isNameAnyParentheses(expr) &&
-        !handler.isPropertyAccess(expr))
-    {
-        // Parentheses are forbidden around destructuring *patterns* (but
-        // allowed around names). Use our nicer error message for
-        // parenthesized, nested patterns.
-        if (handler.isParenthesizedDestructuringPattern(expr))
-            possibleError->setPendingDestructuringErrorAt(exprPos, JSMSG_BAD_DESTRUCT_PARENS);
-        else
-            possibleError->setPendingDestructuringErrorAt(exprPos, JSMSG_BAD_DESTRUCT_TARGET);
-    }
 }
 
 template <class ParseHandler, typename CharT>
-void
+bool
 Parser<ParseHandler, CharT>::checkDestructuringAssignmentElement(Node expr, TokenPos exprPos,
+                                                                 PossibleError* exprPossibleError,
                                                                  PossibleError* possibleError)
 {
     // ES2018 draft rev 0719f44aab93215ed9a626b2f45bd34f36916834
@@ -9544,8 +9582,16 @@ Parser<ParseHandler, CharT>::checkDestructuringAssignmentElement(Node expr, Toke
     // If |expr| is an assignment element with an initializer expression, its
     // destructuring assignment target was already validated in assignExpr().
     // Otherwise we need to check that |expr| is a valid destructuring target.
-    if (!handler.isUnparenthesizedAssignment(expr))
-        checkDestructuringAssignmentTarget(expr, exprPos, possibleError);
+    if (handler.isUnparenthesizedAssignment(expr)) {
+        // Report any pending expression error if we're definitely not in a
+        // destructuring context.
+        if (!possibleError)
+            return exprPossibleError->checkForExpressionError();
+
+        exprPossibleError->transferErrorsTo(possibleError);
+        return true;
+    }
+    return checkDestructuringAssignmentTarget(expr, exprPos, exprPossibleError, possibleError);
 }
 
 template <class ParseHandler, typename CharT>
@@ -9603,12 +9649,17 @@ Parser<ParseHandler, CharT>::arrayInitializer(YieldHandling yieldHandling,
                 if (!tokenStream.peekTokenPos(&innerPos, TokenStream::Operand))
                     return null();
 
+                PossibleError possibleErrorInner(*this);
                 Node inner = assignExpr(InAllowed, yieldHandling, TripledotProhibited,
-                                        possibleError);
+                                        &possibleErrorInner);
                 if (!inner)
                     return null();
-                if (possibleError)
-                    checkDestructuringAssignmentTarget(inner, innerPos, possibleError);
+                if (!checkDestructuringAssignmentTarget(inner, innerPos, &possibleErrorInner,
+                                                        possibleError))
+                {
+                    return null();
+                }
+
                 if (!handler.addSpreadElement(literal, begin, inner))
                     return null();
             } else {
@@ -9616,12 +9667,16 @@ Parser<ParseHandler, CharT>::arrayInitializer(YieldHandling yieldHandling,
                 if (!tokenStream.peekTokenPos(&elementPos, TokenStream::Operand))
                     return null();
 
+                PossibleError possibleErrorInner(*this);
                 Node element = assignExpr(InAllowed, yieldHandling, TripledotProhibited,
-                                          possibleError);
+                                          &possibleErrorInner);
                 if (!element)
                     return null();
-                if (possibleError)
-                    checkDestructuringAssignmentElement(element, elementPos, possibleError);
+                if (!checkDestructuringAssignmentElement(element, elementPos, &possibleErrorInner,
+                                                         possibleError))
+                {
+                    return null();
+                }
                 if (foldConstants && !FoldConstants(context, &element, this))
                     return null();
                 handler.addArrayElement(literal, element);
@@ -9904,13 +9959,16 @@ Parser<ParseHandler, CharT>::objectLiteral(YieldHandling yieldHandling,
             if (!tokenStream.peekTokenPos(&innerPos, TokenStream::Operand))
                 return null();
 
+            PossibleError possibleErrorInner(*this);
             Node inner = assignExpr(InAllowed, yieldHandling, TripledotProhibited,
-                                    possibleError);
+                                    &possibleErrorInner);
             if (!inner)
                 return null();
-            if (possibleError) {
-                checkDestructuringAssignmentTarget(inner, innerPos, possibleError,
-                                                   TargetBehavior::ForbidAssignmentPattern);
+            if (!checkDestructuringAssignmentTarget(inner, innerPos, &possibleErrorInner,
+                                                    possibleError,
+                                                    TargetBehavior::ForbidAssignmentPattern))
+            {
+                return null();
             }
             if (!handler.addSpreadProperty(literal, begin, inner))
                 return null();
@@ -9927,23 +9985,27 @@ Parser<ParseHandler, CharT>::objectLiteral(YieldHandling yieldHandling,
                 if (!tokenStream.peekTokenPos(&exprPos, TokenStream::Operand))
                     return null();
 
+                PossibleError possibleErrorInner(*this);
                 Node propExpr = assignExpr(InAllowed, yieldHandling, TripledotProhibited,
-                                           possibleError);
+                                           &possibleErrorInner);
                 if (!propExpr)
                     return null();
 
                 handler.checkAndSetIsDirectRHSAnonFunction(propExpr);
 
-                if (possibleError)
-                    checkDestructuringAssignmentElement(propExpr, exprPos, possibleError);
+                if (!checkDestructuringAssignmentElement(propExpr, exprPos, &possibleErrorInner,
+                                                         possibleError))
+                {
+                    return null();
+                }
 
                 if (foldConstants && !FoldConstants(context, &propExpr, this))
                     return null();
 
                 if (propAtom == context->names().proto) {
                     if (seenPrototypeMutation) {
-                        // Directly report the error when we're not in a
-                        // destructuring context.
+                        // Directly report the error when we're definitely not
+                        // in a destructuring context.
                         if (!possibleError) {
                             errorAt(namePos.begin, JSMSG_DUPLICATE_PROTO_PROPERTY);
                             return null();
@@ -9984,7 +10046,7 @@ Parser<ParseHandler, CharT>::objectLiteral(YieldHandling yieldHandling,
                     return null();
 
                 if (possibleError)
-                    checkDestructuringAssignmentTarget(nameExpr, namePos, possibleError);
+                    checkDestructuringAssignmentName(nameExpr, namePos, possibleError);
 
                 if (!handler.addShorthand(literal, propName, nameExpr))
                     return null();

@@ -99,6 +99,7 @@
 #include "nsIWebNavigation.h"
 #include "nsIScriptError.h"
 #include "nsISimpleEnumerator.h"
+#include "nsIRequestContext.h"
 #include "nsStyleSheetService.h"
 
 #include "nsNetUtil.h"     // for NS_NewURI
@@ -196,6 +197,7 @@
 #include "mozilla/dom/Comment.h"
 #include "nsTextNode.h"
 #include "mozilla/dom/Link.h"
+#include "mozilla/dom/HTMLCollectionBinding.h"
 #include "mozilla/dom/HTMLElementBinding.h"
 #include "nsXULAppAPI.h"
 #include "mozilla/dom/Touch.h"
@@ -207,7 +209,6 @@
 #include "imgRequestProxy.h"
 #include "nsWrapperCacheInlines.h"
 #include "nsSandboxFlags.h"
-#include "nsIAddonPolicyService.h"
 #include "mozilla/dom/AnimatableBinding.h"
 #include "mozilla/dom/AnonymousContent.h"
 #include "mozilla/dom/BindingUtils.h"
@@ -225,6 +226,7 @@
 #include "mozilla/dom/CustomElementRegistryBinding.h"
 #include "mozilla/dom/CustomElementRegistry.h"
 #include "mozilla/dom/TimeoutManager.h"
+#include "mozilla/ExtensionPolicyService.h"
 #include "nsFrame.h"
 #include "nsDOMCaretPosition.h"
 #include "nsIDOMHTMLTextAreaElement.h"
@@ -277,6 +279,7 @@
 #include "nsIURIClassifier.h"
 #include "mozilla/DocumentStyleRootIterator.h"
 #include "mozilla/ServoRestyleManager.h"
+#include "mozilla/ClearOnShutdown.h"
 
 using namespace mozilla;
 using namespace mozilla::dom;
@@ -316,6 +319,65 @@ GetHttpChannelHelper(nsIChannel* aChannel, nsIHttpChannel** aHttpChannel)
 
   return NS_OK;
 }
+
+////////////////////////////////////////////////////////////////////
+// PrincipalFlashClassifier
+
+// Classify the flash based on the document principal.
+// The usage of this class is as follows:
+//
+// 1) Call AsyncClassify() as early as possible to asynchronously do
+//    classification against all the flash blocking related tables
+//    via nsIURIClassifier.asyncClassifyLocalWithTables.
+//
+// 2) At any time you need the classification result, call Result()
+//    and it is guaranteed to give you the result. Note that you have
+//    to specify "aIsThirdParty" to the function so please make sure
+//    you can already correctly decide if the document is third-party.
+//
+//    Behind the scenes, the sync classification API
+//    (nsIURIClassifier.classifyLocalWithTable) may be called as a fallback to
+//    synchronously get the result if the asyncClassifyLocalWithTables hasn't
+//    been done yet.
+//
+// 3) You can call Result() as many times as you want and only the first time
+//    it may unfortunately call the blocking sync API. The subsequent call
+//    will just return the result that came out at the first time.
+//
+class PrincipalFlashClassifier final : public nsIURIClassifierCallback
+{
+public:
+  NS_DECL_THREADSAFE_ISUPPORTS
+  NS_DECL_NSIURICLASSIFIERCALLBACK
+
+  PrincipalFlashClassifier();
+
+  // Fire async classification based on the given principal.
+  void AsyncClassify(nsIPrincipal* aPrincipal);
+
+  // Would block if the result hasn't come out.
+  mozilla::dom::FlashClassification ClassifyMaybeSync(nsIPrincipal* aPrincipal,
+                                           bool aIsThirdParty);
+
+private:
+ ~PrincipalFlashClassifier() = default;
+
+  void Reset();
+  bool EnsureUriClassifier();
+  mozilla::dom::FlashClassification CheckIfClassifyNeeded(nsIPrincipal* aPrincipal);
+  mozilla::dom::FlashClassification Resolve(bool aIsThirdParty);
+  mozilla::dom::FlashClassification AsyncClassifyInternal(nsIPrincipal* aPrincipal);
+  void GetClassificationTables(bool aIsThirdParty, nsACString& aTables);
+
+  // For the fallback sync classification.
+  nsCOMPtr<nsIURI> mClassificationURI;
+
+  nsCOMPtr<nsIURIClassifier> mUriClassifier;
+  bool mAsyncClassified;
+  nsTArray<nsCString> mMatchedTables;
+  mozilla::dom::FlashClassification mResult;
+};
+
 
 #define NAME_NOT_VALID ((nsSimpleContentList*)1)
 
@@ -512,11 +574,130 @@ nsIdentifierMapEntry::SetImageElement(Element* aElement)
   }
 }
 
+namespace mozilla {
+namespace dom {
+class SimpleHTMLCollection final : public nsSimpleContentList
+                                 , public nsIHTMLCollection
+{
+public:
+  explicit SimpleHTMLCollection(nsINode* aRoot) : nsSimpleContentList(aRoot) {}
+
+  NS_DECL_ISUPPORTS_INHERITED
+
+  // nsIDOMHTMLCollection
+  NS_DECL_NSIDOMHTMLCOLLECTION
+
+  virtual nsINode* GetParentObject() override
+  {
+    return nsSimpleContentList::GetParentObject();
+  }
+  virtual Element* GetElementAt(uint32_t aIndex) override
+  {
+    return mElements.SafeElementAt(aIndex)->AsElement();
+  }
+
+  virtual Element* GetFirstNamedElement(const nsAString& aName,
+                                        bool& aFound) override
+  {
+    aFound = false;
+    nsCOMPtr<nsIAtom> name = NS_Atomize(aName);
+    for (uint32_t i = 0; i < mElements.Length(); i++) {
+      MOZ_DIAGNOSTIC_ASSERT(mElements[i]);
+      Element* element = mElements[i]->AsElement();
+      if (element->GetID() == name ||
+          (element->HasName() &&
+           element->GetParsedAttr(nsGkAtoms::name)->GetAtomValue() == name)) {
+        aFound = true;
+        return element;
+      }
+    }
+    return nullptr;
+  }
+
+  virtual void GetSupportedNames(nsTArray<nsString>& aNames) override
+  {
+    AutoTArray<nsIAtom*, 8> atoms;
+    for (uint32_t i = 0; i < mElements.Length(); i++) {
+      MOZ_DIAGNOSTIC_ASSERT(mElements[i]);
+      Element* element = mElements[i]->AsElement();
+
+      nsIAtom* id = element->GetID();
+      MOZ_ASSERT(id != nsGkAtoms::_empty);
+      if (id && !atoms.Contains(id)) {
+        atoms.AppendElement(id);
+      }
+
+      if (element->HasName()) {
+        nsIAtom* name = element->GetParsedAttr(nsGkAtoms::name)->GetAtomValue();
+        MOZ_ASSERT(name && name != nsGkAtoms::_empty);
+        if (name && !atoms.Contains(name)) {
+          atoms.AppendElement(name);
+        }
+      }
+    }
+
+    nsString* names = aNames.AppendElements(atoms.Length());
+    for (uint32_t i = 0; i < atoms.Length(); i++) {
+      atoms[i]->ToString(names[i]);
+    }
+  }
+
+  virtual JSObject* GetWrapperPreserveColorInternal() override
+  {
+    return nsWrapperCache::GetWrapperPreserveColor();
+  }
+  virtual void PreserveWrapperInternal(nsISupports* aScriptObjectHolder) override
+  {
+    nsWrapperCache::PreserveWrapper(aScriptObjectHolder);
+  }
+  virtual JSObject* WrapObject(JSContext *aCx,
+                               JS::Handle<JSObject*> aGivenProto) override
+  {
+    return HTMLCollectionBinding::Wrap(aCx, this, aGivenProto);
+  }
+
+  using nsBaseContentList::Length;
+  using nsBaseContentList::Item;
+  using nsIHTMLCollection::NamedItem;
+
+private:
+  virtual ~SimpleHTMLCollection() {}
+};
+
+NS_IMPL_ISUPPORTS_INHERITED(SimpleHTMLCollection, nsSimpleContentList,
+                            nsIHTMLCollection, nsIDOMHTMLCollection)
+
+NS_IMETHODIMP
+SimpleHTMLCollection::GetLength(uint32_t* aLength)
+{
+  *aLength = Length();
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+SimpleHTMLCollection::Item(uint32_t aIdx, nsIDOMNode** aRetVal)
+{
+  nsCOMPtr<nsIDOMNode> retVal = Item(aIdx)->AsDOMNode();
+  retVal.forget(aRetVal);
+  return NS_OK;
+}
+
+NS_IMETHODIMP
+SimpleHTMLCollection::NamedItem(const nsAString& aName, nsIDOMNode** aRetVal)
+{
+  nsCOMPtr<nsIDOMNode> retVal = NamedItem(aName)->AsDOMNode();
+  retVal.forget(aRetVal);
+  return NS_OK;
+}
+
+} // namespace dom
+} // namespace mozilla
+
 void
 nsIdentifierMapEntry::AddNameElement(nsINode* aNode, Element* aElement)
 {
   if (!mNameContentList) {
-    mNameContentList = new nsSimpleContentList(aNode);
+    mNameContentList = new SimpleHTMLCollection(aNode);
   }
 
   mNameContentList->AppendElement(aElement);
@@ -1007,12 +1188,12 @@ nsExternalResourceMap::PendingLoad::SetupViewer(nsIRequest* aRequest,
   nsCOMPtr<nsICategoryManager> catMan =
     do_GetService(NS_CATEGORYMANAGER_CONTRACTID);
   NS_ENSURE_TRUE(catMan, NS_ERROR_NOT_AVAILABLE);
-  nsXPIDLCString contractId;
+  nsCString contractId;
   nsresult rv = catMan->GetCategoryEntry("Gecko-Content-Viewers", type.get(),
                                          getter_Copies(contractId));
   NS_ENSURE_SUCCESS(rv, rv);
   nsCOMPtr<nsIDocumentLoaderFactory> docLoaderFactory =
-    do_GetService(contractId);
+    do_GetService(contractId.get());
   NS_ENSURE_TRUE(docLoaderFactory, NS_ERROR_NOT_AVAILABLE);
 
   nsCOMPtr<nsIContentViewer> viewer;
@@ -1386,7 +1567,8 @@ nsIDocument::nsIDocument()
     mChildDocumentUseCounters(0),
     mNotifiedPageForUseCounter(0),
     mIncCounters(),
-    mUserHasInteracted(false)
+    mUserHasInteracted(false),
+    mServoRestyleRootDirtyBits(0)
 {
   SetIsInDocument();
   for (auto& cnt : mIncCounters) {
@@ -1440,6 +1622,9 @@ nsDocument::nsDocument(const char* aContentType)
 #ifdef DEBUG
   , mWillReparent(false)
 #endif
+  , mDOMLoadingSet(false)
+  , mDOMInteractiveSet(false)
+  , mDOMCompleteSet(false)
 {
   SetContentTypeInternal(nsDependentCString(aContentType));
 
@@ -1450,6 +1635,9 @@ nsDocument::nsDocument(const char* aContentType)
 
   // void state used to differentiate an empty source from an unselected source
   mPreloadPictureFoundSource.SetIsVoid(true);
+  // For determining if this is a flash document which should be
+  // blocked based on its principal.
+  mPrincipalFlashClassifier = new PrincipalFlashClassifier();
 }
 
 void
@@ -2206,6 +2394,18 @@ nsDocument::ResetToURI(nsIURI *aURI, nsILoadGroup *aLoadGroup,
 
     // XXXbz what does "just fine" mean exactly?  And given that there
     // is no nsDocShell::SetDocument, what is this talking about?
+
+    // Inform the associated request context about this load start so
+    // any of its internal load progress flags gets reset.
+    nsCOMPtr<nsIRequestContextService> rcsvc =
+      do_GetService("@mozilla.org/network/request-context-service;1");
+    if (rcsvc) {
+      nsCOMPtr<nsIRequestContext> rc;
+      rcsvc->GetRequestContextFromLoadGroup(aLoadGroup, getter_AddRefs(rc));
+      if (rc) {
+        rc->BeginLoad();
+      }
+    }
   }
 
   mLastModified.Truncate();
@@ -2624,6 +2824,11 @@ nsDocument::StartDocumentLoad(const char* aCommand, nsIChannel* aChannel,
     aChannel->Cancel(NS_ERROR_CSP_FRAME_ANCESTOR_VIOLATION);
   }
 
+  // Perform a async flash classification based on the doc principal
+  // in an early stage to reduce the blocking time.
+  mFlashClassification = FlashClassification::Unclassified;
+  mPrincipalFlashClassifier->AsyncClassify(GetPrincipal());
+
   return NS_OK;
 }
 
@@ -2735,10 +2940,8 @@ nsDocument::InitCSP(nsIChannel* aChannel)
   NS_ConvertASCIItoUTF16 cspROHeaderValue(tCspROHeaderValue);
 
   // Check if this is a document from a WebExtension.
-  nsString addonId;
   nsCOMPtr<nsIPrincipal> principal = NodePrincipal();
-  principal->GetAddonId(addonId);
-  bool applyAddonCSP = !addonId.IsEmpty();
+  auto addonPolicy = BasePrincipal::Cast(principal)->AddonPolicy();
 
   // Check if this is a signed content to apply default CSP.
   bool applySignedContentCSP = false;
@@ -2748,7 +2951,7 @@ nsDocument::InitCSP(nsIChannel* aChannel)
   }
 
   // If there's no CSP to apply, go ahead and return early
-  if (!applyAddonCSP &&
+  if (!addonPolicy &&
       !applySignedContentCSP &&
       cspHeaderValue.IsEmpty() &&
       cspROHeaderValue.IsEmpty()) {
@@ -2772,19 +2975,14 @@ nsDocument::InitCSP(nsIChannel* aChannel)
   NS_ENSURE_SUCCESS(rv, rv);
 
   // ----- if the doc is an addon, apply its CSP.
-  if (applyAddonCSP) {
+  if (addonPolicy) {
     nsCOMPtr<nsIAddonPolicyService> aps = do_GetService("@mozilla.org/addons/policy-service;1");
 
     nsAutoString addonCSP;
-    rv = aps->GetBaseCSP(addonCSP);
-    if (NS_SUCCEEDED(rv)) {
-      csp->AppendPolicy(addonCSP, false, false);
-    }
+    Unused << ExtensionPolicyService::GetSingleton().GetBaseCSP(addonCSP);
+    csp->AppendPolicy(addonCSP, false, false);
 
-    rv = aps->GetAddonCSP(addonId, addonCSP);
-    if (NS_SUCCEEDED(rv)) {
-      csp->AppendPolicy(addonCSP, false, false);
-    }
+    csp->AppendPolicy(addonPolicy->ContentSecurityPolicy(), false, false);
   }
 
   // ----- if the doc is a signed content, apply the default CSP.
@@ -2818,13 +3016,14 @@ nsDocument::InitCSP(nsIChannel* aChannel)
   rv = csp->GetCSPSandboxFlags(&cspSandboxFlags);
   NS_ENSURE_SUCCESS(rv, rv);
 
-  mSandboxFlags |= cspSandboxFlags;
-
   // Probably the iframe sandbox attribute already caused the creation of a
   // new NullPrincipal. Only create a new NullPrincipal if CSP requires so
   // and no one has been created yet.
   bool needNewNullPrincipal =
     (cspSandboxFlags & SANDBOXED_ORIGIN) && !(mSandboxFlags & SANDBOXED_ORIGIN);
+
+  mSandboxFlags |= cspSandboxFlags;
+  
   if (needNewNullPrincipal) {
     principal = NullPrincipal::CreateWithInheritedAttributes(principal);
     principal->SetCsp(csp);
@@ -3405,7 +3604,8 @@ nsIDocument::GetActiveElement()
   if (nsCOMPtr<nsPIDOMWindowOuter> window = GetWindow()) {
     nsCOMPtr<nsPIDOMWindowOuter> focusedWindow;
     nsIContent* focusedContent =
-      nsFocusManager::GetFocusedDescendant(window, false,
+      nsFocusManager::GetFocusedDescendant(window,
+                                           nsFocusManager::eOnlyCurrentWindow,
                                            getter_AddRefs(focusedWindow));
     // be safe and make sure the element is from this document
     if (focusedContent && focusedContent->OwnerDoc() == this) {
@@ -3924,6 +4124,9 @@ nsDocument::CreateShell(nsPresContext* aContext, nsViewManager* aViewManager,
   if (docShell && docShell->IsInvisible())
     shell->SetNeverPainting(true);
 
+  MOZ_LOG(gDocumentLeakPRLog, LogLevel::Debug, ("DOCUMENT %p with PressShell %p and DocShell %p",
+                                                this, shell.get(), docShell.get()));
+
   mExternalResourceMap.ShowViewers();
 
   UpdateFrameRequestCallbackSchedulingState();
@@ -4214,13 +4417,6 @@ nsDocument::GetChildCount() const
   return mChildren.ChildCount();
 }
 
-nsIContent * const *
-nsDocument::GetChildArray(uint32_t* aChildCount) const
-{
-  return mChildren.GetChildArray(aChildCount);
-}
-
-
 nsresult
 nsDocument::InsertChildAt(nsIContent* aKid, uint32_t aIndex,
                           bool aNotify)
@@ -4275,6 +4471,7 @@ void
 nsDocument::AddOnDemandBuiltInUASheet(StyleSheet* aSheet)
 {
   MOZ_ASSERT(!mOnDemandBuiltInUASheets.Contains(aSheet));
+  MOZ_DIAGNOSTIC_ASSERT(aSheet->IsServo() == IsStyledByServo());
 
   // Prepend here so that we store the sheets in mOnDemandBuiltInUASheets in
   // the same order that they should end up in the style set.
@@ -4316,6 +4513,7 @@ nsDocument::GetIndexOfStyleSheet(const StyleSheet* aSheet) const
 void
 nsDocument::AddStyleSheetToStyleSets(StyleSheet* aSheet)
 {
+  MOZ_DIAGNOSTIC_ASSERT(aSheet->IsServo() == IsStyledByServo());
   nsCOMPtr<nsIPresShell> shell = GetShell();
   if (shell) {
     shell->StyleSet()->AddDocStyleSheet(aSheet, this);
@@ -4370,6 +4568,7 @@ void
 nsDocument::AddStyleSheet(StyleSheet* aSheet)
 {
   NS_PRECONDITION(aSheet, "null arg");
+  MOZ_DIAGNOSTIC_ASSERT(aSheet->IsServo() == IsStyledByServo());
   mStyleSheets.AppendElement(aSheet);
   aSheet->SetAssociatedDocument(this, StyleSheet::OwnedByDocument);
 
@@ -4435,6 +4634,7 @@ nsDocument::UpdateStyleSheets(nsTArray<RefPtr<StyleSheet>>& aOldSheets,
     // Now put the new one in its place.  If it's null, just ignore it.
     StyleSheet* newSheet = aNewSheets[i];
     if (newSheet) {
+      MOZ_DIAGNOSTIC_ASSERT(newSheet->IsServo() == IsStyledByServo());
       mStyleSheets.InsertElementAt(oldIndex, newSheet);
       newSheet->SetAssociatedDocument(this, StyleSheet::OwnedByDocument);
       if (newSheet->IsApplicable()) {
@@ -4453,6 +4653,7 @@ nsDocument::InsertStyleSheetAt(StyleSheet* aSheet, int32_t aIndex)
 {
   NS_PRECONDITION(aSheet, "null ptr");
 
+  MOZ_DIAGNOSTIC_ASSERT(aSheet->IsServo() == IsStyledByServo());
   mStyleSheets.InsertElementAt(aIndex, aSheet);
 
   aSheet->SetAssociatedDocument(this, StyleSheet::OwnedByDocument);
@@ -4472,6 +4673,7 @@ nsDocument::SetStyleSheetApplicableState(StyleSheet* aSheet,
   NS_PRECONDITION(aSheet, "null arg");
 
   // If we're actually in the document style sheet list
+  MOZ_DIAGNOSTIC_ASSERT(aSheet->IsServo() == IsStyledByServo());
   if (mStyleSheets.IndexOf(aSheet) != mStyleSheets.NoIndex) {
     if (aApplicable) {
       AddStyleSheetToStyleSets(aSheet);
@@ -5460,6 +5662,9 @@ nsDocument::UnblockDOMContentLoaded()
   if (--mBlockDOMContentLoaded != 0 || mDidFireDOMContentLoaded) {
     return;
   }
+
+  MOZ_LOG(gDocumentLeakPRLog, LogLevel::Debug, ("DOCUMENT %p UnblockDOMContentLoaded", this));
+
   mDidFireDOMContentLoaded = true;
 
   MOZ_ASSERT(mReadyState == READYSTATE_INTERACTIVE);
@@ -7030,8 +7235,12 @@ nsDocument::GetTitleElement()
 
   // We check the HTML namespace even for non-HTML documents, except SVG.  This
   // matches the spec and the behavior of all tested browsers.
-  RefPtr<nsContentList> list =
-    NS_GetContentList(this, kNameSpaceID_XHTML, NS_LITERAL_STRING("title"));
+  // We avoid creating a live nsContentList since we don't need to watch for DOM
+  // tree mutations.
+  RefPtr<nsContentList> list = new nsContentList(this, kNameSpaceID_XHTML,
+                                                 nsGkAtoms::title, nsGkAtoms::title,
+                                                 /* aDeep = */ true,
+                                                 /* aLiveList = */ false);
 
   nsIContent* first = list->Item(0, false);
 
@@ -8815,6 +9024,7 @@ nsDocument::Destroy()
 
   mIsGoingAway = true;
 
+  ScriptLoader()->Destroy();
   SetScriptGlobalObject(nullptr);
   RemovedFromDocShell();
 
@@ -9472,6 +9682,7 @@ nsDocument::CloneDocHelper(nsDocument* clone, bool aPreallocateChildren) const
   clone->mContentLanguage = mContentLanguage;
   clone->SetContentTypeInternal(GetContentTypeInternal());
   clone->mSecurityInfo = mSecurityInfo;
+  clone->mStyleBackendType = mStyleBackendType;
 
   // State from nsDocument
   clone->mType = mType;
@@ -9515,6 +9726,8 @@ nsDocument::SetReadyStateInternal(ReadyState rs)
   if (READYSTATE_LOADING == rs) {
     mLoadingTimeStamp = mozilla::TimeStamp::Now();
   }
+
+  RecordNavigationTiming(rs);
 
   RefPtr<AsyncEventDispatcher> asyncDispatcher =
     new AsyncEventDispatcher(this, NS_LITERAL_STRING("readystatechange"),
@@ -9637,19 +9850,23 @@ already_AddRefed<nsIURI>
 nsDocument::ResolvePreloadImage(nsIURI *aBaseURI,
                                 const nsAString& aSrcAttr,
                                 const nsAString& aSrcsetAttr,
-                                const nsAString& aSizesAttr)
+                                const nsAString& aSizesAttr,
+                                bool *aIsImgSet)
 {
   nsString sourceURL;
+  bool isImgSet;
   if (mPreloadPictureDepth == 1 && !mPreloadPictureFoundSource.IsVoid()) {
     // We're in a <picture> element and found a URI from a source previous to
     // this image, use it.
     sourceURL = mPreloadPictureFoundSource;
+    isImgSet = true;
   } else {
     // Otherwise try to use this <img> as a source
     HTMLImageElement::SelectSourceForTagWithAttrs(this, false, aSrcAttr,
                                                   aSrcsetAttr, aSizesAttr,
                                                   NullString(), NullString(),
                                                   sourceURL);
+    isImgSet = !aSrcsetAttr.IsEmpty();
   }
 
   // Empty sources are not loaded by <img> (i.e. not resolved to the baseURI)
@@ -9667,6 +9884,8 @@ nsDocument::ResolvePreloadImage(nsIURI *aBaseURI,
     return nullptr;
   }
 
+  *aIsImgSet = isImgSet;
+
   // We don't clear mPreloadPictureFoundSource because subsequent <img> tags in
   // this this <picture> share the same <sources> (though this is not valid per
   // spec)
@@ -9675,16 +9894,12 @@ nsDocument::ResolvePreloadImage(nsIURI *aBaseURI,
 
 void
 nsDocument::MaybePreLoadImage(nsIURI* uri, const nsAString &aCrossOriginAttr,
-                              ReferrerPolicy aReferrerPolicy)
+                              ReferrerPolicy aReferrerPolicy, bool aIsImgSet)
 {
   // Early exit if the img is already present in the img-cache
   // which indicates that the "real" load has already started and
   // that we shouldn't preload it.
-  int16_t blockingStatus;
-  if (nsContentUtils::IsImageInCache(uri, static_cast<nsIDocument *>(this)) ||
-      !nsContentUtils::CanLoadImage(uri, static_cast<nsIDocument *>(this),
-                                    this, NodePrincipal(), &blockingStatus,
-                                    nsIContentPolicy::TYPE_INTERNAL_IMAGE_PRELOAD)) {
+  if (nsContentUtils::IsImageInCache(uri, static_cast<nsIDocument *>(this))) {
     return;
   }
 
@@ -9703,6 +9918,10 @@ nsDocument::MaybePreLoadImage(nsIURI* uri, const nsAString &aCrossOriginAttr,
     MOZ_CRASH("Unknown CORS mode!");
   }
 
+  nsContentPolicyType policyType =
+    aIsImgSet ? nsIContentPolicy::TYPE_IMAGESET :
+                nsIContentPolicy::TYPE_INTERNAL_IMAGE_PRELOAD;
+
   // Image not in cache - trigger preload
   RefPtr<imgRequestProxy> request;
   nsresult rv =
@@ -9716,7 +9935,7 @@ nsDocument::MaybePreLoadImage(nsIURI* uri, const nsAString &aCrossOriginAttr,
                               loadFlags,
                               NS_LITERAL_STRING("img"),
                               getter_AddRefs(request),
-                              nsIContentPolicy::TYPE_INTERNAL_IMAGE_PRELOAD);
+                              policyType);
 
   // Pin image-reference to avoid evicting it from the img-cache before
   // the "real" load occurs. Unpinned in DispatchContentLoadedEvents and
@@ -9834,7 +10053,8 @@ NS_IMPL_ISUPPORTS(StubCSSLoaderObserver, nsICSSLoaderObserver)
 } // namespace
 
 void
-nsDocument::PreloadStyle(nsIURI* uri, const nsAString& charset,
+nsDocument::PreloadStyle(nsIURI* uri,
+                         const Encoding* aEncoding,
                          const nsAString& aCrossOriginAttr,
                          const ReferrerPolicy aReferrerPolicy,
                          const nsAString& aIntegrity)
@@ -9843,11 +10063,14 @@ nsDocument::PreloadStyle(nsIURI* uri, const nsAString& charset,
   nsCOMPtr<nsICSSLoaderObserver> obs = new StubCSSLoaderObserver();
 
   // Charset names are always ASCII.
-  CSSLoader()->LoadSheet(uri, true, NodePrincipal(),
-                         NS_LossyConvertUTF16toASCII(charset),
+  CSSLoader()->LoadSheet(uri,
+                         true,
+                         NodePrincipal(),
+                         aEncoding,
                          obs,
                          Element::StringToCORSMode(aCrossOriginAttr),
-                         aReferrerPolicy, aIntegrity);
+                         aReferrerPolicy,
+                         aIntegrity);
 }
 
 nsresult
@@ -10007,23 +10230,12 @@ nsDocument::ScrollToRef()
     return;
   }
 
-  char* tmpstr = ToNewCString(mScrollToRef);
-  if (!tmpstr) {
-    return;
-  }
-
-  nsUnescape(tmpstr);
-  nsAutoCString unescapedRef;
-  unescapedRef.Assign(tmpstr);
-  free(tmpstr);
-
-  nsresult rv = NS_ERROR_FAILURE;
-  // We assume that the bytes are in UTF-8, as it says in the spec:
-  // http://www.w3.org/TR/html4/appendix/notes.html#h-B.2.1
-  NS_ConvertUTF8toUTF16 ref(unescapedRef);
-
   nsCOMPtr<nsIPresShell> shell = GetShell();
   if (shell) {
+    nsresult rv = NS_ERROR_FAILURE;
+    // We assume that the bytes are in UTF-8, as it says in the spec:
+    // http://www.w3.org/TR/html4/appendix/notes.html#h-B.2.1
+    NS_ConvertUTF8toUTF16 ref(mScrollToRef);
     // Check an empty string which might be caused by the UTF-8 conversion
     if (!ref.IsEmpty()) {
       // Note that GoToAnchor will handle flushing layout as needed.
@@ -10034,9 +10246,16 @@ nsDocument::ScrollToRef()
 
     // If UTF-8 URI failed then try to assume the string as a
     // document's charset.
-
     if (NS_FAILED(rv)) {
       auto encoding = GetDocumentCharacterSet();
+      char* tmpstr = ToNewCString(mScrollToRef);
+      if (!tmpstr) {
+        return;
+      }
+      nsUnescape(tmpstr);
+      nsAutoCString unescapedRef;
+      unescapedRef.Assign(tmpstr);
+      free(tmpstr);
 
       rv = encoding->DecodeWithoutBOMHandling(unescapedRef, ref);
 
@@ -10188,6 +10407,7 @@ nsIDocument::CreateStaticClone(nsIDocShell* aCloneContainer)
 
       clonedDoc->mOriginalDocument->mStaticCloneCount++;
 
+      MOZ_ASSERT(GetStyleBackendType() == clonedDoc->GetStyleBackendType());
       int32_t sheetsCount = GetNumberOfStyleSheets();
       for (int32_t i = 0; i < sheetsCount; ++i) {
         RefPtr<StyleSheet> sheet = GetStyleSheetAt(i);
@@ -12435,8 +12655,7 @@ nsDocument::GetVisibilityState(nsAString& aState)
 /* virtual */ void
 nsIDocument::DocAddSizeOfExcludingThis(nsWindowSizes& aSizes) const
 {
-  nsINode::AddSizeOfExcludingThis(aSizes.mState, aSizes.mStyleSizes,
-                                  &aSizes.mDOMOtherSize);
+  nsINode::AddSizeOfExcludingThis(aSizes, &aSizes.mDOMOtherSize);
 
   if (mPresShell) {
     mPresShell->AddSizeOfIncludingThis(aSizes);
@@ -12483,8 +12702,7 @@ SizeOfOwnedSheetArrayExcludingThis(const nsTArray<RefPtr<StyleSheet>>& aSheets,
 }
 
 void
-nsDocument::AddSizeOfExcludingThis(SizeOfState& aState,
-                                   nsStyleSizes& aSizes,
+nsDocument::AddSizeOfExcludingThis(nsWindowSizes& aSizes,
                                    size_t* aNodeSize) const
 {
   // This AddSizeOfExcludingThis() overrides the one from nsINode.  But
@@ -12498,8 +12716,7 @@ static void
 AddSizeOfNodeTree(nsIContent* aNode, nsWindowSizes& aWindowSizes)
 {
   size_t nodeSize = 0;
-  aNode->AddSizeOfIncludingThis(aWindowSizes.mState, aWindowSizes.mStyleSizes,
-                                &nodeSize);
+  aNode->AddSizeOfIncludingThis(aWindowSizes, &nodeSize);
 
   // This is where we transfer the nodeSize obtained from
   // nsINode::AddSizeOfIncludingThis() to a value in nsWindowSizes.
@@ -12556,23 +12773,23 @@ nsDocument::DocAddSizeOfExcludingThis(nsWindowSizes& aWindowSizes) const
   // PresShell, which contains the frame tree.
   nsIDocument::DocAddSizeOfExcludingThis(aWindowSizes);
 
-  aWindowSizes.mStyleSheetsSize +=
+  aWindowSizes.mLayoutStyleSheetsSize +=
     SizeOfOwnedSheetArrayExcludingThis(mStyleSheets,
                                        aWindowSizes.mState.mMallocSizeOf);
   // Note that we do not own the sheets pointed to by mOnDemandBuiltInUASheets
   // (the nsLayoutStyleSheetCache singleton does).
-  aWindowSizes.mStyleSheetsSize +=
+  aWindowSizes.mLayoutStyleSheetsSize +=
     mOnDemandBuiltInUASheets.ShallowSizeOfExcludingThis(
       aWindowSizes.mState.mMallocSizeOf);
   for (auto& sheetArray : mAdditionalSheets) {
-    aWindowSizes.mStyleSheetsSize +=
+    aWindowSizes.mLayoutStyleSheetsSize +=
       SizeOfOwnedSheetArrayExcludingThis(sheetArray,
                                          aWindowSizes.mState.mMallocSizeOf);
   }
   // Lumping in the loader with the style-sheets size is not ideal,
   // but most of the things in there are in fact stylesheets, so it
   // doesn't seem worthwhile to separate it out.
-  aWindowSizes.mStyleSheetsSize +=
+  aWindowSizes.mLayoutStyleSheetsSize +=
     CSSLoader()->SizeOfIncludingThis(aWindowSizes.mState.mMallocSizeOf);
 
   aWindowSizes.mDOMOtherSize += mAttrStyleSheet
@@ -12961,9 +13178,15 @@ nsDocument::UpdateIntersectionObservations()
       time = perf->Now();
     }
   }
+  nsTArray<RefPtr<DOMIntersectionObserver>> observers(mIntersectionObservers.Count());
   for (auto iter = mIntersectionObservers.Iter(); !iter.Done(); iter.Next()) {
     DOMIntersectionObserver* observer = iter.Get()->GetKey();
-    observer->Update(this, time);
+      observers.AppendElement(observer);
+  }
+  for (const auto& observer : observers) {
+    if (observer) {
+      observer->Update(this, time);
+    }
   }
 }
 
@@ -12990,7 +13213,9 @@ nsDocument::NotifyIntersectionObservers()
     observers.AppendElement(observer);
   }
   for (const auto& observer : observers) {
-    observer->Notify();
+    if (observer) {
+      observer->Notify();
+    }
   }
 }
 
@@ -13330,6 +13555,23 @@ nsIDocument::UpdateStyleBackendType()
 }
 
 /**
+ * Retrieves the classification of the Flash plugins in the document based on
+ * the classification lists. We perform AsyncInitFlashClassification on
+ * StartDocumentLoad() and the result may not be initialized when this function
+ * gets called. In that case, We can only unfortunately have a blocking wait.
+ *
+ * For more information, see
+ * toolkit/components/url-classifier/flash-block-lists.rst
+ */
+FlashClassification
+nsDocument::PrincipalFlashClassification()
+{
+  MOZ_ASSERT(mPrincipalFlashClassifier);
+  return mPrincipalFlashClassifier->ClassifyMaybeSync(GetPrincipal(),
+                                                      IsThirdParty());
+}
+
+/**
  * Helper function for |nsDocument::PrincipalFlashClassification|
  *
  * Adds a table name string to a table list (a comma separated string). The
@@ -13369,27 +13611,279 @@ ArrayContainsTable(const nsTArray<nsCString>& aTableArray,
   return false;
 }
 
-/**
- * Retrieves the classification of the Flash plugins in the document based on
- * the classification lists.
- *
- * For more information, see
- * toolkit/components/url-classifier/flash-block-lists.rst
- */
-FlashClassification
-nsDocument::PrincipalFlashClassification()
+namespace {
+
+// An object to store all preferences we need for flash blocking feature.
+struct PrefStore
 {
-  nsresult rv;
+  PrefStore()
+  {
+    Preferences::AddBoolVarCache(&mFlashBlockEnabled,
+                                 "plugins.flashBlock.enabled");
+    Preferences::AddBoolVarCache(&mPluginsHttpOnly,
+                                 "plugins.http_https_only");
 
-  bool httpOnly = Preferences::GetBool("plugins.http_https_only", true);
-  bool flashBlock = Preferences::GetBool("plugins.flashBlock.enabled", false);
+    // We only need to register string-typed preferences.
+    Preferences::RegisterCallback(UpdateStringPrefs, "urlclassifier.flashAllowTable", this);
+    Preferences::RegisterCallback(UpdateStringPrefs, "urlclassifier.flashAllowExceptTable", this);
+    Preferences::RegisterCallback(UpdateStringPrefs, "urlclassifier.flashTable", this);
+    Preferences::RegisterCallback(UpdateStringPrefs, "urlclassifier.flashExceptTable", this);
+    Preferences::RegisterCallback(UpdateStringPrefs, "urlclassifier.flashSubDocTable", this);
+    Preferences::RegisterCallback(UpdateStringPrefs, "urlclassifier.flashSubDocExceptTable", this);
 
-  // If neither pref is on, skip the null-principal and principal URI checks.
-  if (!httpOnly && !flashBlock) {
+    UpdateStringPrefs();
+  }
+
+  ~PrefStore()
+  {
+    Preferences::UnregisterCallback(UpdateStringPrefs, "urlclassifier.flashAllowTable", this);
+    Preferences::UnregisterCallback(UpdateStringPrefs, "urlclassifier.flashAllowExceptTable", this);
+    Preferences::UnregisterCallback(UpdateStringPrefs, "urlclassifier.flashTable", this);
+    Preferences::UnregisterCallback(UpdateStringPrefs, "urlclassifier.flashExceptTable", this);
+    Preferences::UnregisterCallback(UpdateStringPrefs, "urlclassifier.flashSubDocTable", this);
+    Preferences::UnregisterCallback(UpdateStringPrefs, "urlclassifier.flashSubDocExceptTable", this);
+  }
+
+  void UpdateStringPrefs()
+  {
+    Preferences::GetCString("urlclassifier.flashAllowTable", mAllowTables);
+    Preferences::GetCString("urlclassifier.flashAllowExceptTable", mAllowExceptionsTables);
+    Preferences::GetCString("urlclassifier.flashTable", mDenyTables);
+    Preferences::GetCString("urlclassifier.flashExceptTable", mDenyExceptionsTables);
+    Preferences::GetCString("urlclassifier.flashSubDocTable", mSubDocDenyTables);
+    Preferences::GetCString("urlclassifier.flashSubDocExceptTable", mSubDocDenyExceptionsTables);
+  }
+
+  static void UpdateStringPrefs(const char*, void* aClosure)
+  {
+    static_cast<PrefStore*>(aClosure)->UpdateStringPrefs();
+  }
+
+  bool mFlashBlockEnabled;
+  bool mPluginsHttpOnly;
+
+  nsCString mAllowTables;
+  nsCString mAllowExceptionsTables;
+  nsCString mDenyTables;
+  nsCString mDenyExceptionsTables;
+  nsCString mSubDocDenyTables;
+  nsCString mSubDocDenyExceptionsTables;
+};
+
+static const
+PrefStore& GetPrefStore()
+{
+  static UniquePtr<PrefStore> sPrefStore;
+  if (!sPrefStore) {
+    sPrefStore.reset(new PrefStore());
+    ClearOnShutdown(&sPrefStore);
+  }
+  return *sPrefStore;
+}
+
+} // end of unnamed namespace.
+
+////////////////////////////////////////////////////////////////////
+// PrincipalFlashClassifier implementation.
+
+NS_IMPL_ISUPPORTS(PrincipalFlashClassifier, nsIURIClassifierCallback)
+
+PrincipalFlashClassifier::PrincipalFlashClassifier()
+{
+  Reset();
+}
+
+void
+PrincipalFlashClassifier::Reset()
+{
+  mAsyncClassified = false;
+  mMatchedTables.Clear();
+  mResult = FlashClassification::Unclassified;
+}
+
+void
+PrincipalFlashClassifier::GetClassificationTables(bool aIsThirdParty,
+                                                  nsACString& aTables)
+{
+  aTables.Truncate();
+  auto& prefs = GetPrefStore();
+
+  MaybeAddTableToTableList(prefs.mAllowTables, aTables);
+  MaybeAddTableToTableList(prefs.mAllowExceptionsTables, aTables);
+  MaybeAddTableToTableList(prefs.mDenyTables, aTables);
+  MaybeAddTableToTableList(prefs.mDenyExceptionsTables, aTables);
+
+  if (aIsThirdParty) {
+    MaybeAddTableToTableList(prefs.mSubDocDenyTables, aTables);
+    MaybeAddTableToTableList(prefs.mSubDocDenyExceptionsTables, aTables);
+  }
+}
+
+bool
+PrincipalFlashClassifier::EnsureUriClassifier()
+{
+  if (!mUriClassifier) {
+    mUriClassifier = do_GetService(NS_URICLASSIFIERSERVICE_CONTRACTID);
+  }
+
+  return !!mUriClassifier;
+}
+
+FlashClassification
+PrincipalFlashClassifier::ClassifyMaybeSync(nsIPrincipal* aPrincipal, bool aIsThirdParty)
+{
+  if (FlashClassification::Unclassified != mResult) {
+    // We already have the result. Just return it.
+    return mResult;
+  }
+
+  // TODO: Bug 1342333 - Entirely remove the use of the sync API
+  // (ClassifyLocalWithTables).
+  if (!mAsyncClassified) {
+
+    //
+    // We may
+    //   1) have called AsyncClassifyLocalWithTables but OnClassifyComplete
+    //      hasn't been called.
+    //   2) haven't even called AsyncClassifyLocalWithTables.
+    //
+    // In both cases we need to do the synchronous classification as the fallback.
+    //
+
+    if (!EnsureUriClassifier()) {
+      return FlashClassification::Denied;
+    }
+    mResult = CheckIfClassifyNeeded(aPrincipal);
+    if (FlashClassification::Unclassified != mResult) {
+      return mResult;
+    }
+
+    nsresult rv;
+    nsAutoCString classificationTables;
+    GetClassificationTables(aIsThirdParty, classificationTables);
+
+    if (!mClassificationURI) {
+      rv = aPrincipal->GetURI(getter_AddRefs(mClassificationURI));
+      if (NS_FAILED(rv) || !mClassificationURI) {
+        mResult = FlashClassification::Denied;
+        return mResult;
+      }
+    }
+
+    rv = mUriClassifier->ClassifyLocalWithTables(mClassificationURI,
+                                                 classificationTables,
+                                                 mMatchedTables);
+    if (NS_WARN_IF(NS_FAILED(rv))) {
+      if (rv == NS_ERROR_MALFORMED_URI) {
+        // This means that the URI had no hostname (ex: file://doc.html). In this
+        // case, we allow the default (Unknown plugin) behavior.
+        mResult = FlashClassification::Unknown;
+      } else {
+        mResult = FlashClassification::Denied;
+      }
+      return mResult;
+    }
+  }
+
+  // Resolve the result based on mMatchedTables and aIsThirdParty.
+  mResult = Resolve(aIsThirdParty);
+  MOZ_ASSERT(FlashClassification::Unclassified != mResult);
+
+  // The subsequent call of Result() will return the resolved result
+  // and never reach here until Reset() is called.
+  return mResult;
+}
+
+/*virtual*/ nsresult
+PrincipalFlashClassifier::OnClassifyComplete(nsresult /*aErrorCode*/,
+                                             const nsACString& aLists, // Only this matters.
+                                             const nsACString& /*aProvider*/,
+                                             const nsACString& /*aPrefix*/)
+{
+  mAsyncClassified = true;
+
+  if (FlashClassification::Unclassified != mResult) {
+    // Result() has been called prior to this callback.
+    return NS_OK;
+  }
+
+  // TODO: Bug 1364804 - We should use a callback type which notifies
+  // the result as a string array rather than a formatted string.
+
+  // We only populate the matched list without resolving the classification
+  // result because we are not sure if the parent doc has been properly set.
+  // We also parse the comma-separated tables to array. (the code is copied
+  // from Classifier::SplitTables.)
+  nsACString::const_iterator begin, iter, end;
+  aLists.BeginReading(begin);
+  aLists.EndReading(end);
+  while (begin != end) {
+    iter = begin;
+    FindCharInReadable(',', iter, end);
+    nsDependentCSubstring table = Substring(begin,iter);
+    if (!table.IsEmpty()) {
+      mMatchedTables.AppendElement(Substring(begin, iter));
+    }
+    begin = iter;
+    if (begin != end) {
+      begin++;
+    }
+  }
+
+  return NS_OK;
+}
+
+// We resolve the classification result based on aIsThirdParty
+// and the matched tables we got ealier on (via either sync or async API).
+FlashClassification
+PrincipalFlashClassifier::Resolve(bool aIsThirdParty)
+{
+  MOZ_ASSERT(FlashClassification::Unclassified == mResult,
+             "We already have resolved classification result.");
+
+  if (mMatchedTables.IsEmpty()) {
     return FlashClassification::Unknown;
   }
 
-  nsCOMPtr<nsIPrincipal> principal = GetPrincipal();
+  auto& prefs = GetPrefStore();
+  if (ArrayContainsTable(mMatchedTables, prefs.mDenyTables) &&
+      !ArrayContainsTable(mMatchedTables, prefs.mDenyExceptionsTables)) {
+    return FlashClassification::Denied;
+  } else if (ArrayContainsTable(mMatchedTables, prefs.mAllowTables) &&
+             !ArrayContainsTable(mMatchedTables, prefs.mAllowExceptionsTables)) {
+    return FlashClassification::Allowed;
+  }
+
+  if (aIsThirdParty && ArrayContainsTable(mMatchedTables, prefs.mSubDocDenyTables) &&
+      !ArrayContainsTable(mMatchedTables, prefs.mSubDocDenyExceptionsTables)) {
+    return FlashClassification::Denied;
+  }
+
+  return FlashClassification::Unknown;
+}
+
+void
+PrincipalFlashClassifier::AsyncClassify(nsIPrincipal* aPrincipal)
+{
+  MOZ_ASSERT(FlashClassification::Unclassified == mResult,
+             "The old classification result should be reset first.");
+  Reset();
+  mResult = AsyncClassifyInternal(aPrincipal);
+}
+
+FlashClassification
+PrincipalFlashClassifier::CheckIfClassifyNeeded(nsIPrincipal* aPrincipal)
+{
+  nsresult rv;
+
+  auto& prefs = GetPrefStore();
+
+  // If neither pref is on, skip the null-principal and principal URI checks.
+  if (prefs.mPluginsHttpOnly && !prefs.mFlashBlockEnabled) {
+   return FlashClassification::Unknown;
+  }
+
+  nsCOMPtr<nsIPrincipal> principal = aPrincipal;
   if (principal->GetIsNullPrincipal()) {
     return FlashClassification::Denied;
   }
@@ -13400,7 +13894,7 @@ nsDocument::PrincipalFlashClassification()
     return FlashClassification::Denied;
   }
 
-  if (httpOnly) {
+  if (prefs.mPluginsHttpOnly) {
     // Only allow plugins for documents from an HTTP/HTTPS origin. This should
     // allow dependent data: URIs to load plugins, but not:
     // * chrome documents
@@ -13416,49 +13910,50 @@ nsDocument::PrincipalFlashClassification()
 
   // If flash blocking is disabled, it is equivalent to all sites being
   // on neither list.
-  if (!flashBlock) {
+  if (!prefs.mFlashBlockEnabled) {
     return FlashClassification::Unknown;
   }
 
-  nsAutoCString allowTables, allowExceptionsTables,
-                denyTables, denyExceptionsTables,
-                subDocDenyTables, subDocDenyExceptionsTables,
-                tables;
-  Preferences::GetCString("urlclassifier.flashAllowTable", allowTables);
-  MaybeAddTableToTableList(allowTables, tables);
-  Preferences::GetCString("urlclassifier.flashAllowExceptTable",
-                          allowExceptionsTables);
-  MaybeAddTableToTableList(allowExceptionsTables, tables);
-  Preferences::GetCString("urlclassifier.flashTable", denyTables);
-  MaybeAddTableToTableList(denyTables, tables);
-  Preferences::GetCString("urlclassifier.flashExceptTable",
-                          denyExceptionsTables);
-  MaybeAddTableToTableList(denyExceptionsTables, tables);
+  return FlashClassification::Unclassified;
+}
 
-  bool isThirdPartyDoc = IsThirdParty();
-  if (isThirdPartyDoc) {
-    Preferences::GetCString("urlclassifier.flashSubDocTable",
-                            subDocDenyTables);
-    MaybeAddTableToTableList(subDocDenyTables, tables);
-    Preferences::GetCString("urlclassifier.flashSubDocExceptTable",
-                            subDocDenyExceptionsTables);
-    MaybeAddTableToTableList(subDocDenyExceptionsTables, tables);
+// Using nsIURIClassifier.asyncClassifyLocalWithTables to do classification
+// against the flash related tables based on the given principal.
+FlashClassification
+PrincipalFlashClassifier::AsyncClassifyInternal(nsIPrincipal* aPrincipal)
+{
+  auto result = CheckIfClassifyNeeded(aPrincipal);
+  if (FlashClassification::Unclassified != result) {
+    return result;
   }
+
+  // We haven't been able to decide if it's a third party document
+  // since determining if a document is third-party may depend on its
+  // parent document. At the time we call AsyncClassifyInternal
+  // (i.e. StartDocumentLoad) the parent document may not have been
+  // set. As a result, we wait until Resolve() to be called to
+  // take "is third party" into account. At this point, we just assume
+  // it's third-party to include every list.
+  nsAutoCString tables;
+  GetClassificationTables(true, tables);
 
   if (tables.IsEmpty()) {
     return FlashClassification::Unknown;
   }
 
-  nsCOMPtr<nsIURIClassifier> uriClassifier =
-    do_GetService(NS_URICLASSIFIERSERVICE_CONTRACTID, &rv);
-  if (NS_FAILED(rv)) {
+  if (!EnsureUriClassifier()) {
     return FlashClassification::Denied;
   }
 
-  nsTArray<nsCString> results;
-  rv = uriClassifier->ClassifyLocalWithTables(classificationURI,
-                                              tables,
-                                              results);
+  nsresult rv = aPrincipal->GetURI(getter_AddRefs(mClassificationURI));
+  if (NS_FAILED(rv) || !mClassificationURI) {
+    return FlashClassification::Denied;
+  }
+
+  rv = mUriClassifier->AsyncClassifyLocalWithTables(mClassificationURI,
+                                                    tables,
+                                                    this);
+
   if (NS_FAILED(rv)) {
     if (rv == NS_ERROR_MALFORMED_URI) {
       // This means that the URI had no hostname (ex: file://doc.html). In this
@@ -13469,24 +13964,7 @@ nsDocument::PrincipalFlashClassification()
     }
   }
 
-  if (results.IsEmpty()) {
-    return FlashClassification::Unknown;
-  }
-
-  if (ArrayContainsTable(results, denyTables) &&
-      !ArrayContainsTable(results, denyExceptionsTables)) {
-    return FlashClassification::Denied;
-  } else if (ArrayContainsTable(results, allowTables) &&
-             !ArrayContainsTable(results, allowExceptionsTables)) {
-    return FlashClassification::Allowed;
-  }
-
-  if (isThirdPartyDoc && ArrayContainsTable(results, subDocDenyTables) &&
-      !ArrayContainsTable(results, subDocDenyExceptionsTables)) {
-    return FlashClassification::Denied;
-  }
-
-  return FlashClassification::Unknown;
+  return FlashClassification::Unclassified;
 }
 
 FlashClassification
@@ -13690,4 +14168,54 @@ nsIDocument::GetSelection(ErrorResult& aRv)
   }
 
   return nsGlobalWindow::Cast(window)->GetSelection(aRv);
+}
+
+void
+nsDocument::RecordNavigationTiming(ReadyState aReadyState)
+{
+  if (!XRE_IsContentProcess()) {
+    return;
+  }
+  if (!IsTopLevelContentDocument()) {
+    return;
+  }
+  // If we dont have the timing yet (mostly because the doc is still loading),
+  // get it from docshell.
+  RefPtr<nsDOMNavigationTiming> timing = mTiming;
+  if (!timing) {
+    if (!mDocumentContainer) {
+      return;
+    }
+    timing = mDocumentContainer->GetNavigationTiming();
+    if (!timing) {
+      return;
+    }
+  }
+  TimeStamp startTime = timing->GetNavigationStartTimeStamp();
+  switch (aReadyState) {
+    case READYSTATE_LOADING:
+      if (!mDOMLoadingSet) {
+        Telemetry::AccumulateTimeDelta(Telemetry::TIME_TO_DOM_LOADING_MS,
+                                       startTime);
+        mDOMLoadingSet = true;
+      }
+      break;
+    case READYSTATE_INTERACTIVE:
+      if (!mDOMInteractiveSet) {
+        Telemetry::AccumulateTimeDelta(Telemetry::TIME_TO_DOM_INTERACTIVE_MS,
+                                       startTime);
+        mDOMInteractiveSet = true;
+      }
+      break;
+    case READYSTATE_COMPLETE:
+      if (!mDOMCompleteSet) {
+        Telemetry::AccumulateTimeDelta(Telemetry::TIME_TO_DOM_COMPLETE_MS,
+                                       startTime);
+        mDOMCompleteSet = true;
+      }
+      break;
+    default:
+      NS_WARNING("Unexpected ReadyState value");
+      break;
+  }
 }

@@ -87,8 +87,6 @@ enum {
 const ClassOps DebuggerFrame::classOps_ = {
     nullptr,    /* addProperty */
     nullptr,    /* delProperty */
-    nullptr,    /* getProperty */
-    nullptr,    /* setProperty */
     nullptr,    /* enumerate   */
     nullptr,    /* newEnumerate */
     nullptr,    /* resolve     */
@@ -121,8 +119,6 @@ const Class DebuggerArguments::class_ = {
 const ClassOps DebuggerEnvironment::classOps_ = {
     nullptr,    /* addProperty */
     nullptr,    /* delProperty */
-    nullptr,    /* getProperty */
-    nullptr,    /* setProperty */
     nullptr,    /* enumerate   */
     nullptr,    /* newEnumerate */
     nullptr,    /* resolve     */
@@ -149,8 +145,6 @@ enum {
 const ClassOps DebuggerObject::classOps_ = {
     nullptr,    /* addProperty */
     nullptr,    /* delProperty */
-    nullptr,    /* getProperty */
-    nullptr,    /* setProperty */
     nullptr,    /* enumerate   */
     nullptr,    /* newEnumerate */
     nullptr,    /* resolve     */
@@ -177,8 +171,6 @@ enum {
 static const ClassOps DebuggerScript_classOps = {
     nullptr,    /* addProperty */
     nullptr,    /* delProperty */
-    nullptr,    /* getProperty */
-    nullptr,    /* setProperty */
     nullptr,    /* enumerate   */
     nullptr,    /* newEnumerate */
     nullptr,    /* resolve     */
@@ -206,8 +198,6 @@ enum {
 static const ClassOps DebuggerSource_classOps = {
     nullptr,    /* addProperty */
     nullptr,    /* delProperty */
-    nullptr,    /* getProperty */
-    nullptr,    /* setProperty */
     nullptr,    /* enumerate   */
     nullptr,    /* newEnumerate */
     nullptr,    /* resolve     */
@@ -1203,7 +1193,7 @@ Debugger::wrapDebuggeeValue(JSContext* cx, MutableHandleValue vp)
         }
 
         RootedValue trueVal(cx, BooleanValue(true));
-        if (!DefineProperty(cx, optObj, name, trueVal))
+        if (!DefineDataProperty(cx, optObj, name, trueVal))
             return false;
 
         vp.setObject(*optObj);
@@ -3311,8 +3301,6 @@ Debugger::findZoneEdges(Zone* zone, js::gc::ZoneComponentFinder& finder)
 const ClassOps Debugger::classOps_ = {
     nullptr,    /* addProperty */
     nullptr,    /* delProperty */
-    nullptr,    /* getProperty */
-    nullptr,    /* setProperty */
     nullptr,    /* enumerate   */
     nullptr,    /* newEnumerate */
     nullptr,    /* resolve     */
@@ -5752,14 +5740,9 @@ class BytecodeRangeWithPosition : private BytecodeRange
  *       The instruction cannot be reached, so the instruction is not an entry
  *       point for the line it is on.
  *   - hasSingleEdge:
- *   - hasMultipleEdgesFromSingleLine:
  *       The instruction can be reached from a single line. If this line is
  *       different from the line the instruction is on, the instruction is an
  *       entry point for that line.
- *   - hasMultipleEdgesFromMultipleLines:
- *       The instruction can be reached from multiple lines. At least one of
- *       these lines is guaranteed to be different from the line the instruction
- *       is on, so the instruction is an entry point for that line.
  *
  * Similarly, an instruction on a given position (line/column pair) is an
  * entry point for that position if it can be reached from (an instruction on) a
@@ -5771,21 +5754,11 @@ class BytecodeRangeWithPosition : private BytecodeRange
  *       The instruction can be reached from a single position. If this line is
  *       different from the position the instruction is on, the instruction is
  *       an entry point for that position.
- *   - hasMultipleEdgesFromSingleLine:
- *   - hasMultipleEdgesFromMultipleLines:
- *       The instruction can be reached from multiple positions. At least one
- *       of these positions is guaranteed to be different from the position the
- *       instruction is on, so the instruction is an entry point for that
- *       position.
  */
 class FlowGraphSummary {
   public:
     class Entry {
       public:
-        static Entry createWithNoEdges() {
-            return Entry(SIZE_MAX, 0);
-        }
-
         static Entry createWithSingleEdge(size_t lineno, size_t column) {
             return Entry(lineno, column);
         }
@@ -5806,22 +5779,6 @@ class FlowGraphSummary {
 
         bool hasSingleEdge() const {
             return lineno_ != SIZE_MAX && column_ != SIZE_MAX;
-        }
-
-        bool hasMultipleEdgesFromSingleLine() const {
-            return lineno_ != SIZE_MAX && column_ == SIZE_MAX;
-        }
-
-        bool hasMultipleEdgesFromMultipleLines() const {
-            return lineno_ == SIZE_MAX && column_ == SIZE_MAX;
-        }
-
-        bool operator==(const Entry& other) const {
-            return lineno_ == other.lineno_ && column_ == other.column_;
-        }
-
-        bool operator!=(const Entry& other) const {
-            return lineno_ != other.lineno_ || column_ != other.column_;
         }
 
         size_t lineno() const {
@@ -5992,11 +5949,11 @@ class DebuggerScriptGetOffsetLocationMatcher
 
         RootedId id(cx_, NameToId(cx_->names().lineNumber));
         RootedValue value(cx_, NumberValue(lineno));
-        if (!DefineProperty(cx_, result_, id, value))
+        if (!DefineDataProperty(cx_, result_, id, value))
             return false;
 
         value = NumberValue(column);
-        if (!DefineProperty(cx_, result_, cx_->names().columnNumber, value))
+        if (!DefineDataProperty(cx_, result_, cx_->names().columnNumber, value))
             return false;
 
         // The same entry point test that is used by getAllColumnOffsets.
@@ -6005,7 +5962,7 @@ class DebuggerScriptGetOffsetLocationMatcher
                         (flowData[offset].lineno() != r.frontLineNumber() ||
                          flowData[offset].column() != r.frontColumnNumber()));
         value.setBoolean(isEntryPoint);
-        if (!DefineProperty(cx_, result_, cx_->names().isEntryPoint, value))
+        if (!DefineDataProperty(cx_, result_, cx_->names().isEntryPoint, value))
             return false;
 
         return true;
@@ -6029,15 +5986,15 @@ class DebuggerScriptGetOffsetLocationMatcher
 
         RootedId id(cx_, NameToId(cx_->names().lineNumber));
         RootedValue value(cx_, NumberValue(lineno));
-        if (!DefineProperty(cx_, result_, id, value))
+        if (!DefineDataProperty(cx_, result_, id, value))
             return false;
 
         value = NumberValue(column);
-        if (!DefineProperty(cx_, result_, cx_->names().columnNumber, value))
+        if (!DefineDataProperty(cx_, result_, cx_->names().columnNumber, value))
             return false;
 
         value.setBoolean(true);
-        if (!DefineProperty(cx_, result_, cx_->names().isEntryPoint, value))
+        if (!DefineDataProperty(cx_, result_, cx_->names().isEntryPoint, value))
             return false;
 
         return true;
@@ -6120,7 +6077,7 @@ DebuggerScript_getAllOffsets(JSContext* cx, unsigned argc, Value* vp)
                 }
 
                 RootedValue value(cx, ObjectValue(*offsets));
-                if (!DefineProperty(cx, result, id, value))
+                if (!DefineDataProperty(cx, result, id, value))
                     return false;
             }
 
@@ -6146,16 +6103,16 @@ class DebuggerScriptGetAllColumnOffsetsMatcher
 
         RootedId id(cx_, NameToId(cx_->names().lineNumber));
         RootedValue value(cx_, NumberValue(lineno));
-        if (!DefineProperty(cx_, entry, id, value))
+        if (!DefineDataProperty(cx_, entry, id, value))
             return false;
 
         value = NumberValue(column);
-        if (!DefineProperty(cx_, entry, cx_->names().columnNumber, value))
+        if (!DefineDataProperty(cx_, entry, cx_->names().columnNumber, value))
             return false;
 
         id = NameToId(cx_->names().offset);
         value = NumberValue(offset);
-        if (!DefineProperty(cx_, entry, id, value))
+        if (!DefineDataProperty(cx_, entry, id, value))
             return false;
 
         return NewbornArrayPush(cx_, result_, ObjectValue(*entry));
@@ -6804,10 +6761,10 @@ DebuggerScript_getOffsetsCoverage(JSContext* cx, unsigned argc, Value* vp)
     if (!result)
         return false;
 
-    RootedId offsetId(cx, AtomToId(cx->names().offset));
-    RootedId lineNumberId(cx, AtomToId(cx->names().lineNumber));
-    RootedId columnNumberId(cx, AtomToId(cx->names().columnNumber));
-    RootedId countId(cx, AtomToId(cx->names().count));
+    RootedId offsetId(cx, NameToId(cx->names().offset));
+    RootedId lineNumberId(cx, NameToId(cx->names().lineNumber));
+    RootedId columnNumberId(cx, NameToId(cx->names().columnNumber));
+    RootedId countId(cx, NameToId(cx->names().count));
 
     RootedObject item(cx);
     RootedValue offsetValue(cx);
@@ -6835,10 +6792,10 @@ DebuggerScript_getOffsetsCoverage(JSContext* cx, unsigned argc, Value* vp)
         // number of hit counts, and append it to the array.
         item = NewObjectWithGivenProto<PlainObject>(cx, nullptr);
         if (!item ||
-            !DefineProperty(cx, item, offsetId, offsetValue) ||
-            !DefineProperty(cx, item, lineNumberId, lineNumberValue) ||
-            !DefineProperty(cx, item, columnNumberId, columnNumberValue) ||
-            !DefineProperty(cx, item, countId, countValue) ||
+            !DefineDataProperty(cx, item, offsetId, offsetValue) ||
+            !DefineDataProperty(cx, item, lineNumberId, lineNumberValue) ||
+            !DefineDataProperty(cx, item, columnNumberId, columnNumberValue) ||
+            !DefineDataProperty(cx, item, countId, countValue) ||
             !NewbornArrayPush(cx, result, ObjectValue(*item)))
         {
             return false;
@@ -11474,7 +11431,7 @@ Builder::Object::definePropertyToTrusted(JSContext* cx, const char* name,
         return false;
     RootedId id(cx, AtomToId(atom));
 
-    return DefineProperty(cx, value, id, trusted);
+    return DefineDataProperty(cx, value, id, trusted);
 }
 
 bool
@@ -11599,11 +11556,8 @@ JS_DefineDebuggerObject(JSContext* cx, HandleObject obj)
         return false;
     debuggeeWouldRunCtor = global->getConstructor(JSProto_DebuggeeWouldRun);
     RootedId debuggeeWouldRunId(cx, NameToId(ClassName(JSProto_DebuggeeWouldRun, cx)));
-    if (!DefineProperty(cx, debugCtor, debuggeeWouldRunId, debuggeeWouldRunCtor,
-                        nullptr, nullptr, 0))
-    {
+    if (!DefineDataProperty(cx, debugCtor, debuggeeWouldRunId, debuggeeWouldRunCtor, 0))
         return false;
-    }
 
     debugProto->setReservedSlot(Debugger::JSSLOT_DEBUG_FRAME_PROTO, ObjectValue(*frameProto));
     debugProto->setReservedSlot(Debugger::JSSLOT_DEBUG_OBJECT_PROTO, ObjectValue(*objectProto));
@@ -11733,7 +11687,7 @@ DefineStringProperty(JSContext* cx, HandleObject obj, PropertyName* propName, co
             return false;
         val = StringValue(atomized);
     }
-    return DefineProperty(cx, obj, propName, val);
+    return DefineDataProperty(cx, obj, propName, val);
 }
 
 JSObject*
@@ -11744,7 +11698,7 @@ GarbageCollectionEvent::toJSObject(JSContext* cx) const
     if (!obj ||
         !DefineStringProperty(cx, obj, cx->names().nonincrementalReason, nonincrementalReason) ||
         !DefineStringProperty(cx, obj, cx->names().reason, reason) ||
-        !DefineProperty(cx, obj, cx->names().gcCycleNumber, gcCycleNumberVal))
+        !DefineDataProperty(cx, obj, cx->names().gcCycleNumber, gcCycleNumberVal))
     {
         return nullptr;
     }
@@ -11764,19 +11718,19 @@ GarbageCollectionEvent::toJSObject(JSContext* cx) const
         RootedValue start(cx), end(cx);
         start = NumberValue((range.front().startTimestamp - originTime).ToMilliseconds());
         end = NumberValue((range.front().endTimestamp - originTime).ToMilliseconds());
-        if (!DefineProperty(cx, collectionObj, cx->names().startTimestamp, start) ||
-            !DefineProperty(cx, collectionObj, cx->names().endTimestamp, end))
+        if (!DefineDataProperty(cx, collectionObj, cx->names().startTimestamp, start) ||
+            !DefineDataProperty(cx, collectionObj, cx->names().endTimestamp, end))
         {
             return nullptr;
         }
 
         RootedValue collectionVal(cx, ObjectValue(*collectionObj));
-        if (!DefineElement(cx, slicesArray, idx++, collectionVal))
+        if (!DefineDataElement(cx, slicesArray, idx++, collectionVal))
             return nullptr;
     }
 
     RootedValue slicesValue(cx, ObjectValue(*slicesArray));
-    if (!DefineProperty(cx, obj, cx->names().collections, slicesValue))
+    if (!DefineDataProperty(cx, obj, cx->names().collections, slicesValue))
         return nullptr;
 
     return obj;

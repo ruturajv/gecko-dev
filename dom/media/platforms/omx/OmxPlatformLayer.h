@@ -10,9 +10,8 @@
 #include "OMX_Core.h"
 #include "OMX_Types.h"
 
+#include "nsStringFwd.h"
 #include "OmxPromiseLayer.h"
-
-class nsACString;
 
 namespace mozilla {
 
@@ -27,7 +26,8 @@ class TrackInfo;
  * For other platforms like Raspberry Pi, it will be easy to implement this layer
  * with the standard OpenMax IL api.
  */
-class OmxPlatformLayer {
+class OmxPlatformLayer
+{
 public:
   typedef OmxPromiseLayer::BUFFERLIST BUFFERLIST;
   typedef OmxPromiseLayer::BufferData BufferData;

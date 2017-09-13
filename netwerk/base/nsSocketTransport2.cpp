@@ -1263,8 +1263,12 @@ nsSocketTransport::BuildSocket(PRFileDesc *&fd, bool &proxyTransparent, bool &us
                 }
                 // don't call into PSM while holding mLock!!
                 nsCOMPtr<nsISSLSocketControl> secCtrl(do_QueryInterface(secinfo));
-                if (secCtrl)
+                if (secCtrl) {
+                    if (mConnectionFlags & nsISocketTransport::SPECULATIVE) {
+                        secCtrl->SetSpeculative(true);
+                    }
                     secCtrl->SetNotificationCallbacks(callbacks);
+                }
                 // remember if socket type is SSL so we can ProxyStartSSL if need be.
                 usingSSL = isSSL;
             }
@@ -3543,7 +3547,7 @@ nsSocketTransport::CloseSocket(PRFileDesc *aFd, nsSocketTransportService *aSTS)
       }
     } else {
       SOCKET_LOG(("nsSocketTransport::CloseSocket - there is no "
-                  "PR_FileDesc2PlatformOverlappedIOHandle function.\n"));
+                  "PR_EXPERIMENTAL_ONLY_IN_4_17_GetOverlappedIOHandle function.\n"));
       canClose = true;
     }
 

@@ -51,7 +51,7 @@ use std::sync::Arc;
 use unpremultiplytable::UNPREMULTIPLY_TABLE;
 
 #[must_root]
-#[derive(JSTraceable, Clone, HeapSizeOf)]
+#[derive(Clone, HeapSizeOf, JSTraceable)]
 #[allow(dead_code)]
 enum CanvasFillOrStrokeStyle {
     Color(RGBA),
@@ -81,7 +81,7 @@ pub struct CanvasRenderingContext2D {
 }
 
 #[must_root]
-#[derive(JSTraceable, Clone, HeapSizeOf)]
+#[derive(Clone, HeapSizeOf, JSTraceable)]
 struct CanvasContextState {
     global_alpha: f64,
     global_composition: CompositionOrBlending,
@@ -800,6 +800,13 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
         receiver.recv().unwrap()
     }
 
+    // https://html.spec.whatwg.org/multipage/#dom-context-2d-filltext
+    fn FillText(&self, text: DOMString, x: f64, y: f64, max_width: Option<f64>) {
+        let parsed_text: String = text.into();
+        self.ipc_renderer.send(CanvasMsg::Canvas2d(Canvas2dMsg::FillText(parsed_text, x, y, max_width))).unwrap();
+        self.mark_as_dirty();
+    }
+
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-drawimage
     fn DrawImage(&self,
                  image: CanvasImageSource,
@@ -946,6 +953,26 @@ impl CanvasRenderingContext2DMethods for CanvasRenderingContext2D {
         let msg = CanvasMsg::Canvas2d(Canvas2dMsg::ArcTo(Point2D::new(cp1x as f32, cp1y as f32),
                                                          Point2D::new(cp2x as f32, cp2y as f32),
                                                          r as f32));
+        self.ipc_renderer.send(msg).unwrap();
+        Ok(())
+    }
+
+    // https://html.spec.whatwg.org/multipage/#dom-context-2d-ellipse
+    fn Ellipse(&self, x: f64, y: f64, rx: f64, ry: f64, rotation: f64, start: f64, end: f64, ccw: bool) -> ErrorResult {
+        if !([x, y, rx, ry, rotation, start, end].iter().all(|x| x.is_finite())) {
+            return Ok(());
+        }
+        if rx < 0.0 || ry < 0.0 {
+            return Err(Error::IndexSize);
+        }
+
+        let msg = CanvasMsg::Canvas2d(Canvas2dMsg::Ellipse(Point2D::new(x as f32, y as f32),
+                                                       rx as f32,
+                                                       ry as f32,
+                                                       rotation as f32,
+                                                       start as f32,
+                                                       end as f32,
+                                                       ccw));
         self.ipc_renderer.send(msg).unwrap();
         Ok(())
     }

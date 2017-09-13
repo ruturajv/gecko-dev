@@ -19,6 +19,7 @@
 #include "nsTObserverArray.h"       // for member
 #include "nsWindowSizes.h"          // for nsStyleSizes
 #include "mozilla/ErrorResult.h"
+#include "mozilla/LinkedList.h"
 #include "mozilla/MemoryReporting.h"
 #include "mozilla/dom/EventTarget.h" // for base class
 #include "js/TypeDecls.h"     // for Handle, Value, JSObject, JSContext
@@ -35,7 +36,7 @@
 #endif
 
 class nsAttrAndChildArray;
-class nsChildContentList;
+class nsAttrChildContentList;
 struct nsCSSSelectorList;
 class nsDOMAttributeMap;
 class nsIAnimationObserver;
@@ -268,8 +269,7 @@ private:
 // AddSizeOfExcludingThis from its super-class. AddSizeOfIncludingThis() need
 // not be defined, it is inherited from nsINode.
 #define NS_DECL_ADDSIZEOFEXCLUDINGTHIS \
-  virtual void AddSizeOfExcludingThis(mozilla::SizeOfState& aState, \
-                                      nsStyleSizes& aSizes, \
+  virtual void AddSizeOfExcludingThis(nsWindowSizes& aSizes, \
                                       size_t* aNodeSize) const override;
 
 // Categories of node properties
@@ -332,20 +332,18 @@ public:
   // The following members don't need to be measured:
   // - nsIContent: mPrimaryFrame, because it's non-owning and measured elsewhere
   //
-  virtual void AddSizeOfExcludingThis(mozilla::SizeOfState& aState,
-                                      nsStyleSizes& aSizes,
+  virtual void AddSizeOfExcludingThis(nsWindowSizes& aSizes,
                                       size_t* aNodeSize) const;
 
   // SizeOfIncludingThis doesn't need to be overridden by sub-classes because
   // sub-classes of nsINode are guaranteed to be laid out in memory in such a
   // way that |this| points to the start of the allocated object, even in
-  // methods of nsINode's sub-classes, so aState.mMallocSizeOf(this) is always
-  // safe to call no matter which object it was invoked on.
-  virtual void AddSizeOfIncludingThis(mozilla::SizeOfState& aState,
-                                      nsStyleSizes& aSizes,
+  // methods of nsINode's sub-classes, so aSizes.mState.mMallocSizeOf(this) is
+  // always safe to call no matter which object it was invoked on.
+  virtual void AddSizeOfIncludingThis(nsWindowSizes& aSizes,
                                       size_t* aNodeSize) const {
-    *aNodeSize += aState.mMallocSizeOf(this);
-    AddSizeOfExcludingThis(aState, aSizes, aNodeSize);
+    *aNodeSize += aSizes.mState.mMallocSizeOf(this);
+    AddSizeOfExcludingThis(aSizes, aNodeSize);
   }
 
   friend class nsNodeUtils;
@@ -411,6 +409,16 @@ public:
    * @return whether the content matches ALL flags passed in
    */
   virtual bool IsNodeOfType(uint32_t aFlags) const = 0;
+
+  bool
+  IsContainerNode() const
+  {
+    return IsElement() ||
+      !(IsNodeOfType(eTEXT) ||
+        IsNodeOfType(ePROCESSING_INSTRUCTION) ||
+        IsNodeOfType(eCOMMENT) ||
+        IsNodeOfType(eDATA_NODE));
+  }
 
   virtual JSObject* WrapObject(JSContext *aCx, JS::Handle<JSObject*> aGivenProto) override;
 
@@ -492,17 +500,6 @@ public:
    * @return the child, or null if index out of bounds
    */
   virtual nsIContent* GetChildAt(uint32_t aIndex) const = 0;
-
-  /**
-   * Get a raw pointer to the child array.  This should only be used if you
-   * plan to walk a bunch of the kids, promise to make sure that nothing ever
-   * mutates (no attribute changes, not DOM tree changes, no script execution,
-   * NOTHING), and will never ever peform an out-of-bounds access here.  This
-   * method may return null if there are no children, or it may return a
-   * garbage pointer.  In all cases the out param will be set to the number of
-   * children.
-   */
-  virtual nsIContent * const * GetChildArray(uint32_t* aChildCount) const = 0;
 
   /**
    * Get the index of a child within this content
@@ -1116,7 +1113,7 @@ public:
      * @see nsIDOMNodeList
      * @see nsGenericHTMLElement::GetChildNodes
      */
-    RefPtr<nsChildContentList> mChildNodes;
+    RefPtr<nsAttrChildContentList> mChildNodes;
 
     /**
      * Weak reference to this node.  This is cleared by the destructor of
@@ -1125,10 +1122,12 @@ public:
     nsNodeWeakReference* MOZ_NON_OWNING_REF mWeakReference;
 
     /**
-     * A set of ranges in the common ancestor for the selection to which
-     * this node belongs to.
+     * A set of ranges which are in the selection and which have this node as
+     * their endpoints' common ancestor.  This is a UniquePtr instead of just a
+     * LinkedList, because that prevents us from pushing DOMSlots up to the next
+     * allocation bucket size, at the cost of some complexity.
      */
-    mozilla::UniquePtr<nsTHashtable<nsPtrHashKey<nsRange>>> mCommonAncestorRanges;
+    mozilla::UniquePtr<mozilla::LinkedList<nsRange>> mCommonAncestorRanges;
 
     /**
      * Number of descendant nodes in the uncomposed document that have been
@@ -1281,10 +1280,9 @@ public:
   nsIContent* GetFirstChild() const { return mFirstChild; }
   nsIContent* GetLastChild() const
   {
-    uint32_t count;
-    nsIContent* const* children = GetChildArray(&count);
+    uint32_t count = GetChildCount();
 
-    return count > 0 ? children[count - 1] : nullptr;
+    return count > 0 ? GetChildAt(count - 1) : nullptr;
   }
 
   /**
@@ -1936,23 +1934,23 @@ public:
                                                   CallerType aCallerType,
                                                   ErrorResult& aRv);
 
-  const nsTHashtable<nsPtrHashKey<nsRange>>* GetExistingCommonAncestorRanges() const
+  const mozilla::LinkedList<nsRange>* GetExistingCommonAncestorRanges() const
   {
     if (!HasSlots()) {
       return nullptr;
     }
-    mozilla::UniquePtr<nsTHashtable<nsPtrHashKey<nsRange>>>& ranges =
-      GetExistingSlots()->mCommonAncestorRanges;
-    return ranges.get();
+    return GetExistingSlots()->mCommonAncestorRanges.get();
   }
 
-  nsTHashtable<nsPtrHashKey<nsRange>>* GetExistingCommonAncestorRanges()
+  mozilla::LinkedList<nsRange>* GetExistingCommonAncestorRanges()
   {
-    nsINode::nsSlots* slots = GetExistingSlots();
-    return slots ? slots->mCommonAncestorRanges.get() : nullptr;
+    if (!HasSlots()) {
+      return nullptr;
+    }
+    return GetExistingSlots()->mCommonAncestorRanges.get();
   }
 
-  mozilla::UniquePtr<nsTHashtable<nsPtrHashKey<nsRange>>>& GetCommonAncestorRangesPtr()
+  mozilla::UniquePtr<mozilla::LinkedList<nsRange>>& GetCommonAncestorRangesPtr()
   {
     return Slots()->mCommonAncestorRanges;
   }

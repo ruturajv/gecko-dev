@@ -1272,6 +1272,10 @@ public class BrowserProvider extends SharedBrowserDatabaseProvider {
                 DBUtils.qualifyColumn(Bookmarks.TABLE_NAME, Bookmarks.PARENT) + " AS " + Highlights.PARENT + ", " +
                 DBUtils.qualifyColumn(History.TABLE_NAME, History._ID) + " AS " + Highlights.HISTORY_ID + ", " +
 
+                /**
+                 * NB: Highlights filtering depends on BOOKMARK_ID, so changes to this logic should also update
+                 * {@link org.mozilla.gecko.activitystream.ranking.HighlightsRanking#filterOutItemsPreffedOff(List, boolean, boolean)}
+                 */
                 "CASE WHEN " + DBUtils.qualifyColumn(Bookmarks.TABLE_NAME, Bookmarks._ID) + " IS NOT NULL "
                 + "AND " + DBUtils.qualifyColumn(Bookmarks.TABLE_NAME, Bookmarks.PARENT) + " IS NOT " + Bookmarks.FIXED_PINNED_LIST_ID + " "
                 + "THEN " + DBUtils.qualifyColumn(Bookmarks.TABLE_NAME, Bookmarks._ID) + " "
@@ -2388,12 +2392,6 @@ public class BrowserProvider extends SharedBrowserDatabaseProvider {
         final List<String> guids = getBookmarkDescendantGUIDs(db, selection, selectionArgs);
         changed += bulkDeleteByBookmarkGUIDs(db, uri, guids);
 
-        try {
-            cleanUpSomeDeletedRecords(uri, TABLE_BOOKMARKS);
-        } catch (Exception e) {
-            // We don't care.
-            Log.e(LOGTAG, "Unable to clean up deleted bookmark records: ", e);
-        }
         return changed;
     }
 
@@ -2767,7 +2765,22 @@ public class BrowserProvider extends SharedBrowserDatabaseProvider {
                 compiledStatement.clearBindings();
                 compiledStatement.bindLong(1, syncVersion); // NB: 1-based index.
                 compiledStatement.bindString(2, guid);
-                changed += compiledStatement.executeUpdateDelete();
+
+                // We expect this to be 1.
+                final int didUpdate = compiledStatement.executeUpdateDelete();
+
+                // These strong assertions are here to help figure out root cause of Bug 1392078.
+                // This will throw if there are duplicate GUIDs present.
+                if (didUpdate > 1) {
+                    throw new IllegalStateException("Modified more than a single GUID during syncVersion update");
+                }
+
+                // This will throw if the requested GUID is missing from the database.
+                if (didUpdate == 0) {
+                    throw new IllegalStateException("Expected to modify syncVersion for a guid, but did not");
+                }
+
+                changed += didUpdate;
             }
 
             markWriteSuccessful(db);

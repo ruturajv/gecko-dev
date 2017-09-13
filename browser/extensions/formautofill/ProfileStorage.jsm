@@ -69,6 +69,7 @@
  *       cc-given-name,
  *       cc-additional-name,
  *       cc-family-name,
+ *       cc-exp,
  *
  *       // metadata
  *       timeCreated,          // in ms
@@ -190,6 +191,7 @@ const VALID_CREDIT_CARD_COMPUTED_FIELDS = [
   "cc-given-name",
   "cc-additional-name",
   "cc-family-name",
+  "cc-exp",
 ];
 
 const INTERNAL_FIELDS = [
@@ -372,8 +374,10 @@ class AutofillRecords {
    *         Indicates which record to update.
    * @param  {Object} record
    *         The new record used to overwrite the old one.
+   * @param  {boolean} [preserveOldProperties = false]
+   *         Preserve old record's properties if they don't exist in new record.
    */
-  update(guid, record) {
+  update(guid, record, preserveOldProperties = false) {
     this.log.debug("update:", guid, record);
 
     let recordFound = this._findByGUID(guid);
@@ -381,17 +385,23 @@ class AutofillRecords {
       throw new Error("No matching record.");
     }
 
-    let recordToUpdate = this._clone(record);
+    // Clone the record by Object assign API to preserve the property with empty string.
+    let recordToUpdate = Object.assign({}, record);
     this._normalizeRecord(recordToUpdate);
 
     for (let field of this.VALID_FIELDS) {
       let oldValue = recordFound[field];
       let newValue = recordToUpdate[field];
 
-      if (newValue != null) {
-        recordFound[field] = newValue;
-      } else {
+      // Resume the old field value in the perserve case
+      if (preserveOldProperties && newValue === undefined) {
+        newValue = oldValue;
+      }
+
+      if (!newValue) {
         delete recordFound[field];
+      } else {
+        recordFound[field] = newValue;
       }
 
       this._maybeStoreLastSyncedField(recordFound, field, oldValue);
@@ -531,33 +541,6 @@ class AutofillRecords {
       }
     });
     return clonedRecords;
-  }
-
-  /**
-   * Returns the filtered records based on input's information and searchString.
-   *
-   * @returns {Array.<Object>}
-   *          An array containing clones of matched record.
-   */
-  getByFilter({info, searchString}) {
-    this.log.debug("getByFilter:", info, searchString);
-
-    let lcSearchString = searchString.toLowerCase();
-    let result = this.getAll().filter(record => {
-      // Return true if string is not provided and field exists.
-      // TODO: We'll need to check if the address is for billing or shipping.
-      //       (Bug 1358941)
-      let name = record[info.fieldName];
-
-      if (!searchString) {
-        return !!name;
-      }
-
-      return name && name.toLowerCase().startsWith(lcSearchString);
-    });
-
-    this.log.debug("getByFilter:", "Returning", result.length, "result(s)");
-    return result;
   }
 
   /**
@@ -1326,26 +1309,14 @@ class Addresses extends AutofillRecords {
       return;
     }
 
-    let region = address["tel-country-code"] || address.country || FormAutofillUtils.DEFAULT_COUNTRY_CODE;
-    let number;
+    FormAutofillUtils.compressTel(address);
 
-    if (address.tel) {
-      number = address.tel;
-    } else if (address["tel-national"]) {
-      number = address["tel-national"];
-    } else if (address["tel-local"]) {
-      number = (address["tel-area-code"] || "") + address["tel-local"];
-    } else if (address["tel-local-prefix"] && address["tel-local-suffix"]) {
-      number = (address["tel-area-code"] || "") + address["tel-local-prefix"] + address["tel-local-suffix"];
-    }
+    let possibleRegion = address.country || FormAutofillUtils.DEFAULT_COUNTRY_CODE;
+    let tel = PhoneNumber.Parse(address.tel, possibleRegion);
 
-    let tel = PhoneNumber.Parse(number, region);
     if (tel && tel.internationalNumber) {
       // Force to save numbers in E.164 format if parse success.
       address.tel = tel.internationalNumber;
-    } else if (!address.tel) {
-      // Save the original number anyway if "tel" is omitted.
-      address.tel = number;
     }
 
     TEL_COMPONENTS.forEach(c => delete address[c]);
@@ -1471,6 +1442,13 @@ class CreditCards extends AutofillRecords {
       hasNewComputedFields = true;
     }
 
+    let year = creditCard["cc-exp-year"];
+    let month = creditCard["cc-exp-month"];
+    if (!creditCard["cc-exp"] && month && year) {
+      creditCard["cc-exp"] = String(year) + "-" + String(month).padStart(2, "0");
+      hasNewComputedFields = true;
+    }
+
     return hasNewComputedFields;
   }
 
@@ -1533,18 +1511,11 @@ class CreditCards extends AutofillRecords {
       let ccNumber = creditCard["cc-number"].replace(/\s/g, "");
       delete creditCard["cc-number"];
 
-      if (!/^\d+$/.test(ccNumber)) {
-        throw new Error("Credit card number contains invalid characters.");
+      if (!FormAutofillUtils.isCCNumber(ccNumber)) {
+        throw new Error("Credit card number contains invalid characters or is under 12 digits.");
       }
 
-      // Based on the information on wiki[1], the shortest valid length should be
-      // 12 digits(Maestro).
-      // [1] https://en.wikipedia.org/wiki/Payment_card_number
-      if (ccNumber.length < 12) {
-        throw new Error("Invalid credit card number because length is under 12 digits.");
-      }
-
-      creditCard["cc-number-encrypted"] = await MasterPassword.encrypt(creditCard["cc-number"]);
+      creditCard["cc-number-encrypted"] = await MasterPassword.encrypt(ccNumber);
       creditCard["cc-number"] = "*".repeat(ccNumber.length - 4) + ccNumber.substr(-4);
     }
   }

@@ -8,19 +8,22 @@ use cssparser::Parser;
 use parser::{Parse, ParserContext};
 use std::fmt;
 use style_traits::{ParseError, StyleParseError, ToCss};
+use values::{Either, None_};
+use values::computed::NumberOrPercentage;
 use values::computed::length::LengthOrPercentage;
-
+use values::distance::{ComputeSquaredDistance, SquaredDistance};
 
 /// An SVG paint value
 ///
 /// https://www.w3.org/TR/SVG2/painting.html#SpecifyingPaint
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
-#[derive(Clone, Debug, PartialEq, ToAnimatedValue, ToComputedValue, ToCss)]
+#[derive(Animate, Clone, ComputeSquaredDistance, Debug, PartialEq)]
+#[derive(ToAnimatedValue, ToComputedValue, ToCss)]
 pub struct SVGPaint<ColorType, UrlPaintServer> {
     /// The paint source
     pub kind: SVGPaintKind<ColorType, UrlPaintServer>,
-    /// The fallback color
-    pub fallback: Option<ColorType>,
+    /// The fallback color. It would be empty, the `none` keyword or <color>.
+    pub fallback: Option<Either<ColorType, None_>>,
 }
 
 /// An SVG paint value without the fallback
@@ -29,13 +32,16 @@ pub struct SVGPaint<ColorType, UrlPaintServer> {
 /// to have a fallback, Gecko lets the context
 /// properties have a fallback as well.
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
-#[derive(Clone, Debug, PartialEq, ToAnimatedValue, ToComputedValue, ToCss)]
+#[derive(Animate, Clone, ComputeSquaredDistance, Debug, PartialEq)]
+#[derive(ToAnimatedValue, ToAnimatedZero, ToComputedValue, ToCss)]
 pub enum SVGPaintKind<ColorType, UrlPaintServer> {
     /// `none`
+    #[animation(error)]
     None,
     /// `<color>`
     Color(ColorType),
     /// `url(...)`
+    #[animation(error)]
     PaintServer(UrlPaintServer),
     /// `context-fill`
     ContextFill,
@@ -55,15 +61,19 @@ impl<ColorType, UrlPaintServer> SVGPaintKind<ColorType, UrlPaintServer> {
 }
 
 /// Parse SVGPaint's fallback.
-/// fallback is keyword(none) or Color.
+/// fallback is keyword(none), Color or empty.
 /// https://svgwg.org/svg2-draft/painting.html#SpecifyingPaint
 fn parse_fallback<'i, 't, ColorType: Parse>(context: &ParserContext,
                                             input: &mut Parser<'i, 't>)
-                                            -> Option<ColorType> {
+                                            -> Option<Either<ColorType, None_>> {
     if input.try(|i| i.expect_ident_matching("none")).is_ok() {
-        None
+        Some(Either::Second(None_))
     } else {
-        input.try(|i| ColorType::parse(context, i)).ok()
+        if let Ok(color) = input.try(|i| ColorType::parse(context, i)) {
+            Some(Either::First(color))
+        } else {
+            None
+        }
     }
 }
 
@@ -100,13 +110,49 @@ impl<ColorType: Parse, UrlPaintServer: Parse> Parse for SVGPaint<ColorType, UrlP
 /// A value of <length> | <percentage> | <number> for svg which allow unitless length.
 /// https://www.w3.org/TR/SVG11/painting.html#StrokeProperties
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
-#[derive(Clone, Copy, Debug, PartialEq, ToCss, HasViewportPercentage)]
-#[derive(ToComputedValue, ToAnimatedValue, ComputeSquaredDistance)]
-pub enum SvgLengthOrPercentageOrNumber<LengthOrPercentageType, NumberType> {
+#[derive(Clone, Copy, Debug, PartialEq, ToAnimatedValue)]
+#[derive(ToAnimatedZero, ToComputedValue, ToCss)]
+pub enum SvgLengthOrPercentageOrNumber<LengthOrPercentage, Number> {
     /// <length> | <percentage>
-    LengthOrPercentage(LengthOrPercentageType),
+    LengthOrPercentage(LengthOrPercentage),
     /// <number>
-    Number(NumberType),
+    Number(Number),
+}
+
+impl<L, N> ComputeSquaredDistance for SvgLengthOrPercentageOrNumber<L, N>
+    where
+        L: ComputeSquaredDistance + Copy + Into<NumberOrPercentage>,
+        N: ComputeSquaredDistance + Copy + Into<NumberOrPercentage>
+{
+    #[inline]
+    fn compute_squared_distance(&self, other: &Self) -> Result<SquaredDistance, ()> {
+        match (self, other) {
+            (
+                &SvgLengthOrPercentageOrNumber::LengthOrPercentage(ref from),
+                &SvgLengthOrPercentageOrNumber::LengthOrPercentage(ref to)
+            ) => {
+                from.compute_squared_distance(to)
+            },
+            (
+                &SvgLengthOrPercentageOrNumber::Number(ref from),
+                &SvgLengthOrPercentageOrNumber::Number(ref to)
+            ) => {
+                from.compute_squared_distance(to)
+            },
+            (
+                &SvgLengthOrPercentageOrNumber::LengthOrPercentage(from),
+                &SvgLengthOrPercentageOrNumber::Number(to)
+            ) => {
+                from.into().compute_squared_distance(&to.into())
+            },
+            (
+                &SvgLengthOrPercentageOrNumber::Number(from),
+                &SvgLengthOrPercentageOrNumber::LengthOrPercentage(to)
+            ) => {
+                from.into().compute_squared_distance(&to.into())
+            },
+        }
+    }
 }
 
 impl<LengthOrPercentageType, NumberType> SvgLengthOrPercentageOrNumber<LengthOrPercentageType, NumberType>
@@ -147,7 +193,8 @@ impl <LengthOrPercentageType: Parse, NumberType: Parse> Parse for
 /// An SVG length value supports `context-value` in addition to length.
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
 #[derive(Clone, ComputeSquaredDistance, Copy, Debug, PartialEq)]
-#[derive(HasViewportPercentage, ToAnimatedValue, ToComputedValue, ToCss)]
+#[derive(ToAnimatedValue, ToAnimatedZero)]
+#[derive(ToComputedValue, ToCss)]
 pub enum SVGLength<LengthType> {
     /// `<length> | <percentage> | <number>`
     Length(LengthType),
@@ -157,7 +204,7 @@ pub enum SVGLength<LengthType> {
 
 /// Generic value for stroke-dasharray.
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
-#[derive(Clone, ComputeSquaredDistance, Debug, PartialEq, HasViewportPercentage, ToAnimatedValue, ToComputedValue)]
+#[derive(Clone, ComputeSquaredDistance, Debug, PartialEq, ToAnimatedValue, ToComputedValue)]
 pub enum SVGStrokeDashArray<LengthType> {
     /// `[ <length> | <percentage> | <number> ]#`
     Values(Vec<LengthType>),
@@ -191,7 +238,8 @@ impl<LengthType> ToCss for SVGStrokeDashArray<LengthType> where LengthType: ToCs
 /// An SVG opacity value accepts `context-{fill,stroke}-opacity` in
 /// addition to opacity value.
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
-#[derive(Clone, ComputeSquaredDistance, Copy, Debug, PartialEq, HasViewportPercentage, ToComputedValue, ToCss)]
+#[derive(Clone, ComputeSquaredDistance, Copy, Debug)]
+#[derive(PartialEq, ToAnimatedZero, ToComputedValue, ToCss)]
 pub enum SVGOpacity<OpacityType> {
     /// `<opacity-value>`
     Opacity(OpacityType),

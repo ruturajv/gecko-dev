@@ -90,7 +90,12 @@ public class VersioningDelegateHelper {
         // At this point we can be sure that all records in our guidsMap have been successfully
         // uploaded. Move syncVersions forward for each GUID en masse.
         final Bundle data = new Bundle();
-        data.putSerializable(BrowserContract.METHOD_PARAM_DATA, this.localVersionsOfGuids);
+        final int versionMapSizeBeforeUpdate;
+
+        synchronized (this.localVersionsOfGuids) {
+            data.putSerializable(BrowserContract.METHOD_PARAM_DATA, this.localVersionsOfGuids);
+            versionMapSizeBeforeUpdate = this.localVersionsOfGuids.size();
+        }
 
         final Bundle result = context.getContentResolver().call(
                 repositoryContentUri,
@@ -103,11 +108,21 @@ public class VersioningDelegateHelper {
             throw new IllegalStateException("Expected to receive a result after decrementing change counters");
         }
 
-        int changed = (int) result.getSerializable(BrowserContract.METHOD_RESULT);
-        if (changed != this.localVersionsOfGuids.size()) {
-            // TODO perhaps not worth throwing, but this shouldn't happen either...
-            throw new IllegalStateException("Decremented incorrect number of change counters");
+        final int changed = (int) result.getSerializable(BrowserContract.METHOD_RESULT);
+        final int versionMapSizeAfterUpdate = this.localVersionsOfGuids.size();
 
+        // None of these should happen, but something's clearly amiss. These strong assertions are
+        // here to help figure out root cause for Bug 1392078.
+        if (versionMapSizeBeforeUpdate != versionMapSizeAfterUpdate) {
+            throw new IllegalStateException("Version/guid map changed during syncVersion update");
+        }
+
+        if (changed < versionMapSizeBeforeUpdate) {
+            throw new IllegalStateException("Updated fewer sync versions than expected");
+        }
+
+        if (changed > versionMapSizeBeforeUpdate) {
+            throw new IllegalStateException("Updated more sync versions than expected");
         }
     }
 
@@ -132,8 +147,8 @@ public class VersioningDelegateHelper {
         }
 
         @Override
-        public void onFetchCompleted(long fetchEnd) {
-            this.inner.onFetchCompleted(fetchEnd);
+        public void onFetchCompleted() {
+            this.inner.onFetchCompleted();
         }
 
         @Override
@@ -160,12 +175,20 @@ public class VersioningDelegateHelper {
         }
 
         @Override
-        public void onRecordStoreReconciled(String guid, Integer newVersion) {
+        public void onRecordStoreReconciled(String guid, String oldGuid, Integer newVersion) {
             if (newVersion == null) {
                 throw new IllegalArgumentException("Received null localVersion after reconciling a versioned record.");
             }
+            // As incoming records are processed, we might be chain-duping them. In which case,
+            // we'd record a reconciled record and its guid in this map, and then another will come in
+            // and will dupe to the just-reconciled record. We'll do the replacement, and record the
+            // winning guid in this map. At that point, our map has two guids, one of which doesn't
+            // exist in the database anymore.
+            // That is why we remove old GUIDs from the map whenever we perform a replacement.
+            // See Bug 1392716.
+            localVersionsOfGuids.remove(oldGuid);
             localVersionsOfGuids.put(guid, newVersion);
-            inner.onRecordStoreReconciled(guid, null);
+            inner.onRecordStoreReconciled(guid, oldGuid, newVersion);
         }
 
         @Override
@@ -174,8 +197,8 @@ public class VersioningDelegateHelper {
         }
 
         @Override
-        public void onStoreCompleted(long storeEnd) {
-            inner.onStoreCompleted(storeEnd);
+        public void onStoreCompleted() {
+            inner.onStoreCompleted();
         }
 
         @Override

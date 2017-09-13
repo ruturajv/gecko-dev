@@ -3,11 +3,27 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* Sidebars */
+
+#history-panel,
+#bookmarksPanel {
+  background-color: transparent;
+}
+
+#sidebar-search-container {
+  padding: 4px;
+}
+
 .sidebar-placesTree {
   -moz-appearance: none;
+  background-color: transparent;
+  color: inherit;
   border: 0;
   margin: 0;
-  border-top: 1px solid ThreeDShadow;
+}
+
+.sidebar-placesTreechildren::-moz-tree-cell,
+.sidebar-placesTreechildren::-moz-tree-twisty {
+  padding: 0 4px;
 }
 
 .sidebar-placesTreechildren::-moz-tree-cell(leaf) ,
@@ -25,21 +41,8 @@
 }
 
 @media (-moz-windows-default-theme) {
-  .sidebar-placesTree {
-    background-color: transparent;
-    border-top: none;
-  }
-
   .sidebar-placesTreechildren::-moz-tree-cell-text(leaf, hover) {
     text-decoration: none;
-  }
-
-  @media (-moz-os-version: windows-win7) {
-    #bookmarksPanel,
-    #history-panel,
-    #tabs-panel {
-      background-color: #EEF3FA;
-    }
   }
 }
 

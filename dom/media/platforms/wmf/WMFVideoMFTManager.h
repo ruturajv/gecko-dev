@@ -10,9 +10,10 @@
 #include "MFTDecoder.h"
 #include "WMF.h"
 #include "WMFMediaDataDecoder.h"
+#include "mozilla/Atomics.h"
 #include "mozilla/RefPtr.h"
 #include "nsAutoPtr.h"
-#include "nsRect.h"
+#include "mozilla/gfx/Rect.h"
 
 namespace mozilla {
 
@@ -39,12 +40,7 @@ public:
 
   TrackInfo::TrackType GetType() override { return TrackInfo::kVideoTrack; }
 
-  const char* GetDescriptionName() const override
-  {
-    nsCString failureReason;
-    return IsHardwareAccelerated(failureReason) ? "wmf hardware video decoder"
-                                                : "wmf software video decoder";
-  }
+  nsCString GetDescriptionName() const override;
 
   void Flush() override
   {
@@ -85,9 +81,11 @@ private:
 
   bool CanUseDXVA(IMFMediaType* aType);
 
+  already_AddRefed<MFTDecoder> LoadAMDVP9Decoder();
+
   // Video frame geometry.
   const VideoInfo mVideoInfo;
-  const nsIntSize mImageSize;
+  const gfx::IntSize mImageSize;
   uint32_t mVideoStride;
 
   RefPtr<layers::ImageContainer> mImageContainer;
@@ -122,6 +120,8 @@ private:
   bool mGotExcessiveNullOutput = false;
   bool mIsValid = true;
   bool mIMFUsable = false;
+  bool mCheckForAMDDecoder = true;
+  Atomic<bool> mAMDVP9InUse;
 };
 
 } // namespace mozilla

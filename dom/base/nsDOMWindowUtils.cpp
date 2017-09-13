@@ -190,6 +190,7 @@ NativeInputRunnable::NativeInputRunnable(already_AddRefed<nsIRunnable>&& aEvent)
 /* static */ already_AddRefed<nsIRunnable>
 NativeInputRunnable::Create(already_AddRefed<nsIRunnable>&& aEvent)
 {
+  MOZ_ASSERT(NS_IsMainThread());
   nsCOMPtr<nsIRunnable> event(new NativeInputRunnable(Move(aEvent)));
   return event.forget();
 }
@@ -1437,7 +1438,7 @@ nsDOMWindowUtils::CycleCollect(nsICycleCollectorListener *aListener)
 NS_IMETHODIMP
 nsDOMWindowUtils::RunNextCollectorTimer()
 {
-  nsJSContext::RunNextCollectorTimer();
+  nsJSContext::RunNextCollectorTimer(JS::gcreason::DOM_WINDOW_UTILS);
 
   return NS_OK;
 }

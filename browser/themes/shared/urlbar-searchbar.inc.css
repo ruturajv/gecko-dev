@@ -19,20 +19,20 @@
 #urlbar:hover,
 .searchbar-textbox:hover {
   border-color: hsla(240,5%,5%,.35);
-  box-shadow: 0 1px 6px rgba(0,0,0,.1), 0 0 1px rgba(0,0,0,.1);
+  box-shadow: 0 1px 6px rgba(0,0,0,.1);
 }
 
 #urlbar:-moz-lwtheme,
-.searchbar-textbox:-moz-lwtheme {
-  background-color: hsla(0,0%,100%,.8);
-  color: black;
+#navigator-toolbox .searchbar-textbox:-moz-lwtheme {
+  background-color: var(--url-and-searchbar-background-color, hsla(0,0%,100%,.8));
+  color: var(--url-and-searchbar-color, black);
 }
 
 #urlbar:-moz-lwtheme:hover,
 #urlbar:-moz-lwtheme[focused="true"],
-.searchbar-textbox:-moz-lwtheme:hover,
-.searchbar-textbox:-moz-lwtheme[focused="true"] {
-  background-color: white;
+#navigator-toolbox .searchbar-textbox:-moz-lwtheme:hover,
+#navigator-toolbox .searchbar-textbox:-moz-lwtheme[focused="true"] {
+  background-color: var(--url-and-searchbar-background-color, white);
 }
 
 :root[uidensity=compact] #urlbar,
@@ -100,10 +100,15 @@
   list-style-image: url("chrome://browser/skin/device-mobile.svg");
 }
 
+.pageAction-sendToDevice-device[clientType=tablet] {
+  list-style-image: url("chrome://browser/skin/device-tablet.svg");
+}
+
 .pageAction-sendToDevice-device[clientType=desktop] {
   list-style-image: url("chrome://browser/skin/device-desktop.svg");
 }
 
+.pageAction-sendToDevice-device.signintosync,
 #pageAction-panel-sendToDevice-fxa,
 #pageAction-urlbar-sendToDevice-fxa {
   list-style-image: url("chrome://browser/skin/sync.svg");
@@ -111,9 +116,95 @@
 
 /* URL bar and page action buttons */
 
+#page-action-buttons {
+  -moz-box-align: center;
+}
+
+#pageActionSeparator {
+  /* This draws the separator the same way that #urlbar-display-box draws its
+     left and right borders, which end up looking like separators.  It might not
+     be the best way in this case, but it makes sure that all these vertical
+     lines in the urlbar look the same: same height, vertical position, etc. */
+  border-inline-start: 1px solid var(--urlbar-separator-color);
+  border-image: linear-gradient(transparent 15%, var(--urlbar-separator-color) 15%, var(--urlbar-separator-color) 85%, transparent 85%);
+  border-image-slice: 1;
+  width: 1px;
+  height: 28px;
+  visibility: hidden;
+}
+
+:root[uidensity=compact] #pageActionSeparator {
+  height: 24px;
+}
+
+:root[uidensity=touch] #pageActionSeparator {
+  height: 30px;
+}
+
+:not(#pageActionSeparator):not([hidden]) ~ #pageActionSeparator {
+  /* Show the separator between the page actions and other elements when at
+     least of the latter is shown. */
+  visibility: visible;
+  margin-left: 6px;
+  margin-right: 6px;
+}
+
+#userContext-icons,
+#urlbar-zoom-button {
+  margin-left: 6px;
+  margin-right: 6px;
+}
+
+.urlbar-icon {
+  width: 28px;
+  height: 28px;
+  /* 28x28 box - 16x16 image = 12x12 padding, 6 on each side */
+  padding: 6px;
+  -moz-context-properties: fill, fill-opacity;
+  fill: currentColor;
+  fill-opacity: 0.6;
+  color: inherit;
+  transition-property: background-color;
+  transition-duration: var(--toolbarbutton-hover-transition-duration);
+}
+
+:root[uidensity=compact] .urlbar-icon {
+  width: 24px;
+  height: 24px;
+  /* 24x24 box - 16x16 image = 8x8 padding, 4 on each side */
+  padding: 4px;
+}
+
+:root[uidensity=touch] .urlbar-icon {
+  width: 30px;
+  height: 30px;
+  /* 30x30 box - 16x16 image = 14x14 padding, 7 on each side */
+  padding: 7px;
+}
+
+.urlbar-icon:hover {
+  background-color: hsla(0,0%,80%,.4);
+}
+
+.urlbar-icon:hover:active {
+  background-color: hsla(0,0%,80%,.45);
+  transition-duration: var(--toolbarbutton-active-transition-duration);
+}
+
+.urlbar-go-button,
+.search-go-button {
+  list-style-image: url("chrome://browser/skin/back.svg");
+  width: 26px;
+}
+
+.urlbar-go-button:-moz-locale-dir(ltr),
+.search-go-button:-moz-locale-dir(ltr) {
+  transform: scaleX(-1);
+}
+
 .urlbar-history-dropmarker {
   -moz-appearance: none;
-  list-style-image: url(chrome://browser/skin/arrow-dropdown-16.svg);
+  list-style-image: url(chrome://global/skin/icons/arrow-dropdown-16.svg);
   transition: opacity 0.15s ease;
 }
 
@@ -123,27 +214,6 @@
 
 #navigator-toolbox:not(:hover) > #nav-bar:not([customizing="true"]) > #nav-bar-customization-target > #urlbar-container > #urlbar:not([focused]) > .urlbar-textbox-container > .urlbar-history-dropmarker {
   opacity: 0;
-}
-
-#page-action-buttons {
-  -moz-box-align: center;
-  /* Add more space between the last icon and the urlbar's edge. */
-  margin-inline-end: 3px;
-}
-
-.urlbar-icon {
-  padding: 0 6px;
-  /* 16x16 icon with border-box sizing */
-  width: 28px;
-  height: 16px;
-  -moz-context-properties: fill, fill-opacity;
-  fill: currentColor;
-  fill-opacity: 0.6;
-  color: inherit;
-}
-
-.urlbar-icon:hover {
-  fill-opacity: 0.8;
 }
 
 #pageActionButton {
@@ -200,6 +270,16 @@
   max-height: 33px;
 }
 
+:root[uidensity=compact] #star-button-box[animationsenabled] > #star-button[starred][animate] + #star-button-animatable-box {
+  /* .urlbar-icon has width 24px in this case */
+  margin-inline-start: -4.5px;
+}
+
+:root[uidensity=touch] #star-button-box[animationsenabled] > #star-button[starred][animate] + #star-button-animatable-box {
+  /* .urlbar-icon has width 30px in this case */
+  margin-inline-start: -1.5px;
+}
+
 #star-button-box[animationsenabled] > #star-button[starred][animate] + #star-button-animatable-box > #star-button-animatable-image {
   background-image: url("chrome://browser/skin/bookmark-animation.svg");
   background-size: auto;
@@ -220,9 +300,26 @@
   animation-name: bookmark-animation-rtl;
 }
 
+/* Reader mode icon */
+
+#reader-mode-button {
+  list-style-image: url(chrome://browser/skin/readerMode.svg);
+}
+
+#reader-mode-button[readeractive] {
+  fill: var(--toolbarbutton-icon-fill-attention);
+  fill-opacity: 1;
+}
+
+/* Blocked popup icon */
+
+#page-report-button {
+  list-style-image: url(chrome://browser/skin/notification-icons/popup.svg);
+}
+
 /* Zoom button */
+
 #urlbar-zoom-button {
-  margin: 0 3px;
   font-size: .8em;
   padding: 0 8px;
   border-radius: 1em;

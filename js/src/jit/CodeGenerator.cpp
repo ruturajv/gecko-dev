@@ -30,7 +30,6 @@
 #include "jit/AtomicOperations.h"
 #include "jit/BaselineCompiler.h"
 #include "jit/IonBuilder.h"
-#include "jit/IonCaches.h"
 #include "jit/IonIC.h"
 #include "jit/IonOptimizationLevels.h"
 #include "jit/JitcodeMap.h"
@@ -11445,11 +11444,11 @@ CodeGenerator::visitAtomicIsLockFree(LAtomicIsLockFree* lir)
     Register value = ToRegister(lir->value());
     Register output = ToRegister(lir->output());
 
-    // Keep this in sync with isLockfree() in jit/AtomicOperations.h.
-    MOZ_ASSERT(AtomicOperations::isLockfree(1));  // Implementation artifact
-    MOZ_ASSERT(AtomicOperations::isLockfree(2));  // Implementation artifact
-    MOZ_ASSERT(AtomicOperations::isLockfree(4));  // Spec requirement
-    MOZ_ASSERT(!AtomicOperations::isLockfree(8)); // Implementation invariant, for now
+    // Keep this in sync with isLockfreeJS() in jit/AtomicOperations.h.
+    MOZ_ASSERT(AtomicOperations::isLockfreeJS(1));  // Implementation artifact
+    MOZ_ASSERT(AtomicOperations::isLockfreeJS(2));  // Implementation artifact
+    MOZ_ASSERT(AtomicOperations::isLockfreeJS(4));  // Spec requirement
+    MOZ_ASSERT(!AtomicOperations::isLockfreeJS(8)); // Implementation invariant, for now
 
     Label Ldone, Lfailed;
     masm.move32(Imm32(1), output);
@@ -12789,16 +12788,16 @@ CodeGenerator::visitRandom(LRandom* ins)
 }
 
 void
-CodeGenerator::visitSignExtend(LSignExtend* ins)
+CodeGenerator::visitSignExtendInt32(LSignExtendInt32* ins)
 {
     Register input = ToRegister(ins->input());
     Register output = ToRegister(ins->output());
 
     switch (ins->mode()) {
-      case MSignExtend::Byte:
+      case MSignExtendInt32::Byte:
         masm.move8SignExtend(input, output);
         break;
-      case MSignExtend::Half:
+      case MSignExtendInt32::Half:
         masm.move16SignExtend(input, output);
         break;
     }

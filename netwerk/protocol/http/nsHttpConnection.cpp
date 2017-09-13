@@ -126,8 +126,9 @@ nsHttpConnection::~nsHttpConnection()
     }
 
     if ((mFastOpenStatus != TFO_FAILED) &&
+        (mFastOpenStatus != TFO_HTTP) &&
         ((mFastOpenStatus != TFO_NOT_TRIED) ||
- #if defined(_WIN64) && defined(WIN95)
+#if defined(_WIN64) && defined(WIN95)
          (gHttpHandler->UseFastOpen() &&
           gSocketTransportService &&
           gSocketTransportService->HasFileDesc2PlatformOverlappedIOHandleFunc()))) {
@@ -151,7 +152,7 @@ nsHttpConnection::Init(nsHttpConnectionInfo *info,
                        nsIInterfaceRequestor *callbacks,
                        PRIntervalTime rtt)
 {
-    LOG(("nsHttpConnection::Init this=%p", this));
+    LOG(("nsHttpConnection::Init this=%p sockettransport=%p", this, transport));
     NS_ENSURE_ARG_POINTER(info);
     NS_ENSURE_TRUE(!mConnInfo, NS_ERROR_ALREADY_INITIALIZED);
 
@@ -953,6 +954,18 @@ nsHttpConnection::CanReuse()
     if ((mTransaction ? (mTransaction->IsDone() ? 0U : 1U) : 0U) >=
         mRemainingConnectionUses) {
         return false;
+    }
+
+    if (!mExperienced) {
+        uint32_t flags = 0;
+        mSocketTransport->GetConnectionFlags(&flags);
+        if (flags & nsISocketTransport::SPECULATIVE) {
+            if (gHttpHandler->ConnMgr()->IsSpeculativeConnectDisabled(mConnInfo)) {
+                LOG(("nsHttpConnection::CanReuse %p can't reuse because speculative"
+                      " connections are disabled for this host", this));
+                return false;
+            }
+        }
     }
 
     bool canReuse;

@@ -29,9 +29,9 @@
 
 use app_units::{Au, MAX_AU};
 use context::LayoutContext;
-use display_list_builder::{BorderPaintingMode, DisplayListBuildState};
-use display_list_builder::BlockFlowDisplayListBuilding;
-use euclid::{Point2D, Size2D, Rect};
+use display_list_builder::{BlockFlowDisplayListBuilding, BorderPaintingMode};
+use display_list_builder::{DisplayListBuildState, EstablishContainingBlock};
+use euclid::{Point2D, Rect, SideOffsets2D, Size2D};
 use floats::{ClearType, FloatKind, Floats, PlacementInfo};
 use flow::{self, BaseFlow, EarlyAbsolutePositionInfo, Flow, FlowClass, ForceNonfloatedFlag};
 use flow::{BLOCK_POSITION_IS_STATIC, CLEARS_LEFT, CLEARS_RIGHT};
@@ -51,10 +51,10 @@ use servo_geometry::max_rect;
 use std::cmp::{max, min};
 use std::fmt;
 use std::sync::Arc;
-use style::computed_values::{border_collapse, box_sizing, display, float, overflow_x};
+use style::computed_values::{box_sizing, display, float, overflow_x};
 use style::computed_values::{position, text_align};
 use style::context::SharedStyleContext;
-use style::logical_geometry::{LogicalPoint, LogicalRect, LogicalSize, WritingMode};
+use style::logical_geometry::{LogicalMargin, LogicalPoint, LogicalRect, LogicalSize, WritingMode};
 use style::properties::ComputedValues;
 use style::servo::restyle_damage::{BUBBLE_ISIZES, REFLOW, REFLOW_OUT_OF_FLOW};
 use style::values::computed::{LengthOrPercentageOrNone, LengthOrPercentage};
@@ -86,7 +86,7 @@ impl FloatedBlockInfo {
 }
 
 /// The solutions for the block-size-and-margins constraint equation.
-#[derive(Copy, Clone)]
+#[derive(Clone, Copy)]
 struct BSizeConstraintSolution {
     block_start: Au,
     block_size: Au,
@@ -643,7 +643,7 @@ impl BlockFlow {
         &mut self.fragment
     }
 
-    pub fn stacking_relative_position(&self, coor: CoordinateSystem) -> Rect<Au> {
+    pub fn stacking_relative_border_box(&self, coor: CoordinateSystem) -> Rect<Au> {
         return self.fragment.stacking_relative_border_box(
             &self.base.stacking_relative_position,
             &self.base.early_absolute_position_info.relative_containing_block_size,
@@ -1429,6 +1429,9 @@ impl BlockFlow {
     /// Determines the type of formatting context this is. See the definition of
     /// `FormattingContextType`.
     pub fn formatting_context_type(&self) -> FormattingContextType {
+        if self.is_inline_flex_item() || self.is_block_flex_item() {
+            return FormattingContextType::Other
+        }
         let style = self.fragment.style();
         if style.get_box().float != float::T::none {
             return FormattingContextType::Other
@@ -1787,6 +1790,20 @@ impl BlockFlow {
         self.flags.contains(HAS_SCROLLING_OVERFLOW)
     }
 
+    // Return offset from original position because of `position: sticky`.
+    pub fn sticky_position(&self) -> SideOffsets2D<MaybeAuto> {
+        let containing_block_size = &self.base.early_absolute_position_info
+                                              .relative_containing_block_size;
+        let writing_mode = self.base.early_absolute_position_info.relative_containing_block_mode;
+        let offsets = self.fragment.style().logical_position();
+        let as_margins = LogicalMargin::new(writing_mode,
+            MaybeAuto::from_style(offsets.block_start, containing_block_size.inline),
+            MaybeAuto::from_style(offsets.inline_end, containing_block_size.inline),
+            MaybeAuto::from_style(offsets.block_end, containing_block_size.inline),
+            MaybeAuto::from_style(offsets.inline_start, containing_block_size.inline));
+        as_margins.to_physical(writing_mode)
+    }
+
 }
 
 impl Flow for BlockFlow {
@@ -2134,7 +2151,7 @@ impl Flow for BlockFlow {
     }
 
     fn collect_stacking_contexts(&mut self, state: &mut DisplayListBuildState) {
-        self.collect_stacking_contexts_for_block(state);
+        self.collect_stacking_contexts_for_block(state, EstablishContainingBlock::Yes);
     }
 
     fn build_display_list(&mut self, state: &mut DisplayListBuildState) {
@@ -2196,7 +2213,7 @@ impl fmt::Debug for BlockFlow {
 }
 
 /// The inputs for the inline-sizes-and-margins constraint equation.
-#[derive(Debug, Copy, Clone)]
+#[derive(Clone, Copy, Debug)]
 pub struct ISizeConstraintInput {
     pub computed_inline_size: MaybeAuto,
     pub inline_start_margin: MaybeAuto,
@@ -2229,7 +2246,7 @@ impl ISizeConstraintInput {
 }
 
 /// The solutions for the inline-size-and-margins constraint equation.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct ISizeConstraintSolution {
     pub inline_start: Au,
     pub inline_size: Au,
@@ -2268,8 +2285,7 @@ impl ISizeConstraintSolution {
 pub trait ISizeAndMarginsComputer {
     /// Instructs the fragment to compute its border and padding.
     fn compute_border_and_padding(&self, block: &mut BlockFlow, containing_block_inline_size: Au) {
-        block.fragment.compute_border_and_padding(containing_block_inline_size,
-                                                  border_collapse::T::separate);
+        block.fragment.compute_border_and_padding(containing_block_inline_size);
     }
 
     /// Compute the inputs for the ISize constraint equation.
@@ -3086,7 +3102,7 @@ impl ISizeAndMarginsComputer for InlineFlexItem {
 }
 
 /// A stacking context, a pseudo-stacking context, or a non-stacking context.
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum BlockStackingContextType {
     NonstackingContext,
     PseudoStackingContext,

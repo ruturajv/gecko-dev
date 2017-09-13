@@ -151,7 +151,6 @@ private:
   DECL_MEDIA_PREF("media.gmp.decoder.h264",                   GMPH264Preferred, uint32_t, 0);
   DECL_MEDIA_PREF("media.eme.audio.blank",                    EMEBlankAudio, bool, false);
   DECL_MEDIA_PREF("media.eme.video.blank",                    EMEBlankVideo, bool, false);
-  DECL_MEDIA_PREF("media.eme.chromium-api.enabled",           EMEChromiumAPIEnabled, bool, false);
   DECL_MEDIA_PREF("media.eme.chromium-api.video-shmems",
                   EMEChromiumAPIVideoShmemCount,
                   uint32_t,
@@ -207,6 +206,12 @@ private:
 
   // resume background video decoding when the cursor is hovering over the tab.
   DECL_MEDIA_PREF("media.resume-bkgnd-video-on-tabhover",     ResumeVideoDecodingOnTabHover, bool, false);
+
+#ifdef MOZ_CUBEB_REMOTING
+  DECL_MEDIA_PREF("media.cubeb.sandbox",                      CubebSandbox, bool, false);
+#endif // MOZ_CUBEB_REMOTING
+  DECL_MEDIA_PREF("media.videocontrols.lock-video-orientation",  VideoOrientationLockEnabled, bool, false);
+
 public:
   // Manage the singleton:
   static MediaPrefs& GetSingleton();

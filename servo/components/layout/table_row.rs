@@ -9,7 +9,8 @@
 use app_units::Au;
 use block::{BlockFlow, ISizeAndMarginsComputer};
 use context::LayoutContext;
-use display_list_builder::{BlockFlowDisplayListBuilding, BorderPaintingMode, DisplayListBuildState};
+use display_list_builder::{BlockFlowDisplayListBuilding, BorderPaintingMode};
+use display_list_builder::{DisplayListBuildState, EstablishContainingBlock};
 use euclid::Point2D;
 use flow::{self, EarlyAbsolutePositionInfo, Flow, FlowClass, ImmutableFlowUtils, OpaqueFlow};
 use flow_list::MutFlowListIterator;
@@ -73,7 +74,7 @@ impl Serialize for TableRowFlow {
 }
 
 /// Information about the column inline size and span for each cell.
-#[derive(Serialize, Copy, Clone)]
+#[derive(Clone, Copy, Serialize)]
 pub struct CellIntrinsicInlineSize {
     /// Inline sizes that this cell contributes to the column.
     pub column_size: ColumnIntrinsicInlineSize,
@@ -478,7 +479,7 @@ impl Flow for TableRowFlow {
     }
 
     fn collect_stacking_contexts(&mut self, state: &mut DisplayListBuildState) {
-        self.block_flow.collect_stacking_contexts(state);
+        self.block_flow.collect_stacking_contexts_for_block(state, EstablishContainingBlock::No);
     }
 
     fn repair_style(&mut self, new_style: &::ServoArc<ComputedValues>) {
@@ -571,7 +572,7 @@ impl CollapsedBorderSpacingForRow {
 }
 
 /// All aspects of a border that can collapse with adjacent borders. See CSS 2.1 § 17.6.2.1.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct CollapsedBorder {
     /// The style of the border.
     pub style: border_top_style::T,
@@ -596,7 +597,7 @@ impl Serialize for CollapsedBorder {
 // FIXME(#8586): FromTableRow, FromTableRowGroup, FromTableColumn,
 // FromTableColumnGroup are unused
 #[allow(dead_code)]
-#[derive(Copy, Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 pub enum CollapsedBorderProvenance {
     FromPreviousTableCell = 6,
     FromNextTableCell = 5,
@@ -906,7 +907,7 @@ fn set_inline_position_of_child_flow(
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone, Copy)]
 pub struct BorderCollapseInfoForChildTableCell<'a> {
     collapsed_borders_for_row: &'a CollapsedBordersForRow,
     collapsed_border_spacing_for_row: &'a CollapsedBorderSpacingForRow,

@@ -79,7 +79,7 @@ libs-%:
 	@$(MAKE) -C ../../toolkit/locales libs-$* XPI_ROOT_APPID='$(XPI_ROOT_APPID)'
 	@$(MAKE) -C ../../services/sync/locales AB_CD=$* XPI_NAME=locale-$*
 	@$(MAKE) -C ../../extensions/spellcheck/locales AB_CD=$* XPI_NAME=locale-$*
-ifndef RELEASE_OR_BETA
+ifneq (,$(wildcard ../extensions/formautofill/locales))
 	@$(MAKE) -C ../extensions/formautofill/locales AB_CD=$* XPI_NAME=locale-$*
 endif
 	@$(MAKE) -C ../extensions/onboarding/locales AB_CD=$* XPI_NAME=locale-$*
@@ -90,8 +90,8 @@ endif
 ifneq '$(or $(MOZ_DEV_EDITION),$(NIGHTLY_BUILD))' ''
 	@$(MAKE) -C ../extensions/webcompat-reporter/locales AB_CD=$* XPI_NAME=locale-$*
 endif
-	@$(MAKE) -C ../../intl/locales AB_CD=$* XPI_NAME=locale-$*
 	@$(MAKE) -C ../../devtools/client/locales AB_CD=$* XPI_NAME=locale-$* XPI_ROOT_APPID='$(XPI_ROOT_APPID)'
+	@$(MAKE) -C ../../devtools/shim/locales AB_CD=$* XPI_NAME=locale-$* XPI_ROOT_APPID='$(XPI_ROOT_APPID)'
 	@$(MAKE) -B searchplugins AB_CD=$* XPI_NAME=locale-$*
 	@$(MAKE) libs AB_CD=$* XPI_NAME=locale-$* PREF_DIR=$(PREF_DIR)
 	@$(MAKE) -C $(DEPTH)/$(MOZ_BRANDING_DIRECTORY)/locales AB_CD=$* XPI_NAME=locale-$*
@@ -103,15 +103,15 @@ chrome-%:
 	@$(MAKE) -C ../../toolkit/locales chrome-$*
 	@$(MAKE) -C ../../services/sync/locales chrome AB_CD=$*
 	@$(MAKE) -C ../../extensions/spellcheck/locales chrome AB_CD=$*
-ifndef RELEASE_OR_BETA
+ifneq (,$(wildcard ../extensions/formautofill/locales))
 	@$(MAKE) -C ../extensions/formautofill/locales chrome AB_CD=$*
 endif
 	@$(MAKE) -C ../extensions/pocket/locale chrome AB_CD=$*
 ifndef RELEASE_OR_BETA
 	@$(MAKE) -C ../extensions/presentation/locale chrome AB_CD=$*
 endif
-	@$(MAKE) -C ../../intl/locales chrome AB_CD=$*
 	@$(MAKE) -C ../../devtools/client/locales chrome AB_CD=$*
+	@$(MAKE) -C ../../devtools/shim/locales chrome AB_CD=$*
 	@$(MAKE) chrome AB_CD=$*
 	@$(MAKE) -C $(DEPTH)/$(MOZ_BRANDING_DIRECTORY)/locales chrome AB_CD=$*
 ifdef NIGHTLY_BUILD
@@ -203,4 +203,24 @@ l10n-check::
 	$(MAKE) installers-x-test L10NBASEDIR='$(PWD)' \
 	    ZIP_IN='$(ZIP_IN)' MOZ_SIMPLE_PACKAGE_NAME=
 	$(PYTHON) $(topsrcdir)/toolkit/mozapps/installer/unpack.py $(DIST)/l10n-stage/$(MOZ_PKG_DIR)$(_RESPATH)
-	cd $(DIST)/l10n-stage && test $$(cat $(MOZ_PKG_DIR)$(_RESPATH)/update.locale) = x-test
+	(cd $(DIST)/l10n-stage && test $$(cat $(MOZ_PKG_DIR)$(_RESPATH)/update.locale) = x-test)
+	@# package langpack as web extension, too, run some tests on it
+	$(MAKE) package-langpack-x-test L10NBASEDIR='$(PWD)' WEBEXT_LANGPACKS=1 MOZ_SIMPLE_PACKAGE_NAME=
+	$(MAKE) analyze-langpack-x-test MOZ_SIMPLE_PACKAGE_NAME=
+	$(MAKE) check-clobber-l10n-x-test MOZ_SIMPLE_PACKAGE_NAME=
+
+# Helper rules to have AB_CD set to the locale we test for testing
+# We need to split this out from l10n-check, as that needs AB_CD to be en-US
+# at the top level to unpack the right file
+analyze-langpack-%: AB_CD=$*
+analyze-langpack-%:
+	$(if $(shell unzip -qql $(ABS_DIST)/$(LANGPACK) manifest.json),$(info Found manifest.json),$(error manifest.json is missing))
+	$(if $(shell unzip -qql $(ABS_DIST)/$(LANGPACK) chrome.manifest),$(error Found chrome.manifest),$(info Not packaging chrome.manifest))
+
+check-clobber-l10n-%: AB_CD=$*
+check-clobber-l10n-%:
+	$(MAKE) clobber-x-test
+	$(RM) -r $(DIST)/l10n-stage $(DIST)/xpi-stage/locale-$(AB_CD)
+	$(RM) -r $(DIST)/*.$(AB_CD).*
+	$(RM) -r $(UNPACKED_INSTALLER) $(ABS_DIST)/$(LANGPACK)
+	$(RM) -rf $(DIST)/install/sea/*.$(AB_CD).*

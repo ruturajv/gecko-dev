@@ -24,6 +24,8 @@ class EventQueue;
 template<typename InnerQueueT>
 class PrioritizedEventQueue;
 
+class LabeledEventQueue;
+
 class ThreadEventTarget;
 
 // A ThreadEventQueue implements normal monitor-style synchronization over the
@@ -49,6 +51,9 @@ public:
   void Disconnect(const MutexAutoLock& aProofOfLock) final {}
 
   void EnableInputEventPrioritization() final;
+  void FlushInputEventPrioritization() final;
+  void SuspendInputEventPrioritization() final;
+  void ResumeInputEventPrioritization() final;
 
   /**
    * This method causes any events currently enqueued on the thread to be
@@ -112,6 +117,7 @@ private:
 
 extern template class ThreadEventQueue<EventQueue>;
 extern template class ThreadEventQueue<PrioritizedEventQueue<EventQueue>>;
+extern template class ThreadEventQueue<PrioritizedEventQueue<LabeledEventQueue>>;
 
 }; // namespace mozilla
 

@@ -31,7 +31,7 @@ fn almost_equals(a: &Json, b: &Json) -> bool {
         (_, &Json::I64(b)) => almost_equals(a, &Json::F64(b as f64)),
         (_, &Json::U64(b)) => almost_equals(a, &Json::F64(b as f64)),
 
-        (&Json::F64(a), &Json::F64(b)) => (a - b).abs() < 1e-6,
+        (&Json::F64(a), &Json::F64(b)) => (a - b).abs() <= a.abs() * 1e-6,
 
         (&Json::Boolean(a), &Json::Boolean(b)) => a == b,
         (&Json::String(ref a), &Json::String(ref b)) => a == b,
@@ -300,10 +300,10 @@ fn unquoted_url_escaping() {
     let serialized = token.to_css_string();
     assert_eq!(serialized, "\
         url(\
-            \\1 \\2 \\3 \\4 \\5 \\6 \\7 \\8 \\9 \\A \\B \\C \\D \\E \\F \\10 \
-            \\11 \\12 \\13 \\14 \\15 \\16 \\17 \\18 \\19 \\1A \\1B \\1C \\1D \\1E \\1F \\20 \
+            \\1 \\2 \\3 \\4 \\5 \\6 \\7 \\8 \\9 \\a \\b \\c \\d \\e \\f \\10 \
+            \\11 \\12 \\13 \\14 \\15 \\16 \\17 \\18 \\19 \\1a \\1b \\1c \\1d \\1e \\1f \\20 \
             !\\\"#$%&\\'\\(\\)*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]\
-            ^_`abcdefghijklmnopqrstuvwxyz{|}~\\7F é\
+            ^_`abcdefghijklmnopqrstuvwxyz{|}~\\7f é\
         )\
         ");
     let mut input = ParserInput::new(&serialized);
@@ -439,6 +439,26 @@ fn serializer(preserve_comments: bool) {
         let parser = &mut Parser::new(&mut input);
         Json::Array(component_values_to_json(parser))
     });
+}
+
+#[test]
+fn serialize_bad_tokens() {
+    let mut input = ParserInput::new("url(foo\\) b\\)ar)'ba\\'\"z\n4");
+    let mut parser = Parser::new(&mut input);
+
+    let token = parser.next().unwrap().clone();
+    assert!(matches!(token, Token::BadUrl(_)));
+    assert_eq!(token.to_css_string(), "url(foo\\) b\\)ar)");
+
+    let token = parser.next().unwrap().clone();
+    assert!(matches!(token, Token::BadString(_)));
+    assert_eq!(token.to_css_string(), "\"ba'\\\"z");
+
+    let token = parser.next().unwrap().clone();
+    assert!(matches!(token, Token::Number { .. }));
+    assert_eq!(token.to_css_string(), "4");
+
+    assert!(parser.next().is_err());
 }
 
 #[test]
@@ -745,28 +765,34 @@ impl<'i> DeclarationParser<'i> for JsonParser {
 }
 
 impl<'i> AtRuleParser<'i> for JsonParser {
-    type Prelude = Vec<Json>;
+    type PreludeNoBlock = Vec<Json>;
+    type PreludeBlock = Vec<Json>;
     type AtRule = Json;
     type Error = ();
 
     fn parse_prelude<'t>(&mut self, name: CowRcStr<'i>, input: &mut Parser<'i, 't>)
-                         -> Result<AtRuleType<Vec<Json>, Json>, ParseError<'i, ()>> {
-        Ok(AtRuleType::OptionalBlock(vec![
+                         -> Result<AtRuleType<Vec<Json>, Vec<Json>>, ParseError<'i, ()>> {
+        let prelude = vec![
             "at-rule".to_json(),
             name.to_json(),
             Json::Array(component_values_to_json(input)),
-        ]))
+        ];
+        match_ignore_ascii_case! { &*name,
+            "media" | "foo-with-block" => Ok(AtRuleType::WithBlock(prelude)),
+            "charset" => Err(BasicParseError::AtRuleInvalid(name.clone()).into()),
+            _ => Ok(AtRuleType::WithoutBlock(prelude)),
+        }
+    }
+
+    fn rule_without_block(&mut self, mut prelude: Vec<Json>) -> Json {
+        prelude.push(Json::Null);
+        Json::Array(prelude)
     }
 
     fn parse_block<'t>(&mut self, mut prelude: Vec<Json>, input: &mut Parser<'i, 't>)
                        -> Result<Json, ParseError<'i, ()>> {
         prelude.push(Json::Array(component_values_to_json(input)));
         Ok(Json::Array(prelude))
-    }
-
-    fn rule_without_block(&mut self, mut prelude: Vec<Json>) -> Json {
-        prelude.push(Json::Null);
-        Json::Array(prelude)
     }
 }
 
@@ -971,6 +997,29 @@ fn parser_maintains_current_line() {
 }
 
 #[test]
+fn parser_with_line_number_offset() {
+    let mut input = ParserInput::new_with_line_number_offset("ident\nident", 72);
+    let mut parser = Parser::new(&mut input);
+    assert_eq!(parser.current_source_location(), SourceLocation { line: 72, column: 0 });
+    assert_eq!(parser.next_including_whitespace_and_comments(), Ok(&Token::Ident("ident".into())));
+    assert_eq!(parser.current_source_location(), SourceLocation { line: 72, column: 5 });
+    assert_eq!(parser.next_including_whitespace_and_comments(),
+               Ok(&Token::WhiteSpace("\n".into())));
+    assert_eq!(parser.current_source_location(), SourceLocation { line: 73, column: 0 });
+    assert_eq!(parser.next_including_whitespace_and_comments(), Ok(&Token::Ident("ident".into())));
+    assert_eq!(parser.current_source_location(), SourceLocation { line: 73, column: 5 });
+}
+
+#[test]
+fn cdc_regression_test() {
+    let mut input = ParserInput::new("-->x");
+    let mut parser = Parser::new(&mut input);
+    parser.skip_cdc_and_cdo();
+    assert_eq!(parser.next(), Ok(&Token::Ident("x".into())));
+    assert_eq!(parser.next(), Err(BasicParseError::EndOfInput));
+}
+
+#[test]
 fn parse_entirely_reports_first_error() {
     #[derive(PartialEq, Debug)]
     enum E { Foo }
@@ -1002,5 +1051,77 @@ fn parse_comments() {
         while let Ok(_) = parser.next_including_whitespace() {
         }
         assert_eq!(parser.current_source_map_url(), test.1);
+    }
+}
+
+#[test]
+fn roundtrip_percentage_token() {
+    fn test_roundtrip(value: &str) {
+        let mut input = ParserInput::new(value);
+        let mut parser = Parser::new(&mut input);
+        let token = parser.next().unwrap();
+        assert_eq!(token.to_css_string(), value);
+    }
+    // Test simple number serialization
+    for i in 0..101 {
+        test_roundtrip(&format!("{}%", i));
+        for j in 0..10 {
+            if j != 0 {
+                test_roundtrip(&format!("{}.{}%", i, j));
+            }
+            for k in 1..10 {
+                test_roundtrip(&format!("{}.{}{}%", i, j, k));
+            }
+        }
+    }
+}
+
+#[test]
+fn utf16_columns() {
+    // This particular test serves two purposes.  First, it checks
+    // that the column number computations are correct.  Second, it
+    // checks that tokenizer code paths correctly differentiate
+    // between the different UTF-8 encoding bytes.  In particular
+    // different leader bytes and continuation bytes are treated
+    // differently, so we make sure to include all lengths in the
+    // tests, using the string "QΡ✈🆒".  Also, remember that because
+    // the column is in units of UTF-16, the 4-byte sequence results
+    // in two columns.
+    let tests = vec![
+        ("", 0),
+        ("ascii", 5),
+        ("/*QΡ✈🆒*/", 9),
+        ("'QΡ✈🆒*'", 8),
+        ("\"\\\"'QΡ✈🆒*'", 11),
+        ("\\Q\\Ρ\\✈\\🆒", 9),
+        ("QΡ✈🆒", 5),
+        ("QΡ✈🆒\\Q\\Ρ\\✈\\🆒", 14),
+        ("newline\r\nQΡ✈🆒", 5),
+        ("url(QΡ✈🆒\\Q\\Ρ\\✈\\🆒)", 19),
+        ("url(QΡ✈🆒)", 10),
+        ("url(\r\nQΡ✈🆒\\Q\\Ρ\\✈\\🆒)", 15),
+        ("url(\r\nQΡ✈🆒\\Q\\Ρ\\✈\\🆒", 14),
+        ("url(\r\nQΡ✈🆒\\Q\\Ρ\\✈\\🆒 x", 16),
+        ("QΡ✈🆒()", 7),
+        // Test that under/over-flow of current_line_start_position is
+        // handled properly; see the special case in consume_4byte_intro.
+        ("🆒", 2),
+    ];
+
+    for test in tests {
+        let mut input = ParserInput::new(test.0);
+        let mut parser = Parser::new(&mut input);
+
+        // Read all tokens.
+        loop {
+            match parser.next() {
+                Err(BasicParseError::EndOfInput) => { break; }
+                Err(_) => { assert!(false); }
+                Ok(_) => {}
+            };
+        }
+
+        // Check the resulting column.
+        assert_eq!(parser.current_source_location().column, test.1);
     }
 }

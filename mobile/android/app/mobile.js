@@ -230,6 +230,8 @@ pref("extensions.compatability.locales.buildid", "0");
 /* Don't let XPIProvider install distribution add-ons; we do our own thing on mobile. */
 pref("extensions.installDistroAddons", false);
 
+pref("extensions.webextPermissionPrompts", true);
+
 // Add-on content security policies.
 pref("extensions.webextensions.base-content-security-policy", "script-src 'self' https://* moz-extension: blob: filesystem: 'unsafe-eval' 'unsafe-inline'; object-src 'self' https://* moz-extension: blob: filesystem:;");
 pref("extensions.webextensions.default-content-security-policy", "script-src 'self'; object-src 'self';");
@@ -566,10 +568,8 @@ pref("apz.second_tap_tolerance", "0.3");
 pref("apz.touch_move_tolerance", "0.03");
 pref("apz.touch_start_tolerance", "0.06");
 
-#ifdef NIGHTLY_BUILD
-// Temporary fix of Bug 1390145 for Fennec Nightly
+// Enabling this on Fennec is blocked on a proper fix for bug 1390145.
 pref("apz.frame_delay.enabled", false);
-#endif
 
 pref("layers.progressive-paint", true);
 pref("layers.low-precision-buffer", true);
@@ -632,7 +632,9 @@ pref("media.mediadrm-widevinecdm.visible", true);
 pref("media.eme.enabled", true);
 #endif
 
+#ifdef NIGHTLY_BUILD
 pref("media.hls.enabled", true);
+#endif
 
 // Whether to suspend decoding of videos in background tabs.
 pref("media.suspend-bkgnd-video.enabled", true);
@@ -736,10 +738,6 @@ pref("media.stagefright.omxcodec.flags", 0);
 
 // Coalesce touch events to prevent them from flooding the event queue
 pref("dom.event.touch.coalescing.enabled", false);
-
-// On memory pressure, release dirty but unused pages held by jemalloc
-// back to the system.
-pref("memory.free_dirty_pages", true);
 
 pref("layout.framevisibility.numscrollportwidths", 1);
 pref("layout.framevisibility.numscrollportheights", 1);
@@ -934,3 +932,7 @@ pref("javascript.options.native_regexp", false);
 
 // Ask for permission when enumerating WebRTC devices.
 pref("media.navigator.permission.device", true);
+
+#ifdef NIGHTLY_BUILD
+pref("media.videocontrols.lock-video-orientation", true);
+#endif

@@ -676,6 +676,12 @@ impl<H: 'static, T: 'static> ThinArc<H, T> {
         // Forward the result.
         result
     }
+
+    /// Returns the address on the heap of the ThinArc itself -- not the T
+    /// within it -- for memory reporting.
+    pub fn heap_ptr(&self) -> *const c_void {
+        self.ptr as *const ArcInner<T> as *const c_void
+    }
 }
 
 impl<H, T> Deref for ThinArc<H, T> {
@@ -879,7 +885,7 @@ impl<T: 'static> Arc<T> {
 ///
 /// ArcBorrow lets us deal with borrows of known-refcounted objects
 /// without needing to worry about how they're actually stored.
-#[derive(PartialEq, Eq)]
+#[derive(Eq, PartialEq)]
 pub struct ArcBorrow<'a, T: 'a>(&'a T);
 
 impl<'a, T> Copy for ArcBorrow<'a, T> {}

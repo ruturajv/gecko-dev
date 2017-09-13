@@ -61,10 +61,12 @@ use gecko_bindings::structs::ELEMENT_HAS_DIRTY_DESCENDANTS_FOR_SERVO;
 use gecko_bindings::structs::ELEMENT_HAS_SNAPSHOT;
 use gecko_bindings::structs::EffectCompositor_CascadeLevel as CascadeLevel;
 use gecko_bindings::structs::NODE_DESCENDANTS_NEED_FRAMES;
+use gecko_bindings::structs::NODE_NEEDS_FRAME;
 use gecko_bindings::structs::nsChangeHint;
 use gecko_bindings::structs::nsIDocument_DocumentTheme as DocumentTheme;
 use gecko_bindings::structs::nsRestyleHint;
 use gecko_bindings::sugar::ownership::{HasArcFFI, HasSimpleFFI};
+use hash::HashMap;
 use logical_geometry::WritingMode;
 use media_queries::Device;
 use properties::{ComputedValues, parse_style_attribute};
@@ -82,7 +84,6 @@ use selectors::sink::Push;
 use servo_arc::{Arc, ArcBorrow, RawOffsetArc};
 use shared_lock::Locked;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::mem;
@@ -294,6 +295,7 @@ impl<'ln> TNode for GeckoNode<'ln> {
         unimplemented!()
     }
 
+    #[inline]
     fn as_element(&self) -> Option<GeckoElement<'ln>> {
         if self.is_element() {
             unsafe { Some(GeckoElement(&*(self.0 as *const _ as *const RawGeckoElement))) }
@@ -316,17 +318,6 @@ impl<'ln> TNode for GeckoNode<'ln> {
     fn is_in_doc(&self) -> bool {
         unsafe { bindings::Gecko_IsInDocument(self.0) }
     }
-
-    fn needs_dirty_on_viewport_size_changed(&self) -> bool {
-        // Gecko's node doesn't have the DIRTY_ON_VIEWPORT_SIZE_CHANGE flag,
-        // so we force them to be dirtied on viewport size change, regardless if
-        // they use viewport percentage size or not.
-        // TODO(shinglyu): implement this in Gecko: https://github.com/servo/servo/pull/11890
-        true
-    }
-
-    // TODO(shinglyu): implement this in Gecko: https://github.com/servo/servo/pull/11890
-    unsafe fn set_dirty_on_viewport_size_changed(&self) {}
 }
 
 /// A wrapper on top of two kind of iterators, depending on the parent being
@@ -465,10 +456,13 @@ impl<'le> fmt::Debug for GeckoElement<'le> {
 
 impl<'le> GeckoElement<'le> {
     /// Parse the style attribute of an element.
-    pub fn parse_style_attribute(value: &str,
-                                 url_data: &UrlExtraData,
-                                 quirks_mode: QuirksMode,
-                                 reporter: &ParseErrorReporter) -> PropertyDeclarationBlock {
+    pub fn parse_style_attribute<R>(value: &str,
+                                    url_data: &UrlExtraData,
+                                    quirks_mode: QuirksMode,
+                                    reporter: &R)
+                                    -> PropertyDeclarationBlock
+        where R: ParseErrorReporter
+    {
         parse_style_attribute(value, url_data, reporter, quirks_mode)
     }
 
@@ -490,6 +484,33 @@ impl<'le> GeckoElement<'le> {
 
     fn unset_flags(&self, flags: u32) {
         unsafe { Gecko_UnsetNodeFlags(self.as_node().0, flags) }
+    }
+
+    /// Returns true if this element has descendants for lazy frame construction.
+    pub fn descendants_need_frames(&self) -> bool {
+        self.flags() & (NODE_DESCENDANTS_NEED_FRAMES  as u32) != 0
+    }
+
+    /// Returns true if this element needs lazy frame construction.
+    pub fn needs_frame(&self) -> bool {
+        self.flags() & (NODE_NEEDS_FRAME as u32) != 0
+    }
+
+    /// Returns true if a traversal starting from this element requires a post-traversal.
+    pub fn needs_post_traversal(&self) -> bool {
+        debug!("needs_post_traversal: dd={}, aodd={}, lfcd={}, lfc={}, restyle={:?}",
+               self.has_dirty_descendants(),
+               self.has_animation_only_dirty_descendants(),
+               self.descendants_need_frames(),
+               self.needs_frame(),
+               self.borrow_data().unwrap().restyle);
+
+        let has_flag =
+            self.flags() & (ELEMENT_HAS_DIRTY_DESCENDANTS_FOR_SERVO as u32 |
+                            ELEMENT_HAS_ANIMATION_ONLY_DIRTY_DESCENDANTS_FOR_SERVO as u32 |
+                            NODE_DESCENDANTS_NEED_FRAMES as u32 |
+                            NODE_NEEDS_FRAME as u32) != 0;
+        has_flag || self.borrow_data().unwrap().restyle.contains_restyle_data()
     }
 
     /// Returns true if this element has a shadow root.
@@ -1019,10 +1040,12 @@ impl<'le> TElement for GeckoElement<'le> {
                                      Gecko_ClassOrClassList)
     }
 
+    #[inline]
     fn has_snapshot(&self) -> bool {
         self.flags() & (ELEMENT_HAS_SNAPSHOT as u32) != 0
     }
 
+    #[inline]
     fn handled_snapshot(&self) -> bool {
         self.flags() & (ELEMENT_HANDLED_SNAPSHOT as u32) != 0
     }
@@ -1032,6 +1055,7 @@ impl<'le> TElement for GeckoElement<'le> {
         self.set_flags(ELEMENT_HANDLED_SNAPSHOT as u32)
     }
 
+    #[inline]
     fn has_dirty_descendants(&self) -> bool {
         self.flags() & (ELEMENT_HAS_DIRTY_DESCENDANTS_FOR_SERVO as u32) != 0
     }
@@ -1046,6 +1070,7 @@ impl<'le> TElement for GeckoElement<'le> {
         self.unset_flags(ELEMENT_HAS_DIRTY_DESCENDANTS_FOR_SERVO as u32)
     }
 
+    #[inline]
     fn has_animation_only_dirty_descendants(&self) -> bool {
         self.flags() & (ELEMENT_HAS_ANIMATION_ONLY_DIRTY_DESCENDANTS_FOR_SERVO as u32) != 0
     }
@@ -1058,10 +1083,18 @@ impl<'le> TElement for GeckoElement<'le> {
         self.unset_flags(ELEMENT_HAS_ANIMATION_ONLY_DIRTY_DESCENDANTS_FOR_SERVO as u32)
     }
 
-    unsafe fn clear_descendants_bits(&self) {
+    unsafe fn clear_descendant_bits(&self) {
         self.unset_flags(ELEMENT_HAS_DIRTY_DESCENDANTS_FOR_SERVO as u32 |
                          ELEMENT_HAS_ANIMATION_ONLY_DIRTY_DESCENDANTS_FOR_SERVO as u32 |
                          NODE_DESCENDANTS_NEED_FRAMES as u32)
+    }
+
+    #[inline]
+    unsafe fn clear_dirty_bits(&self) {
+        self.unset_flags(ELEMENT_HAS_DIRTY_DESCENDANTS_FOR_SERVO as u32 |
+                         ELEMENT_HAS_ANIMATION_ONLY_DIRTY_DESCENDANTS_FOR_SERVO as u32 |
+                         NODE_DESCENDANTS_NEED_FRAMES as u32 |
+                         NODE_NEEDS_FRAME as u32)
     }
 
     fn is_visited_link(&self) -> bool {
@@ -1069,6 +1102,7 @@ impl<'le> TElement for GeckoElement<'le> {
         self.get_state().intersects(IN_VISITED_STATE)
     }
 
+    #[inline]
     fn is_native_anonymous(&self) -> bool {
         use gecko_bindings::structs::NODE_IS_NATIVE_ANONYMOUS;
         self.flags() & (NODE_IS_NATIVE_ANONYMOUS as u32) != 0
@@ -1096,6 +1130,7 @@ impl<'le> TElement for GeckoElement<'le> {
         panic!("Atomic child count not implemented in Gecko");
     }
 
+    #[inline(always)]
     fn get_data(&self) -> Option<&AtomicRefCell<ElementData>> {
         unsafe { self.0.mServoData.get().as_ref() }
     }
@@ -1113,7 +1148,9 @@ impl<'le> TElement for GeckoElement<'le> {
         let ptr = self.0.mServoData.get();
         unsafe {
             self.unset_flags(ELEMENT_HAS_SNAPSHOT as u32 |
-                             ELEMENT_HANDLED_SNAPSHOT as u32);
+                             ELEMENT_HANDLED_SNAPSHOT as u32 |
+                             structs::Element_kAllServoDescendantBits |
+                             NODE_NEEDS_FRAME as u32);
         }
         if !ptr.is_null() {
             debug!("Dropping ElementData for {:?}", self);
@@ -1127,13 +1164,17 @@ impl<'le> TElement for GeckoElement<'le> {
         }
     }
 
+    #[inline]
     fn skip_root_and_item_based_display_fixup(&self) -> bool {
-        // We don't want to fix up display values of native anonymous content.
-        // Additionally, we want to skip root-based display fixup for document
-        // level native anonymous content subtree roots, since they're not
-        // really roots from the style fixup perspective.  Checking that we
-        // are NAC handles both cases.
-        self.is_native_anonymous()
+        if !self.is_native_anonymous() {
+            return false;
+        }
+
+        if let Some(p) = self.implemented_pseudo_element() {
+            return p.skip_item_based_display_fixup();
+        }
+
+        self.is_root_of_native_anonymous_subtree()
     }
 
     unsafe fn set_selector_flags(&self, flags: ElementSelectorFlags) {
@@ -1321,7 +1362,7 @@ impl<'le> TElement for GeckoElement<'le> {
                                 after_change_style: &ComputedValues)
                                 -> bool {
         use gecko_bindings::structs::nsCSSPropertyID;
-        use std::collections::HashSet;
+        use hash::HashSet;
 
         debug_assert!(self.might_need_transitions_update(Some(before_change_style),
                                                          after_change_style),
@@ -1401,15 +1442,15 @@ impl<'le> TElement for GeckoElement<'le> {
         })
     }
 
-    fn needs_transitions_update_per_property(&self,
-                                             property: &TransitionProperty,
-                                             combined_duration: f32,
-                                             before_change_style: &ComputedValues,
-                                             after_change_style: &ComputedValues,
-                                             existing_transitions: &HashMap<TransitionProperty,
-                                                                            Arc<AnimationValue>>)
-                                             -> bool {
-        use properties::animated_properties::Animatable;
+    fn needs_transitions_update_per_property(
+        &self,
+        property: &TransitionProperty,
+        combined_duration: f32,
+        before_change_style: &ComputedValues,
+        after_change_style: &ComputedValues,
+        existing_transitions: &HashMap<TransitionProperty, Arc<AnimationValue>>,
+    ) -> bool {
+        use values::animated::{Animate, Procedure};
 
         // |property| should be an animatable longhand
         let animatable_longhand = AnimatableLonghand::from_transition_property(property).unwrap();
@@ -1431,7 +1472,7 @@ impl<'le> TElement for GeckoElement<'le> {
 
         combined_duration > 0.0f32 &&
         from != to &&
-        from.interpolate(&to, 0.5).is_ok()
+        from.animate(&to, Procedure::Interpolate { progress: 0.5 }).is_ok()
     }
 
     #[inline]

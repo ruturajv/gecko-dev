@@ -32,7 +32,6 @@
 #include "nsIDocShellTreeOwner.h"
 #include "nsIThreadRetargetableStreamListener.h"
 
-#include "nsXPIDLString.h"
 #include "nsString.h"
 #include "nsThreadUtils.h"
 #include "nsReadableUtils.h"
@@ -456,7 +455,7 @@ nsresult nsDocumentOpenInfo::DispatchContent(nsIRequest *request, nsISupports * 
       nsCOMPtr<nsICategoryManager> catman =
         do_GetService(NS_CATEGORYMANAGER_CONTRACTID);
       if (catman) {
-        nsXPIDLCString contractidString;
+        nsCString contractidString;
         rv = catman->GetCategoryEntry(NS_CONTENT_LISTENER_CATEGORYMANAGER_ENTRY,
                                       mContentType.get(),
                                       getter_Copies(contractidString));
@@ -464,9 +463,9 @@ nsresult nsDocumentOpenInfo::DispatchContent(nsIRequest *request, nsISupports * 
           LOG(("  Listener contractid for '%s' is '%s'",
                mContentType.get(), contractidString.get()));
 
-          listener = do_CreateInstance(contractidString);
+          listener = do_CreateInstance(contractidString.get());
           LOG(("  Listener from category manager: 0x%p", listener.get()));
-          
+
           if (listener && TryContentListener(listener, aChannel)) {
             LOG(("  Listener from category manager likes this type"));
             return NS_OK;

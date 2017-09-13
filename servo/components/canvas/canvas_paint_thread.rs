@@ -133,6 +133,7 @@ impl<'a> CanvasPaintThread<'a> {
                 match msg.unwrap() {
                     CanvasMsg::Canvas2d(message) => {
                         match message {
+                            Canvas2dMsg::FillText(text, x, y, max_width) => painter.fill_text(text, x, y, max_width),
                             Canvas2dMsg::FillRect(ref rect) => painter.fill_rect(rect),
                             Canvas2dMsg::StrokeRect(ref rect) => painter.stroke_rect(rect),
                             Canvas2dMsg::ClearRect(ref rect) => painter.clear_rect(rect),
@@ -171,6 +172,9 @@ impl<'a> CanvasPaintThread<'a> {
                             }
                             Canvas2dMsg::ArcTo(ref cp1, ref cp2, radius) => {
                                 painter.arc_to(cp1, cp2, radius)
+                            }
+                            Canvas2dMsg::Ellipse(ref center, radius_x, radius_y, rotation, start, end, ccw) => {
+                                painter.ellipse(center, radius_x, radius_y, rotation, start, end, ccw)
                             }
                             Canvas2dMsg::RestoreContext => painter.restore_context_state(),
                             Canvas2dMsg::SaveContext => painter.save_context_state(),
@@ -226,6 +230,10 @@ impl<'a> CanvasPaintThread<'a> {
             self.drawtarget.set_transform(&self.state.transform);
             self.drawtarget.pop_clip();
         }
+    }
+
+    fn fill_text(&self, text: String, x: f64, y: f64, max_width: Option<f64>) {
+        error!("Unimplemented canvas2d.fillText. Values received: {}, {}, {}, {:?}.", text, x, y, max_width);
     }
 
     fn fill_rect(&self, rect: &Rect<f32>) {
@@ -494,6 +502,17 @@ impl<'a> CanvasPaintThread<'a> {
             self.arc(&Point2D::new(cx, cy), radius,
                      angle_start, angle_end, anticlockwise);
         }
+    }
+
+    fn ellipse(&mut self,
+           center: &Point2D<AzFloat>,
+           radius_x: AzFloat,
+           radius_y: AzFloat,
+           rotation_angle: AzFloat,
+           start_angle: AzFloat,
+           end_angle: AzFloat,
+           ccw: bool) {
+        self.path_builder.ellipse(*center, radius_x, radius_y, rotation_angle, start_angle, end_angle, ccw);
     }
 
     fn set_fill_style(&mut self, style: FillOrStrokeStyle) {

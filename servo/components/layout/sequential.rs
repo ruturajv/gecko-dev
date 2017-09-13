@@ -18,8 +18,6 @@ use style::servo::restyle_damage::{REFLOW, REFLOW_OUT_OF_FLOW, STORE_OVERFLOW};
 use traversal::{AssignBSizes, AssignISizes, BubbleISizes, BuildDisplayList};
 use traversal::{InorderFlowTraversal, PostorderFlowTraversal, PreorderFlowTraversal};
 
-pub use style::sequential::traverse_dom;
-
 pub fn resolve_generated_content(root: &mut Flow, layout_context: &LayoutContext) {
     ResolveGeneratedContent::new(&layout_context).traverse(root, 0);
 }
@@ -95,7 +93,7 @@ pub fn iterate_through_flow_tree_fragment_border_boxes(root: &mut Flow, iterator
                                             flow::base(kid).stacking_relative_position +
                                             stacking_context_position.to_vector();
                 let relative_position = kid.as_block()
-                    .stacking_relative_position(CoordinateSystem::Own);
+                    .stacking_relative_border_box(CoordinateSystem::Own);
                 if let Some(matrix) = kid.as_block()
                        .fragment
                        .transform_matrix(&relative_position) {

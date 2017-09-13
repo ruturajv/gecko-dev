@@ -185,7 +185,6 @@ ChromiumCDMChild::SetTimer(int64_t aDelayMs, void* aContext)
 cdm::Time
 ChromiumCDMChild::GetCurrentWallTime()
 {
-  MOZ_ASSERT(IsOnMessageLoopThread());
   return base::Time::Now().ToDoubleT();
 }
 
@@ -233,7 +232,7 @@ ChromiumCDMChild::OnResolveNewSessionPromiseInternal(uint32_t aPromiseId,
     // a session it calls OnResolveNewSessionPromise with nullptr as the sessionId.
     // We can safely assume this means that we have failed to load a session
     // as the other methods specify calling 'OnRejectPromise' when they fail.
-    bool loadSuccessful = aSessionId != nullptr;
+    bool loadSuccessful = !aSessionId.IsEmpty();
     GMP_LOG("ChromiumCDMChild::OnResolveNewSessionPromise(pid=%u, sid=%s) "
             "resolving %s load session ",
             aPromiseId,

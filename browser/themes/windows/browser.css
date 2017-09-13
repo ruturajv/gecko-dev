@@ -6,7 +6,6 @@
 
 @namespace url("http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul");
 @namespace html url("http://www.w3.org/1999/xhtml");
-@namespace svg url("http://www.w3.org/2000/svg");
 
 %include ../shared/browser.inc.css
 
@@ -30,6 +29,8 @@
   --arrowpanel-dimmed-even-further: hsla(0,0%,80%,.8);
 
   --urlbar-separator-color: ThreeDLightShadow;
+
+  --toolbox-border-bottom-color: ThreeDShadow;
 }
 
 @media (-moz-windows-default-theme) {
@@ -41,6 +42,8 @@
     --toolbar-non-lwt-bgimage: none;
 
     --panel-separator-color: hsla(210,4%,10%,.14);
+
+    --toolbox-border-bottom-color: #e1e1e2;
   }
 }
 
@@ -49,6 +52,8 @@
 
   --toolbar-bgcolor: rgba(255,255,255,.4);
   --toolbar-bgimage: none;
+
+  --toolbox-border-bottom-color: rgba(0,0,0,.3);
 }
 
 #menubar-items {
@@ -68,30 +73,6 @@
 #navigator-toolbox,
 #navigator-toolbox > toolbar {
   -moz-appearance: none;
-}
-
-#navigator-toolbox::after {
-  content: "";
-  display: -moz-box;
-  -moz-box-ordinal-group: 101; /* tabs toolbar is 100 */
-  border-bottom: 1px solid ThreeDShadow;
-}
-
-@media (-moz-windows-default-theme) {
-  @media (-moz-os-version: windows-win8),
-         (-moz-os-version: windows-win10) {
-    #navigator-toolbox::after {
-      border-bottom-color: #c2c2c2;
-    }
-  }
-}
-
-#navigator-toolbox:-moz-lwtheme::after {
-  border-bottom-color: rgba(0,0,0,.3);
-}
-
-:root[customizing] #navigator-toolbox::after {
-  display: none;
 }
 
 #navigator-toolbox > toolbar:not(#toolbar-menubar):not(#TabsToolbar) {
@@ -279,17 +260,6 @@
   #titlebar-min {
     margin-inline-end: 2px;
   }
-}
-
-/* ::::: bookmark buttons ::::: */
-
-#bookmarks-toolbar-placeholder {
-  list-style-image: url("chrome://browser/skin/places/bookmarksToolbar.png") !important;
-}
-
-toolbarpaletteitem[place="palette"] > #personal-bookmarks > #bookmarks-toolbar-placeholder,
-#personal-bookmarks[cui-areatype="menu-panel"] > #bookmarks-toolbar-placeholder {
-  list-style-image: url("chrome://browser/skin/places/bookmarksToolbar-menuPanel.png") !important;
 }
 
 /* ::::: bookmark menus ::::: */
@@ -707,18 +677,6 @@ html|span.ac-emphasize-text-url {
   }
 }
 
-.autocomplete-richlistitem:hover,
-treechildren.searchbar-treebody::-moz-tree-row(hover) {
-  background-color: var(--arrowpanel-dimmed);
-  border-color: hsla(0, 0%, 0%, 0.1);
-}
-
-.autocomplete-richlistitem[selected],
-treechildren.searchbar-treebody::-moz-tree-row(selected) {
-  background-color: Highlight;
-  color: HighlightText;
-}
-
 .ac-type-icon[type=bookmark] {
   list-style-image: url("chrome://browser/skin/bookmark.svg");
   -moz-context-properties: fill;
@@ -768,49 +726,12 @@ treechildren.searchbar-treebody::-moz-tree-row(selected) {
   border-top: 1px solid GrayText;
 }
 
-/* popup blocker button */
-
-#page-report-button {
-  list-style-image: url("chrome://browser/skin/urlbar-popup-blocked.png");
-  -moz-image-region: rect(0, 16px, 16px, 0);
-}
-
-#page-report-button:hover {
-  -moz-image-region: rect(0, 32px, 16px, 16px);
-}
-
-#page-report-button:hover:active,
-#page-report-button[open="true"] {
-  -moz-image-region: rect(0, 48px, 16px, 32px);
-}
-
-/* Reader mode button */
-
-#reader-mode-button {
-  list-style-image: url("chrome://browser/skin/readerMode.svg");
-  -moz-image-region: rect(0, 16px, 16px, 0);
-}
-
-#reader-mode-button:hover,
-#reader-mode-button[readeractive]:hover {
-  -moz-image-region: rect(0, 32px, 16px, 16px);
-}
-
-#reader-mode-button:hover:active,
-#reader-mode-button[readeractive] {
-  -moz-image-region: rect(0, 48px, 16px, 32px);
-}
-
 /* bookmarking panel */
 
 #editBookmarkPanelStarIcon {
   list-style-image: url("chrome://browser/skin/places/starred48.png");
   width: 48px;
   height: 48px;
-}
-
-#editBookmarkPanelStarIcon[unstarred] {
-  list-style-image: url("chrome://browser/skin/places/unstarred48.png");
 }
 
 #editBookmarkPanelTitle {
@@ -831,8 +752,9 @@ treechildren.searchbar-treebody::-moz-tree-row(selected) {
 
 %include ../shared/sidebar.inc.css
 
-#sidebar {
-  background-color: Window;
+#sidebar-box {
+  background-color: -moz-Field;
+  color: -moz-FieldText;
 }
 
 #sidebar-header {
@@ -1124,8 +1046,6 @@ notification[value="translation"] {
 %include ../shared/ctrlTab.inc.css
 %include ../shared/plugin-doorhanger.inc.css
 
-%include downloads/indicator.css
-
 /* Error counter */
 
 #developer-toolbar-toolbox-button[error-count]:before {
@@ -1179,6 +1099,9 @@ notification[value="translation"] {
 #private-browsing-indicator-titlebar {
   display: block;
   position: absolute;
+  /* Need to ensure this gets positioned on top of the position:relative #navigator-toolbox
+   * in case the dark/light themes give that item a background. */
+  z-index: 1;
 }
 
 #main-window[privatebrowsingmode=temporary][tabsintitlebar] #private-browsing-indicator-titlebar > .private-browsing-indicator {

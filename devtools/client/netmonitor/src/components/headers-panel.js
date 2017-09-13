@@ -54,7 +54,8 @@ const HeadersPanel = createClass({
   propTypes: {
     cloneSelectedRequest: PropTypes.func.isRequired,
     request: PropTypes.object.isRequired,
-    renderValue: PropTypes.func
+    renderValue: PropTypes.func,
+    openLink: PropTypes.func,
   },
 
   getInitialState() {
@@ -125,6 +126,7 @@ const HeadersPanel = createClass({
 
   render() {
     const {
+      openLink,
       cloneSelectedRequest,
       request: {
         fromCache,
@@ -203,11 +205,11 @@ const HeadersPanel = createClass({
             className: "headers-summary learn-more-link",
           }),
           button({
-            className: "devtools-button",
+            className: "devtools-button edit-and-resend-button",
             onClick: cloneSelectedRequest,
           }, EDIT_AND_RESEND),
           button({
-            className: "devtools-button",
+            className: "devtools-button raw-headers-button",
             onClick: this.toggleRawHeaders,
           }, RAW_HEADERS),
         )
@@ -256,6 +258,7 @@ const HeadersPanel = createClass({
           filterPlaceHolder: HEADERS_FILTER_TEXT,
           sectionNames: Object.keys(object),
           renderValue: this.renderValue,
+          openLink,
         }),
       )
     );

@@ -205,10 +205,10 @@ public:
   nsresult Init(int64_t aContentLength);
 
   // Set up this stream with the cache, assuming it's for the same data
-  // as the aOriginal stream. Can fail on OOM.
+  // as the aOriginal stream.
   // Exactly one of InitAsClone or Init must be called before any other method
-  // on this class. Does nothing if already initialized.
-  nsresult InitAsClone(MediaCacheStream* aOriginal);
+  // on this class.
+  void InitAsClone(MediaCacheStream* aOriginal);
 
   // These are called on the main thread.
   // Tell us whether the stream is seekable or not. Non-seekable streams
@@ -425,12 +425,6 @@ private:
   // If |aNotifyAll| is true, this function will wake up readers who may be
   // waiting on the media cache monitor. Called on the main thread only.
   void FlushPartialBlockInternal(bool aNotify, ReentrantMonitorAutoEnter& aReentrantMonitor);
-  // A helper function to do the work of closing the stream. Assumes
-  // that the cache monitor is held. Main thread only.
-  // aReentrantMonitor is the nsAutoReentrantMonitor wrapper holding the cache monitor.
-  // This is used to NotifyAll to wake up threads that might be
-  // blocked on reading from this stream.
-  void CloseInternal(ReentrantMonitorAutoEnter& aReentrantMonitor);
   // Update mPrincipal given that data has been received from aPrincipal
   bool UpdatePrincipal(nsIPrincipal* aPrincipal);
 
@@ -440,9 +434,6 @@ private:
   // These fields are main-thread-only.
   ChannelMediaResource*  mClient;
   nsCOMPtr<nsIPrincipal> mPrincipal;
-  // Set to true when MediaCache::Update() has finished while this stream
-  // was present.
-  bool                   mHasHadUpdate;
   // Set to true when the stream has been closed either explicitly or
   // due to an internal cache error
   bool                   mClosed;

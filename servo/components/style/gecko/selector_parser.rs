@@ -35,7 +35,7 @@ macro_rules! pseudo_class_name {
      string: [$(($s_css:expr, $s_name:ident, $s_gecko_type:tt, $s_state:tt, $s_flags:tt),)*],
      keyword: [$(($k_css:expr, $k_name:ident, $k_gecko_type:tt, $k_state:tt, $k_flags:tt),)*]) => {
         #[doc = "Our representation of a non tree-structural pseudo-class."]
-        #[derive(Clone, Debug, PartialEq, Eq)]
+        #[derive(Clone, Debug, Eq, PartialEq)]
         pub enum NonTSPseudoClass {
             $(
                 #[doc = $css]
@@ -70,7 +70,7 @@ impl ToCss for NonTSPseudoClass {
                 match *self {
                     $(NonTSPseudoClass::$name => concat!(":", $css),)*
                     $(NonTSPseudoClass::$s_name(ref s) => {
-                        write!(dest, ":{}(", $s_css)?;
+                        dest.write_str(concat!(":", $s_css, "("))?;
                         {
                             // FIXME(emilio): Avoid the extra allocation!
                             let mut css = CssStringWriter::new(dest);
@@ -84,7 +84,9 @@ impl ToCss for NonTSPseudoClass {
                     $(NonTSPseudoClass::$k_name(ref s) => {
                         // Don't include the terminating nul.
                         let value = String::from_utf16(&s[..s.len() - 1]).unwrap();
-                        return write!(dest, ":{}({})", $k_css, value)
+                        dest.write_str(concat!(":", $k_css, "("))?;
+                        dest.write_str(&value)?;
+                        return dest.write_char(')')
                     }, )*
                     NonTSPseudoClass::MozAny(ref selectors) => {
                         dest.write_str(":-moz-any(")?;
@@ -256,7 +258,7 @@ impl NonTSPseudoClass {
 }
 
 /// The dummy struct we use to implement our selector parsing.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SelectorImpl;
 
 impl ::selectors::SelectorImpl for SelectorImpl {
@@ -308,7 +310,7 @@ impl<'a, 'i> ::selectors::Parser<'i> for SelectorParser<'a> {
              keyword: [$(($k_css:expr, $k_name:ident, $k_gecko_type:tt, $k_state:tt, $k_flags:tt),)*]) => {
                 match_ignore_ascii_case! { &name,
                     $($css => NonTSPseudoClass::$name,)*
-                    _ => return Err(::selectors::parser::SelectorParseError::UnexpectedIdent(
+                    _ => return Err(::selectors::parser::SelectorParseError::UnsupportedPseudoClassOrElement(
                         name.clone()).into())
                 }
             }
@@ -317,7 +319,7 @@ impl<'a, 'i> ::selectors::Parser<'i> for SelectorParser<'a> {
         if self.is_pseudo_class_enabled(&pseudo_class) {
             Ok(pseudo_class)
         } else {
-            Err(SelectorParseError::UnexpectedIdent(name).into())
+            Err(SelectorParseError::UnsupportedPseudoClassOrElement(name).into())
         }
     }
 
@@ -354,7 +356,7 @@ impl<'a, 'i> ::selectors::Parser<'i> for SelectorParser<'a> {
                         }
                         NonTSPseudoClass::MozAny(selectors.into_boxed_slice())
                     }
-                    _ => return Err(SelectorParseError::UnexpectedIdent(name.clone()).into())
+                    _ => return Err(SelectorParseError::UnsupportedPseudoClassOrElement(name.clone()).into())
                 }
             }
         }
@@ -362,13 +364,13 @@ impl<'a, 'i> ::selectors::Parser<'i> for SelectorParser<'a> {
         if self.is_pseudo_class_enabled(&pseudo_class) {
             Ok(pseudo_class)
         } else {
-            Err(SelectorParseError::UnexpectedIdent(name).into())
+            Err(SelectorParseError::UnsupportedPseudoClassOrElement(name).into())
         }
     }
 
     fn parse_pseudo_element(&self, name: CowRcStr<'i>) -> Result<PseudoElement, ParseError<'i>> {
         PseudoElement::from_slice(&name, self.in_user_agent_stylesheet())
-            .ok_or(SelectorParseError::UnexpectedIdent(name.clone()).into())
+            .ok_or(SelectorParseError::UnsupportedPseudoClassOrElement(name.clone()).into())
     }
 
     fn parse_functional_pseudo_element<'t>(&self, name: CowRcStr<'i>,
@@ -392,7 +394,7 @@ impl<'a, 'i> ::selectors::Parser<'i> for SelectorParser<'a> {
                 return Ok(pseudo);
             }
         }
-        Err(SelectorParseError::UnexpectedIdent(name.clone()).into())
+        Err(SelectorParseError::UnsupportedPseudoClassOrElement(name.clone()).into())
     }
 
     fn default_namespace(&self) -> Option<Namespace> {

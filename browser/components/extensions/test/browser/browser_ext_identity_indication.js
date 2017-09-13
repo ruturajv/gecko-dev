@@ -4,7 +4,7 @@
 
 function confirmDefaults() {
   let identityIconURL = getComputedStyle(document.getElementById("identity-icon")).listStyleImage;
-  is(identityIconURL, "url(\"chrome://browser/skin/identity-icon.svg\")", "Identity icon should be the default identity icon");
+  is(identityIconURL, "url(\"chrome://global/skin/icons/autocomplete-search.svg\")", "Identity icon should be the search icon");
 
   let connectionIconURL = getComputedStyle(document.getElementById("connection-icon")).listStyleImage;
   is(connectionIconURL, "none", "Connection icon should not be displayed");
@@ -44,6 +44,42 @@ add_task(async function testIdentityIndication() {
     files: {
       "icon.png": "",
     },
+  });
+
+  await extension.startup();
+
+  confirmDefaults();
+
+  let url = await extension.awaitMessage("url");
+  await BrowserTestUtils.withNewTab({gBrowser, url}, async function() {
+    confirmExtensionPage();
+  });
+
+  await extension.unload();
+
+  confirmDefaults();
+});
+
+add_task(async function testIdentityIndicationNewTab() {
+  let extension = ExtensionTestUtils.loadExtension({
+    background() {
+      browser.test.sendMessage("url", browser.extension.getURL("newtab.html"));
+    },
+    manifest: {
+      name: "Test Extension",
+      applications: {
+        gecko: {
+          id: "@newtab",
+        },
+      },
+      chrome_url_overrides: {
+        newtab: "newtab.html",
+      },
+    },
+    files: {
+      "newtab.html": "<h1>New tab!</h1>",
+    },
+    useAddonManager: "temporary",
   });
 
   await extension.startup();

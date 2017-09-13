@@ -230,7 +230,6 @@ UNIFIED_SOURCES += [
     'jit/IonAnalysis.cpp',
     'jit/IonBuilder.cpp',
     'jit/IonCacheIRCompiler.cpp',
-    'jit/IonCaches.cpp',
     'jit/IonControlFlow.cpp',
     'jit/IonIC.cpp',
     'jit/IonOptimizationLevels.cpp',
@@ -259,6 +258,7 @@ UNIFIED_SOURCES += [
     'jit/RematerializedFrame.cpp',
     'jit/Safepoints.cpp',
     'jit/ScalarReplacement.cpp',
+    'jit/shared/Assembler-shared.cpp',
     'jit/shared/BaselineCompiler-shared.cpp',
     'jit/shared/CodeGenerator-shared.cpp',
     'jit/shared/Lowering-shared.cpp',
@@ -639,6 +639,12 @@ FINAL_LIBRARY = 'js'
 if CONFIG['NIGHTLY_BUILD']:
     DEFINES['ENABLE_BINARYDATA'] = True
     DEFINES['ENABLE_SIMD'] = True
+
+# In-flight WebAssembly atomic operations, sign extension operations,
+# and shared memory objects proposal:
+# https://github.com/WebAssembly/threads
+if CONFIG['NIGHTLY_BUILD']:
+    DEFINES['ENABLE_WASM_THREAD_OPS'] = True
 
 if CONFIG['MOZ_DEBUG'] or CONFIG['NIGHTLY_BUILD']:
     DEFINES['JS_CACHEIR_SPEW'] = True

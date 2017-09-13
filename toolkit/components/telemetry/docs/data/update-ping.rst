@@ -2,8 +2,7 @@
 "update" ping
 ==================
 
-This opt-out ping is sent from Firefox Desktop when a browser update is ready to be applied. There is a
-plan to send this ping after an update is successfully applied and the work will happen in `bug 1380256 <https://bugzilla.mozilla.org/show_bug.cgi?id=1380256>`_.
+This opt-out ping is sent from Firefox Desktop when a browser update is ready to be applied and after it was correctly applied.
 
 Structure:
 
@@ -15,18 +14,22 @@ Structure:
       clientId: <UUID>,
       environment: { ... },
       payload: {
-        reason: <string>, // "ready"
-        targetChannel: <string>, // "nightly"
-        targetVersion: <string>, // "56.01a"
-        targetBuildId: <string>, // "20080811053724"
+        reason: <string>, // "ready", "success"
+        targetChannel: <string>, // "nightly" (only present for reason = "ready")
+        targetVersion: <string>, // "56.01a" (only present for reason = "ready")
+        targetBuildId: <string>, // "20080811053724" (only present for reason = "ready")
+        previousChannel: <string>, // "nightly" or null (only present for reason = "success")
+        previousVersion: <string>, // "55.01a" (only present for reason = "success")
+        previousBuildId: <string>, // "20080810053724" (only present for reason = "success")
       }
     }
 
 payload.reason
 --------------
-This field only supports the value ``ready``, meaning that the ping was generated after an update was downloaded
-and marked as ready to be processed. For *non-staged* updates this happens as soon as the download
-finishes and is verified while for *staged* updates this happens before the staging step is started.
+This field supports the following values:
+
+- ``ready`` meaning that the ping was generated after an update was downloaded and marked as ready to be processed. For *non-staged* updates this happens as soon as the download finishes and is verified while for *staged* updates this happens before the staging step is started.
+- ``ready`` the ping was generated after the browser was restarted and the update correctly applied.
 
 payload.targetChannel
 -----------------------
@@ -40,6 +43,19 @@ payload.targetBuildId
 -----------------------
 The Firefox build id the browser is updating to. Follows the same format a application.buildId (only valid for pings with reason "ready").
 
+payload.previousChannel
+-----------------------
+The Firefox channel the profile was on before the update was applied (only valid for pings with reason "success").
+This can be ``null``.
+
+payload.previousVersion
+-----------------------
+The Firefox version the browser is updating from. Follows the same format a application.version (only valid for pings with reason "success").
+
+payload.previousBuildId
+-----------------------
+The Firefox build id the browser is updating from. Follows the same format a application.buildId (only valid for pings with reason "success").
+
 Expected behaviours
 -------------------
 The following is a list of conditions and expected behaviours for the ``update`` ping:
@@ -50,3 +66,6 @@ The following is a list of conditions and expected behaviours for the ``update``
   - *for users who did not see the privacy policy*, the ``update`` ping is saved to disk and after the policy is displayed.
 - **If the download of the update retries or other fallback occur**: the ``update`` ping will not be generated
   multiple times, but only one time once the download is complete and verified.
+- **If automatic updates are disabled**: when the user forces a manual update, no ``update`` ping will be generated.
+- **If updates fail to apply**: in some cases the client will download the same update blob and generate a new ``update`` ping for the same target version and build id, with a different document id.
+- **If the build update channel contains the CCK keyword**, the update ping will not report it but rather report a vanilla channel name (e.g. ``mozilla-cck-test-beta`` gets reported as ``beta``).

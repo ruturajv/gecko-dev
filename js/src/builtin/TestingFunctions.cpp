@@ -18,6 +18,7 @@
 #include "jscntxt.h"
 #include "jsfriendapi.h"
 #include "jsgc.h"
+#include "jsiter.h"
 #include "jsobj.h"
 #include "jsprf.h"
 #include "jswrapper.h"
@@ -30,6 +31,7 @@
 #include "irregexp/RegExpEngine.h"
 #include "irregexp/RegExpParser.h"
 #endif
+#include "jit/AtomicOperations.h"
 #include "jit/InlinableNatives.h"
 #include "js/Debug.h"
 #include "js/HashTable.h"
@@ -534,6 +536,29 @@ WasmDebuggingIsSupported(JSContext* cx, unsigned argc, Value* vp)
 {
     CallArgs args = CallArgsFromVp(argc, vp);
     args.rval().setBoolean(wasm::HasSupport(cx) && cx->options().wasmBaseline());
+    return true;
+}
+
+static bool
+WasmThreadsSupported(JSContext* cx, unsigned argc, Value* vp)
+{
+    CallArgs args = CallArgsFromVp(argc, vp);
+#ifdef ENABLE_WASM_THREAD_OPS
+    bool isSupported = wasm::HasSupport(cx);
+#else
+    bool isSupported = false;
+#endif
+
+    // NOTE!  When we land thread support, the following test and its comment
+    // should be moved into wasm::HasSupport() or wasm::HasCompilerSupport().
+
+    // Wasm threads require 8-byte lock-free atomics.  This guard will
+    // effectively disable Wasm support for some older devices, such as early
+    // ARMv6 and older MIPS.
+
+    isSupported = isSupported && jit::AtomicOperations::isLockfree8();
+
+    args.rval().setBoolean(isSupported);
     return true;
 }
 
@@ -1454,7 +1479,6 @@ SetupOOMFailure(JSContext* cx, bool failAlways, unsigned argc, Value* vp)
         return false;
     }
 
-    HelperThreadState().waitForAllThreads();
     js::oom::SimulateOOMAfter(count, targetThread, failAlways);
     args.rval().setUndefined();
     return true;
@@ -1562,9 +1586,6 @@ OOMTest(JSContext* cx, unsigned argc, Value* vp)
     for (unsigned thread = threadStart; thread < threadEnd; thread++) {
         if (verbose)
             fprintf(stderr, "thread %d\n", thread);
-
-        HelperThreadState().waitForAllThreads();
-        js::oom::targetThread = thread;
 
         unsigned allocation = 1;
         bool handledOOM;
@@ -1765,8 +1786,6 @@ finalize_counter_finalize(JSFreeOp* fop, JSObject* obj)
 static const JSClassOps FinalizeCounterClassOps = {
     nullptr, /* addProperty */
     nullptr, /* delProperty */
-    nullptr, /* getProperty */
-    nullptr, /* setProperty */
     nullptr, /* enumerate */
     nullptr, /* newEnumerate */
     nullptr, /* resolve */
@@ -2063,17 +2082,11 @@ ShellAllocationMetadataBuilder::build(JSContext* cx, HandleObject,
     static int createdIndex = 0;
     createdIndex++;
 
-    if (!JS_DefineProperty(cx, obj, "index", createdIndex, 0,
-                           JS_STUBGETTER, JS_STUBSETTER))
-    {
+    if (!JS_DefineProperty(cx, obj, "index", createdIndex, 0))
         oomUnsafe.crash("ShellAllocationMetadataBuilder::build");
-    }
 
-    if (!JS_DefineProperty(cx, obj, "stack", stack, 0,
-                           JS_STUBGETTER, JS_STUBSETTER))
-    {
+    if (!JS_DefineProperty(cx, obj, "stack", stack, 0))
         oomUnsafe.crash("ShellAllocationMetadataBuilder::build");
-    }
 
     int stackIndex = 0;
     RootedId id(cx);
@@ -2082,11 +2095,8 @@ ShellAllocationMetadataBuilder::build(JSContext* cx, HandleObject,
         if (iter.isFunctionFrame() && iter.compartment() == cx->compartment()) {
             id = INT_TO_JSID(stackIndex);
             RootedObject callee(cx, iter.callee(cx));
-            if (!JS_DefinePropertyById(cx, stack, id, callee, 0,
-                                       JS_STUBGETTER, JS_STUBSETTER))
-            {
+            if (!JS_DefinePropertyById(cx, stack, id, callee, 0))
                 oomUnsafe.crash("ShellAllocationMetadataBuilder::build");
-            }
             stackIndex++;
         }
     }
@@ -2498,8 +2508,6 @@ class CloneBufferObject : public NativeObject {
 static const ClassOps CloneBufferObjectClassOps = {
     nullptr, /* addProperty */
     nullptr, /* delProperty */
-    nullptr, /* getProperty */
-    nullptr, /* setProperty */
     nullptr, /* enumerate */
     nullptr, /* newEnumerate */
     nullptr, /* resolve */
@@ -3139,8 +3147,7 @@ FindPath(JSContext* cx, unsigned argc, Value* vp)
         if (!cx->compartment()->wrap(cx, &wrapped))
             return false;
 
-        if (!JS_DefineProperty(cx, obj, "node", wrapped,
-                               JSPROP_ENUMERATE, nullptr, nullptr))
+        if (!JS_DefineProperty(cx, obj, "node", wrapped, JSPROP_ENUMERATE))
             return false;
 
         heaptools::EdgeName edgeName = Move(edges[i]);
@@ -3150,7 +3157,7 @@ FindPath(JSContext* cx, unsigned argc, Value* vp)
             return false;
         mozilla::Unused << edgeName.release(); // edgeStr acquired ownership
 
-        if (!JS_DefineProperty(cx, obj, "edge", edgeStr, JSPROP_ENUMERATE, nullptr, nullptr))
+        if (!JS_DefineProperty(cx, obj, "edge", edgeStr, JSPROP_ENUMERATE))
             return false;
 
         result->setDenseElement(length - i - 1, ObjectValue(*obj));
@@ -3972,7 +3979,15 @@ GetModuleEnvironmentValue(JSContext* cx, unsigned argc, Value* vp)
     if (!JS_StringToId(cx, name, &id))
         return false;
 
-    return GetProperty(cx, env, env, id, args.rval());
+    if (!GetProperty(cx, env, env, id, args.rval()))
+        return false;
+
+    if (args.rval().isMagic(JS_UNINITIALIZED_LEXICAL)) {
+        ReportRuntimeLexicalError(cx, JSMSG_UNINITIALIZED_LEXICAL, id);
+        return false;
+    }
+
+    return true;
 }
 
 #ifdef DEBUG
@@ -4421,6 +4436,17 @@ IsConstructor(JSContext* cx, unsigned argc, Value* vp)
     return true;
 }
 
+static bool
+IsLegacyIterator(JSContext* cx, unsigned argc, Value* vp)
+{
+    CallArgs args = CallArgsFromVp(argc, vp);
+    if (args.length() < 1)
+        args.rval().setBoolean(false);
+    else
+        args.rval().setBoolean(IsLegacyIterator(args[0]));
+    return true;
+}
+
 static const JSFunctionSpecWithHelp TestingFunctions[] = {
     JS_FN_HELP("gc", ::GC, 0, 0,
 "gc([obj] | 'zone' [, 'shrinking'])",
@@ -4719,6 +4745,11 @@ gc::ZealModeHelpText),
 "  Returns a boolean indicating whether WebAssembly debugging is supported on the current device;\n"
 "  returns false also if WebAssembly is not supported"),
 
+    JS_FN_HELP("wasmThreadsSupported", WasmThreadsSupported, 0, 0,
+"wasmThreadsSupported()",
+"  Returns a boolean indicating whether the WebAssembly threads proposal is\n"
+"  supported on the current device."),
+
     JS_FN_HELP("wasmTextToBinary", WasmTextToBinary, 1, 0,
 "wasmTextToBinary(str)",
 "  Translates the given text wasm module into its binary encoding."),
@@ -5006,6 +5037,10 @@ gc::ZealModeHelpText),
     JS_FN_HELP("isConstructor", IsConstructor, 1, 0,
 "isConstructor(value)",
 "  Returns whether the value is considered IsConstructor.\n"),
+
+    JS_FN_HELP("isLegacyIterator", IsLegacyIterator, 1, 0,
+"isLegacyIterator(value)",
+"  Returns whether the value is considered is a legacy iterator.\n"),
 
     JS_FS_HELP_END
 };

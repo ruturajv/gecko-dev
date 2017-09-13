@@ -41,6 +41,7 @@ WebRenderLayerManager::WebRenderLayerManager(nsIWidget* aWidget)
   , mEndTransactionWithoutLayers(false)
   , mTarget(nullptr)
   , mPaintSequenceNumber(0)
+  , mShouldNotifyInvalidation(false)
 {
   MOZ_COUNT_CTOR(WebRenderLayerManager);
 }
@@ -102,7 +103,7 @@ WebRenderLayerManager::DoDestroy(bool aIsSync)
 
   if (WrBridge()) {
     // Just clear ImageKeys, they are deleted during WebRenderAPI destruction.
-    mImageKeysToDelete.clear();
+    mImageKeysToDelete.Clear();
     // CompositorAnimations are cleared by WebRenderBridgeParent.
     mDiscardedCompositorAnimationsIds.Clear();
     WrBridge()->Destroy(aIsSync);
@@ -157,6 +158,11 @@ WebRenderLayerManager::BeginTransactionWithTarget(gfxContext* aTarget)
 bool
 WebRenderLayerManager::BeginTransaction()
 {
+  if (!WrBridge()->IPCOpen()) {
+    gfxCriticalNote << "IPC Channel is already torn down unexpectedly\n";
+    return false;
+  }
+
   // Increment the paint sequence number even if test logging isn't
   // enabled in this process; it may be enabled in the parent process,
   // and the parent process expects unique sequence numbers.
@@ -243,6 +249,10 @@ WebRenderLayerManager::CreateWebRenderCommandsFromDisplayList(nsDisplayList* aDi
       continue;
     }
 
+    if (item->BackfaceIsHidden() && aSc.IsBackfaceVisible()) {
+      continue;
+    }
+
     savedItems.AppendToTop(item);
 
     bool forceNewLayerData = false;
@@ -306,6 +316,14 @@ WebRenderLayerManager::CreateWebRenderCommandsFromDisplayList(nsDisplayList* aDi
       // walking up their ASR chain when building scroll metadata.
       if (forceNewLayerData) {
         mAsrStack.push_back(asr);
+      }
+    }
+
+    // If there is any invalid item, we should notify nsPresContext after EndTransaction.
+    if (!mShouldNotifyInvalidation) {
+      nsRect invalid;
+      if (item->IsInvalid(invalid)) {
+        mShouldNotifyInvalidation = true;
       }
     }
 
@@ -440,12 +458,12 @@ PaintItemByDrawTarget(nsDisplayItem* aItem,
   MOZ_ASSERT(aDT);
 
   aDT->ClearRect(aImageRect.ToUnknownRect());
-  RefPtr<gfxContext> context = gfxContext::CreateOrNull(aDT, aOffset.ToUnknownPoint());
+  RefPtr<gfxContext> context = gfxContext::CreateOrNull(aDT);
   MOZ_ASSERT(context);
 
+  context->SetMatrix(gfxMatrix::Translation(-aOffset.x, -aOffset.y));
   switch (aItem->GetType()) {
   case DisplayItemType::TYPE_MASK:
-    context->SetMatrix(gfxMatrix::Translation(-aOffset.x, -aOffset.y));
     static_cast<nsDisplayMask*>(aItem)->PaintMask(aDisplayListBuilder, context);
     break;
   case DisplayItemType::TYPE_FILTER:
@@ -499,9 +517,18 @@ WebRenderLayerManager::GenerateFallbackData(nsDisplayItem* aItem,
   nsRect clippedBounds = itemBounds;
 
   const DisplayItemClip& clip = aItem->GetClip();
-  if (clip.HasClip()) {
+  // Blob images will only draw the visible area of the blob so we don't need to clip
+  // them here and can just rely on the webrender clipping.
+  if (clip.HasClip() && !gfxPrefs::WebRenderBlobImages()) {
     clippedBounds = itemBounds.Intersect(clip.GetClipRect());
   }
+
+  // nsDisplayItem::Paint() may refer the variables that come from ComputeVisibility().
+  // So we should call ComputeVisibility() before painting. e.g.: nsDisplayBoxShadowInner
+  // uses mVisibleRegion in Paint() and mVisibleRegion is computed in
+  // nsDisplayBoxShadowInner::ComputeVisibility().
+  nsRegion visibleRegion(clippedBounds);
+  aItem->ComputeVisibility(aDisplayListBuilder, &visibleRegion);
 
   const int32_t appUnitsPerDevPixel = aItem->Frame()->PresContext()->AppUnitsPerDevPixel();
   LayerRect bounds = ViewAs<LayerPixel>(
@@ -544,17 +571,21 @@ WebRenderLayerManager::GenerateFallbackData(nsDisplayItem* aItem,
                                                     gfx::SurfaceFormat::A8 : gfx::SurfaceFormat::B8G8R8A8;
   if (!geometry || !invalidRegion.IsEmpty() || fallbackData->IsInvalid()) {
     if (gfxPrefs::WebRenderBlobImages()) {
+      bool snapped;
+      bool isOpaque = aItem->GetOpaqueRegion(aDisplayListBuilder, &snapped).Contains(clippedBounds);
+
       RefPtr<gfx::DrawEventRecorderMemory> recorder = MakeAndAddRef<gfx::DrawEventRecorderMemory>();
-      // TODO: should use 'format' to replace gfx::SurfaceFormat::B8G8R8X8. Currently blob image doesn't support A8 format.
+      // TODO: should use 'format' to replace gfx::SurfaceFormat::B8G8R8A8. Currently blob image doesn't support A8 format.
       RefPtr<gfx::DrawTarget> dummyDt =
-        gfx::Factory::CreateDrawTarget(gfx::BackendType::SKIA, gfx::IntSize(1, 1), gfx::SurfaceFormat::B8G8R8X8);
+        gfx::Factory::CreateDrawTarget(gfx::BackendType::SKIA, gfx::IntSize(1, 1), gfx::SurfaceFormat::B8G8R8A8);
       RefPtr<gfx::DrawTarget> dt = gfx::Factory::CreateRecordingDrawTarget(recorder, dummyDt, imageSize.ToUnknownSize());
       PaintItemByDrawTarget(aItem, dt, aImageRect, aOffset, aDisplayListBuilder);
       recorder->Finish();
 
-      wr::ByteBuffer bytes(recorder->mOutputStream.mLength, (uint8_t*)recorder->mOutputStream.mData);
+      Range<uint8_t> bytes((uint8_t*)recorder->mOutputStream.mData, recorder->mOutputStream.mLength);
       wr::ImageKey key = WrBridge()->GetNextImageKey();
-      WrBridge()->SendAddBlobImage(key, imageSize.ToUnknownSize(), imageSize.width * 4, dt->GetFormat(), bytes);
+      wr::ImageDescriptor descriptor(imageSize.ToUnknownSize(), 0, dt->GetFormat(), isOpaque);
+      aBuilder.Resources().AddBlobImage(key, descriptor, bytes);
       fallbackData->SetKey(key);
     } else {
       fallbackData->CreateImageClientIfNeeded();
@@ -672,7 +703,7 @@ WebRenderLayerManager::EndTransactionInternal(DrawPaintedLayerCallback aCallback
   mAnimationReadyTime = TimeStamp::Now();
 
   LayoutDeviceIntSize size = mWidget->GetClientSize();
-  if (!WrBridge()->DPBegin(size.ToUnknownSize())) {
+  if (!WrBridge()->BeginTransaction(size.ToUnknownSize())) {
     return false;
   }
   DiscardCompositorAnimations();
@@ -681,6 +712,9 @@ WebRenderLayerManager::EndTransactionInternal(DrawPaintedLayerCallback aCallback
   wr::DisplayListBuilder builder(WrBridge()->GetPipeline(), contentSize);
 
   if (mEndTransactionWithoutLayers) {
+    // Reset the notification flag at the begin of the EndTransaction.
+    mShouldNotifyInvalidation = false;
+
     // aDisplayList being null here means this is an empty transaction following a layers-free
     // transaction, so we reuse the previously built displaylist and scroll
     // metadata information
@@ -705,6 +739,14 @@ WebRenderLayerManager::EndTransactionInternal(DrawPaintedLayerCallback aCallback
           mLayerScrollData.back().SetEventRegionsOverride(EventRegionsOverride::ForceDispatchToContent);
         }
       }
+      RefPtr<WebRenderLayerManager> self(this);
+      auto callback = [self](FrameMetrics::ViewID aScrollId) -> bool {
+        return self->mScrollData.HasMetadataFor(aScrollId);
+      };
+      if (Maybe<ScrollMetadata> rootMetadata = nsLayoutUtils::GetRootMetadata(
+            aDisplayListBuilder, nullptr, ContainerLayerParameters(), callback)) {
+        mLayerScrollData.back().AppendScrollMetadata(mScrollData, rootMetadata.ref());
+      }
       // Append the WebRenderLayerScrollData items into WebRenderScrollData
       // in reverse order, from topmost to bottommost. This is in keeping with
       // the semantics of WebRenderScrollData.
@@ -717,6 +759,9 @@ WebRenderLayerManager::EndTransactionInternal(DrawPaintedLayerCallback aCallback
       for (auto iter = mLastCanvasDatas.Iter(); !iter.Done(); iter.Next()) {
         RefPtr<WebRenderCanvasData> canvasData = iter.Get()->GetKey();
         WebRenderCanvasRendererAsync* canvas = canvasData->GetCanvasRenderer();
+        if (canvas->IsDirty()) {
+          mShouldNotifyInvalidation = true;
+        }
         canvas->UpdateCompositableClient();
       }
     }
@@ -774,7 +819,8 @@ WebRenderLayerManager::EndTransactionInternal(DrawPaintedLayerCallback aCallback
   {
     AutoProfilerTracing
       tracing("Paint", sync ? "ForwardDPTransactionSync":"ForwardDPTransaction");
-    WrBridge()->DPEnd(builder, size.ToUnknownSize(), sync, mLatestTransactionId, mScrollData, transactionStart);
+    WrBridge()->EndTransaction(builder, size.ToUnknownSize(), sync,
+                               mLatestTransactionId, mScrollData, transactionStart);
   }
 
   MakeSnapshotIfRequired(size);
@@ -829,7 +875,7 @@ WebRenderLayerManager::MakeSnapshotIfRequired(LayoutDeviceIntSize aSize)
   }
 
   IntRect bounds = ToOutsideIntRect(mTarget->GetClipExtents());
-  if (!WrBridge()->SendDPGetSnapshot(texture->GetIPDLActor())) {
+  if (!WrBridge()->SendGetSnapshot(texture->GetIPDLActor())) {
     return;
   }
 
@@ -867,18 +913,13 @@ WebRenderLayerManager::MakeSnapshotIfRequired(LayoutDeviceIntSize aSize)
 void
 WebRenderLayerManager::AddImageKeyForDiscard(wr::ImageKey key)
 {
-  mImageKeysToDelete.push_back(key);
+  mImageKeysToDelete.DeleteImage(key);
 }
 
 void
 WebRenderLayerManager::DiscardImages()
 {
-  if (WrBridge()->IPCOpen()) {
-    for (auto key : mImageKeysToDelete) {
-      WrBridge()->SendDeleteImage(key);
-    }
-  }
-  mImageKeysToDelete.clear();
+  WrBridge()->UpdateResources(mImageKeysToDelete);
 }
 
 void
@@ -903,7 +944,7 @@ WebRenderLayerManager::DiscardLocalImages()
   // Removes images but doesn't tell the parent side about them
   // This is useful in empty / failed transactions where we created
   // image keys but didn't tell the parent about them yet.
-  mImageKeysToDelete.clear();
+  mImageKeysToDelete.Clear();
 }
 
 void

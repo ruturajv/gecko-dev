@@ -78,6 +78,8 @@ const kDownloadsStringsRequiringPluralForm = {
 
 const kPartialDownloadSuffix = ".part";
 
+const kMaxHistoryResultsForLimitedView = 42;
+
 const kPrefBranch = Services.prefs.getBranch("browser.download.");
 
 var PrefObserver = {
@@ -193,13 +195,22 @@ this.DownloadsCommon = {
    *        The browser window which owns the download button.
    * @param [optional] history
    *        True to include history downloads when the window is public.
+   * @param [optional] privateAll
+   *        Whether to force the public downloads data to be returned together
+   *        with the private downloads data for a private window.
+   * @param [optional] limited
+   *        True to limit the amount of downloads returned to
+   *        `kMaxHistoryResultsForLimitedView`.
    */
-  getData(window, history = false) {
-    if (PrivateBrowsingUtils.isContentWindowPrivate(window)) {
+  getData(window, history = false, privateAll = false, limited = false) {
+    let isPrivate = PrivateBrowsingUtils.isContentWindowPrivate(window);
+    if (isPrivate && !privateAll) {
       return PrivateDownloadsData;
     }
     if (history) {
-      return HistoryDownloadsData;
+      if (isPrivate && privateAll)
+        return LimitedPrivateHistoryDownloadData;
+      return limited ? LimitedHistoryDownloadsData : HistoryDownloadsData;
     }
     return DownloadsData;
   },
@@ -636,7 +647,7 @@ XPCOMUtils.defineLazyGetter(DownloadsCommon, "isWinVistaOrHigher", function() {
  * This powers the DownloadsData, PrivateDownloadsData, and HistoryDownloadsData
  * singleton objects.
  */
-function DownloadsDataCtor({ isPrivate, isHistory } = {}) {
+function DownloadsDataCtor({ isPrivate, isHistory, maxHistoryResults } = {}) {
   this._isPrivate = !!isPrivate;
 
   // Contains all the available Download objects and their integer state.
@@ -648,9 +659,18 @@ function DownloadsDataCtor({ isPrivate, isHistory } = {}) {
   // are invoked before those of views registered on HistoryDownloadsData,
   // allowing the endTime property to be set correctly.
   if (isHistory) {
+    if (isPrivate) {
+      PrivateDownloadsData.initializeDataLink();
+    }
     DownloadsData.initializeDataLink();
-    this._promiseList = DownloadsData._promiseList
-                                     .then(() => DownloadHistory.getList());
+    this._promiseList = DownloadsData._promiseList.then(() => {
+      // For history downloads in Private Browsing mode, we'll fetch the combined
+      // list of public and private downloads.
+      return DownloadHistory.getList({
+        type: isPrivate ? Downloads.ALL : Downloads.PUBLIC,
+        maxHistoryResults
+      });
+    });
     return;
   }
 
@@ -835,6 +855,15 @@ XPCOMUtils.defineLazyGetter(this, "HistoryDownloadsData", function() {
   return new DownloadsDataCtor({ isHistory: true });
 });
 
+XPCOMUtils.defineLazyGetter(this, "LimitedHistoryDownloadsData", function() {
+  return new DownloadsDataCtor({ isHistory: true, maxHistoryResults: kMaxHistoryResultsForLimitedView });
+});
+
+XPCOMUtils.defineLazyGetter(this, "LimitedPrivateHistoryDownloadData", function() {
+  return new DownloadsDataCtor({ isPrivate: true, isHistory: true,
+    maxHistoryResults: kMaxHistoryResultsForLimitedView });
+});
+
 XPCOMUtils.defineLazyGetter(this, "PrivateDownloadsData", function() {
   return new DownloadsDataCtor({ isPrivate: true });
 });
@@ -951,6 +980,7 @@ const DownloadsViewPrototype = {
    */
   onDownloadBatchEnded() {
     this._loading = false;
+    this._updateViews();
   },
 
   /**
@@ -1064,13 +1094,6 @@ DownloadsIndicatorDataCtor.prototype = {
     if (this._views.length == 0) {
       this._itemCount = 0;
     }
-  },
-
-  // Callback functions from DownloadsData
-
-  onDataLoadCompleted() {
-    DownloadsViewPrototype.onDataLoadCompleted.call(this);
-    this._updateViews();
   },
 
   onDownloadAdded(download) {
@@ -1221,7 +1244,14 @@ DownloadsIndicatorDataCtor.prototype = {
     // Determine if the indicator should be shown or get attention.
     this._hasDownloads = (this._itemCount > 0);
 
-    this._percentComplete = summary.percentComplete;
+    // Always show a progress bar if there are downloads in progress.
+    if (summary.percentComplete >= 0) {
+      this._percentComplete = summary.percentComplete;
+    } else if (summary.numDownloading > 0) {
+      this._percentComplete = 0;
+    } else {
+      this._percentComplete = -1;
+    }
   }
 };
 
@@ -1300,15 +1330,6 @@ DownloadsSummaryData.prototype = {
       // another view registered with us, this will get re-populated.
       this._downloads = [];
     }
-  },
-
-  // Callback functions from DownloadsData - see the documentation in
-  // DownloadsViewPrototype for more information on what these functions
-  // are used for.
-
-  onDataLoadCompleted() {
-    DownloadsViewPrototype.onDataLoadCompleted.call(this);
-    this._updateViews();
   },
 
   onDownloadAdded(download) {

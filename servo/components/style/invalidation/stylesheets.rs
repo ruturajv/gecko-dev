@@ -20,7 +20,7 @@ use stylesheets::{CssRule, StylesheetInDocument};
 
 /// An invalidation scope represents a kind of subtree that may need to be
 /// restyled.
-#[derive(Debug, Hash, Eq, PartialEq)]
+#[derive(Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
 enum InvalidationScope {
     /// All the descendants of an element with a given id.
@@ -53,8 +53,8 @@ impl InvalidationScope {
 
 /// A set of invalidations due to stylesheet additions.
 ///
-/// TODO(emilio): We might be able to do the same analysis for removals and
-/// media query changes too?
+/// TODO(emilio): We might be able to do the same analysis for media query
+/// changes too (or even selector changes?).
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
 pub struct StylesheetInvalidationSet {
     /// The style scopes we know we have to restyle so far.
@@ -117,13 +117,17 @@ impl StylesheetInvalidationSet {
 
     /// Clears the invalidation set, invalidating elements as needed if
     /// `document_element` is provided.
-    pub fn flush<E>(&mut self, document_element: Option<E>)
+    ///
+    /// Returns true if any invalidations ocurred.
+    pub fn flush<E>(&mut self, document_element: Option<E>) -> bool
         where E: TElement,
     {
-        if let Some(e) = document_element {
-            self.process_invalidations(e);
-        }
+        let have_invalidations = match document_element {
+            Some(e) => self.process_invalidations(e),
+            None => false,
+        };
         self.clear();
+        have_invalidations
     }
 
     /// Clears the invalidation set without processing.

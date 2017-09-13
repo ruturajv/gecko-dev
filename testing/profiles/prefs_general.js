@@ -193,9 +193,6 @@ user_pref("layout.css.prefixes.device-pixel-ratio-webkit", true);
 // Enable CSS shape-outside for testing
 user_pref("layout.css.shape-outside.enabled", true);
 
-// Enable CSS text-justify for testing
-user_pref("layout.css.text-justify.enabled", true);
-
 // Disable spammy layout warnings because they pollute test logs
 user_pref("layout.spammy_warnings.enabled", false);
 
@@ -263,6 +260,9 @@ user_pref("toolkit.telemetry.bhrPing.enabled", false);
 // to suppress the leak. Running locally does not reproduce the issue,
 // so disable this until we rewrite the pingsender in Rust (bug 1339035).
 user_pref("toolkit.telemetry.shutdownPingSender.enabledFirstSession", false);
+// Don't send the 'first-shutdown' during tests, otherwise tests expecting
+// main and subsession pings will fail.
+user_pref("toolkit.telemetry.firstShutdownPing.enabled", false);
 
 // A couple of preferences with default values to test that telemetry preference
 // watching is working.

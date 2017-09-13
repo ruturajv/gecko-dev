@@ -166,8 +166,8 @@ const SQL_BOOKMARK_TAGS_FRAGMENT =
 
 // TODO bug 412736: in case of a frecency tie, we might break it with h.typed
 // and h.visit_count.  That is slower though, so not doing it yet...
-// NB: as a slight performance optimization, we only evaluate the "btitle"
-// and "tags" queries for bookmarked entries.
+// NB: as a slight performance optimization, we only evaluate the "bookmarked"
+// condition once, and avoid evaluating "btitle" and "tags" when it is false.
 function defaultQuery(conditions = "") {
   let query =
     `SELECT :query_type, h.url, h.title, ${SQL_BOOKMARK_TAGS_FRAGMENT},
@@ -177,16 +177,20 @@ function defaultQuery(conditions = "") {
             ON t.url = h.url
            AND t.userContextId = :userContextId
      WHERE h.frecency <> 0
-       AND AUTOCOMPLETE_MATCH(:searchString, h.url,
-                              CASE WHEN bookmarked THEN
-                                IFNULL(btitle, h.title)
-                              ELSE h.title END,
-                              CASE WHEN bookmarked THEN
-                                tags
-                              ELSE '' END,
+       AND CASE WHEN bookmarked
+         THEN
+           AUTOCOMPLETE_MATCH(:searchString, h.url,
+                              IFNULL(btitle, h.title), tags,
                               h.visit_count, h.typed,
-                              bookmarked, t.open_count,
+                              1, t.open_count,
                               :matchBehavior, :searchBehavior)
+         ELSE
+           AUTOCOMPLETE_MATCH(:searchString, h.url,
+                              h.title, '',
+                              h.visit_count, h.typed,
+                              0, t.open_count,
+                              :matchBehavior, :searchBehavior)
+         END
        ${conditions}
      ORDER BY h.frecency DESC, h.id DESC
      LIMIT :maxResults`;
@@ -343,6 +347,11 @@ XPCOMUtils.defineLazyGetter(this, "SwitchToTabStorage", () => Object.seal({
   _conn: null,
   // Temporary queue used while the database connection is not available.
   _queue: new Map(),
+  // Whether we are in the process of updating the temp table.
+  _updatingLevel: 0,
+  get updating() {
+    return this._updatingLevel > 0;
+  },
   async initDatabase(conn) {
     // To reduce IO use an in-memory table for switch-to-tab tracking.
     // Note: this should be kept up-to-date with the definition in
@@ -372,7 +381,7 @@ XPCOMUtils.defineLazyGetter(this, "SwitchToTabStorage", () => Object.seal({
     // Populate the table with the current cache contents...
     for (let [userContextId, uris] of this._queue) {
       for (let uri of uris) {
-        this.add(uri, userContextId);
+        this.add(uri, userContextId).catch(Cu.reportError);
       }
     }
 
@@ -380,7 +389,7 @@ XPCOMUtils.defineLazyGetter(this, "SwitchToTabStorage", () => Object.seal({
     this._queue.clear();
   },
 
-  add(uri, userContextId) {
+  async add(uri, userContextId) {
     if (!this._conn) {
       if (!this._queue.has(userContextId)) {
         this._queue.set(userContextId, new Set());
@@ -388,23 +397,27 @@ XPCOMUtils.defineLazyGetter(this, "SwitchToTabStorage", () => Object.seal({
       this._queue.get(userContextId).add(uri);
       return;
     }
-    this._conn.executeCached(
-      `INSERT OR REPLACE INTO moz_openpages_temp (url, userContextId, open_count)
-         VALUES ( :url,
-                  :userContextId,
-                  IFNULL( ( SELECT open_count + 1
-                            FROM moz_openpages_temp
-                            WHERE url = :url
-                            AND userContextId = :userContextId ),
-                          1
-                        )
-                )`
-    , { url: uri.spec, userContextId });
+    try {
+      this._updatingLevel++;
+      await this._conn.executeCached(
+        `INSERT OR REPLACE INTO moz_openpages_temp (url, userContextId, open_count)
+          VALUES ( :url,
+                    :userContextId,
+                    IFNULL( ( SELECT open_count + 1
+                              FROM moz_openpages_temp
+                              WHERE url = :url
+                              AND userContextId = :userContextId ),
+                            1
+                          )
+                  )
+        `, { url: uri.spec, userContextId });
+    } finally {
+      this._updatingLevel--;
+    }
   },
 
-  delete(uri, userContextId) {
+  async delete(uri, userContextId) {
     if (!this._conn) {
-      // This should not happen.
       if (!this._queue.has(userContextId)) {
         throw new Error("Unknown userContextId!");
       }
@@ -415,12 +428,17 @@ XPCOMUtils.defineLazyGetter(this, "SwitchToTabStorage", () => Object.seal({
       }
       return;
     }
-    this._conn.executeCached(
-      `UPDATE moz_openpages_temp
-       SET open_count = open_count - 1
-       WHERE url = :url
-       AND userContextId = :userContextId`
-    , { url: uri.spec, userContextId });
+    try {
+      this._updatingLevel++;
+      await this._conn.executeCached(
+        `UPDATE moz_openpages_temp
+         SET open_count = open_count - 1
+         WHERE url = :url
+           AND userContextId = :userContextId
+        `, { url: uri.spec, userContextId });
+    } finally {
+      this._updatingLevel--;
+    }
   },
 
   shutdown() {
@@ -947,6 +965,9 @@ Search.prototype = {
       this._searchSuggestionController.stop();
       this._searchSuggestionController = null;
     }
+    if (typeof this.interrupt == "function") {
+      this.interrupt();
+    }
     this.pending = false;
   },
 
@@ -964,6 +985,14 @@ Search.prototype = {
     // A search might be canceled before it starts.
     if (!this.pending)
       return;
+
+    // Used by stop() to interrupt an eventual running statement.
+    this.interrupt = () => {
+      // Interrupt any ongoing statement to run the search sooner.
+      if (!SwitchToTabStorage.updating) {
+        conn.interrupt();
+      }
+    }
 
     TelemetryStopwatch.start(TELEMETRY_1ST_RESULT, this);
     if (this._searchString)
@@ -1064,8 +1093,9 @@ Search.prototype = {
     // If we do not have enough results, and our match type is
     // MATCH_BOUNDARY_ANYWHERE, search again with MATCH_ANYWHERE to get more
     // results.
+    let count = this._counts[MATCHTYPE.GENERAL] + this._counts[MATCHTYPE.HEURISTIC];
     if (this._matchBehavior == MATCH_BOUNDARY_ANYWHERE &&
-        this._counts[MATCHTYPE.GENERAL] < Prefs.get("maxRichResults")) {
+        count < Prefs.get("maxRichResults")) {
       this._matchBehavior = MATCH_ANYWHERE;
       for (let [query, params] of [ this._adaptiveQuery,
                                     this._searchQuery ]) {
@@ -1380,9 +1410,9 @@ Search.prototype = {
         // like a URL, then we'll probably have a result.
         let gotResult = false;
         let [ query, params ] = this._urlQuery;
-        await conn.executeCached(query, params, row => {
+        await conn.executeCached(query, params, (row, cancel) => {
           gotResult = true;
-          this._onResultRow(row);
+          this._onResultRow(row, cancel);
         });
         return gotResult;
       }
@@ -1391,9 +1421,9 @@ Search.prototype = {
 
     let gotResult = false;
     let [ query, params ] = this._hostQuery;
-    await conn.executeCached(query, params, row => {
+    await conn.executeCached(query, params, (row, cancel) => {
       gotResult = true;
-      this._onResultRow(row);
+      this._onResultRow(row, cancel);
     });
     return gotResult;
   },
@@ -1699,7 +1729,7 @@ Search.prototype = {
     return true;
   },
 
-  _onResultRow(row) {
+  _onResultRow(row, cancel) {
     if (this._counts[MATCHTYPE.GENERAL] == 0) {
       TelemetryStopwatch.finish(TELEMETRY_1ST_RESULT, this);
     }
@@ -1721,8 +1751,9 @@ Search.prototype = {
     this._addMatch(match);
     // If the search has been canceled by the user or by _addMatch, or we
     // fetched enough results, we can stop the underlying Sqlite query.
-    if (!this.pending || this._counts[MATCHTYPE.GENERAL] == Prefs.get("maxRichResults"))
-      throw StopIteration;
+    let count = this._counts[MATCHTYPE.GENERAL] + this._counts[MATCHTYPE.HEURISTIC];
+    if (!this.pending || count >= Prefs.get("maxRichResults"))
+      cancel();
   },
 
   _maybeRestyleSearchMatch(match) {
@@ -2289,11 +2320,11 @@ UnifiedComplete.prototype = {
   // mozIPlacesAutoComplete
 
   registerOpenPage(uri, userContextId) {
-    SwitchToTabStorage.add(uri, userContextId);
+    SwitchToTabStorage.add(uri, userContextId).catch(Cu.reportError);
   },
 
   unregisterOpenPage(uri, userContextId) {
-    SwitchToTabStorage.delete(uri, userContextId);
+    SwitchToTabStorage.delete(uri, userContextId).catch(Cu.reportError);
   },
 
   populatePreloadedSiteStorage(json) {

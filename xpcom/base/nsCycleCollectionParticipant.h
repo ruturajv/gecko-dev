@@ -286,24 +286,12 @@ NS_DEFINE_STATIC_IID_ACCESSOR(nsXPCOMCycleCollectionParticipant,
 #define NS_CYCLE_COLLECTION_CLASSNAME(_class)                                  \
         _class::NS_CYCLE_COLLECTION_INNERCLASS
 
-#define NS_IMPL_QUERY_CYCLE_COLLECTION(_class)                                 \
-  if ( aIID.Equals(NS_GET_IID(nsXPCOMCycleCollectionParticipant)) ) {          \
-    *aInstancePtr = NS_CYCLE_COLLECTION_PARTICIPANT(_class);                   \
-    return NS_OK;                                                              \
-  } else
-
-#define NS_IMPL_QUERY_CYCLE_COLLECTION_ISUPPORTS(_class)                       \
-  if ( aIID.Equals(NS_GET_IID(nsCycleCollectionISupports)) ) {                 \
-    *aInstancePtr = NS_CYCLE_COLLECTION_CLASSNAME(_class)::Upcast(this);       \
-    return NS_OK;                                                              \
-  } else
-
 // The IIDs for nsXPCOMCycleCollectionParticipant and nsCycleCollectionISupports
 // are special in that they only differ in their last byte.  This allows for the
 // optimization below where we first check the first three words of the IID and
 // if we find a match we check the last word to decide which case we have to
 // deal with.
-#define NS_INTERFACE_MAP_ENTRY_CYCLE_COLLECTION(_class)                        \
+#define NS_INTERFACE_MAP_ENTRIES_CYCLE_COLLECTION(_class)                      \
   if (TopThreeWordsEquals(aIID, NS_GET_IID(nsXPCOMCycleCollectionParticipant), \
                           NS_GET_IID(nsCycleCollectionISupports)) &&           \
        /* The calls to LowWordEquals here are repeated inside the if branch.   \
@@ -326,21 +314,9 @@ NS_DEFINE_STATIC_IID_ACCESSOR(nsXPCOMCycleCollectionParticipant,
     }                                                                          \
   } else
 
-#define NS_INTERFACE_MAP_ENTRY_CYCLE_COLLECTION_ISUPPORTS(_class)              \
-  NS_IMPL_QUERY_CYCLE_COLLECTION_ISUPPORTS(_class)
-
-#define NS_INTERFACE_MAP_ENTRIES_CYCLE_COLLECTION(_class)                      \
-  NS_INTERFACE_MAP_ENTRY_CYCLE_COLLECTION(_class)                              \
-  NS_INTERFACE_MAP_ENTRY_CYCLE_COLLECTION_ISUPPORTS(_class)
-
 #define NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(_class)                        \
   NS_INTERFACE_MAP_BEGIN(_class)                                               \
     NS_INTERFACE_MAP_ENTRIES_CYCLE_COLLECTION(_class)
-
-#define NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION_INHERITED(_class)              \
-  NS_INTERFACE_MAP_BEGIN(_class)                                               \
-    NS_INTERFACE_MAP_ENTRY_CYCLE_COLLECTION(_class)                            \
-    NS_INTERFACE_MAP_ENTRY_CYCLE_COLLECTION_ISUPPORTS(_class)
 
 #define NS_INTERFACE_TABLE_TO_MAP_SEGUE_CYCLE_COLLECTION(_class)  \
   if (rv == NS_OK) return rv; \
@@ -368,7 +344,7 @@ NS_DEFINE_STATIC_IID_ACCESSOR(nsXPCOMCycleCollectionParticipant,
         return NS_OK;                                                         \
       }                                                                       \
     }                                                                         \
-    nsresult rv;
+    nsresult rv = NS_ERROR_FAILURE;
 
 #define NS_CYCLE_COLLECTION_UPCAST(obj, clazz)                                \
   NS_CYCLE_COLLECTION_CLASSNAME(clazz)::Upcast(obj)
@@ -977,6 +953,22 @@ static NS_CYCLE_COLLECTION_INNERCLASS NS_CYCLE_COLLECTION_INNERNAME;
   NS_IMPL_CYCLE_COLLECTION_TRAVERSE_END
 
 #define NS_CYCLE_COLLECTION_NOTE_EDGE_NAME CycleCollectionNoteEdgeName
+
+
+/**
+ * Convenience macros for defining nISupports methods in a cycle collected class.
+ */
+
+#define NS_IMPL_QUERY_INTERFACE_CYCLE_COLLECTION_INHERITED(aClass, aSuper, ...) \
+  NS_INTERFACE_TABLE_HEAD_CYCLE_COLLECTION_INHERITED(aClass)                    \
+  NS_INTERFACE_TABLE_INHERITED(aClass, __VA_ARGS__)                             \
+  NS_INTERFACE_TABLE_TAIL_INHERITING(aSuper)
+
+#define NS_IMPL_ISUPPORTS_CYCLE_COLLECTION_INHERITED(aClass, aSuper, ...)         \
+  NS_IMPL_QUERY_INTERFACE_CYCLE_COLLECTION_INHERITED(aClass, aSuper, __VA_ARGS__) \
+  NS_IMPL_ADDREF_INHERITED(aClass, aSuper)                                        \
+  NS_IMPL_RELEASE_INHERITED(aClass, aSuper)
+
 
 /**
  * Equivalency of the high three words where two IIDs have the same

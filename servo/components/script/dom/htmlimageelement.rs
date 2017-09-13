@@ -58,7 +58,7 @@ use std::sync::{Arc, Mutex};
 use style::attr::{AttrValue, LengthOrPercentageOrAuto};
 use task_source::TaskSource;
 
-#[derive(Clone, Copy, JSTraceable, HeapSizeOf)]
+#[derive(Clone, Copy, HeapSizeOf, JSTraceable)]
 #[allow(dead_code)]
 enum State {
     Unavailable,
@@ -66,12 +66,12 @@ enum State {
     CompletelyAvailable,
     Broken,
 }
-#[derive(Copy, Clone, JSTraceable, HeapSizeOf)]
+#[derive(Clone, Copy, HeapSizeOf, JSTraceable)]
 enum ImageRequestPhase {
     Pending,
     Current
 }
-#[derive(JSTraceable, HeapSizeOf)]
+#[derive(HeapSizeOf, JSTraceable)]
 #[must_root]
 struct ImageRequest {
     state: State,
@@ -117,8 +117,6 @@ impl ImageResponseHandlerRunnable {
 }
 
 impl Runnable for ImageResponseHandlerRunnable {
-    fn name(&self) -> &'static str { "ImageResponseHandlerRunnable" }
-
     fn handler(self: Box<Self>) {
         let element = self.element.root();
         // Ignore any image response for a previous request that has been discarded.
@@ -715,7 +713,7 @@ impl HTMLImageElement {
 
 }
 
-#[derive(JSTraceable, HeapSizeOf)]
+#[derive(HeapSizeOf, JSTraceable)]
 pub enum ImageElementMicrotask {
     StableStateUpdateImageDataTask {
         elem: Root<HTMLImageElement>,

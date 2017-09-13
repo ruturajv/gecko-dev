@@ -11,6 +11,8 @@ const {classes: Cc, interfaces: Ci, utils: Cu} = Components;
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "AppConstants",
   "resource://gre/modules/AppConstants.jsm");
+XPCOMUtils.defineLazyModuleGetter(this, "BrowserUtils",
+  "resource://gre/modules/BrowserUtils.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "CustomizableUI",
   "resource:///modules/CustomizableUI.jsm");
 
@@ -414,7 +416,6 @@ this.PanelMultiView = class {
       if (this.panelViews) {
         viewNode.removeAttribute("current");
         this.showSubView(this._mainViewId);
-        this.node.setAttribute("viewtype", "main");
       } else {
         this._transitionHeight(() => {
           viewNode.removeAttribute("current");
@@ -510,7 +511,11 @@ this.PanelMultiView = class {
       this._currentSubView = viewNode;
       viewNode.setAttribute("current", true);
       if (this.panelViews) {
-        this.node.setAttribute("viewtype", "subview");
+        if (viewNode.id == this._mainViewId) {
+          this.node.setAttribute("viewtype", "main");
+        } else {
+          this.node.setAttribute("viewtype", "subview");
+        }
         if (!playTransition)
           this.descriptionHeightWorkaround(viewNode);
       }
@@ -654,7 +659,11 @@ this.PanelMultiView = class {
       } else if (!this.panelViews) {
         this._transitionHeight(() => {
           viewNode.setAttribute("current", true);
-          this.node.setAttribute("viewtype", "subview");
+          if (viewNode.id == this._mainViewId) {
+            this.node.setAttribute("viewtype", "main");
+          } else {
+            this.node.setAttribute("viewtype", "subview");
+          }
           // Now that the subview is visible, we can check the height of the
           // description elements it contains.
           this.descriptionHeightWorkaround(viewNode);
@@ -726,9 +735,9 @@ this.PanelMultiView = class {
     let oldSibling = viewNode.nextSibling || null;
     this._offscreenViewStack.appendChild(viewNode);
 
-    this.window.addEventListener("MozAfterPaint", () => {
-      let viewRect = this._dwu.getBoundsWithoutFlushing(viewNode);
-
+    BrowserUtils.promiseLayoutFlushed(this.document, "layout", () => {
+      return this._dwu.getBoundsWithoutFlushing(viewNode);
+    }).then(viewRect => {
       try {
         this._viewStack.insertBefore(viewNode, oldSibling);
       } catch (ex) {
@@ -736,7 +745,7 @@ this.PanelMultiView = class {
       }
 
       callback(viewRect);
-    }, { once: true });
+    });
   }
 
   /**
@@ -870,7 +879,7 @@ this.PanelMultiView = class {
         // direction that the panel originally opened in. This property resets
         // every time the popup closes, which is why we have to set it each time.
         this._panel.autoPosition = false;
-        if (this.panelViews) {
+        if (this.panelViews && !this.node.hasAttribute("disablekeynav")) {
           this.window.addEventListener("keydown", this);
           this._panel.addEventListener("mousemove", this);
         }

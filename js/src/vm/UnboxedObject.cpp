@@ -948,8 +948,6 @@ const Class UnboxedExpandoObject::class_ = {
 static const ClassOps UnboxedPlainObjectClassOps = {
     nullptr,        /* addProperty */
     nullptr,        /* delProperty */
-    nullptr,        /* getProperty */
-    nullptr,        /* setProperty */
     nullptr,        /* enumerate   */
     UnboxedPlainObject::newEnumerate,
     nullptr,        /* resolve     */
@@ -1644,8 +1642,6 @@ UnboxedArrayObject::newEnumerate(JSContext* cx, HandleObject obj, AutoIdVector& 
 static const ClassOps UnboxedArrayObjectClassOps = {
     nullptr,        /* addProperty */
     nullptr,        /* delProperty */
-    nullptr,        /* getProperty */
-    nullptr,        /* setProperty */
     nullptr,        /* enumerate   */
     UnboxedArrayObject::newEnumerate,
     nullptr,        /* resolve     */
@@ -1769,7 +1765,7 @@ static bool
 CombineArrayObjectElements(JSContext* cx, ArrayObject* obj, JSValueType* elementType)
 {
     if (obj->inDictionaryMode() ||
-        obj->lastProperty()->propid() != AtomToId(cx->names().length) ||
+        obj->lastProperty()->propid() != NameToId(cx->names().length) ||
         !obj->lastProperty()->previous()->isEmptyShape())
     {
         // Only use an unboxed representation if the object has no properties.

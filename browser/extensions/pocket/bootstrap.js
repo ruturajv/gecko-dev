@@ -109,7 +109,7 @@ var PocketPageAction = {
 
           let wrapper = doc.createElement("hbox");
           wrapper.id = "pocket-button-box";
-          wrapper.classList.add("urlbar-icon-wrapper");
+          wrapper.classList.add("urlbar-icon-wrapper", "urlbar-page-action");
           wrapper.setAttribute("context", "pageActionPanelContextMenu");
           wrapper.addEventListener("contextmenu", event => {
             window.BrowserPageActions.onContextMenu(event);
@@ -118,9 +118,15 @@ var PocketPageAction = {
           animatableBox.id = "pocket-animatable-box";
           let animatableImage = doc.createElement("image");
           animatableImage.id = "pocket-animatable-image";
+          animatableImage.setAttribute("role", "presentation");
+          let tooltip =
+            gPocketBundle.GetStringFromName("pocket-button.tooltiptext");
+          animatableImage.setAttribute("tooltiptext", tooltip);
           let pocketButton = doc.createElement("image");
           pocketButton.id = "pocket-button";
           pocketButton.classList.add("urlbar-icon");
+          pocketButton.setAttribute("role", "button");
+          pocketButton.setAttribute("tooltiptext", tooltip);
 
           wrapper.appendChild(pocketButton);
           wrapper.appendChild(animatableBox);
@@ -158,7 +164,7 @@ var PocketPageAction = {
         },
         onIframeHiding(iframe, panel) {
           if (iframe.getAttribute("itemAdded") == "true") {
-            PocketPageAction.startLibraryAnimation(iframe.ownerDocument);
+            iframe.ownerGlobal.LibraryUI.triggerLibraryAnimation("pocket");
           }
         },
         onIframeHidden(iframe, panel) {
@@ -189,32 +195,6 @@ var PocketPageAction = {
 
     this.pageAction.remove();
     this.pageAction = null;
-  },
-
-  startLibraryAnimation(doc) {
-    var libraryButton = doc.getElementById("library-button");
-    if (!Services.prefs.getBoolPref("toolkit.cosmeticAnimations.enabled") ||
-        !libraryButton ||
-        libraryButton.getAttribute("cui-areatype") == "menu-panel" ||
-        libraryButton.getAttribute("overflowedItem") == "true" ||
-        !libraryButton.closest("#nav-bar")) {
-      return;
-    }
-    libraryButton.removeAttribute("fade");
-    libraryButton.setAttribute("animate", "pocket");
-    libraryButton.addEventListener("animationend", PocketPageAction.onLibraryButtonAnimationEnd);
-  },
-
-  onLibraryButtonAnimationEnd(event) {
-    let doc = event.target.ownerDocument;
-    let libraryButton = doc.getElementById("library-button");
-    if (event.animationName.startsWith("library-pocket-animation")) {
-      libraryButton.setAttribute("fade", "true");
-    } else if (event.animationName == "library-pocket-fade") {
-      libraryButton.removeEventListener("animationend", PocketPageAction.onLibraryButtonAnimationEnd);
-      libraryButton.removeAttribute("animate");
-      libraryButton.removeAttribute("fade");
-    }
   },
 };
 
@@ -440,7 +420,7 @@ var PocketOverlay = {
         "id": "menu_pocket",
         "label": gPocketBundle.GetStringFromName("pocketMenuitem.label"),
         "class": "menuitem-iconic", // OSX only
-        "oncommand": "openUILink(Pocket.listURL, event);",
+        "oncommand": "Pocket.openList(event)",
         "hidden": hidden
       });
       let sep = createElementWithAttrs(document, "menuseparator", {
@@ -461,7 +441,7 @@ var PocketOverlay = {
         "id": "BMB_pocket",
         "label": gPocketBundle.GetStringFromName("pocketMenuitem.label"),
         "class": "menuitem-iconic bookmark-item subviewbutton",
-        "oncommand": "openUILink(Pocket.listURL, event);",
+        "oncommand": "Pocket.openList(event)",
         "hidden": hidden
       });
       let sep = createElementWithAttrs(document, "menuseparator", {
@@ -479,7 +459,7 @@ var PocketOverlay = {
         "id": "panelMenu_pocket",
         "label": gPocketBundle.GetStringFromName("pocketMenuitem.label"),
         "class": "subviewbutton cui-withicon",
-        "oncommand": "openUILink(Pocket.listURL, event);",
+        "oncommand": "Pocket.openList(event)",
         "hidden": hidden
       });
       let sep = createElementWithAttrs(document, "toolbarseparator", {
@@ -500,7 +480,7 @@ var PocketOverlay = {
         "id": "appMenu-library-pocket-button",
         "label": gPocketBundle.GetStringFromName("pocketMenuitem.label"),
         "class": "subviewbutton subviewbutton-iconic",
-        "oncommand": "openUILink(Pocket.listURL, event);",
+        "oncommand": "Pocket.openList(event)",
         "hidden": hidden
       });
       sib.parentNode.insertBefore(menu, sib);

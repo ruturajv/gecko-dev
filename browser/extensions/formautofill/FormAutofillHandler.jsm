@@ -12,6 +12,7 @@ this.EXPORTED_SYMBOLS = ["FormAutofillHandler"];
 
 const {classes: Cc, interfaces: Ci, utils: Cu, results: Cr} = Components;
 
+Cu.import("resource://gre/modules/Services.jsm");
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 
 Cu.import("resource://formautofill/FormAutofillUtils.jsm");
@@ -52,6 +53,12 @@ function FormAutofillHandler(form) {
      * String of the filled creditCard's guid.
      */
     filledRecordGUID: null,
+  };
+
+  this._cacheValue = {
+    allFieldNames: null,
+    oneLineStreetAddress: null,
+    matchingSelectOption: null,
   };
 }
 
@@ -114,6 +121,11 @@ FormAutofillHandler.prototype = {
   },
 
   /**
+   * Time in milliseconds since epoch when a user started filling in the form.
+   */
+  timeStartedFillingMS: null,
+
+  /**
    * Set fieldDetails from the form about fields that can be autofilled.
    *
    * @param {boolean} allowDuplicates
@@ -146,19 +158,34 @@ FormAutofillHandler.prototype = {
       log.debug("Ignoring credit card related fields since it's without credit card number field");
       this.creditCard.fieldDetails = [];
     }
+    let validDetails = Array.of(...(this.address.fieldDetails),
+                                ...(this.creditCard.fieldDetails));
+    for (let detail of validDetails) {
+      let input = detail.elementWeakRef.get();
+      if (!input) {
+        continue;
+      }
+      input.addEventListener("input", this);
+    }
 
-    return Array.of(...(this.address.fieldDetails),
-                    ...(this.creditCard.fieldDetails));
+    return validDetails;
   },
 
   getFieldDetailByName(fieldName) {
     return this.fieldDetails.find(detail => detail.fieldName == fieldName);
   },
 
-  _cacheValue: {
-    allFieldNames: null,
-    oneLineStreetAddress: null,
-    matchingSelectOption: null,
+  getFieldDetailsByElement(element) {
+    let fieldDetail = this.fieldDetails.find(
+      detail => detail.elementWeakRef.get() == element
+    );
+    if (FormAutofillUtils.isAddressField(fieldDetail.fieldName)) {
+      return this.address.fieldDetails;
+    }
+    if (FormAutofillUtils.isCreditCardField(fieldDetail.fieldName)) {
+      return this.creditCard.fieldDetails;
+    }
+    return [];
   },
 
   get allFieldNames() {
@@ -255,31 +282,67 @@ FormAutofillHandler.prototype = {
    * @param {Object} profile
    *        A profile to be filled in.
    * @param {Object} focusedInput
-   *        A focused input element which is skipped for filling.
+   *        A focused input element needed to determine the address or credit
+   *        card field.
    */
-  autofillFormFields(profile, focusedInput) {
+  async autofillFormFields(profile, focusedInput) {
+    let focusedDetail = this.fieldDetails.find(
+      detail => detail.elementWeakRef.get() == focusedInput
+    );
+    let targetSet;
+    if (FormAutofillUtils.isCreditCardField(focusedDetail.fieldName)) {
+      // When Master Password is enabled by users, the decryption process
+      // should prompt Master Password dialog to get the decrypted credit
+      // card number. Otherwise, the number can be decrypted with the default
+      // password.
+      if (profile["cc-number-encrypted"]) {
+        let decrypted = await this._decrypt(profile["cc-number-encrypted"], true);
+
+        if (!decrypted) {
+          // Early return if the decrypted is empty or undefined
+          return;
+        }
+
+        profile["cc-number"] = decrypted;
+      }
+      targetSet = this.creditCard;
+    } else if (FormAutofillUtils.isAddressField(focusedDetail.fieldName)) {
+      targetSet = this.address;
+    } else {
+      throw new Error("Unknown form fields");
+    }
+
     log.debug("profile in autofillFormFields:", profile);
 
-    this.address.filledRecordGUID = profile.guid;
-    for (let fieldDetail of this.address.fieldDetails) {
+    targetSet.filledRecordGUID = profile.guid;
+    for (let fieldDetail of targetSet.fieldDetails) {
       // Avoid filling field value in the following cases:
-      // 1. the focused input which is filled in FormFillController.
-      // 2. a non-empty input field
-      // 3. the invalid value set
-      // 4. value already chosen in select element
+      // 1. a non-empty input field for an unfocused input
+      // 2. the invalid value set
+      // 3. value already chosen in select element
 
       let element = fieldDetail.elementWeakRef.get();
       if (!element) {
         continue;
       }
 
+      element.previewValue = "";
       let value = profile[fieldDetail.fieldName];
-      if (element instanceof Ci.nsIDOMHTMLInputElement && !element.value && value) {
-        if (element !== focusedInput) {
+
+      if (element instanceof Ci.nsIDOMHTMLInputElement && value) {
+        // For the focused input element, it will be filled with a valid value
+        // anyway.
+        // For the others, the fields should be only filled when their values
+        // are empty.
+        if (element == focusedInput ||
+            (element != focusedInput && !element.value)) {
           element.setUserInput(value);
+          this.changeFieldState(fieldDetail, "AUTO_FILLED");
+          continue;
         }
-        this.changeFieldState(fieldDetail, "AUTO_FILLED");
-      } else if (element instanceof Ci.nsIDOMHTMLSelectElement) {
+      }
+
+      if (element instanceof Ci.nsIDOMHTMLSelectElement) {
         let cache = this._cacheValue.matchingSelectOption.get(element) || {};
         let option = cache[value] && cache[value].get();
         if (!option) {
@@ -295,23 +358,6 @@ FormAutofillHandler.prototype = {
         // Autofill highlight appears regardless if value is changed or not
         this.changeFieldState(fieldDetail, "AUTO_FILLED");
       }
-
-      // Unlike using setUserInput directly, FormFillController dispatches an
-      // asynchronous "DOMAutoComplete" event with an "input" event follows right
-      // after. So, we need to suppress the first "input" event fired off from
-      // focused input to make sure the latter change handler won't be affected
-      // by auto filling.
-      if (element === focusedInput) {
-        const suppressFirstInputHandler = e => {
-          if (e.isTrusted) {
-            e.stopPropagation();
-            element.removeEventListener("input", suppressFirstInputHandler);
-          }
-        };
-
-        element.addEventListener("input", suppressFirstInputHandler);
-      }
-      element.previewValue = "";
     }
 
     // Handle the highlight style resetting caused by user's correction afterward.
@@ -323,7 +369,7 @@ FormAutofillHandler.prototype = {
         return;
       }
 
-      for (let fieldDetail of this.address.fieldDetails) {
+      for (let fieldDetail of targetSet.fieldDetails) {
         let element = fieldDetail.elementWeakRef.get();
 
         if (!element) {
@@ -341,7 +387,7 @@ FormAutofillHandler.prototype = {
       if (!hasFilledFields) {
         this.form.rootElement.removeEventListener("input", onChangeHandler);
         this.form.rootElement.removeEventListener("reset", onChangeHandler);
-        this.address.filledRecordGUID = null;
+        targetSet.filledRecordGUID = null;
       }
     };
 
@@ -354,11 +400,20 @@ FormAutofillHandler.prototype = {
    *
    * @param {Object} profile
    *        A profile to be previewed with
+   * @param {Object} focusedInput
+   *        A focused input element for determining credit card or address fields.
    */
-  previewFormFields(profile) {
+  previewFormFields(profile, focusedInput) {
     log.debug("preview profile in autofillFormFields:", profile);
 
-    for (let fieldDetail of this.address.fieldDetails) {
+    // Always show the decrypted credit card number when Master Password is
+    // disabled.
+    if (profile["cc-number-decrypted"]) {
+      profile["cc-number"] = profile["cc-number-decrypted"];
+    }
+
+    let fieldDetails = this.getFieldDetailsByElement(focusedInput);
+    for (let fieldDetail of fieldDetails) {
       let element = fieldDetail.elementWeakRef.get();
       let value = profile[fieldDetail.fieldName] || "";
 
@@ -390,11 +445,15 @@ FormAutofillHandler.prototype = {
 
   /**
    * Clear preview text and background highlight of all fields.
+   *
+   * @param {Object} focusedInput
+   *        A focused input element for determining credit card or address fields.
    */
-  clearPreviewedFormFields() {
+  clearPreviewedFormFields(focusedInput) {
     log.debug("clear previewed fields in:", this.form);
 
-    for (let fieldDetail of this.address.fieldDetails) {
+    let fieldDetails = this.getFieldDetailsByElement(focusedInput);
+    for (let fieldDetail of fieldDetails) {
       let element = fieldDetail.elementWeakRef.get();
       if (!element) {
         log.warn(fieldDetail.fieldName, "is unreachable");
@@ -490,6 +549,8 @@ FormAutofillHandler.prototype = {
           // are multiple options being selected. The empty option is usually
           // assumed to be default along with a meaningless text to users.
           if (!value || element.selectedOptions.length != 1) {
+            // Keep the property and preserve more information for address updating
+            data[type].record[detail.fieldName] = "";
             return;
           }
 
@@ -498,6 +559,8 @@ FormAutofillHandler.prototype = {
         }
 
         if (!value) {
+          // Keep the property and preserve more information for updating
+          data[type].record[detail.fieldName] = "";
           return;
         }
 
@@ -509,19 +572,96 @@ FormAutofillHandler.prototype = {
       });
     });
 
+    this._normalizeAddress(data.address);
+
     if (data.address &&
-        Object.keys(data.address.record).length < FormAutofillUtils.AUTOFILL_FIELDS_THRESHOLD) {
+        Object.values(data.address.record).filter(v => v).length <
+        FormAutofillUtils.AUTOFILL_FIELDS_THRESHOLD) {
       log.debug("No address record saving since there are only",
                      Object.keys(data.address.record).length,
                      "usable fields");
       delete data.address;
     }
 
-    if (data.creditCard && !data.creditCard.record["cc-number"]) {
-      log.debug("No credit card record saving since card number is empty");
+    if (data.creditCard && (!data.creditCard.record["cc-number"] ||
+        !FormAutofillUtils.isCCNumber(data.creditCard.record["cc-number"]))) {
+      log.debug("No credit card record saving since card number is invalid");
       delete data.creditCard;
     }
 
     return data;
+  },
+
+  _normalizeAddress(address) {
+    if (!address) {
+      return;
+    }
+
+    // Normalize Country
+    if (address.record.country) {
+      let detail = this.getFieldDetailByName("country");
+      // Try identifying country field aggressively if it doesn't come from
+      // @autocomplete.
+      if (detail._reason != "autocomplete") {
+        let countryCode = FormAutofillUtils.identifyCountryCode(address.record.country);
+        if (countryCode) {
+          address.record.country = countryCode;
+        }
+      }
+    }
+
+    // Normalize Tel
+    FormAutofillUtils.compressTel(address.record);
+    if (address.record.tel) {
+      let allTelComponentsAreUntouched = Object.keys(address.record)
+        .filter(field => FormAutofillUtils.getCategoryFromFieldName(field) == "tel")
+        .every(field => address.untouchedFields.includes(field));
+      if (allTelComponentsAreUntouched) {
+        // No need to verify it if none of related fields are modified after autofilling.
+        if (!address.untouchedFields.includes("tel")) {
+          address.untouchedFields.push("tel");
+        }
+      } else {
+        let strippedNumber = address.record.tel.replace(/[\s\(\)-]/g, "");
+
+        // Remove "tel" if it contains invalid characters or the length of its
+        // number part isn't between 5 and 15.
+        // (The maximum length of a valid number in E.164 format is 15 digits
+        //  according to https://en.wikipedia.org/wiki/E.164 )
+        if (!/^(\+?)[\da-zA-Z]{5,15}$/.test(strippedNumber)) {
+          address.record.tel = "";
+        }
+      }
+    }
+  },
+
+  async _decrypt(cipherText, reauth) {
+    return new Promise((resolve) => {
+      Services.cpmm.addMessageListener("FormAutofill:DecryptedString", function getResult(result) {
+        Services.cpmm.removeMessageListener("FormAutofill:DecryptedString", getResult);
+        resolve(result.data);
+      });
+
+      Services.cpmm.sendAsyncMessage("FormAutofill:GetDecryptedString", {cipherText, reauth});
+    });
+  },
+
+  handleEvent(event) {
+    switch (event.type) {
+      case "input":
+        if (!event.isTrusted) {
+          return;
+        }
+
+        for (let detail of this.fieldDetails) {
+          let input = detail.elementWeakRef.get();
+          if (!input) {
+            continue;
+          }
+          input.removeEventListener("input", this);
+        }
+        this.timeStartedFillingMS = Date.now();
+        break;
+    }
   },
 };

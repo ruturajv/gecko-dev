@@ -837,8 +837,7 @@ CreateInterfaceObject(JSContext* cx, JS::Handle<JSObject*> global,
       if (!namedConstructor ||
           !JS_DefineProperty(cx, namedConstructor, "prototype",
                              proto,
-                             JSPROP_PERMANENT | JSPROP_READONLY,
-                             JS_STUBGETTER, JS_STUBSETTER) ||
+                             JSPROP_PERMANENT | JSPROP_READONLY) ||
           (defineOnGlobal &&
            !DefineConstructor(cx, global, namedConstructors->mName,
                               namedConstructor))) {
@@ -1617,7 +1616,7 @@ DEBUG_CheckXBLCallable(JSContext *cx, JSObject *obj)
     // has been adopted into another compartment, those prototypes will now point
     // to a different XBL scope (which is ok).
     MOZ_ASSERT_IF(js::IsCrossCompartmentWrapper(obj),
-                  xpc::IsContentXBLScope(js::GetObjectCompartment(js::UncheckedUnwrap(obj))));
+                  xpc::IsInContentXBLScope(js::UncheckedUnwrap(obj)));
     MOZ_ASSERT(JS::IsCallable(obj));
 }
 
@@ -1716,7 +1715,7 @@ XrayResolveOwnProperty(JSContext* cx, JS::Handle<JSObject*> wrapper,
     // Make sure to assert that.
     JS::Rooted<JSObject*> maybeElement(cx, obj);
     Element* element;
-    if (xpc::ObjectScope(wrapper)->IsContentXBLScope() &&
+    if (xpc::IsInContentXBLScope(wrapper) &&
         NS_SUCCEEDED(UNWRAP_OBJECT(Element, &maybeElement, element))) {
       if (!nsContentUtils::LookupBindingMember(cx, element, id, desc)) {
         return false;
@@ -2048,8 +2047,6 @@ NativePropertyHooks sEmptyNativePropertyHooks = {
 const js::ClassOps sBoringInterfaceObjectClassClassOps = {
     nullptr,               /* addProperty */
     nullptr,               /* delProperty */
-    nullptr,               /* getProperty */
-    nullptr,               /* setProperty */
     nullptr,               /* enumerate */
     nullptr,               /* newEnumerate */
     nullptr,               /* resolve */
@@ -3747,8 +3744,7 @@ AssertReflectorHasGivenProto(JSContext* aCx, JSObject* aReflector,
 #endif // DEBUG
 
 void
-SetDocumentAndPageUseCounter(JSContext* aCx, JSObject* aObject,
-                             UseCounter aUseCounter)
+SetDocumentAndPageUseCounter(JSObject* aObject, UseCounter aUseCounter)
 {
   nsGlobalWindow* win = xpc::WindowGlobalOrNull(js::UncheckedUnwrap(aObject));
   if (win && win->GetDocument()) {

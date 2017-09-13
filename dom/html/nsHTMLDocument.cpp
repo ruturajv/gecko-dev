@@ -11,7 +11,7 @@
 #include "mozilla/dom/HTMLAllCollection.h"
 #include "nsCOMPtr.h"
 #include "nsGlobalWindow.h"
-#include "nsXPIDLString.h"
+#include "nsString.h"
 #include "nsPrintfCString.h"
 #include "nsReadableUtils.h"
 #include "nsUnicharUtils.h"
@@ -57,7 +57,6 @@
 #include "nsIComponentManager.h"
 #include "nsParserCIID.h"
 #include "nsIDOMHTMLElement.h"
-#include "nsIDOMHTMLHeadElement.h"
 #include "nsNameSpaceManager.h"
 #include "nsGenericHTMLElement.h"
 #include "mozilla/css/Loader.h"
@@ -204,18 +203,13 @@ NS_IMPL_CYCLE_COLLECTION_INHERITED(nsHTMLDocument, nsDocument,
                                    mAnchors,
                                    mScripts,
                                    mForms,
-                                   mFormControls,
                                    mWyciwygChannel,
                                    mMidasCommandManager)
 
-NS_IMPL_ADDREF_INHERITED(nsHTMLDocument, nsDocument)
-NS_IMPL_RELEASE_INHERITED(nsHTMLDocument, nsDocument)
-
-// QueryInterface implementation for nsHTMLDocument
-NS_INTERFACE_TABLE_HEAD_CYCLE_COLLECTION_INHERITED(nsHTMLDocument)
-  NS_INTERFACE_TABLE_INHERITED(nsHTMLDocument, nsIHTMLDocument,
-                               nsIDOMHTMLDocument)
-NS_INTERFACE_TABLE_TAIL_INHERITING(nsDocument)
+NS_IMPL_ISUPPORTS_CYCLE_COLLECTION_INHERITED(nsHTMLDocument,
+                                             nsDocument,
+                                             nsIHTMLDocument,
+                                             nsIDOMHTMLDocument)
 
 JSObject*
 nsHTMLDocument::WrapNode(JSContext* aCx, JS::Handle<JSObject*> aGivenProto)
@@ -358,12 +352,8 @@ nsHTMLDocument::TryCacheCharset(nsICachingChannel* aCachingChannel,
   if (NS_FAILED(rv) || cachedCharset.IsEmpty()) {
     return;
   }
-  // The replacement encoding is not ASCII-compatible.
-  if (cachedCharset.EqualsLiteral("replacement")) {
-    return;
-  }
   // The canonical names changed, so the cache may have an old name.
-  const Encoding* encoding = Encoding::ForLabel(cachedCharset);
+  const Encoding* encoding = Encoding::ForLabelNoReplacement(cachedCharset);
   if (!encoding) {
     return;
   }
@@ -737,9 +727,6 @@ nsHTMLDocument::StartDocumentLoad(const char* aCommand,
       if (NS_SUCCEEDED(rv)) {
         if (cachedSource > charsetSource) {
           auto cachedEncoding = Encoding::ForLabel(cachedCharset);
-          if (!cachedEncoding && cachedCharset.EqualsLiteral("replacement")) {
-            cachedEncoding = REPLACEMENT_ENCODING;
-          }
           if (cachedEncoding) {
             charsetSource = cachedSource;
             encoding = WrapNotNull(cachedEncoding);
@@ -1150,7 +1137,7 @@ nsHTMLDocument::SetBody(nsGenericHTMLElement* newBody, ErrorResult& rv)
 }
 
 NS_IMETHODIMP
-nsHTMLDocument::GetHead(nsIDOMHTMLHeadElement** aHead)
+nsHTMLDocument::GetHead(nsISupports** aHead)
 {
   *aHead = nullptr;
 
@@ -1348,6 +1335,11 @@ nsHTMLDocument::GetCookie(nsAString& aCookie, ErrorResult& rv)
     return;
   }
 
+  // If the document is a cookie-averse Document... return the empty string.
+  if (IsCookieAverse()) {
+    return;
+  }
+
   // not having a cookie service isn't an error
   nsCOMPtr<nsICookieService> service = do_GetService(NS_COOKIESERVICE_CONTRACTID);
   if (service) {
@@ -1398,6 +1390,11 @@ nsHTMLDocument::SetCookie(const nsAString& aCookie, ErrorResult& rv)
   // is prohibited.
   if (mSandboxFlags & SANDBOXED_ORIGIN) {
     rv.Throw(NS_ERROR_DOM_SECURITY_ERR);
+    return;
+  }
+
+  // If the document is a cookie-averse Document... do nothing.
+  if (IsCookieAverse()) {
     return;
   }
 
@@ -2348,26 +2345,18 @@ nsContentList*
 nsHTMLDocument::GetForms()
 {
   if (!mForms) {
+    // Please keep this in sync with nsContentUtils::GenerateStateKey().
     mForms = new nsContentList(this, kNameSpaceID_XHTML, nsGkAtoms::form, nsGkAtoms::form);
   }
 
   return mForms;
 }
 
-static bool MatchFormControls(Element* aElement, int32_t aNamespaceID,
-                              nsIAtom* aAtom, void* aData)
+bool
+nsHTMLDocument::MatchFormControls(Element* aElement, int32_t aNamespaceID,
+                                  nsIAtom* aAtom, void* aData)
 {
   return aElement->IsNodeOfType(nsIContent::eHTML_FORM_CONTROL);
-}
-
-nsContentList*
-nsHTMLDocument::GetFormControls()
-{
-  if (!mFormControls) {
-    mFormControls = new nsContentList(this, MatchFormControls, nullptr, nullptr);
-  }
-
-  return mFormControls;
 }
 
 nsresult
@@ -2833,7 +2822,8 @@ nsHTMLDocument::EditingStateChanged()
     if (designMode) {
       nsCOMPtr<nsPIDOMWindowOuter> focusedWindow;
       nsIContent* focusedContent =
-        nsFocusManager::GetFocusedDescendant(window, false,
+        nsFocusManager::GetFocusedDescendant(window,
+                                             nsFocusManager::eOnlyCurrentWindow,
                                              getter_AddRefs(focusedWindow));
       if (focusedContent) {
         nsIFrame* focusedFrame = focusedContent->GetPrimaryFrame();
@@ -3252,9 +3242,10 @@ nsHTMLDocument::ExecCommand(const nsAString& commandID,
 
   bool isCutCopy = (commandID.LowerCaseEqualsLiteral("cut") ||
                     commandID.LowerCaseEqualsLiteral("copy"));
+  bool isPaste = commandID.LowerCaseEqualsLiteral("paste");
 
   // if editing is not on, bail
-  if (!isCutCopy && !IsEditingOnAfterFlush()) {
+  if (!isCutCopy && !isPaste && !IsEditingOnAfterFlush()) {
     return false;
   }
 
@@ -3295,9 +3286,8 @@ nsHTMLDocument::ExecCommand(const nsAString& commandID,
     return false;
   }
 
-  bool restricted = commandID.LowerCaseEqualsLiteral("paste");
-  if (restricted && !nsContentUtils::PrincipalHasPermission(&aSubjectPrincipal,
-                                                            NS_LITERAL_STRING("clipboardRead"))) {
+  if (isPaste && !nsContentUtils::PrincipalHasPermission(&aSubjectPrincipal,
+                                                         nsGkAtoms::clipboardRead)) {
     return false;
   }
 
@@ -3725,7 +3715,6 @@ nsHTMLDocument::DocAddSizeOfExcludingThis(nsWindowSizes& aWindowSizes) const
   // - mAnchors
   // - mScripts
   // - mForms
-  // - mFormControls
   // - mWyciwygChannel
   // - mMidasCommandManager
 }

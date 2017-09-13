@@ -9,6 +9,7 @@ const MONTH_YEAR = ".month-year",
       BTN_PREV_MONTH = ".prev",
       BTN_NEXT_MONTH = ".next";
 const DATE_FORMAT = new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", timeZone: "UTC" }).format;
+const DATE_FORMAT_LOCAL = new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long" }).format;
 
 // Create a list of abbreviations for calendar class names
 const W = "weekend",
@@ -54,7 +55,11 @@ add_task(async function test_datepicker_today() {
 
   await helper.openPicker("data:text/html, <input type='date'>");
 
-  Assert.equal(helper.getElement(MONTH_YEAR).textContent, DATE_FORMAT(date));
+  if (date.getMonth() === new Date().getMonth()) {
+    Assert.equal(helper.getElement(MONTH_YEAR).textContent, DATE_FORMAT_LOCAL(date));
+  } else {
+    Assert.ok(true, "Skipping datepicker today test if month changes when opening picker.");
+  }
 
   await helper.tearDown();
 });
@@ -216,6 +221,46 @@ add_task(async function test_datepicker_step() {
       [P], [P], [P], [],  [P], [P], [P],
     ]),
     "2016-12 with step",
+  );
+
+  await helper.tearDown();
+});
+
+add_task(async function test_datepicker_abs_min() {
+  const inputValue = "0001-01-01";
+  await helper.openPicker(`data:text/html, <input type="date" value="${inputValue}">`);
+
+  Assert.deepEqual(
+    getCalendarText(),
+    [
+      "",   "1",  "2",  "3",  "4",  "5",  "6",
+      "7",  "8",  "9",  "10", "11", "12", "13",
+      "14", "15", "16", "17", "18", "19", "20",
+      "21", "22", "23", "24", "25", "26", "27",
+      "28", "29", "30", "31", "1",  "2",  "3",
+      "4",  "5",  "6",  "7",  "8",  "9",  "10",
+    ],
+    "0001-01",
+  );
+
+  await helper.tearDown();
+});
+
+add_task(async function test_datepicker_abs_max() {
+  const inputValue = "275760-09-13";
+  await helper.openPicker(`data:text/html, <input type="date" value="${inputValue}">`);
+
+  Assert.deepEqual(
+    getCalendarText(),
+    [
+      "31", "1", "2", "3",  "4",  "5",  "6",
+      "7",  "8", "9", "10", "11", "12", "13",
+      "",   "",  "",  "",   "",   "",   "",
+      "",   "",  "",  "",   "",   "",   "",
+      "",   "",  "",  "",   "",   "",   "",
+      "",   "",  "",  "",   "",   "",   "",
+    ],
+    "275760-09",
   );
 
   await helper.tearDown();

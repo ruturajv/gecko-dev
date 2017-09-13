@@ -201,7 +201,11 @@ class Test(MachCommandBase):
     @Command('test', category='testing',
              description='Run tests (detects the kind of test and runs it).')
     @CommandArgument('what', default=None, nargs='*', help=TEST_HELP)
-    def test(self, what):
+    @CommandArgument('extra_args', default=None, nargs=argparse.REMAINDER,
+                     help="Extra arguments to pass to the underlying test command(s). "
+                          "If an underlying command doesn't recognize the argument, it "
+                          "will fail.")
+    def test(self, what, extra_args):
         """Run tests from names or paths.
 
         mach test accepts arguments specifying which tests to run. Each argument
@@ -265,12 +269,7 @@ class Test(MachCommandBase):
                 print("Tests will be run based on modifications to the "
                       "following files:\n\t%s" % "\n\t".join(changed_files))
 
-            from mozbuild.frontend.reader import (
-                BuildReader,
-                EmptyConfig,
-            )
-            config = EmptyConfig(self.topsrcdir)
-            reader = BuildReader(config)
+            reader = self.mozbuild_reader(config_mode='empty')
             files_info = reader.files_info(changed_files)
 
             paths, tags, flavors = set(), set(), set()
@@ -305,7 +304,7 @@ class Test(MachCommandBase):
             if 'mach_command' in suite:
                 res = self._mach_context.commands.dispatch(
                     suite['mach_command'], self._mach_context,
-                    **suite['kwargs'])
+                    argv=extra_args, **suite['kwargs'])
                 if res:
                     status = res
 
@@ -331,7 +330,7 @@ class Test(MachCommandBase):
 
             res = self._mach_context.commands.dispatch(
                 m['mach_command'], self._mach_context,
-                test_objects=tests, **kwargs)
+                argv=extra_args, test_objects=tests, **kwargs)
             if res:
                 status = res
 

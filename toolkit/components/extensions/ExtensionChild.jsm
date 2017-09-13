@@ -24,6 +24,9 @@ const Cr = Components.results;
 Cu.import("resource://gre/modules/Services.jsm");
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 
+XPCOMUtils.defineLazyServiceGetter(this, "finalizationService",
+  "@mozilla.org/toolkit/finalizationwitness;1", "nsIFinalizationWitnessService");
+
 XPCOMUtils.defineLazyModuleGetters(this, {
   ExtensionContent: "resource://gre/modules/ExtensionContent.jsm",
   MessageChannel: "resource://gre/modules/MessageChannel.jsm",
@@ -41,6 +44,7 @@ const {
   defineLazyGetter,
   getMessageManager,
   getUniqueId,
+  getWinUtils,
   withHandlingUserInput,
 } = ExtensionUtils;
 
@@ -73,6 +77,38 @@ function injectAPI(source, dest) {
     }
   }
 }
+
+/**
+ * A finalization witness helper that wraps a sendMessage response and
+ * guarantees to either get the promise resolved, or rejected when the
+ * wrapped promise goes out of scope.
+ *
+ * Holding a reference to a returned StrongPromise doesn't prevent the
+ * wrapped promise from being garbage collected.
+ */
+const StrongPromise = {
+  wrap(promise, channelId, location) {
+    return new Promise((resolve, reject) => {
+      const tag = `${channelId}|${location}`;
+      const witness = finalizationService.make("extensions-sendMessage-witness", tag);
+      promise.then(value => {
+        witness.forget();
+        resolve(value);
+      }, error => {
+        witness.forget();
+        reject(error);
+      });
+    });
+  },
+  observe(subject, topic, tag) {
+    const pos = tag.indexOf("|");
+    const channel = tag.substr(0, pos);
+    const location = tag.substr(pos + 1);
+    const message = `Promised response from onMessage listener at ${location} went out of scope`;
+    MessageChannel.abortChannel(channel, {message});
+  },
+};
+Services.obs.addObserver(StrongPromise, "extensions-sendMessage-witness");
 
 /**
  * Abstraction for a Port object in the extension API.
@@ -350,6 +386,8 @@ class Messenger {
 
   _onMessage(name, filter) {
     return new EventManager(this.context, name, fire => {
+      const [location] = new this.context.cloneScope.Error().stack.split("\n", 1);
+
       let listener = {
         messageFilterPermissive: this.optionalFilter,
         messageFilterStrict: this.filter,
@@ -360,7 +398,7 @@ class Messenger {
                   filter(sender, recipient));
         },
 
-        receiveMessage: ({target, data: holder, sender, recipient}) => {
+        receiveMessage: ({target, data: holder, sender, recipient, channelId}) => {
           if (!this.context.active) {
             return;
           }
@@ -386,9 +424,9 @@ class Messenger {
           message = null;
 
           if (result instanceof this.context.cloneScope.Promise) {
-            return result;
+            return StrongPromise.wrap(result, channelId, location);
           } else if (result === true) {
-            return promise;
+            return StrongPromise.wrap(promise, channelId, location);
           }
           return response;
         },
@@ -647,8 +685,7 @@ class ProxyAPIImplementation extends SchemaAPIInterface {
   callAsyncFunction(args, callback, requireUserInput) {
     if (requireUserInput) {
       let context = this.childApiManager.context;
-      let winUtils = context.contentWindow.getInterface(Ci.nsIDOMWindowUtils);
-      if (!winUtils.isHandlingUserInput) {
+      if (!getWinUtils(context.contentWindow).isHandlingUserInput) {
         let err = new context.cloneScope.Error(`${this.path} may only be called from a user input handler`);
         return context.wrapPromise(Promise.reject(err), callback);
       }

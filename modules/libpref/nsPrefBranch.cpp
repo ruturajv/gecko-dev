@@ -15,7 +15,6 @@
 #include "nsIDirectoryService.h"
 #include "nsString.h"
 #include "nsReadableUtils.h"
-#include "nsXPIDLString.h"
 #include "nsPrintfCString.h"
 #include "nsIStringBundle.h"
 #include "prefapi.h"
@@ -841,7 +840,7 @@ nsPrefBranch::GetDefaultFromPropertiesFile(const char *aPrefName,
 
   // the default value contains a URL to a .properties file
 
-  nsXPIDLCString propertyFileURL;
+  nsCString propertyFileURL;
   rv = PREF_CopyCharPref(aPrefName, getter_Copies(propertyFileURL), true);
   if (NS_FAILED(rv))
     return rv;
@@ -852,7 +851,7 @@ nsPrefBranch::GetDefaultFromPropertiesFile(const char *aPrefName,
     return NS_ERROR_FAILURE;
 
   nsCOMPtr<nsIStringBundle> bundle;
-  rv = bundleService->CreateBundle(propertyFileURL,
+  rv = bundleService->CreateBundle(propertyFileURL.get(),
                                    getter_AddRefs(bundle));
   if (NS_FAILED(rv))
     return rv;

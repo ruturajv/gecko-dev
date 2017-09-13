@@ -27,6 +27,8 @@ var {synthesizeDragStart, synthesizeDrop} = EventUtils;
 const kNSXUL = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
 const kTabEventFailureTimeoutInMs = 20000;
 
+const kForceOverflowWidthPx = 300;
+
 function createDummyXULButton(id, label, win = window) {
   let btn = document.createElementNS(kNSXUL, "toolbarbutton");
   btn.id = id;
@@ -509,4 +511,15 @@ function checkContextMenu(aContextMenu, aExpectedEntries, aWindow = window) {
       ok(false, "Exception when checking context menu: " + e);
     }
   }
+}
+
+function waitForOverflowButtonShown(win = window) {
+  let dwu = win.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
+  return BrowserTestUtils.waitForCondition(() => {
+    info("Waiting for overflow button to have non-0 size");
+    let ov = win.document.getElementById("nav-bar-overflow-button");
+    let icon = win.document.getAnonymousElementByAttribute(ov, "class", "toolbarbutton-icon");
+    let bounds = dwu.getBoundsWithoutFlushing(icon);
+    return bounds.width > 0 && bounds.height > 0;
+  });
 }

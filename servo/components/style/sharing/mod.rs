@@ -67,7 +67,6 @@
 use Atom;
 use applicable_declarations::ApplicableDeclarationBlock;
 use atomic_refcell::{AtomicRefCell, AtomicRefMut};
-use bit_vec::BitVec;
 use bloom::StyleBloom;
 use cache::{LRUCache, LRUCacheMutIterator};
 use context::{SelectorFlagsMap, SharedStyleContext, StyleContext};
@@ -78,6 +77,7 @@ use owning_ref::OwningHandle;
 use properties::ComputedValues;
 use selectors::matching::{ElementSelectorFlags, VisitedHandlingMode};
 use servo_arc::Arc;
+use smallbitvec::SmallBitVec;
 use smallvec::SmallVec;
 use std::marker::PhantomData;
 use std::mem;
@@ -123,7 +123,7 @@ pub struct ValidationData {
 
     /// The cached result of matching this entry against the revalidation
     /// selectors.
-    revalidation_match_results: Option<BitVec>,
+    revalidation_match_results: Option<SmallBitVec>,
 }
 
 impl ValidationData {
@@ -177,7 +177,7 @@ impl ValidationData {
         bloom: &StyleBloom<E>,
         bloom_known_valid: bool,
         flags_setter: &mut F
-    ) -> &BitVec
+    ) -> &SmallBitVec
         where E: TElement,
               F: FnMut(&E, ElementSelectorFlags),
     {
@@ -256,7 +256,7 @@ impl<E: TElement> StyleSharingCandidate<E> {
         &mut self,
         stylist: &Stylist,
         bloom: &StyleBloom<E>,
-    ) -> &BitVec {
+    ) -> &SmallBitVec {
         self.validation_data.revalidation_match_results(
             self.element,
             stylist,
@@ -309,7 +309,7 @@ impl<E: TElement> StyleSharingTarget<E> {
         stylist: &Stylist,
         bloom: &StyleBloom<E>,
         selector_flags_map: &mut SelectorFlagsMap<E>
-    ) -> &BitVec {
+    ) -> &SmallBitVec {
         // It's important to set the selector flags. Otherwise, if we succeed in
         // sharing the style, we may not set the slow selector flags for the
         // right elements (which may not necessarily be |element|), causing
@@ -509,6 +509,23 @@ impl<E: TElement> StyleSharingCandidateCache<E> {
             return;
         }
 
+        // If the element has running animations, we can't share style.
+        //
+        // This is distinct from the specifies_{animations,transitions} check below,
+        // because:
+        //   * Animations can be triggered directly via the Web Animations API.
+        //   * Our computed style can still be affected by animations after we no
+        //     longer match any animation rules, since removing animations involves
+        //     a sequential task and an additional traversal.
+        if element.has_animations() {
+            debug!("Failing to insert to the cache: running animations");
+            return;
+        }
+
+        // In addition to the above running animations check, we also need to
+        // check CSS animation and transition styles since it's possible that
+        // we are about to create CSS animations/transitions.
+        //
         // These are things we don't check in the candidate match because they
         // are either uncommon or expensive.
         let box_style = style.get_box();

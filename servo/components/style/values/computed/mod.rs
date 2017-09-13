@@ -4,7 +4,7 @@
 
 //! Computed values.
 
-use Atom;
+use {Atom, Namespace};
 use context::QuirksMode;
 use euclid::Size2D;
 use font_metrics::FontMetricsProvider;
@@ -14,16 +14,16 @@ use properties;
 use properties::{ComputedValues, StyleBuilder};
 #[cfg(feature = "servo")]
 use servo_url::ServoUrl;
-use std::f32;
-use std::fmt;
+use std::{f32, fmt, ops};
 #[cfg(feature = "servo")]
 use std::sync::Arc;
 use style_traits::ToCss;
+use style_traits::cursor::Cursor;
 use super::{CSSFloat, CSSInteger};
 use super::generics::{GreaterThanOrEqualToOne, NonNegative};
-use super::generics::grid::{TrackBreadth as GenericTrackBreadth, TrackSize as GenericTrackSize};
+use super::generics::grid::{GridLine as GenericGridLine, TrackBreadth as GenericTrackBreadth};
+use super::generics::grid::{TrackSize as GenericTrackSize, TrackList as GenericTrackList};
 use super::generics::grid::GridTemplateComponent as GenericGridTemplateComponent;
-use super::generics::grid::TrackList as GenericTrackList;
 use super::specified;
 
 pub use app_units::Au;
@@ -34,7 +34,8 @@ pub use self::angle::Angle;
 pub use self::background::BackgroundSize;
 pub use self::border::{BorderImageSlice, BorderImageWidth, BorderImageSideWidth};
 pub use self::border::{BorderRadius, BorderCornerRadius};
-pub use self::color::{Color, RGBAColor};
+pub use self::box_::VerticalAlign;
+pub use self::color::{Color, ColorPropertyValue, RGBAColor};
 pub use self::effects::{BoxShadow, Filter, SimpleShadow};
 pub use self::flex::FlexBasis;
 pub use self::image::{Gradient, GradientItem, Image, ImageLayer, LineDirection, MozImageRect};
@@ -43,7 +44,6 @@ pub use self::gecko::ScrollSnapPoint;
 pub use self::rect::LengthOrNumberRect;
 pub use super::{Auto, Either, None_};
 pub use super::specified::BorderStyle;
-pub use super::generics::grid::GridLine;
 pub use self::length::{CalcLengthOrPercentage, Length, LengthOrNone, LengthOrNumber, LengthOrPercentage};
 pub use self::length::{LengthOrPercentageOrAuto, LengthOrPercentageOrNone, MaxLength, MozLength};
 pub use self::length::NonNegativeLengthOrPercentage;
@@ -60,6 +60,8 @@ pub mod angle;
 pub mod background;
 pub mod basic_shape;
 pub mod border;
+#[path = "box.rs"]
+pub mod box_;
 pub mod color;
 pub mod effects;
 pub mod flex;
@@ -127,9 +129,9 @@ impl<'a> Context<'a> {
         self.builder.device
     }
 
-    /// The current viewport size.
-    pub fn viewport_size(&self) -> Size2D<Au> {
-        self.builder.device.au_viewport_size()
+    /// The current viewport size, used to resolve viewport units.
+    pub fn viewport_size_for_viewport_unit_resolution(&self) -> Size2D<Au> {
+        self.builder.device.au_viewport_size_for_viewport_unit_resolution()
     }
 
     /// The default computed style we're getting our reset style from.
@@ -199,6 +201,11 @@ impl<'a, 'cx, 'cx_a: 'cx, S: ToComputedValue + 'a> Iterator for ComputedVecIter<
 }
 
 /// A trait to represent the conversion between computed and specified values.
+///
+/// This trait is derivable with `#[derive(ToComputedValue)]`. The derived
+/// implementation just calls `ToComputedValue::to_computed_value` on each field
+/// of the passed value, or `Clone::clone` if the field is annotated with
+/// `#[compute(clone)]`.
 pub trait ToComputedValue {
     /// The computed value type we're going to be converted to.
     type ComputedValue;
@@ -325,10 +332,17 @@ impl<T> ToComputedValue for T
     }
 }
 
-impl ComputedValueAsSpecified for Atom {}
-impl ComputedValueAsSpecified for bool {}
-
-impl ComputedValueAsSpecified for specified::BorderStyle {}
+trivial_to_computed_value!(());
+trivial_to_computed_value!(bool);
+trivial_to_computed_value!(f32);
+trivial_to_computed_value!(i32);
+trivial_to_computed_value!(u8);
+trivial_to_computed_value!(u16);
+trivial_to_computed_value!(Atom);
+trivial_to_computed_value!(BorderStyle);
+trivial_to_computed_value!(Cursor);
+trivial_to_computed_value!(Namespace);
+trivial_to_computed_value!(String);
 
 /// A `<number>` value.
 pub type Number = CSSFloat;
@@ -369,7 +383,7 @@ impl From<GreaterThanOrEqualToOneNumber> for CSSFloat {
 
 #[allow(missing_docs)]
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
-#[derive(Clone, Copy, Debug, PartialEq, ToCss)]
+#[derive(Clone, ComputeSquaredDistance, Copy, Debug, PartialEq, ToCss)]
 pub enum NumberOrPercentage {
     Percentage(Percentage),
     Number(Number),
@@ -492,10 +506,13 @@ pub type TrackSize = GenericTrackSize<LengthOrPercentage>;
 
 /// The computed value of a grid `<track-list>`
 /// (could also be `<auto-track-list>` or `<explicit-track-list>`)
-pub type TrackList = GenericTrackList<LengthOrPercentage>;
+pub type TrackList = GenericTrackList<LengthOrPercentage, Integer>;
+
+/// The computed value of a `<grid-line>`.
+pub type GridLine = GenericGridLine<Integer>;
 
 /// `<grid-template-rows> | <grid-template-columns>`
-pub type GridTemplateComponent = GenericGridTemplateComponent<LengthOrPercentage>;
+pub type GridTemplateComponent = GenericGridTemplateComponent<LengthOrPercentage, Integer>;
 
 impl ClipRectOrAuto {
     /// Return an auto (default for clip-rect and image-region) value
@@ -545,6 +562,13 @@ impl NonNegativeAu {
     }
 }
 
+impl ops::Add<NonNegativeAu> for NonNegativeAu {
+    type Output = NonNegativeAu;
+    fn add(self, other: Self) -> Self {
+        (self.0 + other.0).into()
+    }
+}
+
 impl From<Au> for NonNegativeAu {
     #[inline]
     fn from(au: Au) -> NonNegativeAu {
@@ -554,7 +578,7 @@ impl From<Au> for NonNegativeAu {
 
 /// The computed value of a CSS `url()`, resolved relative to the stylesheet URL.
 #[cfg(feature = "servo")]
-#[derive(Clone, Debug, HeapSizeOf, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, HeapSizeOf, PartialEq, Serialize)]
 pub enum ComputedUrl {
     /// The `url()` was invalid or it wasn't specified by the user.
     Invalid(Arc<String>),

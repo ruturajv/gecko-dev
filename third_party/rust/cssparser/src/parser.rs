@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use cow_rc_str::CowRcStr;
+use smallvec::SmallVec;
 use std::ops::Range;
 use std::ascii::AsciiExt;
 use std::ops::BitOr;
@@ -56,6 +57,7 @@ pub enum BasicParseError<'a> {
 }
 
 impl<'a, T> From<BasicParseError<'a>> for ParseError<'a, T> {
+    #[inline]
     fn from(this: BasicParseError<'a>) -> ParseError<'a, T> {
         ParseError::Basic(this)
     }
@@ -97,6 +99,15 @@ impl<'i> ParserInput<'i> {
     pub fn new(input: &'i str) -> ParserInput<'i> {
         ParserInput {
             tokenizer: Tokenizer::new(input),
+            cached_token: None,
+        }
+    }
+
+    /// Create a new input for a parser.  Line numbers in locations
+    /// are offset by the given value.
+    pub fn new_with_line_number_offset(input: &'i str, first_line_number: u32) -> ParserInput<'i> {
+        ParserInput {
+            tokenizer: Tokenizer::with_first_line_number(input, first_line_number),
             cached_token: None,
         }
     }
@@ -190,16 +201,19 @@ mod ClosingDelimiter {
 impl BitOr<Delimiters> for Delimiters {
     type Output = Delimiters;
 
+    #[inline]
     fn bitor(self, other: Delimiters) -> Delimiters {
         Delimiters { bits: self.bits | other.bits }
     }
 }
 
 impl Delimiters {
+    #[inline]
     fn contains(self, other: Delimiters) -> bool {
         (self.bits & other.bits) != 0
     }
 
+    #[inline]
     fn from_byte(byte: Option<u8>) -> Delimiters {
         match byte {
             Some(b';') => Delimiter::Semicolon,
@@ -288,6 +302,34 @@ impl<'i: 't, 't> Parser<'i, 't> {
         }
     }
 
+    /// Advance the input until the next token that’s not whitespace or a comment.
+    #[inline]
+    pub fn skip_whitespace(&mut self) {
+        if let Some(block_type) = self.at_start_of.take() {
+            consume_until_end_of_block(block_type, &mut self.input.tokenizer);
+        }
+
+        self.input.tokenizer.skip_whitespace()
+    }
+
+    #[inline]
+    pub(crate) fn skip_cdc_and_cdo(&mut self) {
+        if let Some(block_type) = self.at_start_of.take() {
+            consume_until_end_of_block(block_type, &mut self.input.tokenizer);
+        }
+
+        self.input.tokenizer.skip_cdc_and_cdo()
+    }
+
+    #[inline]
+    pub(crate) fn next_byte(&self) -> Option<u8> {
+        let byte = self.input.tokenizer.next_byte();
+        if self.stop_before.contains(Delimiters::from_byte(byte)) {
+            return None
+        }
+        byte
+    }
+
     /// Restore the internal state of the parser (including position within the input)
     /// to what was previously saved by the `Parser::position` method.
     ///
@@ -309,20 +351,6 @@ impl<'i: 't, 't> Parser<'i, 't> {
     #[inline]
     pub fn seen_var_functions(&mut self) -> bool {
         self.input.tokenizer.seen_var_functions()
-    }
-
-    /// Start looking for viewport percentage lengths. (See the `seen_viewport_percentages`
-    /// method.)
-    #[inline]
-    pub fn look_for_viewport_percentages(&mut self) {
-        self.input.tokenizer.look_for_viewport_percentages()
-    }
-
-    /// Return whether a `vh`, `vw`, `vmin`, or `vmax` dimension has been seen by the tokenizer
-    /// since `look_for_viewport_percentages` was called, and stop looking.
-    #[inline]
-    pub fn seen_viewport_percentages(&mut self) -> bool {
-        self.input.tokenizer.seen_viewport_percentages()
     }
 
     /// Execute the given closure, passing it the parser.
@@ -364,14 +392,8 @@ impl<'i: 't, 't> Parser<'i, 't> {
     ///
     /// This only returns a closing token when it is unmatched (and therefore an error).
     pub fn next(&mut self) -> Result<&Token<'i>, BasicParseError<'i>> {
-        loop {
-            match self.next_including_whitespace_and_comments() {
-                Err(e) => return Err(e),
-                Ok(&Token::WhiteSpace(_)) | Ok(&Token::Comment(_)) => {},
-                _ => break
-            }
-        }
-        Ok(self.input.cached_token_ref())
+        self.skip_whitespace();
+        self.next_including_whitespace_and_comments()
     }
 
     /// Same as `Parser::next`, but does not skip whitespace tokens.
@@ -409,7 +431,6 @@ impl<'i: 't, 't> Parser<'i, 't> {
             if cached_token.start_position == token_start_position => {
                 self.input.tokenizer.reset(&cached_token.end_state);
                 match cached_token.token {
-                    Token::Dimension { ref unit, .. } => self.input.tokenizer.see_dimension(unit),
                     Token::Function(ref name) => self.input.tokenizer.see_function(name),
                     _ => {}
                 }
@@ -457,8 +478,13 @@ impl<'i: 't, 't> Parser<'i, 't> {
     #[inline]
     pub fn parse_comma_separated<F, T, E>(&mut self, mut parse_one: F) -> Result<Vec<T>, ParseError<'i, E>>
     where F: for<'tt> FnMut(&mut Parser<'i, 'tt>) -> Result<T, ParseError<'i, E>> {
-        let mut values = vec![];
+        // Vec grows from 0 to 4 by default on first push().  So allocate with
+        // capacity 1, so in the somewhat common case of only one item we don't
+        // way overallocate.  Note that we always push at least one item if
+        // parsing succeeds.
+        let mut values = Vec::with_capacity(1);
         loop {
+            self.skip_whitespace();  // Unnecessary for correctness, but may help try() in parse_one rewind less.
             values.push(self.parse_until_before(Delimiter::Comma, &mut parse_one)?);
             match self.next() {
                 Err(_) => return Ok(values),
@@ -766,10 +792,10 @@ pub fn parse_until_before<'i: 't, 't, F, T, E>(parser: &mut Parser<'i, 't>,
     }
     // FIXME: have a special-purpose tokenizer method for this that does less work.
     loop {
-        if delimiters.contains(Delimiters::from_byte((parser.input.tokenizer).next_byte())) {
+        if delimiters.contains(Delimiters::from_byte(parser.input.tokenizer.next_byte())) {
             break
         }
-        if let Ok(token) = (parser.input.tokenizer).next() {
+        if let Ok(token) = parser.input.tokenizer.next() {
             if let Some(block_type) = BlockType::opening(&token) {
                 consume_until_end_of_block(block_type, &mut parser.input.tokenizer);
             }
@@ -786,10 +812,11 @@ pub fn parse_until_after<'i: 't, 't, F, T, E>(parser: &mut Parser<'i, 't>,
                                               -> Result <T, ParseError<'i, E>>
     where F: for<'tt> FnOnce(&mut Parser<'i, 'tt>) -> Result<T, ParseError<'i, E>> {
     let result = parser.parse_until_before(delimiters, parse);
-    let next_byte = (parser.input.tokenizer).next_byte();
+    let next_byte = parser.input.tokenizer.next_byte();
     if next_byte.is_some() && !parser.stop_before.contains(Delimiters::from_byte(next_byte)) {
         debug_assert!(delimiters.contains(Delimiters::from_byte(next_byte)));
-        (parser.input.tokenizer).advance(1);
+        // We know this byte is ASCII.
+        parser.input.tokenizer.advance(1);
         if next_byte == Some(b'{') {
             consume_until_end_of_block(BlockType::CurlyBracket, &mut parser.input.tokenizer);
         }
@@ -827,8 +854,11 @@ pub fn parse_nested_block<'i: 't, 't, F, T, E>(parser: &mut Parser<'i, 't>, pars
     result
 }
 
+#[inline(never)]
+#[cold]
 fn consume_until_end_of_block(block_type: BlockType, tokenizer: &mut Tokenizer) {
-    let mut stack = vec![block_type];
+    let mut stack = SmallVec::<[BlockType; 16]>::new();
+    stack.push(block_type);
 
     // FIXME: have a special-purpose tokenizer method for this that does less work.
     while let Ok(ref token) = tokenizer.next() {

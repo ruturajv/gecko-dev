@@ -47,7 +47,7 @@ use webdriver::command::{
 use webdriver::response::{CloseWindowResponse, Cookie, CookieResponse, CookiesResponse,
                           ElementRectResponse, NewSessionResponse, TimeoutsResponse,
                           ValueResponse, WebDriverResponse, WindowRectResponse};
-use webdriver::common::{Date, ELEMENT_KEY, FrameId, Nullable, WebElement, WindowState};
+use webdriver::common::{Date, ELEMENT_KEY, FrameId, Nullable, WebElement};
 use webdriver::error::{ErrorStatus, WebDriverError, WebDriverResult};
 use webdriver::server::{WebDriverHandler, Session};
 use webdriver::httpapi::{WebDriverExtensionRoute};
@@ -451,6 +451,11 @@ impl MarionetteHandler {
         // double-dashed flags are not accepted on Windows systems
         runner.args().push("-marionette".to_owned());
 
+        // https://developer.mozilla.org/docs/Environment_variables_affecting_crash_reporting
+        runner.envs().insert("MOZ_CRASHREPORTER".to_string(), "1".to_string());
+        runner.envs().insert("MOZ_CRASHREPORTER_NO_REPORT".to_string(), "1".to_string());
+        runner.envs().insert("MOZ_CRASHREPORTER_SHUTDOWN".to_string(), "1".to_string());
+
         if let Some(args) = options.args.take() {
             runner.args().extend(args);
         };
@@ -799,12 +804,7 @@ impl MarionetteSession {
                     ErrorStatus::UnknownError,
                     "Failed to interpret y as float");
 
-                let state = match resp.result.find("state") {
-                    Some(json) => WindowState::from_json(json)?,
-                    None => WindowState::Normal,
-                };
-
-                let rect = WindowRectResponse { x, y, width, height, state };
+                let rect = WindowRectResponse { x, y, width, height };
                 WebDriverResponse::WindowRect(rect)
             },
             GetCookies => {
@@ -1054,7 +1054,7 @@ impl MarionetteCommand {
             GetWindowRect => (Some("getWindowRect"), None),
             MinimizeWindow => (Some("WebDriver:MinimizeWindow"), None),
             MaximizeWindow => (Some("maximizeWindow"), None),
-            FullscreenWindow => (Some("fullscreenWindow"), None),
+            FullscreenWindow => (Some("fullscreen"), None),
             SwitchToWindow(ref x) => (Some("switchToWindow"), Some(x.to_marionette())),
             SwitchToFrame(ref x) => (Some("switchToFrame"), Some(x.to_marionette())),
             SwitchToParentFrame => (Some("switchToParentFrame"), None),

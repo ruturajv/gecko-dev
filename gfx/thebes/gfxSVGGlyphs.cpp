@@ -136,11 +136,12 @@ nsresult
 gfxSVGGlyphsDocument::SetupPresentation()
 {
     nsCOMPtr<nsICategoryManager> catMan = do_GetService(NS_CATEGORYMANAGER_CONTRACTID);
-    nsXPIDLCString contractId;
+    nsCString contractId;
     nsresult rv = catMan->GetCategoryEntry("Gecko-Content-Viewers", "image/svg+xml", getter_Copies(contractId));
     NS_ENSURE_SUCCESS(rv, rv);
 
-    nsCOMPtr<nsIDocumentLoaderFactory> docLoaderFactory = do_GetService(contractId);
+    nsCOMPtr<nsIDocumentLoaderFactory> docLoaderFactory =
+      do_GetService(contractId.get());
     NS_ASSERTION(docLoaderFactory, "Couldn't get DocumentLoaderFactory");
 
     nsCOMPtr<nsIContentViewer> viewer;
@@ -167,9 +168,9 @@ gfxSVGGlyphsDocument::SetupPresentation()
 
     mDocument->FlushPendingNotifications(FlushType::Layout);
 
-    nsSMILAnimationController* controller = mDocument->GetAnimationController();
-    if (controller) {
-      controller->Resume(nsSMILTimeContainer::PAUSE_IMAGE);
+    if (mDocument->HasAnimationController()) {
+      mDocument->GetAnimationController()
+               ->Resume(nsSMILTimeContainer::PAUSE_IMAGE);
     }
     mDocument->ImageTracker()->SetAnimatingState(true);
 

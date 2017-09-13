@@ -598,6 +598,7 @@ impl FragmentBorderBoxIterator for ParentOffsetBorderBoxIterator {
                 (true, _, _) |
                 (false, computed_values::position::T::static_, &SpecificFragmentInfo::Table) |
                 (false, computed_values::position::T::static_, &SpecificFragmentInfo::TableCell) |
+                (false, computed_values::position::T::sticky, _) |
                 (false, computed_values::position::T::absolute, _) |
                 (false, computed_values::position::T::relative, _) |
                 (false, computed_values::position::T::fixed, _) => true,
@@ -702,7 +703,7 @@ pub fn process_resolved_style_request<'a, N>(context: &LayoutContext,
         thread_local: &mut tlc,
     };
 
-    let styles = resolve_style(&mut context, element, RuleInclusion::All, false);
+    let styles = resolve_style(&mut context, element, RuleInclusion::All, false, pseudo.as_ref());
     let style = styles.primary();
     let longhand_id = match *property {
         PropertyId::Longhand(id) => id,
@@ -766,7 +767,7 @@ where
 
     let positioned = match style.get_box().position {
         position::computed_value::T::relative |
-        /*position::computed_value::T::sticky |*/
+        position::computed_value::T::sticky |
         position::computed_value::T::fixed |
         position::computed_value::T::absolute => true,
         _ => false

@@ -13,13 +13,13 @@ use font_metrics::FontMetricsQueryResult;
 use parser::{Parse, ParserContext};
 use std::{cmp, fmt, mem};
 use std::ascii::AsciiExt;
-use std::ops::Mul;
-use style_traits::{HasViewportPercentage, ToCss, ParseError, StyleParseError};
+use std::ops::{Add, Mul};
+use style_traits::{ToCss, ParseError, StyleParseError};
 use style_traits::values::specified::AllowedLengthType;
 use stylesheets::CssRuleType;
 use super::{AllowQuirks, Number, ToComputedValue, Percentage};
 use values::{Auto, CSSFloat, Either, FONT_MEDIUM_PX, None_, Normal};
-use values::ExtremumLength;
+use values::{ExtremumLength, serialize_dimension};
 use values::computed::{self, Context};
 use values::generics::NonNegative;
 use values::specified::NonNegativeNumber;
@@ -52,7 +52,7 @@ pub fn au_to_int_px(au: f32) -> i32 {
     (au / AU_PER_PX).round() as i32
 }
 
-#[derive(Clone, PartialEq, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
 /// A font relative length.
 pub enum FontRelativeLength {
@@ -71,15 +71,16 @@ impl ToCss for FontRelativeLength {
         where W: fmt::Write
     {
         match *self {
-            FontRelativeLength::Em(length) => write!(dest, "{}em", length),
-            FontRelativeLength::Ex(length) => write!(dest, "{}ex", length),
-            FontRelativeLength::Ch(length) => write!(dest, "{}ch", length),
-            FontRelativeLength::Rem(length) => write!(dest, "{}rem", length)
+            FontRelativeLength::Em(length) => serialize_dimension(length, "em", dest),
+            FontRelativeLength::Ex(length) => serialize_dimension(length, "ex", dest),
+            FontRelativeLength::Ch(length) => serialize_dimension(length, "ch", dest),
+            FontRelativeLength::Rem(length) => serialize_dimension(length, "rem", dest)
         }
     }
 }
 
 /// A source to resolve font-relative units against
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FontBaseSize {
     /// Use the font-size of the current element
     CurrentStyle,
@@ -167,7 +168,7 @@ impl FontRelativeLength {
     }
 }
 
-#[derive(Clone, PartialEq, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
 /// A viewport-relative length.
 ///
@@ -183,19 +184,13 @@ pub enum ViewportPercentageLength {
     Vmax(CSSFloat)
 }
 
-impl HasViewportPercentage for ViewportPercentageLength {
-    fn has_viewport_percentage(&self) -> bool {
-        true
-    }
-}
-
 impl ToCss for ViewportPercentageLength {
     fn to_css<W>(&self, dest: &mut W) -> fmt::Result where W: fmt::Write {
         match *self {
-            ViewportPercentageLength::Vw(length) => write!(dest, "{}vw", length),
-            ViewportPercentageLength::Vh(length) => write!(dest, "{}vh", length),
-            ViewportPercentageLength::Vmin(length) => write!(dest, "{}vmin", length),
-            ViewportPercentageLength::Vmax(length) => write!(dest, "{}vmax", length)
+            ViewportPercentageLength::Vw(length) => serialize_dimension(length, "vw", dest),
+            ViewportPercentageLength::Vh(length) => serialize_dimension(length, "vh", dest),
+            ViewportPercentageLength::Vmin(length) => serialize_dimension(length, "vmin", dest),
+            ViewportPercentageLength::Vmax(length) => serialize_dimension(length, "vmax", dest)
         }
     }
 }
@@ -203,28 +198,26 @@ impl ToCss for ViewportPercentageLength {
 impl ViewportPercentageLength {
     /// Computes the given viewport-relative length for the given viewport size.
     pub fn to_computed_value(&self, viewport_size: Size2D<Au>) -> Au {
-        macro_rules! to_unit {
-            ($viewport_dimension:expr) => {
-                $viewport_dimension.to_f32_px() / 100.0
-            }
-        }
-
-        let value = match *self {
+        let (factor, length) = match *self {
             ViewportPercentageLength::Vw(length) =>
-                length * to_unit!(viewport_size.width),
+                (length, viewport_size.width),
             ViewportPercentageLength::Vh(length) =>
-                length * to_unit!(viewport_size.height),
+                (length, viewport_size.height),
             ViewportPercentageLength::Vmin(length) =>
-                length * to_unit!(cmp::min(viewport_size.width, viewport_size.height)),
+                (length, cmp::min(viewport_size.width, viewport_size.height)),
             ViewportPercentageLength::Vmax(length) =>
-                length * to_unit!(cmp::max(viewport_size.width, viewport_size.height)),
+                (length, cmp::max(viewport_size.width, viewport_size.height)),
         };
-        Au::from_f32_px(value)
+
+        // See bug 989802. We truncate so that adding multiple viewport units
+        // that add up to 100 does not overflow due to rounding differences
+        let trunc_scaled = ((length.0 as f64) * factor as f64 / 100.).trunc();
+        Au::from_f64_au(trunc_scaled)
     }
 }
 
 /// HTML5 "character width", as defined in HTML5 § 14.5.4.
-#[derive(Clone, PartialEq, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
 pub struct CharacterWidth(pub i32);
 
@@ -241,22 +234,8 @@ impl CharacterWidth {
     }
 }
 
-/// Same as Gecko
-const ABSOLUTE_LENGTH_MAX: i32 = (1 << 30);
-const ABSOLUTE_LENGTH_MIN: i32 = - (1 << 30);
-
-/// Helper to convert a floating point length to application units
-fn to_au_round(length: CSSFloat, au_per_unit: CSSFloat) -> Au {
-    Au(
-        (length * au_per_unit)
-        .min(ABSOLUTE_LENGTH_MAX as f32)
-        .max(ABSOLUTE_LENGTH_MIN as f32)
-        .round() as i32
-    )
-}
-
 /// Represents an absolute length with its unit
-#[derive(Clone, PartialEq, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
 pub enum AbsoluteLength {
     /// An absolute length in pixels (px)
@@ -287,6 +266,23 @@ impl AbsoluteLength {
             | AbsoluteLength::Pc(v) => v == 0.,
         }
     }
+
+    /// Convert this into a pixel value.
+    #[inline]
+    pub fn to_px(&self) -> CSSFloat {
+        use std::f32;
+
+        let pixel = match *self {
+            AbsoluteLength::Px(value) => value,
+            AbsoluteLength::In(value) => value * (AU_PER_IN / AU_PER_PX),
+            AbsoluteLength::Cm(value) => value * (AU_PER_CM / AU_PER_PX),
+            AbsoluteLength::Mm(value) => value * (AU_PER_MM / AU_PER_PX),
+            AbsoluteLength::Q(value) => value * (AU_PER_Q / AU_PER_PX),
+            AbsoluteLength::Pt(value) => value * (AU_PER_PT / AU_PER_PX),
+            AbsoluteLength::Pc(value) => value * (AU_PER_PC / AU_PER_PX),
+        };
+        pixel.min(f32::MAX).max(f32::MIN)
+    }
 }
 
 impl ToComputedValue for AbsoluteLength {
@@ -301,16 +297,20 @@ impl ToComputedValue for AbsoluteLength {
     }
 }
 
+fn au_from_f32_round(x: f32) -> Au {
+    Au::from_f64_au((x as f64).round())
+}
+
 impl From<AbsoluteLength> for Au {
     fn from(length: AbsoluteLength) -> Au {
         match length {
-            AbsoluteLength::Px(value) => to_au_round(value, AU_PER_PX),
-            AbsoluteLength::In(value) => to_au_round(value, AU_PER_IN),
-            AbsoluteLength::Cm(value) => to_au_round(value, AU_PER_CM),
-            AbsoluteLength::Mm(value) => to_au_round(value, AU_PER_MM),
-            AbsoluteLength::Q(value) => to_au_round(value, AU_PER_Q),
-            AbsoluteLength::Pt(value) => to_au_round(value, AU_PER_PT),
-            AbsoluteLength::Pc(value) => to_au_round(value, AU_PER_PC),
+            AbsoluteLength::Px(value) => au_from_f32_round((value * AU_PER_PX)),
+            AbsoluteLength::In(value) => au_from_f32_round((value * AU_PER_IN)),
+            AbsoluteLength::Cm(value) => au_from_f32_round((value * AU_PER_CM)),
+            AbsoluteLength::Mm(value) => au_from_f32_round((value * AU_PER_MM)),
+            AbsoluteLength::Q(value) => au_from_f32_round((value * AU_PER_Q)),
+            AbsoluteLength::Pt(value) => au_from_f32_round((value * AU_PER_PT)),
+            AbsoluteLength::Pc(value) => au_from_f32_round((value * AU_PER_PC)),
         }
     }
 }
@@ -318,13 +318,13 @@ impl From<AbsoluteLength> for Au {
 impl ToCss for AbsoluteLength {
     fn to_css<W>(&self, dest: &mut W) -> fmt::Result where W: fmt::Write {
         match *self {
-            AbsoluteLength::Px(length) => write!(dest, "{}px", length),
-            AbsoluteLength::In(length) => write!(dest, "{}in", length),
-            AbsoluteLength::Cm(length) => write!(dest, "{}cm", length),
-            AbsoluteLength::Mm(length) => write!(dest, "{}mm", length),
-            AbsoluteLength::Q(length) => write!(dest, "{}q", length),
-            AbsoluteLength::Pt(length) => write!(dest, "{}pt", length),
-            AbsoluteLength::Pc(length) => write!(dest, "{}pc", length),
+            AbsoluteLength::Px(length) => serialize_dimension(length, "px", dest),
+            AbsoluteLength::In(length) => serialize_dimension(length, "in", dest),
+            AbsoluteLength::Cm(length) => serialize_dimension(length, "cm", dest),
+            AbsoluteLength::Mm(length) => serialize_dimension(length, "mm", dest),
+            AbsoluteLength::Q(length) => serialize_dimension(length, "q", dest),
+            AbsoluteLength::Pt(length) => serialize_dimension(length, "pt", dest),
+            AbsoluteLength::Pc(length) => serialize_dimension(length, "pc", dest),
         }
     }
 }
@@ -346,8 +346,26 @@ impl Mul<CSSFloat> for AbsoluteLength {
     }
 }
 
+impl Add<AbsoluteLength> for AbsoluteLength {
+    type Output = Self;
+
+    #[inline]
+    fn add(self, rhs: Self) -> Self {
+        match (self, rhs) {
+            (AbsoluteLength::Px(x), AbsoluteLength::Px(y)) => AbsoluteLength::Px(x + y),
+            (AbsoluteLength::In(x), AbsoluteLength::In(y)) => AbsoluteLength::In(x + y),
+            (AbsoluteLength::Cm(x), AbsoluteLength::Cm(y)) => AbsoluteLength::Cm(x + y),
+            (AbsoluteLength::Mm(x), AbsoluteLength::Mm(y)) => AbsoluteLength::Mm(x + y),
+            (AbsoluteLength::Q(x), AbsoluteLength::Q(y)) => AbsoluteLength::Q(x + y),
+            (AbsoluteLength::Pt(x), AbsoluteLength::Pt(y)) => AbsoluteLength::Pt(x + y),
+            (AbsoluteLength::Pc(x), AbsoluteLength::Pc(y)) => AbsoluteLength::Pc(x + y),
+            _ => AbsoluteLength::Px(self.to_px() + rhs.to_px()),
+        }
+    }
+}
+
 /// Represents a physical length (mozmm) based on DPI
-#[derive(Clone, PartialEq, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg(feature = "gecko")]
 pub struct PhysicalLength(pub CSSFloat);
 
@@ -369,14 +387,14 @@ impl PhysicalLength {
 
         let inch = self.0 / MM_PER_INCH;
 
-        to_au_round(inch, physical_inch as f32)
+        au_from_f32_round(inch * physical_inch as f32)
     }
 }
 
 #[cfg(feature = "gecko")]
 impl ToCss for PhysicalLength {
     fn to_css<W>(&self, dest: &mut W) -> fmt::Result where W: fmt::Write {
-        write!(dest, "{}mozmm", self.0)
+        serialize_dimension(self.0, "mozmm", dest)
     }
 }
 
@@ -393,7 +411,7 @@ impl Mul<CSSFloat> for PhysicalLength {
 /// A `<length>` without taking `calc` expressions into account
 ///
 /// https://drafts.csswg.org/css-values/#lengths
-#[derive(Clone, PartialEq, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
 pub enum NoCalcLength {
     /// An absolute length
@@ -422,15 +440,6 @@ pub enum NoCalcLength {
     Physical(PhysicalLength),
 }
 
-impl HasViewportPercentage for NoCalcLength {
-    fn has_viewport_percentage(&self) -> bool {
-        match *self {
-            NoCalcLength::ViewportPercentage(_) => true,
-            _ => false,
-        }
-    }
-}
-
 impl ToCss for NoCalcLength {
     fn to_css<W>(&self, dest: &mut W) -> fmt::Result where W: fmt::Write {
         match *self {
@@ -438,7 +447,11 @@ impl ToCss for NoCalcLength {
             NoCalcLength::FontRelative(length) => length.to_css(dest),
             NoCalcLength::ViewportPercentage(length) => length.to_css(dest),
             /* This should only be reached from style dumping code */
-            NoCalcLength::ServoCharacterWidth(CharacterWidth(i)) => write!(dest, "CharWidth({})", i),
+            NoCalcLength::ServoCharacterWidth(CharacterWidth(i)) => {
+                dest.write_str("CharWidth(")?;
+                i.to_css(dest)?;
+                dest.write_char(')')
+            }
             #[cfg(feature = "gecko")]
             NoCalcLength::Physical(length) => length.to_css(dest),
         }
@@ -545,7 +558,7 @@ impl NoCalcLength {
 ///
 /// https://drafts.csswg.org/css-values/#lengths
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
-#[derive(Clone, Debug, HasViewportPercentage, PartialEq, ToCss)]
+#[derive(Clone, Debug, PartialEq, ToCss)]
 pub enum Length {
     /// The internal length type that cannot parse `calc`
     NoCalc(NoCalcLength),
@@ -759,7 +772,7 @@ pub type NonNegativeLengthOrNumber = Either<NonNegativeLength, NonNegativeNumber
 /// A length or a percentage value.
 #[allow(missing_docs)]
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
-#[derive(Clone, Debug, HasViewportPercentage, PartialEq, ToCss)]
+#[derive(Clone, Debug, PartialEq, ToCss)]
 pub enum LengthOrPercentage {
     Length(NoCalcLength),
     Percentage(computed::Percentage),
@@ -929,7 +942,7 @@ impl LengthOrPercentage {
 /// Either a `<length>`, a `<percentage>`, or the `auto` keyword.
 #[allow(missing_docs)]
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
-#[derive(Clone, Debug, HasViewportPercentage, PartialEq, ToCss)]
+#[derive(Clone, Debug, PartialEq, ToCss)]
 pub enum LengthOrPercentageOrAuto {
     Length(NoCalcLength),
     Percentage(computed::Percentage),
@@ -1045,7 +1058,7 @@ impl LengthOrPercentageOrAuto {
 
 /// Either a `<length>`, a `<percentage>`, or the `none` keyword.
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
-#[derive(Clone, Debug, HasViewportPercentage, PartialEq, ToCss)]
+#[derive(Clone, Debug, PartialEq, ToCss)]
 #[allow(missing_docs)]
 pub enum LengthOrPercentageOrNone {
     Length(NoCalcLength),
@@ -1193,7 +1206,7 @@ impl LengthOrNumber {
 /// `auto`, and cannot be `none`.
 #[allow(missing_docs)]
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
-#[derive(Clone, Debug, HasViewportPercentage, PartialEq, ToCss)]
+#[derive(Clone, Debug, PartialEq, ToCss)]
 pub enum MozLength {
     LengthOrPercentageOrAuto(LengthOrPercentageOrAuto),
     ExtremumLength(ExtremumLength),
@@ -1219,7 +1232,7 @@ impl MozLength {
 /// A value suitable for a `max-width` or `max-height` property.
 #[allow(missing_docs)]
 #[cfg_attr(feature = "servo", derive(HeapSizeOf))]
-#[derive(Clone, Debug, HasViewportPercentage, PartialEq, ToCss)]
+#[derive(Clone, Debug, PartialEq, ToCss)]
 pub enum MaxLength {
     LengthOrPercentageOrNone(LengthOrPercentageOrNone),
     ExtremumLength(ExtremumLength),

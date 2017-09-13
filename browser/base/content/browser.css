@@ -4,7 +4,6 @@
 
 @namespace url("http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul");
 @namespace html url("http://www.w3.org/1999/xhtml");
-@namespace svg url("http://www.w3.org/2000/svg");
 
 :root {
   --panelui-subview-transition-duration: 150ms;
@@ -180,6 +179,22 @@ tabbrowser {
   transition: transform 200ms var(--animation-easing-function);
 }
 
+#TabsToolbar[movingtab] > .tabbrowser-tabs {
+  padding-bottom: 15px;
+}
+
+#TabsToolbar[movingtab] + #nav-bar {
+  margin-top: -15px;
+  pointer-events: none;
+}
+
+/* Allow dropping a tab on buttons with associated drop actions. */
+#TabsToolbar[movingtab] + #nav-bar > #nav-bar-customization-target > #home-button,
+#TabsToolbar[movingtab] + #nav-bar > #nav-bar-customization-target > #downloads-button,
+#TabsToolbar[movingtab] + #nav-bar > #nav-bar-customization-target > #bookmarks-menu-button {
+  pointer-events: auto;
+}
+
 .new-tab-popup,
 #alltabs-popup {
   -moz-binding: url("chrome://browser/content/tabbrowser.xml#tabbrowser-alltabs-popup");
@@ -327,6 +342,7 @@ toolbarpaletteitem > toolbaritem[sdkstylewidget="true"][cui-areatype="toolbar"] 
 }
 
 .webextension-browser-action > .toolbarbutton-badge-stack > .toolbarbutton-icon {
+  height: 16px;
   width: 16px;
 }
 
@@ -411,7 +427,6 @@ toolbarbutton.webextension-menuitem > .toolbarbutton-icon {
 
 toolbarpaletteitem[removable="false"] {
   opacity: 0.5;
-  cursor: default;
 }
 
 %ifndef XP_MACOSX
@@ -423,21 +438,21 @@ toolbarpaletteitem[place="toolbar"] {
 %endif
 
 #bookmarks-toolbar-placeholder,
+#bookmarks-toolbar-button,
 toolbarpaletteitem > #personal-bookmarks > #PlacesToolbar,
-#personal-bookmarks[cui-areatype="menu-panel"] > #PlacesToolbar,
-#personal-bookmarks[cui-areatype="toolbar"][overflowedItem=true] > #PlacesToolbar {
+#personal-bookmarks:-moz-any([overflowedItem=true], [cui-areatype="menu-panel"]) > #PlacesToolbar {
   display: none;
+}
+
+toolbarpaletteitem[place="toolbar"] > #personal-bookmarks > #bookmarks-toolbar-placeholder,
+toolbarpaletteitem[place="palette"] > #personal-bookmarks > #bookmarks-toolbar-button,
+#personal-bookmarks:-moz-any([overflowedItem=true], [cui-areatype="menu-panel"]) > #bookmarks-toolbar-button {
+  display: -moz-box;
 }
 
 #PlacesToolbarDropIndicatorHolder {
   position: absolute;
   top: 25%;
-}
-
-toolbarpaletteitem > #personal-bookmarks > #bookmarks-toolbar-placeholder,
-#personal-bookmarks[cui-areatype="menu-panel"] > #bookmarks-toolbar-placeholder,
-#personal-bookmarks[cui-areatype="toolbar"][overflowedItem=true] > #bookmarks-toolbar-placeholder {
-  display: -moz-box;
 }
 
 #nav-bar-customization-target > #personal-bookmarks,
@@ -452,7 +467,7 @@ toolbar:not(#TabsToolbar) > #personal-bookmarks {
 
 #reload-button:not([displaystop]) + #stop-button,
 #reload-button[displaystop] {
-  visibility: collapse;
+  display: none;
 }
 
 /* The reload-button is only disabled temporarily when it becomes visible
@@ -666,14 +681,15 @@ html|input.urlbar-input[textoverflow]:not([focused]) {
   -moz-binding: url("chrome://global/content/bindings/datetimepopup.xml#datetime-popup");
 }
 
-#urlbar[pageproxystate="invalid"] > #page-action-buttons > .urlbar-icon,
-#urlbar[pageproxystate="invalid"] > #page-action-buttons > .urlbar-icon-wrapper > .urlbar-icon,
-.urlbar-go-button[pageproxystate="valid"],
+#urlbar[pageproxystate=invalid] > #page-action-buttons > .urlbar-page-action,
+#identity-box.chromeUI ~ #page-action-buttons > .urlbar-page-action:not(#star-button-box),
+.urlbar-history-dropmarker[usertyping],
+.urlbar-go-button:not([usertyping]),
 .urlbar-go-button:not([parentfocused="true"]),
 #urlbar[pageproxystate="invalid"] > #identity-box > #blocked-permissions-container,
 #urlbar[pageproxystate="invalid"] > #identity-box > #notification-popup-box,
 #urlbar[pageproxystate="invalid"] > #identity-box > #identity-icon-labels {
-  visibility: collapse;
+  display: none;
 }
 
 #identity-box {
@@ -746,6 +762,10 @@ toolbarspring {
   -moz-box-flex: 80;
 }
 
+#widget-overflow-list > toolbarspring {
+  display: none;
+}
+
 /* ::::: Unified Back-/Forward Button ::::: */
 .unified-nav-current {
   font-weight: bold;
@@ -757,10 +777,6 @@ toolbarspring {
   unicode-bidi: plaintext;
 }
 
-toolbarbutton.bookmark-item {
-  max-width: 13em;
-}
-
 /* Apply crisp rendering for favicons at exactly 2dppx resolution */
 @media (resolution: 2dppx) {
   #alltabs-popup > .menuitem-iconic > .menu-iconic-left > .menu-iconic-icon,
@@ -769,8 +785,7 @@ toolbarbutton.bookmark-item {
   }
 
   .bookmark-item > .toolbarbutton-icon,
-  .bookmark-item > .menu-iconic-left > .menu-iconic-icon,
-  #personal-bookmarks[cui-areatype="toolbar"] > #bookmarks-toolbar-placeholder > .toolbarbutton-icon {
+  .bookmark-item > .menu-iconic-left > .menu-iconic-icon {
     image-rendering: -moz-crisp-edges;
   }
   /* Synced Tabs sidebar */

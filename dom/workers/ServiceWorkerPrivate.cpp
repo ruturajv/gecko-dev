@@ -1510,6 +1510,15 @@ public:
 
     if (mMarkLaunchServiceWorkerEnd) {
       mInterceptedChannel->SetLaunchServiceWorkerEnd(TimeStamp::Now());
+
+      // A probe to measure sw launch time for telemetry.
+      TimeStamp launchStartTime = TimeStamp();
+      mInterceptedChannel->GetLaunchServiceWorkerStart(&launchStartTime);
+
+      TimeStamp launchEndTime = TimeStamp();
+      mInterceptedChannel->GetLaunchServiceWorkerEnd(&launchEndTime);
+      Telemetry::AccumulateTimeDelta(Telemetry::SERVICE_WORKER_LAUNCH_TIME,
+                                     launchStartTime, launchEndTime);
     }
 
     mInterceptedChannel->SetDispatchFetchEventEnd(TimeStamp::Now());
@@ -1594,7 +1603,7 @@ private:
                                                               mReferrerPolicy,
                                                               mContentPolicyType,
                                                               mIntegrity);
-    internalReq->SetBody(mUploadStream);
+    internalReq->SetBody(mUploadStream, -1);
     // For Telemetry, note that this Request object was created by a Fetch event.
     internalReq->SetCreatedByFetchEvent();
 
@@ -1602,7 +1611,10 @@ private:
     if (NS_WARN_IF(!global)) {
       return false;
     }
-    RefPtr<Request> request = new Request(global, internalReq);
+
+    // TODO This request object should be created with a AbortSignal object
+    // which should be aborted if the loading is aborted. See bug 1394102.
+    RefPtr<Request> request = new Request(global, internalReq, nullptr);
 
     MOZ_ASSERT_IF(internalReq->IsNavigationRequest(),
                   request->Redirect() == RequestRedirect::Manual);

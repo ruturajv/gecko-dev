@@ -468,8 +468,24 @@ public:
 
   Directionality GetComputedDirectionality() const;
 
+  static const uint32_t kAllServoDescendantBits =
+    ELEMENT_HAS_DIRTY_DESCENDANTS_FOR_SERVO |
+    ELEMENT_HAS_ANIMATION_ONLY_DIRTY_DESCENDANTS_FOR_SERVO |
+    NODE_DESCENDANTS_NEED_FRAMES;
+
+  /**
+   * Notes that something in the given subtree of this element needs dirtying,
+   * and that all the relevant dirty bits have already been propagated up to the
+   * element.
+   *
+   * This is important because `NoteDirtyForServo` uses the dirty bits to reason
+   * about the shape of the tree, so we can't just call into there.
+   */
+  void NoteDirtySubtreeForServo();
+
   void NoteDirtyForServo();
   void NoteAnimationOnlyDirtyForServo();
+  void NoteDescendantsNeedFramesForServo();
 
   bool HasDirtyDescendantsForServo() const
   {
@@ -506,7 +522,8 @@ public:
     return !!mServoData.Get();
   }
 
-  void ClearServoData();
+  void ClearServoData() { ClearServoData(GetComposedDoc()); }
+  void ClearServoData(nsIDocument* aDocument);
 
   /**
    * Gets the custom element data used by web components custom element.

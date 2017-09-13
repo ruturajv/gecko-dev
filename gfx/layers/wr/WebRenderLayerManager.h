@@ -222,6 +222,8 @@ public:
     return res.forget();
   }
 
+  bool ShouldNotifyInvalidation() const { return mShouldNotifyInvalidation; }
+
 private:
   /**
    * Take a snapshot of the parent context, and copy
@@ -239,7 +241,7 @@ private:
 
 private:
   nsIWidget* MOZ_NON_OWNING_REF mWidget;
-  std::vector<wr::ImageKey> mImageKeysToDelete;
+  wr::ResourceUpdateQueue mImageKeysToDelete;
   nsTArray<uint64_t> mDiscardedCompositorAnimationsIds;
 
   /* PaintedLayer callbacks; valid at the end of a transaciton,
@@ -319,6 +321,10 @@ private:
   typedef nsTHashtable<nsRefPtrHashKey<WebRenderCanvasData>> CanvasDataSet;
   // Store of WebRenderCanvasData objects for use in empty transactions
   CanvasDataSet mLastCanvasDatas;
+
+  // True if the layers-free transaction has invalidation region and then
+  // we should send notification after EndTransaction
+  bool mShouldNotifyInvalidation;
 };
 
 } // namespace layers

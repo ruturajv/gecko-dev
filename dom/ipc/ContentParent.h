@@ -11,7 +11,6 @@
 #include "mozilla/dom/nsIContentParent.h"
 #include "mozilla/gfx/gfxVarReceiver.h"
 #include "mozilla/gfx/GPUProcessListener.h"
-#include "mozilla/ipc/CrashReporterHost.h"
 #include "mozilla/ipc/GeckoChildProcessHost.h"
 #include "mozilla/Attributes.h"
 #include "mozilla/FileUtils.h"
@@ -36,8 +35,6 @@
 #include "DriverCrashGuard.h"
 
 #define CHILD_PROCESS_SHUTDOWN_MESSAGE NS_LITERAL_STRING("child-process-shutdown")
-
-#define NO_REMOTE_TYPE ""
 
 // These must match the similar ones in E10SUtils.jsm.
 // Process names as reported by about:memory are defined in
@@ -76,6 +73,7 @@ class PrintingParent;
 }
 
 namespace ipc {
+class CrashReporterHost;
 class OptionalURIParams;
 class PFileDescriptorSetParent;
 class URIParams;
@@ -169,7 +167,7 @@ public:
    * 3. normal iframe
    */
   static already_AddRefed<ContentParent>
-  GetNewOrUsedBrowserProcess(const nsAString& aRemoteType = NS_LITERAL_STRING(NO_REMOTE_TYPE),
+  GetNewOrUsedBrowserProcess(const nsAString& aRemoteType,
                              hal::ProcessPriority aPriority =
                              hal::ProcessPriority::PROCESS_PRIORITY_FOREGROUND,
                              ContentParent* aOpener = nullptr,
@@ -434,6 +432,11 @@ public:
   already_AddRefed<embedding::PrintingParent> GetPrintingParent();
 #endif
 
+  virtual mozilla::ipc::IPCResult
+  RecvInitStreamFilter(const uint64_t& aChannelId,
+                       const nsString& aAddonId,
+                       InitStreamFilterResolver&& aResolver) override;
+
   virtual PChildToParentStreamParent* AllocPChildToParentStreamParent() override;
   virtual bool
   DeallocPChildToParentStreamParent(PChildToParentStreamParent* aActor) override;
@@ -541,7 +544,7 @@ public:
     const bool& aCalledFromJS,
     const bool& aPositionSpecified,
     const bool& aSizeSpecified,
-    const URIParams& aURIToLoad,
+    const OptionalURIParams& aURIToLoad,
     const nsCString& aFeatures,
     const nsCString& aBaseURI,
     const float& aFullZoom,
@@ -607,12 +610,6 @@ public:
     return PContentParent::SendDeactivate(aTab);
   }
 
-  virtual bool SendParentActivated(PBrowserParent* aTab,
-                                   const bool& aActivated) override
-  {
-    return PContentParent::SendParentActivated(aTab, aActivated);
-  }
-
   virtual bool
   DeallocPURLClassifierLocalParent(PURLClassifierLocalParent* aActor) override;
 
@@ -637,6 +634,15 @@ public:
   nsresult TransmitPermissionsForPrincipal(nsIPrincipal* aPrincipal);
 
   void OnCompositorDeviceReset() override;
+
+  // Control the priority of the IPC messages for input events.
+  void SetInputPriorityEventEnabled(bool aEnabled);
+  bool IsInputPriorityEventEnabled()
+  {
+    return mIsInputPriorityEventEnabled;
+  }
+
+  static bool IsInputEventQueueSupported();
 
 protected:
   void OnChannelConnected(int32_t pid) override;
@@ -1171,6 +1177,11 @@ private:
 
   virtual mozilla::ipc::IPCResult RecvBHRThreadHang(
     const HangDetails& aHangDetails) override;
+
+  // Notify the ContentChild to enable the input event prioritization when
+  // initializing.
+  void MaybeEnableRemoteInputEventQueue();
+
 public:
   void SendGetFilesResponseAndForget(const nsID& aID,
                                      const GetFilesResponseResult& aResult);
@@ -1232,6 +1243,14 @@ private:
   bool mCreatedPairedMinidumps;
   bool mShutdownPending;
   bool mIPCOpen;
+
+  // True if the input event queue on the main thread of the content process is
+  // enabled.
+  bool mIsRemoteInputEventQueueEnabled;
+
+  // True if we send input events with input priority. Otherwise, we send input
+  // events with normal priority.
+  bool mIsInputPriorityEventEnabled;
 
   RefPtr<nsConsoleService>  mConsoleService;
   nsConsoleService* GetConsoleService();

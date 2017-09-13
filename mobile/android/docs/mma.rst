@@ -33,7 +33,7 @@ Who will have Leanplum enabled?
 
 
 Where does data sent to the Leanplum backend go?
-==============================================
+======================================================
 
 The Leanplum SDK is hard-coded to send data to the endpoint https://www.leanplum.com.  The endpoint is
 defined by ``com.leanplum.internal.Constants.API_HOST_NAME`` at
@@ -44,7 +44,7 @@ This unique identifier is only used by Leanplum and can't be tracked back to any
 
 
 What data is collected and sent to the Leanplum backend?
-======================================================
+==========================================================
 
 The Leanplum SDK collects and sends two messages to the Leanplum backend.  The messages have the
 following parameters::
@@ -61,6 +61,7 @@ following parameters::
   "userAttributes" -> "{                // A set of key-value pairs used to describe the user.
     "Focus Installed" -> true           // If Focus for Android is installed.
     "Klar Installed" -> true            // If Klar for Android is installed.
+    "Pocket Installed" -> true          // If Pocket for Android is installed.
     "Signed In Sync" -> true            // If the user has signed in to Mozilla account.
     "Default Browser" -> true           // If the user has set Fennec as default browser.
   }
@@ -142,7 +143,14 @@ List of current Events related data that is sent:
 {
   "event" : "E_Opened_New_Tab"
 }
-
+* App start but Fennec is not set as default browser
+{
+  "event" : "E_Launch_But_Not_Default_Browser"
+}
+* General app start event
+{
+  "event" : "E_Launch_Browser"
+}
 Deep Links:
 Deep links are actions that can point Fennec to open certain pages or load features such as `show bookmark list` or
 `open a SUMO page`. When users see a prompt Leanplum message, they can click the button(s) on it. These buttons can
@@ -182,7 +190,7 @@ Technical notes
 ~~~~~~~~~~~~~~~
 
 Build flags controlling the Leanplum SDK integration
-==================================================
+======================================================
 
 To test this locally, add lines like:
 
@@ -199,7 +207,7 @@ mobile/android/moz.configure, and therefore we enable using the
 automation mozconfigs.
 
 Technical notes on the Leanplum SDK integration
-=============================================
+================================================
 
 Just like Adjust, MmaDelegate uses mmaInterface to inject the MmaLeanplumImp and MmaStubImp.
 Constants used by Leanplum is in MmaConstants. Services in AndroidManifest are in
@@ -207,7 +215,7 @@ Constants used by Leanplum is in MmaConstants. Services in AndroidManifest are i
 MOZ_ANDROID_MMA.
 
 Notes and links
-===============
+=================
 
 * Leanplum web page: http://leanplum.com/
 * Leanplum SDK github repo: https://github.com/Leanplum/Leanplum-Android-SDK

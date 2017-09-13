@@ -1038,7 +1038,9 @@ nsPIDOMWindow<T>::nsPIDOMWindow(nsPIDOMWindowOuter *aOuterWindow)
   mMarkedCCGeneration(0), mServiceWorkersTestingEnabled(false),
   mLargeAllocStatus(LargeAllocStatus::NONE),
   mHasTriedToCacheTopInnerWindow(false),
-  mNumOfIndexedDBDatabases(0)
+  mNumOfIndexedDBDatabases(0),
+  mNumOfOpenWebSockets(0),
+  mNumOfActiveUserMedia(0)
 {
   if (aOuterWindow) {
     mTimeoutManager =
@@ -2394,6 +2396,7 @@ NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN(nsGlobalWindow)
     NS_IMPL_CYCLE_COLLECTION_UNLINK(mListenerManager)
   }
 
+  tmp->UpdateTopInnerWindow();
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mTopInnerWindow)
 
   NS_IMPL_CYCLE_COLLECTION_UNLINK(mLocation)
@@ -2625,7 +2628,10 @@ nsGlobalWindow::SetInitialPrincipalToSubject()
   }
 
   GetDocShell()->CreateAboutBlankContentViewer(newWindowPrincipal);
-  mDoc->SetIsInitialDocument(true);
+
+  if (mDoc) {
+    mDoc->SetIsInitialDocument(true);
+  }
 
   nsCOMPtr<nsIPresShell> shell = GetDocShell()->GetPresShell();
 
@@ -2755,7 +2761,7 @@ EnablePrivilege(JSContext* cx, unsigned argc, JS::Value* vp)
 }
 
 static const JSFunctionSpec EnablePrivilegeSpec[] = {
-  JS_FS("enablePrivilege", EnablePrivilege, 1, 0),
+  JS_FN("enablePrivilege", EnablePrivilege, 1, 0),
   JS_FS_END
 };
 
@@ -3342,9 +3348,8 @@ nsGlobalWindow::SetNewDocument(nsIDocument* aDocument,
   // it runs JS code for this compartment. We skip the check if this window is
   // for chrome JS or an add-on.
   nsCOMPtr<nsIPrincipal> principal = mDoc->NodePrincipal();
-  nsString addonId;
-  principal->GetAddonId(addonId);
-  if (GetDocGroup() && !nsContentUtils::IsSystemPrincipal(principal) && addonId.IsEmpty()) {
+  if (GetDocGroup() && !nsContentUtils::IsSystemPrincipal(principal) &&
+      !BasePrincipal::Cast(principal)->AddonPolicy()) {
     js::SetCompartmentValidAccessPtr(cx, newInnerGlobal,
                                      newInnerWindow->GetDocGroup()->GetValidAccessPtr());
   }
@@ -4380,21 +4385,44 @@ nsPIDOMWindowInner::SyncStateFromParentWindow()
 }
 
 void
+nsGlobalWindow::UpdateTopInnerWindow()
+{
+  if (!IsInnerWindow() || AsInner()->IsTopInnerWindow()) {
+    return;
+  }
+
+  AsInner()->UpdateWebSocketCount(-(int32_t)mNumOfOpenWebSockets);
+  AsInner()->UpdateUserMediaCount(-(int32_t)mNumOfActiveUserMedia);
+}
+
+void
 nsPIDOMWindowInner::AddPeerConnection()
 {
-  nsGlobalWindow::Cast(this)->AddPeerConnection();
+  MOZ_ASSERT(NS_IsMainThread());
+  MOZ_ASSERT(IsInnerWindow());
+  mTopInnerWindow ? mTopInnerWindow->mActivePeerConnections++
+                  : mActivePeerConnections++;
 }
 
 void
 nsPIDOMWindowInner::RemovePeerConnection()
 {
-  nsGlobalWindow::Cast(this)->RemovePeerConnection();
+  MOZ_ASSERT(NS_IsMainThread());
+  MOZ_ASSERT(IsInnerWindow());
+  MOZ_ASSERT(mTopInnerWindow ? mTopInnerWindow->mActivePeerConnections
+                             : mActivePeerConnections);
+
+  mTopInnerWindow ? mTopInnerWindow->mActivePeerConnections--
+                  : mActivePeerConnections--;
 }
 
 bool
 nsPIDOMWindowInner::HasActivePeerConnections()
 {
-  return nsGlobalWindow::Cast(this)->HasActivePeerConnections();
+  MOZ_ASSERT(NS_IsMainThread());
+  MOZ_ASSERT(IsInnerWindow());
+  return mTopInnerWindow ? mTopInnerWindow->mActivePeerConnections
+                         : mActivePeerConnections;
 }
 
 bool
@@ -4495,6 +4523,60 @@ nsPIDOMWindowInner::HasActiveIndexedDBDatabases()
   return mTopInnerWindow ?
     mTopInnerWindow->mNumOfIndexedDBDatabases > 0 :
     mNumOfIndexedDBDatabases > 0;
+}
+
+void
+nsPIDOMWindowInner::UpdateWebSocketCount(int32_t aDelta)
+{
+  MOZ_ASSERT(NS_IsMainThread());
+
+  if (aDelta == 0) {
+    return;
+  }
+
+  if (mTopInnerWindow && !IsTopInnerWindow()) {
+    mTopInnerWindow->UpdateWebSocketCount(aDelta);
+  }
+
+  MOZ_DIAGNOSTIC_ASSERT(
+    aDelta > 0 || ((aDelta + mNumOfOpenWebSockets) < mNumOfOpenWebSockets));
+
+  mNumOfOpenWebSockets += aDelta;
+}
+
+bool
+nsPIDOMWindowInner::HasOpenWebSockets() const
+{
+  MOZ_ASSERT(NS_IsMainThread());
+
+  return mNumOfOpenWebSockets ||
+         (mTopInnerWindow && mTopInnerWindow->mNumOfOpenWebSockets);
+}
+
+void
+nsPIDOMWindowInner::UpdateUserMediaCount(int32_t aDelta)
+{
+  MOZ_ASSERT(NS_IsMainThread());
+
+  if (aDelta == 0) {
+    return;
+  }
+
+  if (mTopInnerWindow && !IsTopInnerWindow()) {
+    mTopInnerWindow->UpdateUserMediaCount(aDelta);
+  }
+
+  MOZ_DIAGNOSTIC_ASSERT(
+    aDelta > 0 || ((aDelta + mNumOfActiveUserMedia) < mNumOfActiveUserMedia));
+
+  mNumOfActiveUserMedia += aDelta;
+}
+
+bool
+nsPIDOMWindowInner::HasActiveUserMedia() const
+{
+  return (mTopInnerWindow ? mTopInnerWindow->mNumOfActiveUserMedia
+                          : mNumOfActiveUserMedia) > 0;
 }
 
 void
@@ -9763,8 +9845,7 @@ public:
             JSCompartment* cpt = js::GetObjectCompartment(obj);
             nsCOMPtr<nsIPrincipal> pc = nsJSPrincipals::get(JS_GetCompartmentPrincipals(cpt));
 
-            nsAutoString addonId;
-            if (NS_SUCCEEDED(pc->GetAddonId(addonId)) && !addonId.IsEmpty()) {
+            if (BasePrincipal::Cast(pc)->AddonPolicy()) {
               // We want to nuke all references to the add-on compartment.
               xpc::NukeAllWrappersForCompartment(cx, cpt,
                                                  win->IsInnerWindow() ? js::DontNukeWindowReferences
@@ -12591,31 +12672,6 @@ nsGlobalWindow::SyncStateFromParentWindow()
   }
 }
 
-void
-nsGlobalWindow::AddPeerConnection()
-{
-  MOZ_ASSERT(NS_IsMainThread());
-  MOZ_ASSERT(IsInnerWindow());
-  mActivePeerConnections++;
-}
-
-void
-nsGlobalWindow::RemovePeerConnection()
-{
-  MOZ_ASSERT(NS_IsMainThread());
-  MOZ_ASSERT(IsInnerWindow());
-  MOZ_ASSERT(mActivePeerConnections);
-  mActivePeerConnections--;
-}
-
-bool
-nsGlobalWindow::HasActivePeerConnections()
-{
-  MOZ_ASSERT(NS_IsMainThread());
-  MOZ_ASSERT(IsInnerWindow());
-  return mActivePeerConnections;
-}
-
 template<typename Method>
 void
 nsGlobalWindow::CallOnChildren(Method aMethod)
@@ -12708,7 +12764,7 @@ nsGlobalWindow::GetParentInternal()
   if (IsInnerWindow()) {
     nsGlobalWindow* outer = GetOuterWindowInternal();
     if (!outer) {
-      NS_WARNING("No outer window available!");
+      // No outer window available!
       return nullptr;
     }
     return outer->GetParentInternal();
@@ -12810,10 +12866,10 @@ nsGlobalWindow::OpenInternal(const nsAString& aUrl, const nsAString& aName,
   const bool checkForPopup = !nsContentUtils::LegacyIsCallerChromeOrNativeCode() &&
     !aDialog && !WindowExists(aName, forceNoOpener, !aCalledNoScript);
 
-  // Note: it's very important that this be an nsXPIDLCString, since we want
-  // .get() on it to return nullptr until we write stuff to it.  The window
-  // watcher expects a null URL string if there is no URL to load.
-  nsXPIDLCString url;
+  // Note: the Void handling here is very important, because the window watcher
+  // expects a null URL string (not an empty string) if there is no URL to load.
+  nsCString url;
+  url.SetIsVoid(true);
   nsresult rv = NS_OK;
 
   // It's important to do this security check before determining whether this
@@ -12828,7 +12884,7 @@ nsGlobalWindow::OpenInternal(const nsAString& aUrl, const nsAString& aName,
     //
     // If we're not navigating, we assume that whoever *does* navigate the
     // window will do a security check of their own.
-    if (url.get() && !aDialog && aNavigate)
+    if (!url.IsVoid() && !aDialog && aNavigate)
       rv = SecurityCheckURL(url.get());
   }
 
@@ -12892,7 +12948,8 @@ nsGlobalWindow::OpenInternal(const nsAString& aUrl, const nsAString& aName,
     if (!aCalledNoScript) {
       // We asserted at the top of this function that aNavigate is true for
       // !aCalledNoScript.
-      rv = pwwatch->OpenWindow2(AsOuter(), url.get(), name_ptr,
+      rv = pwwatch->OpenWindow2(AsOuter(), url.IsVoid() ? nullptr : url.get(),
+                                name_ptr,
                                 options_ptr, /* aCalledFromScript = */ true,
                                 aDialog, aNavigate, argv,
                                 isPopupSpamWindow,
@@ -12914,7 +12971,8 @@ nsGlobalWindow::OpenInternal(const nsAString& aUrl, const nsAString& aName,
         nojsapi.emplace();
       }
 
-      rv = pwwatch->OpenWindow2(AsOuter(), url.get(), name_ptr,
+      rv = pwwatch->OpenWindow2(AsOuter(), url.IsVoid() ? nullptr : url.get(),
+                                name_ptr,
                                 options_ptr, /* aCalledFromScript = */ false,
                                 aDialog, aNavigate, aExtraArgument,
                                 isPopupSpamWindow,
@@ -13994,7 +14052,7 @@ NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN_INHERITED(nsGlobalChromeWindow,
 NS_IMPL_CYCLE_COLLECTION_UNLINK_END
 
 // QueryInterface implementation for nsGlobalChromeWindow
-NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION_INHERITED(nsGlobalChromeWindow)
+NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(nsGlobalChromeWindow)
   NS_INTERFACE_MAP_ENTRY(nsIDOMChromeWindow)
 NS_INTERFACE_MAP_END_INHERITING(nsGlobalWindow)
 
@@ -14684,8 +14742,7 @@ nsGlobalWindow::RedefineProperty(JSContext* aCx, const char* aPropName,
   }
 
   if (!JS_WrapObject(aCx, &thisObj) ||
-      !JS_DefineProperty(aCx, thisObj, aPropName, aValue, JSPROP_ENUMERATE,
-                         JS_STUBGETTER, JS_STUBSETTER)) {
+      !JS_DefineProperty(aCx, thisObj, aPropName, aValue, JSPROP_ENUMERATE)) {
     aError.Throw(NS_ERROR_FAILURE);
   }
 }
