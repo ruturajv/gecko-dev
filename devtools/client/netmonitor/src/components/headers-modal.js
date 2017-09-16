@@ -13,6 +13,7 @@ const {
 } = require("devtools/client/shared/vendor/react");
 const { connect } = require("devtools/client/shared/vendor/react-redux");
 const Actions = require("../actions/index");
+const { propertiesEqual } = require("../utils/request-utils");
 
 let CustomHeaderColumn = createFactory(createClass({
   displayName: "CustomHeaderColumn",
@@ -86,7 +87,7 @@ const HeadersModal = createClass({
     addCustomHeaderColumn: PropTypes.func.isRequired,
     deleteCustomHeaderColumn: PropTypes.func.isRequired,
     renameCustomHeaderColumn: PropTypes.func.isRequired,
-    customHeadersList: PropTypes.array.isRequired,
+    headerColumns: PropTypes.object.isRequired,
   },
 
   newHeaderKeyUpHandler(e) {
@@ -104,7 +105,7 @@ const HeadersModal = createClass({
 
   render() {
     let {
-      customHeadersList,
+      headerColumns,
       deleteCustomHeaderColumn,
       renameCustomHeaderColumn,
     } = this.props;
@@ -117,7 +118,7 @@ const HeadersModal = createClass({
       ),
       dom.ul(
         { className: "devtools-custom-headers-listbox" },
-        customHeadersList.map((item, i) => {
+        Object.keys(headerColumns).map((item, i) => {
           return dom.li({
             key: item,
             title: "Click to edit",
@@ -150,7 +151,7 @@ const HeadersModal = createClass({
 
 module.exports = connect(
   (state) => ({
-    customHeadersList: state.ui.headerColumns,
+    headerColumns: state.ui.headerColumns,
   }),
   (dispatch) => ({
     dispatch,

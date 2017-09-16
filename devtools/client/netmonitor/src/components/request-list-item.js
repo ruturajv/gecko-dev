@@ -91,7 +91,7 @@ const RequestListItem = createClass({
     onThumbnailMouseDown: PropTypes.func.isRequired,
     onWaterfallMouseDown: PropTypes.func.isRequired,
     waterfallWidth: PropTypes.number,
-    headerColumns: PropTypes.array.isRequired,
+    headerColumns: PropTypes.object.isRequired,
   },
 
   componentDidMount() {
@@ -101,10 +101,17 @@ const RequestListItem = createClass({
   },
 
   shouldComponentUpdate(nextProps) {
-    let { headerColumns: oldCustomHeaders } = this.props;
-    let { headerColumns: newCustomHeaders } = nextProps;
-    let customHeadersChanged = (newCustomHeaders.length !== oldCustomHeaders.length)
-      || !arrayEqual(oldCustomHeaders, newCustomHeaders);
+    // let { headerColumns: oldCustomHeaders } = this.props;
+    // let { headerColumns: newCustomHeaders } = nextProps;
+    // let customHeadersChanged = !propertiesEqual(
+    //   Array.from(new Set([...Object.keys(oldCustomHeaders), ...Object.keys(newCustomHeaders)]),
+    //     oldCustomHeaders, newCustomHeaders));
+
+    /**
+     * Something like above can be done, but not sure of performance
+     * keeping hard-coded true as of now.
+     */
+    let customHeadersChanged = true;
 
     return !propertiesEqual(UPDATED_REQ_ITEM_PROPS, this.props.item, nextProps.item) ||
       !propertiesEqual(UPDATED_REQ_PROPS, this.props, nextProps) ||
@@ -140,7 +147,7 @@ const RequestListItem = createClass({
     let classList = ["request-list-item", index % 2 ? "odd" : "even"];
     isSelected && classList.push("selected");
     fromCache && classList.push("fromCache");
-
+console.log(headerColumns, Object.keys(headerColumns).filter(header => headerColumns[header]));
     return (
       div({
         ref: "listItem",
@@ -175,7 +182,7 @@ const RequestListItem = createClass({
         // ...RESPONSE_HEADERS.filter(header => columns.get(header)).map(
         //   header => RequestListColumnResponseHeader({ item, header }),
         // ),
-        ...headerColumns.map(
+        ...Object.keys(headerColumns).filter(header => headerColumns[header]).map(
           header => RequestListColumnResponseHeader({ item, header }),
         ),
         columns.get("waterfall") &&

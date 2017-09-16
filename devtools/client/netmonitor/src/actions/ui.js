@@ -15,6 +15,7 @@ const {
   RESET_COLUMNS,
   SELECT_DETAILS_PANEL_TAB,
   TOGGLE_CUSTOM_HEADER_MODAL,
+  TOGGLE_CUSTOM_HEADER_COLUMN,
   TOGGLE_COLUMN,
   WATERFALL_RESIZE,
 } = require("../constants");
@@ -75,6 +76,13 @@ function resetColumns() {
 function toggleCustomHeaderModal() {
   return {
     type: TOGGLE_CUSTOM_HEADER_MODAL,
+  };
+}
+
+function toggleCustomHeaderColumn(header) {
+  return {
+    type: TOGGLE_CUSTOM_HEADER_COLUMN,
+    header,
   };
 }
 
@@ -170,6 +178,7 @@ module.exports = {
   selectDetailsPanelTab,
   toggleColumn,
   toggleCustomHeaderModal,
+  toggleCustomHeaderColumn,
   toggleNetworkDetails,
   toggleBrowserCache,
   toggleStatistics,

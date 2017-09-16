@@ -21,6 +21,7 @@ const {
   SEND_CUSTOM_REQUEST,
   SELECT_REQUEST,
   TOGGLE_CUSTOM_HEADER_MODAL,
+  TOGGLE_CUSTOM_HEADER_COLUMN,
   TOGGLE_COLUMN,
   WATERFALL_RESIZE,
   PANELS,
@@ -71,7 +72,9 @@ const UI = I.Record({
 });
 
 function resetColumns(state) {
-  return state.set("columns", new Columns());
+  let newState = state.set("columns", new Columns())
+    .set("headerColumns", (new UI()).headerColumns);
+  return newState;
 }
 
 function toggleCustomHeaderModal(state) {
@@ -112,16 +115,25 @@ function toggleColumn(state, action) {
   return newState;
 }
 
+function toggleCustomHeaderColumn(state, action) {
+  let { header } = action;
+  let headerColumns = state.get("headerColumns");
+
+  return state.set("headerColumns", Object.assign(headerColumns,
+    { [header]: !headerColumns[header] })
+  );
+
+}
+
 function addCustomHeaderColumn(state, action) {
   let { header } = action;
   if (header.length < 1) {
     return state;
   }
-
   let headerColumns = state.get("headerColumns");
-  headerColumns.push(header);
+  headerColumns[header] = true;
 
-  return state.set("headerColumns", [...new Set(headerColumns)]);
+  return state.set("headerColumns", Object.assign({}, headerColumns));
 }
 
 function deleteCustomHeaderColumn(state, action) {
@@ -131,9 +143,9 @@ function deleteCustomHeaderColumn(state, action) {
   }
 
   let headerColumns = state.get("headerColumns");
-  headerColumns = headerColumns.filter(value => value !== header);
+  delete headerColumns[header];
 
-  return state.set("headerColumns", headerColumns);
+  return state.set("headerColumns", Object.assign({}, headerColumns));
 }
 
 function renameCustomHeaderColumn(state, action) {
@@ -143,13 +155,10 @@ function renameCustomHeaderColumn(state, action) {
   }
 
   let headerColumns = state.get("headerColumns");
-  let newCustomHeaderColumns = [];
-  headerColumns.forEach(value => {
-    let newValue = value === oldHeader ? newHeader : value;
-    newCustomHeaderColumns.push(newValue);
-  });
+  delete headerColumns[oldHeader];
+  headerColumns[newHeader] = true;
 
-  return state.set("headerColumns", newCustomHeaderColumns);
+  return state.set("headerColumns", Object.assign({}, headerColumns));
 }
 
 function ui(state = new UI(), action) {
@@ -179,6 +188,8 @@ function ui(state = new UI(), action) {
       return openNetworkDetails(state, { open: true });
     case TOGGLE_CUSTOM_HEADER_MODAL:
       return toggleCustomHeaderModal(state);
+    case TOGGLE_CUSTOM_HEADER_COLUMN:
+      return toggleCustomHeaderColumn(state, action);
     case TOGGLE_COLUMN:
       return state.set("columns", toggleColumn(state.columns, action));
     case WATERFALL_RESIZE:

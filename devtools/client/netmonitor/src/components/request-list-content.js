@@ -36,12 +36,11 @@ const RequestListContent = createClass({
 
   propTypes: {
     columns: PropTypes.object.isRequired,
-    headerColumns: PropTypes.array.isRequired,
+    headerColumns: PropTypes.object.isRequired,
     dispatch: PropTypes.func.isRequired,
     displayedRequests: PropTypes.object.isRequired,
     firstRequestStartedMillis: PropTypes.number.isRequired,
     fromCache: PropTypes.bool,
-    headerColumnsModalShown: PropTypes.bool.isRequired,
     onCauseBadgeMouseDown: PropTypes.func.isRequired,
     onItemMouseDown: PropTypes.func.isRequired,
     onSecurityIconMouseDown: PropTypes.func.isRequired,
@@ -273,7 +272,7 @@ const RequestListContent = createClass({
 module.exports = connect(
   (state) => ({
     columns: state.ui.columns,
-    headerColumns: Array.from(state.ui.headerColumns),
+    headerColumns: state.ui.headerColumns,
     displayedRequests: getDisplayedRequests(state),
     firstRequestStartedMillis: state.requests.firstStartedMillis,
     selectedRequestId: state.requests.selectedId,

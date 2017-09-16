@@ -26,9 +26,9 @@ pref("devtools.netmonitor.visibleColumns",
      "\"type\",\"transferred\",\"contentSize\",\"waterfall\"]"
 );
 pref("devtools.netmonitor.headerColumns",
-     "[\"Cache-Control\",\"Connection\",\"Content-Encoding\"," +
-     "\"Content-Length\",\"ETag\",\"Keep-Alive\",\"Last-Modified\"," +
-     "\"Server\",\"Vary\"]");
+     "{\"Cache-Control\":false,\"Connection\":false,\"Content-Encoding\":false," +
+     "\"Content-Length\":false,\"ETag\":false,\"Keep-Alive\":false," +
+     "\"Last-Modified\":false,\"Server\":false,\"Vary\":false}");
 pref("devtools.netmonitor.panes-network-details-width", 550);
 pref("devtools.netmonitor.panes-network-details-height", 450);
 pref("devtools.netmonitor.har.defaultLogDir", "");

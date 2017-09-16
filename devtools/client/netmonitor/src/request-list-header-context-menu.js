@@ -21,10 +21,12 @@ const nonLocalizedHeaders = HEADERS
   .map((header) => header.name);
 
 class RequestListHeaderContextMenu {
-  constructor({ toggleColumn, resetColumns, toggleCustomHeaderModal }) {
+  constructor({ toggleColumn, resetColumns,
+    toggleCustomHeaderModal, toggleCustomHeaderColumn }) {
     this.toggleColumn = toggleColumn;
     this.resetColumns = resetColumns;
     this.toggleCustomHeaderModal = toggleCustomHeaderModal;
+    this.toggleCustomHeaderColumn = toggleCustomHeaderColumn;
   }
 
   get columns() {
@@ -70,12 +72,13 @@ class RequestListHeaderContextMenu {
     }
 
     // Setup Custom Header Columns menu
-    for (let header of this.headerColumns) {
+    for (let header of Object.keys(this.headerColumns)) {
       subMenu.responseHeaders.push({
         id: `request-list-header-${header}-toggle`,
         label: header,
         type: "checkbox",
-        checked: true
+        checked: this.headerColumns[header],
+        click: () => this.toggleCustomHeaderColumn(header),
       });
     }
     subMenu.responseHeaders.push({ type: "separator" });

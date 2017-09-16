@@ -12,6 +12,7 @@ const {
   RENAME_CUSTOM_HEADER_COLUMN,
   RESET_COLUMNS,
   TOGGLE_COLUMN,
+  TOGGLE_CUSTOM_HEADER_COLUMN,
   TOGGLE_REQUEST_FILTER_TYPE,
   DISABLE_BROWSER_CACHE,
 } = require("../constants");
@@ -29,6 +30,7 @@ function prefsMiddleware(store) {
       case ADD_CUSTOM_HEADER_COLUMN:
       case DELETE_CUSTOM_HEADER_COLUMN:
       case RENAME_CUSTOM_HEADER_COLUMN:
+      case TOGGLE_CUSTOM_HEADER_COLUMN:
         Services.prefs.setCharPref(
           "devtools.netmonitor.headerColumns",
           JSON.stringify(store.getState().ui.headerColumns)
@@ -53,6 +55,7 @@ function prefsMiddleware(store) {
           .map(([column, shown]) => column);
         Services.prefs.setCharPref(
           "devtools.netmonitor.visibleColumns", JSON.stringify(visibleColumns));
+        Services.prefs.clearUserPref("devtools.netmonitor.headerColumns");
         break;
     }
     return res;

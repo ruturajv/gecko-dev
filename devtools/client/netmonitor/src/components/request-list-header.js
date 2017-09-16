@@ -19,6 +19,7 @@ const { getFormattedTime } = require("../utils/format-utils");
 const { L10N } = require("../utils/l10n");
 const WaterfallBackground = require("../waterfall-background");
 const RequestListHeaderContextMenu = require("../request-list-header-context-menu");
+const { propertiesEqual } = require("../utils/request-utils");
 
 const { div, button } = DOM;
 
@@ -39,8 +40,9 @@ const RequestListHeader = createClass({
     sortBy: PropTypes.func.isRequired,
     toggleColumn: PropTypes.func.isRequired,
     toggleCustomHeaderModal: PropTypes.func.isRequired,
+    toggleCustomHeaderColumn: PropTypes.func.isRequired,
     waterfallWidth: PropTypes.number,
-    headerColumns: PropTypes.array.isRequired,
+    headerColumns: PropTypes.object.isRequired,
   },
 
   componentWillMount() {
@@ -48,6 +50,7 @@ const RequestListHeader = createClass({
       resetColumns,
       toggleColumn,
       toggleCustomHeaderModal,
+      toggleCustomHeaderColumn,
       headerColumns,
     } = this.props;
     this.contextMenu = new RequestListHeaderContextMenu({
@@ -55,6 +58,7 @@ const RequestListHeader = createClass({
       toggleColumn,
       toggleCustomHeaderModal,
       headerColumns,
+      toggleCustomHeaderColumn,
     });
   },
 
@@ -107,7 +111,8 @@ const RequestListHeader = createClass({
     let listHeaders = [
       ...HEADERS
         .filter(header => columns.get(header.name) && header.name !== "waterfall"),
-      ...headerColumns
+      ...Object.keys(headerColumns)
+        .filter(header => headerColumns[header])
         .map(header => ({ name: header, noLocalization: true }))
     ];
     listHeaders = columns.get("waterfall") ?
@@ -118,14 +123,11 @@ const RequestListHeader = createClass({
 
   render() {
     let { scale, sort, sortBy, waterfallWidth } = this.props;
-    console.log("in request-list-header", HEADERS);
-
-    console.log("listHeaders", this.getListHeaders());
 
     return (
       div({ className: "devtools-toolbar requests-list-headers" },
         this.getListHeaders().map((header) => {
-          console.log(header, header.name);
+          // console.log(header, header.name);
           let name = header.name;
           let boxName = header.boxName || name;
           let label = header.noLocalization
@@ -236,7 +238,7 @@ function WaterfallLabel(waterfallWidth, scale, label) {
 module.exports = connect(
   (state) => ({
     columns: state.ui.columns,
-    headerColumns: state.ui.headerColumns,
+    headerColumns: Object.assign({}, state.ui.headerColumns),
     firstRequestStartedMillis: state.requests.firstStartedMillis,
     scale: getWaterfallScale(state),
     sort: state.sort,
@@ -249,5 +251,7 @@ module.exports = connect(
     sortBy: (type) => dispatch(Actions.sortBy(type)),
     toggleColumn: (column) => dispatch(Actions.toggleColumn(column)),
     toggleCustomHeaderModal: (column) => dispatch(Actions.toggleCustomHeaderModal()),
+    toggleCustomHeaderColumn:
+      (header) => dispatch(Actions.toggleCustomHeaderColumn(header)),
   })
 )(RequestListHeader);

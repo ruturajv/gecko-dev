@@ -29,6 +29,7 @@ const actionTypes = {
   WATERFALL_RESIZE: "WATERFALL_RESIZE",
 
   TOGGLE_CUSTOM_HEADER_MODAL: "TOGGLE_CUSTOM_HEADER_MODAL",
+  TOGGLE_CUSTOM_HEADER_COLUMN: "TOGGLE_CUSTOM_HEADER_COLUMN",
   ADD_CUSTOM_HEADER_COLUMN: "ADD_CUSTOM_HEADER_COLUMN",
   DELETE_CUSTOM_HEADER_COLUMN: "DELETE_CUSTOM_HEADER_COLUMN",
   RENAME_CUSTOM_HEADER_COLUMN: "RENAME_CUSTOM_HEADER_COLUMN",
@@ -236,13 +237,13 @@ const HEADERS = [
     canFilter: false,
     subMenu: "timings",
   },
-  ...RESPONSE_HEADERS
-    .map(header => ({
-      name: header,
-      canFilter: false,
-      subMenu: "responseHeaders",
-      noLocalization: true
-    })),
+  // ...RESPONSE_HEADERS
+  //   .map(header => ({
+  //     name: header,
+  //     canFilter: false,
+  //     subMenu: "responseHeaders",
+  //     noLocalization: true
+  //   })),
   {
     name: "waterfall",
     canFilter: false,
@@ -291,7 +292,7 @@ const general = {
   FILTER_SEARCH_DELAY: 200,
   UPDATE_PROPS,
   HEADERS,
-  RESPONSE_HEADERS,
+  // RESPONSE_HEADERS,
   FILTER_FLAGS,
   SOURCE_EDITOR_SYNTAX_HIGHLIGHT_MAX_SIZE: 51200, // 50 KB in bytes
   REQUESTS_WATERFALL,
