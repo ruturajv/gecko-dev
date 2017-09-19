@@ -38,8 +38,10 @@ const kPrefCustomizationState        = "browser.uiCustomization.state";
 const kPrefCustomizationAutoAdd      = "browser.uiCustomization.autoAdd";
 const kPrefCustomizationDebug        = "browser.uiCustomization.debug";
 const kPrefDrawInTitlebar            = "browser.tabs.drawInTitlebar";
+const kPrefExtraDragSpace            = "browser.tabs.extraDragSpace";
 const kPrefUIDensity                 = "browser.uidensity";
 const kPrefAutoTouchMode             = "browser.touchmode.auto";
+const kPrefAutoHideDownloadsButton   = "browser.download.autohideButton";
 
 const kExpectedWindowURL = "chrome://browser/content/browser.xul";
 
@@ -57,7 +59,7 @@ const kSubviewEvents = [
  * The current version. We can use this to auto-add new default widgets as necessary.
  * (would be const but isn't because of testing purposes)
  */
-var kVersion = 10;
+var kVersion = 11;
 
 /**
  * Buttons removed from built-ins by version they were removed. kVersion must be
@@ -152,6 +154,7 @@ var gListeners = new Set();
 var gUIStateBeforeReset = {
   uiCustomizationState: null,
   drawInTitlebar: null,
+  extraDragSpace: null,
   currentTheme: null,
   uiDensity: null,
   autoTouchMode: null,
@@ -177,7 +180,7 @@ var CustomizableUIInternal = {
     this.addListener(this);
     this._defineBuiltInWidgets();
     this.loadSavedState();
-    this._introduceNewBuiltinWidgets();
+    this._updateForNewVersion();
     this._markObsoleteBuiltinButtonsSeen();
 
     this.registerArea(CustomizableUI.AREA_FIXED_OVERFLOW_PANEL, {
@@ -262,7 +265,7 @@ var CustomizableUIInternal = {
     }
   },
 
-  _introduceNewBuiltinWidgets() {
+  _updateForNewVersion() {
     // We should still enter even if gSavedState.currentVersion >= kVersion
     // because the per-widget pref facility is independent of versioning.
     if (!gSavedState) {
@@ -317,7 +320,7 @@ var CustomizableUIInternal = {
       CustomizableUI.removeWidgetFromArea("loop-button-throttled");
     }
 
-    if (currentVersion < 7 && gSavedState && gSavedState.placements &&
+    if (currentVersion < 7 && gSavedState.placements &&
         gSavedState.placements[CustomizableUI.AREA_NAVBAR]) {
       let placements = gSavedState.placements[CustomizableUI.AREA_NAVBAR];
       let newPlacements = ["back-button", "forward-button", "stop-reload-button", "home-button"];
@@ -407,12 +410,43 @@ var CustomizableUIInternal = {
       }
     }
 
-    if (currentVersion < 10 && gSavedState && gSavedState.placements) {
+    if (currentVersion < 10 && gSavedState.placements) {
       for (let placements of Object.values(gSavedState.placements)) {
         if (placements.includes("webcompat-reporter-button")) {
           placements.splice(placements.indexOf("webcompat-reporter-button"), 1);
           break;
         }
+      }
+    }
+
+    // Move the downloads button to the default position in the navbar if it's
+    // not there already.
+    if (currentVersion < 11 && gSavedState.placements) {
+      let navbarPlacements = gSavedState.placements[CustomizableUI.AREA_NAVBAR];
+      // First remove from wherever it currently lives, if anywhere:
+      for (let placements of Object.values(gSavedState.placements)) {
+        let existingIndex = placements.indexOf("downloads-button");
+        if (existingIndex != -1) {
+          placements.splice(existingIndex, 1);
+          break; // It can only be in 1 place, so no point looking elsewhere.
+        }
+      }
+
+      // Now put the button in the navbar in the correct spot:
+      if (navbarPlacements) {
+        let insertionPoint = navbarPlacements.indexOf("urlbar-container");
+        // Deliberately iterate to 1 past the end of the array to insert at the
+        // end if need be.
+        while (++insertionPoint < navbarPlacements.length) {
+          let widget = navbarPlacements[insertionPoint];
+          // If we find a non-searchbar, non-spacer node, break out of the loop:
+          if (widget != "search-container" && !this.matchingSpecials(widget, "spring")) {
+            break;
+          }
+        }
+        // We either found the right spot, or reached the end of the
+        // placements, so insert here:
+        navbarPlacements.splice(insertionPoint, 0, "downloads-button");
       }
     }
   },
@@ -2593,10 +2627,12 @@ var CustomizableUIInternal = {
   _resetUIState() {
     try {
       gUIStateBeforeReset.drawInTitlebar = Services.prefs.getBoolPref(kPrefDrawInTitlebar);
+      gUIStateBeforeReset.extraDragSpace = Services.prefs.getBoolPref(kPrefExtraDragSpace);
       gUIStateBeforeReset.uiCustomizationState = Services.prefs.getCharPref(kPrefCustomizationState);
       gUIStateBeforeReset.uiDensity = Services.prefs.getIntPref(kPrefUIDensity);
       gUIStateBeforeReset.autoTouchMode = Services.prefs.getBoolPref(kPrefAutoTouchMode);
       gUIStateBeforeReset.currentTheme = LightweightThemeManager.currentTheme;
+      gUIStateBeforeReset.autoHideDownloadsButton = Services.prefs.getBoolPref(kPrefAutoHideDownloadsButton);
       gUIStateBeforeReset.newElementCount = gNewElementCount;
     } catch (e) { }
 
@@ -2604,8 +2640,10 @@ var CustomizableUIInternal = {
 
     Services.prefs.clearUserPref(kPrefCustomizationState);
     Services.prefs.clearUserPref(kPrefDrawInTitlebar);
+    Services.prefs.clearUserPref(kPrefExtraDragSpace);
     Services.prefs.clearUserPref(kPrefUIDensity);
     Services.prefs.clearUserPref(kPrefAutoTouchMode);
+    Services.prefs.clearUserPref(kPrefAutoHideDownloadsButton);
     LightweightThemeManager.currentTheme = null;
     gNewElementCount = 0;
     log.debug("State reset");
@@ -2674,11 +2712,10 @@ var CustomizableUIInternal = {
     }
     gUndoResetting = true;
 
-    let uiCustomizationState = gUIStateBeforeReset.uiCustomizationState;
-    let drawInTitlebar = gUIStateBeforeReset.drawInTitlebar;
-    let currentTheme = gUIStateBeforeReset.currentTheme;
-    let uiDensity = gUIStateBeforeReset.uiDensity;
-    let autoTouchMode = gUIStateBeforeReset.autoTouchMode;
+    const {
+      uiCustomizationState, drawInTitlebar, currentTheme, uiDensity,
+      autoTouchMode, autoHideDownloadsButton, extraDragSpace,
+    } = gUIStateBeforeReset;
     gNewElementCount = gUIStateBeforeReset.newElementCount;
 
     // Need to clear the previous state before setting the prefs
@@ -2687,8 +2724,10 @@ var CustomizableUIInternal = {
 
     Services.prefs.setCharPref(kPrefCustomizationState, uiCustomizationState);
     Services.prefs.setBoolPref(kPrefDrawInTitlebar, drawInTitlebar);
+    Services.prefs.setBoolPref(kPrefExtraDragSpace, extraDragSpace);
     Services.prefs.setIntPref(kPrefUIDensity, uiDensity);
     Services.prefs.setBoolPref(kPrefAutoTouchMode, autoTouchMode);
+    Services.prefs.setBoolPref(kPrefAutoHideDownloadsButton, autoHideDownloadsButton);
     LightweightThemeManager.currentTheme = currentTheme;
     this.loadSavedState();
     // If the user just customizes toolbar/titlebar visibility, gSavedState will be null
@@ -2881,6 +2920,11 @@ var CustomizableUIInternal = {
 
     if (Services.prefs.prefHasUserValue(kPrefDrawInTitlebar)) {
       log.debug(kPrefDrawInTitlebar + " pref is non-default");
+      return false;
+    }
+
+    if (Services.prefs.prefHasUserValue(kPrefExtraDragSpace)) {
+      log.debug(kPrefExtraDragSpace + " pref is non-default");
       return false;
     }
 
@@ -3625,6 +3669,7 @@ this.CustomizableUI = {
   get canUndoReset() {
     return gUIStateBeforeReset.uiCustomizationState != null ||
            gUIStateBeforeReset.drawInTitlebar != null ||
+           gUIStateBeforeReset.extraDragSpace != null ||
            gUIStateBeforeReset.currentTheme != null ||
            gUIStateBeforeReset.autoTouchMode != null ||
            gUIStateBeforeReset.uiDensity != null;
@@ -4294,7 +4339,7 @@ OverflowableToolbar.prototype = {
     if (this._chevron.open) {
       this._panel.hidePopup();
       this._chevron.open = false;
-    } else if (this._panel.state != "hiding") {
+    } else if (this._panel.state != "hiding" && !this._chevron.disabled) {
       this.show();
     }
   },

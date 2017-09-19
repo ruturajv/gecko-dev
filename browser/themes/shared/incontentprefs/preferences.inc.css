@@ -159,6 +159,13 @@ separator.thin:not([orient="vertical"]) {
   margin-inline-end: 0;
 }
 
+.extension-controlled-icon {
+  height: 20px;
+  margin-bottom: 6px;
+  vertical-align: bottom;
+  width: 20px;
+}
+
 #getStarted {
   font-size: 90%;
 }
@@ -429,8 +436,12 @@ separator.thin:not([orient="vertical"]) {
  */
 
 /**
- * Font dialog menulist fixes
+ * Font group and font dialog menulist fixes
  */
+
+#defaultFont {
+  width: 25ch;
+}
 
 #defaultFontType,
 #serif,

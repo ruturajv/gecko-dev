@@ -9,9 +9,9 @@ const { NetUtil } = Cu.import("resource://gre/modules/NetUtil.jsm", {});
 
 /**
  * A function that can be used as part of a require hook for a
- * loader.js Loader.  This function only handles webpack-style "raw!"
- * requires; other requires should not be passed to this.  See
- * https://github.com/webpack/raw-loader.
+ * loader.js Loader.
+ * This function handles "raw!" and "theme-loader!" requires.
+ * See also: https://github.com/webpack/raw-loader.
  */
 this.requireRawId = function (id, require) {
   let index = id.indexOf("!");

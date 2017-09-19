@@ -2,12 +2,16 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-// Remove the "raw!" prefix used in some require which confuses webpack.
-
 "use strict";
 
 var fs = require("fs");
 
+/**
+ * Make sure that content of the file is loaded as a text
+ * (no parsing by other loaders)
+ *
+ * Used e.g. for runtime access to colors defined in variables.css
+ */
 module.exports.pitch = function (remainingRequest, precedingRequest, data) {
   if (this.cacheable) {
     this.cacheable();
@@ -16,6 +20,9 @@ module.exports.pitch = function (remainingRequest, precedingRequest, data) {
   let request = remainingRequest.split("!");
   let rawUrl = request[request.length - 1];
   let content = fs.readFileSync(rawUrl, "utf8");
+
+  // Avoid mix of single & double quotes in a string
+  // (use only double quotes), so we can stringify.
   content = content.replace("'", '"');
 
   return "module.exports = " + JSON.stringify(content) + ";";

@@ -141,7 +141,7 @@ use style::selector_parser::{RestyleDamage, Snapshot};
 use style::shared_lock::{SharedRwLock as StyleSharedRwLock, SharedRwLockReadGuard};
 use style::str::{HTML_SPACE_CHARACTERS, split_html_space_chars, str_join};
 use style::stylesheet_set::StylesheetSet;
-use style::stylesheets::{Stylesheet, StylesheetContents, OriginSet};
+use style::stylesheets::{Stylesheet, StylesheetContents, Origin, OriginSet};
 use task_source::TaskSource;
 use time;
 use timers::OneshotTimerCallback;
@@ -2397,9 +2397,13 @@ impl Document {
                       owner.is::<HTMLMetaElement>(), "Wat");
 
         let mut stylesheets = self.stylesheets.borrow_mut();
-        let insertion_point = stylesheets.iter().find(|sheet_in_doc| {
-            owner.upcast::<Node>().is_before(sheet_in_doc.owner.upcast())
-        }).cloned();
+        let insertion_point =
+            stylesheets
+                .iter()
+                .map(|(sheet, _origin)| sheet)
+                .find(|sheet_in_doc| {
+                    owner.upcast::<Node>().is_before(sheet_in_doc.owner.upcast())
+                }).cloned();
 
         self.window()
             .layout_chan()
@@ -2435,7 +2439,7 @@ impl Document {
     pub fn stylesheet_at(&self, index: usize) -> Option<Root<CSSStyleSheet>> {
         let stylesheets = self.stylesheets.borrow();
 
-        stylesheets.get(index).and_then(|s| {
+        stylesheets.get(Origin::Author, index).and_then(|s| {
             s.owner.upcast::<Node>().get_cssom_stylesheet()
         })
     }

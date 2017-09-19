@@ -9,6 +9,7 @@ const {
   ADD_CUSTOM_HEADER_COLUMN,
   DELETE_CUSTOM_HEADER_COLUMN,
   OPEN_NETWORK_DETAILS,
+  ENABLE_PERSISTENT_LOGS,
   DISABLE_BROWSER_CACHE,
   OPEN_STATISTICS,
   RENAME_CUSTOM_HEADER_COLUMN,
@@ -30,6 +31,18 @@ function openNetworkDetails(open) {
   return {
     type: OPEN_NETWORK_DETAILS,
     open,
+  };
+}
+
+/**
+ * Change persistent logs state.
+ *
+ * @param {boolean} enabled - expected persistent logs enabled state
+ */
+function enablePersistentLogs(enabled) {
+  return {
+    type: ENABLE_PERSISTENT_LOGS,
+    enabled,
   };
 }
 
@@ -151,6 +164,14 @@ function toggleNetworkDetails() {
 }
 
 /**
+ * Toggle persistent logs status.
+ */
+function togglePersistentLogs() {
+  return (dispatch, getState) =>
+    dispatch(enablePersistentLogs(!getState().ui.persistentLogsEnabled));
+}
+
+/**
  * Toggle browser cache status.
  */
 function toggleBrowserCache() {
@@ -170,6 +191,7 @@ module.exports = {
   addCustomHeaderColumn,
   deleteCustomHeaderColumn,
   openNetworkDetails,
+  enablePersistentLogs,
   disableBrowserCache,
   openStatistics,
   renameCustomHeaderColumn,
@@ -180,6 +202,7 @@ module.exports = {
   toggleCustomHeaderModal,
   toggleCustomHeaderColumn,
   toggleNetworkDetails,
+  togglePersistentLogs,
   toggleBrowserCache,
   toggleStatistics,
 };
