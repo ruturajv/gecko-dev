@@ -6,7 +6,7 @@
 
 const { REQUESTS_WATERFALL } = require("./constants");
 const { getColor } = require("devtools/client/shared/theme");
-//const { colorUtils } = require("devtools/shared/css/color");
+const { colorUtils } = require("devtools/shared/css/color");
 
 const HTML_NS = "http://www.w3.org/1999/xhtml";
 const STATE_KEYS = [
@@ -137,10 +137,9 @@ WaterfallBackground.prototype = {
    */
   getThemeColorAsRgba(colorName, theme) {
     let colorStr = getColor(colorName, theme);
-    //let color = new colorUtils.CssColor(colorStr);
-    //let { r, g, b } = color.getRGBATuple();
-    //return [r, g, b, REQUESTS_WATERFALL.TICKS_COLOR_OPACITY];
-    return [255, 0, 0, REQUESTS_WATERFALL.TICKS_COLOR_OPACITY];
+    let color = new colorUtils.CssColor(colorStr);
+    let { r, g, b } = color.getRGBATuple();
+    return [r, g, b, REQUESTS_WATERFALL.TICKS_COLOR_OPACITY];
   },
 
   destroy() {
