@@ -61,7 +61,6 @@ use std::fmt;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
-use std::mem::transmute;
 use std::sync::atomic::Ordering;
 use style::CaseSensitivityExt;
 use style::applicable_declarations::ApplicableDeclarationBlock;
@@ -70,7 +69,7 @@ use style::computed_values::display;
 use style::context::SharedStyleContext;
 use style::data::ElementData;
 use style::dom::{LayoutIterator, NodeInfo, OpaqueNode};
-use style::dom::{PresentationalHintsSynthesizer, TElement, TNode, UnsafeNode};
+use style::dom::{PresentationalHintsSynthesizer, TElement, TNode};
 use style::element_state::*;
 use style::font_metrics::ServoMetricsProvider;
 use style::properties::{ComputedValues, PropertyDeclarationBlock};
@@ -161,17 +160,6 @@ impl<'ln> NodeInfo for ServoLayoutNode<'ln> {
 impl<'ln> TNode for ServoLayoutNode<'ln> {
     type ConcreteElement = ServoLayoutElement<'ln>;
     type ConcreteChildrenIterator = ServoChildrenIterator<'ln>;
-
-    fn to_unsafe(&self) -> UnsafeNode {
-        unsafe {
-            (self.node.unsafe_get() as usize, 0)
-        }
-    }
-
-    unsafe fn from_unsafe(n: &UnsafeNode) -> Self {
-        let (node, _) = *n;
-        transmute(node)
-    }
 
     fn parent_node(&self) -> Option<Self> {
         unsafe {
@@ -630,6 +618,10 @@ fn as_element<'le>(node: LayoutJS<Node>) -> Option<ServoLayoutElement<'le>> {
 impl<'le> ::selectors::Element for ServoLayoutElement<'le> {
     type Impl = SelectorImpl;
 
+    fn opaque(&self) -> ::selectors::OpaqueElement {
+        ::selectors::OpaqueElement::new(self.as_node().opaque().0 as *const ())
+    }
+
     fn parent_element(&self) -> Option<ServoLayoutElement<'le>> {
         unsafe {
             self.element.upcast().parent_node_ref().and_then(as_element)
@@ -979,12 +971,14 @@ impl<'ln> ThreadSafeLayoutNode for ServoThreadSafeLayoutNode<'ln> {
         this.svg_data()
     }
 
-    fn iframe_browsing_context_id(&self) -> BrowsingContextId {
+    // Can return None if the iframe has no nested browsing context
+    fn iframe_browsing_context_id(&self) -> Option<BrowsingContextId> {
         let this = unsafe { self.get_jsmanaged() };
         this.iframe_browsing_context_id()
     }
 
-    fn iframe_pipeline_id(&self) -> PipelineId {
+    // Can return None if the iframe has no nested browsing context
+    fn iframe_pipeline_id(&self) -> Option<PipelineId> {
         let this = unsafe { self.get_jsmanaged() };
         this.iframe_pipeline_id()
     }
@@ -1167,6 +1161,11 @@ impl<'le> ThreadSafeLayoutElement for ServoThreadSafeLayoutElement<'le> {
 /// not for inheritance (styles are inherited appropiately).
 impl<'le> ::selectors::Element for ServoThreadSafeLayoutElement<'le> {
     type Impl = SelectorImpl;
+
+    fn opaque(&self) -> ::selectors::OpaqueElement {
+        ::selectors::OpaqueElement::new(self.as_node().opaque().0 as *const ())
+    }
+
 
     fn parent_element(&self) -> Option<Self> {
         warn!("ServoThreadSafeLayoutElement::parent_element called");

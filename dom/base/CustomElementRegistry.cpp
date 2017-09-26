@@ -593,6 +593,9 @@ CustomElementRegistry::Define(const nsAString& aName,
   }
 
   JSContext *cx = jsapi.cx();
+  // Note: No calls that might run JS or trigger CC before this point, or
+  // there's a (vanishingly small) chance of our constructor being nulled
+  // before we access it.
   JS::Rooted<JSObject*> constructor(cx, aFunctionConstructor.CallableOrNull());
 
   /**
@@ -878,7 +881,7 @@ CustomElementRegistry::Get(JSContext* aCx, const nsAString& aName,
     return;
   }
 
-  aRetVal.setObjectOrNull(data->mConstructor->CallableOrNull());
+  aRetVal.setObject(*data->mConstructor->Callback(aCx));
 }
 
 already_AddRefed<Promise>
@@ -936,7 +939,7 @@ DoUpgrade(Element* aElement,
 } // anonymous namespace
 
 // https://html.spec.whatwg.org/multipage/scripting.html#upgrades
-void
+/* static */ void
 CustomElementRegistry::Upgrade(Element* aElement,
                                CustomElementDefinition* aDefinition,
                                ErrorResult& aRv)
@@ -970,12 +973,14 @@ CustomElementRegistry::Upgrade(Element* aElement,
 
         LifecycleCallbackArgs args = {
           nsDependentAtomString(attrName),
-          NullString(),
-          (attrValue.IsEmpty() ? NullString() : attrValue),
-          (namespaceURI.IsEmpty() ? NullString() : namespaceURI)
+          VoidString(),
+          (attrValue.IsEmpty() ? VoidString() : attrValue),
+          (namespaceURI.IsEmpty() ? VoidString() : namespaceURI)
         };
-        EnqueueLifecycleCallback(nsIDocument::eAttributeChanged, aElement,
-                                 &args, aDefinition);
+        nsContentUtils::EnqueueLifecycleCallback(aElement->OwnerDoc(),
+                                                 nsIDocument::eAttributeChanged,
+                                                 aElement,
+                                                 &args, aDefinition);
       }
     }
   }
@@ -1000,7 +1005,9 @@ CustomElementRegistry::Upgrade(Element* aElement,
   data->mState = CustomElementData::State::eCustom;
 
   // This is for old spec.
-  EnqueueLifecycleCallback(nsIDocument::eCreated, aElement, nullptr, aDefinition);
+  nsContentUtils::EnqueueLifecycleCallback(aElement->OwnerDoc(),
+                                           nsIDocument::eCreated,
+                                           aElement, nullptr, aDefinition);
 }
 
 //-----------------------------------------------------

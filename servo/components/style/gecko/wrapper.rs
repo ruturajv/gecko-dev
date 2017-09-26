@@ -20,7 +20,7 @@ use applicable_declarations::ApplicableDeclarationBlock;
 use atomic_refcell::{AtomicRefCell, AtomicRefMut};
 use context::{QuirksMode, SharedStyleContext, PostAnimationTasks, UpdateAnimationsTasks};
 use data::ElementData;
-use dom::{LayoutIterator, NodeInfo, TElement, TNode, UnsafeNode};
+use dom::{LayoutIterator, NodeInfo, TElement, TNode};
 use dom::{OpaqueNode, PresentationalHintsSynthesizer};
 use element_state::{ElementState, DocumentState, NS_DOCUMENT_STATE_WINDOW_INACTIVE};
 use error_reporting::ParseErrorReporter;
@@ -76,7 +76,7 @@ use properties::animated_properties::TransitionProperty;
 use properties::style_structs::Font;
 use rule_tree::CascadeLevel as ServoCascadeLevel;
 use selector_parser::{AttrValue, ElementExt, PseudoClassStringArg};
-use selectors::Element;
+use selectors::{Element, OpaqueElement};
 use selectors::attr::{AttrSelectorOperation, AttrSelectorOperator, CaseSensitivity, NamespaceConstraint};
 use selectors::matching::{ElementSelectorFlags, LocalMatchingContext, MatchingContext};
 use selectors::matching::{RelevantLinkStatus, VisitedHandlingMode};
@@ -245,14 +245,6 @@ impl<'ln> NodeInfo for GeckoNode<'ln> {
 impl<'ln> TNode for GeckoNode<'ln> {
     type ConcreteElement = GeckoElement<'ln>;
     type ConcreteChildrenIterator = GeckoChildrenIterator<'ln>;
-
-    fn to_unsafe(&self) -> UnsafeNode {
-        (self.0 as *const _ as usize, 0)
-    }
-
-    unsafe fn from_unsafe(n: &UnsafeNode) -> Self {
-        GeckoNode(&*(n.0 as *mut RawGeckoNode))
-    }
 
     fn parent_node(&self) -> Option<Self> {
         unsafe { self.0.mParent.as_ref().map(GeckoNode) }
@@ -1681,6 +1673,10 @@ impl<'le> PresentationalHintsSynthesizer for GeckoElement<'le> {
 
 impl<'le> ::selectors::Element for GeckoElement<'le> {
     type Impl = SelectorImpl;
+
+    fn opaque(&self) -> OpaqueElement {
+        OpaqueElement::new(self.0)
+    }
 
     fn parent_element(&self) -> Option<Self> {
         // FIXME(emilio): This will need to jump across if the parent node is a

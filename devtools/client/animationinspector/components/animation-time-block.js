@@ -58,13 +58,6 @@ AnimationTimeBlock.prototype = {
     this.unrender();
 
     this.animation = animation;
-    let {state} = this.animation;
-
-    // Create a container element to hold the delay and iterations.
-    // It is positioned according to its delay (divided by the playbackrate),
-    // and its width is according to its duration (divided by the playbackrate).
-    const {x, delayX, delayW, endDelayX, endDelayW} =
-      TimeScale.getAnimationDimensions(animation);
 
     // Animation summary graph element.
     const summaryEl = createSVGNode({
@@ -72,24 +65,14 @@ AnimationTimeBlock.prototype = {
       nodeType: "svg",
       attributes: {
         "class": "summary",
-        "preserveAspectRatio": "none",
-        "style": `left: ${ x - (state.delay > 0 ? delayW : 0) }%`
+        "preserveAspectRatio": "none"
       }
     });
+    this.updateSummaryGraphViewBox(summaryEl);
 
+    const {state} = this.animation;
     // Total displayed duration
-    const totalDisplayedDuration = state.playbackRate * TimeScale.getDuration();
-
-    // Calculate stroke height in viewBox to display stroke of path.
-    const strokeHeightForViewBox = 0.5 / this.containerEl.clientHeight;
-
-    // Set viewBox
-    summaryEl.setAttribute("viewBox",
-                           `${ state.delay < 0 ? state.delay : 0 }
-                            -${ 1 + strokeHeightForViewBox }
-                            ${ totalDisplayedDuration }
-                            ${ 1 + strokeHeightForViewBox * 2 }`);
-
+    const totalDisplayedDuration = this.getTotalDisplayedDuration();
     // Minimum segment duration is the duration of one pixel.
     const minSegmentDuration = totalDisplayedDuration / this.containerEl.clientWidth;
     // Minimum progress threshold for effect timing.
@@ -131,31 +114,92 @@ AnimationTimeBlock.prototype = {
     // Delay.
     if (state.delay) {
       // Negative delays need to start at 0.
-      createNode({
+      const delayEl = createNode({
         parent: this.containerEl,
         attributes: {
           "class": "delay"
                    + (state.delay < 0 ? " negative" : " positive")
                    + (state.fill === "both" ||
-                      state.fill === "backwards" ? " fill" : ""),
-          "style": `left:${ delayX }%; width:${ delayW }%;`
+                      state.fill === "backwards" ? " fill" : "")
         }
       });
+      this.updateDelayBounds(delayEl);
     }
 
     // endDelay
     if (state.iterationCount && state.endDelay) {
-      createNode({
+      const endDelayEl = createNode({
         parent: this.containerEl,
         attributes: {
           "class": "end-delay"
                    + (state.endDelay < 0 ? " negative" : " positive")
                    + (state.fill === "both" ||
-                      state.fill === "forwards" ? " fill" : ""),
-          "style": `left:${ endDelayX }%; width:${ endDelayW }%;`
+                      state.fill === "forwards" ? " fill" : "")
         }
       });
+      this.updateEndDelayBounds(endDelayEl);
     }
+  },
+
+  /**
+   * Update animation and updating its DOM accordingly.
+   * Unlike 'render' method, this method does not generate any elements, but update
+   * the bounds of DOM.
+   * @param {Object} animation
+   */
+  update: function (animation) {
+    this.animation = animation;
+    this.updateSummaryGraphViewBox(this.containerEl.querySelector(".summary"));
+    const delayEl = this.containerEl.querySelector(".delay");
+    if (delayEl) {
+      this.updateDelayBounds(delayEl);
+    }
+    const endDelayEl = this.containerEl.querySelector(".end-delay");
+    if (endDelayEl) {
+      this.updateEndDelayBounds(endDelayEl);
+    }
+  },
+
+  /**
+   * Update viewBox and style of SVG element for summary graph to fit to latest
+   * TimeScale.
+   * @param {Element} summaryEl - SVG element for summary graph.
+   */
+  updateSummaryGraphViewBox: function (summaryEl) {
+    const {x, delayW} = TimeScale.getAnimationDimensions(this.animation);
+    const totalDisplayedDuration = this.getTotalDisplayedDuration();
+    const strokeHeightForViewBox = 0.5 / this.containerEl.clientHeight;
+    const {state} = this.animation;
+    summaryEl.setAttribute("viewBox",
+                           `${state.delay < 0 ? state.delay : 0} ` +
+                           `-${1 + strokeHeightForViewBox} ` +
+                           `${totalDisplayedDuration} ` +
+                           `${1 + strokeHeightForViewBox * 2}`);
+    summaryEl.setAttribute("style", `left: ${ x - (state.delay > 0 ? delayW : 0) }%`);
+  },
+
+  /**
+   * Update bounds of element which represents delay to fit to latest TimeScale.
+   * @param {Element} delayEl - which represents delay.
+   */
+  updateDelayBounds: function (delayEl) {
+    const {delayX, delayW} = TimeScale.getAnimationDimensions(this.animation);
+    delayEl.style.left = `${ delayX }%`;
+    delayEl.style.width = `${ delayW }%`;
+  },
+
+  /**
+   * Update bounds of element which represents endDelay to fit to latest TimeScale.
+   * @param {Element} endDelayEl - which represents endDelay.
+   */
+  updateEndDelayBounds: function (endDelayEl) {
+    const {endDelayX, endDelayW} = TimeScale.getAnimationDimensions(this.animation);
+    endDelayEl.style.left = `${ endDelayX }%`;
+    endDelayEl.style.width = `${ endDelayW }%`;
+  },
+
+  getTotalDisplayedDuration: function () {
+    return this.animation.state.playbackRate * TimeScale.getDuration();
   },
 
   getTooltipText: function (state) {
@@ -229,6 +273,14 @@ AnimationTimeBlock.prototype = {
     if (state.playbackRate !== 1) {
       text += L10N.getStr("player.animationRateLabel") + " ";
       text += state.playbackRate;
+      text += "\n";
+    }
+
+    // Adding the animation-timing-function
+    // if it is not "ease" which is default value for CSS Animations.
+    if (state.animationTimingFunction && state.animationTimingFunction !== "ease") {
+      text += L10N.getStr("player.animationTimingFunctionLabel") + " ";
+      text += state.animationTimingFunction;
       text += "\n";
     }
 
@@ -418,7 +470,7 @@ function renderGraph(parentEl, state, totalDisplayedDuration, className, graphHe
 function renderDelay(parentEl, state, graphHelper) {
   const startSegment = graphHelper.getSegment(0);
   const endSegment = { x: state.delay, y: startSegment.y };
-  graphHelper.appendPathElement(parentEl, [startSegment, endSegment], "delay-path");
+  graphHelper.appendShapePath(parentEl, [startSegment, endSegment], "delay-path");
 }
 
 /**
@@ -434,7 +486,7 @@ function renderFirstIteration(parentEl, state, mainIterationStartTime,
   const startTime = mainIterationStartTime;
   const endTime = startTime + firstSectionCount * state.duration;
   const segments = graphHelper.createPathSegments(startTime, endTime);
-  graphHelper.appendPathElement(parentEl, segments, "iteration-path");
+  graphHelper.appendShapePath(parentEl, segments, "iteration-path");
 }
 
 /**
@@ -455,7 +507,7 @@ function renderMiddleIterations(parentEl, state, mainIterationStartTime,
     const startTime = offset + i * state.duration;
     const endTime = startTime + state.duration;
     const segments = graphHelper.createPathSegments(startTime, endTime);
-    graphHelper.appendPathElement(parentEl, segments, "iteration-path");
+    graphHelper.appendShapePath(parentEl, segments, "iteration-path");
   }
 }
 
@@ -476,7 +528,7 @@ function renderLastIteration(parentEl, state, mainIterationStartTime,
                       (firstSectionCount + middleSectionCount) * state.duration;
   const endTime = startTime + lastSectionCount * state.duration;
   const segments = graphHelper.createPathSegments(startTime, endTime);
-  graphHelper.appendPathElement(parentEl, segments, "iteration-path");
+  graphHelper.appendShapePath(parentEl, segments, "iteration-path");
 }
 
 /**
@@ -508,7 +560,7 @@ function renderInfinity(parentEl, state, mainIterationStartTime,
   const firstEndTime = firstStartTime + state.duration;
   const firstSegments =
     graphHelper.createPathSegments(firstStartTime, firstEndTime);
-  graphHelper.appendPathElement(parentEl, firstSegments, "iteration-path infinity");
+  graphHelper.appendShapePath(parentEl, firstSegments, "iteration-path infinity");
 
   // Append other iterations. We can copy first segments.
   const isAlternate = state.direction.match(/alternate/);
@@ -526,7 +578,7 @@ function renderInfinity(parentEl, state, mainIterationStartTime,
         return { x: segment.x - firstStartTime + startTime, y: segment.y };
       });
     }
-    graphHelper.appendPathElement(parentEl, segments, "iteration-path infinity copied");
+    graphHelper.appendShapePath(parentEl, segments, "iteration-path infinity copied");
   }
 }
 
@@ -543,7 +595,7 @@ function renderEndDelay(parentEl, state,
   const startTime = mainIterationStartTime + iterationCount * state.duration;
   const startSegment = graphHelper.getSegment(startTime);
   const endSegment = { x: startTime + state.endDelay, y: startSegment.y };
-  graphHelper.appendPathElement(parentEl, [startSegment, endSegment], "enddelay-path");
+  graphHelper.appendShapePath(parentEl, [startSegment, endSegment], "enddelay-path");
 }
 
 /**
@@ -561,8 +613,7 @@ function renderForwardsFill(parentEl, state, mainIterationStartTime,
                       (state.endDelay > 0 ? state.endDelay : 0);
   const startSegment = graphHelper.getSegment(startTime);
   const endSegment = { x: totalDuration, y: startSegment.y };
-  graphHelper.appendPathElement(parentEl, [startSegment, endSegment],
-                                "fill-forwards-path");
+  graphHelper.appendShapePath(parentEl, [startSegment, endSegment], "fill-forwards-path");
 }
 
 /**
@@ -576,7 +627,7 @@ function renderNegativeDelayHiddenProgress(parentEl, state, graphHelper) {
   const endTime = 0;
   const segments =
     graphHelper.createPathSegments(startTime, endTime);
-  graphHelper.appendPathElement(parentEl, segments, "delay-path negative");
+  graphHelper.appendShapePath(parentEl, segments, "delay-path negative");
 }
 
 /**
@@ -589,7 +640,7 @@ function renderNegativeEndDelayHiddenProgress(parentEl, state, graphHelper) {
   const endTime = state.delay + state.iterationCount * state.duration;
   const startTime = endTime + state.endDelay;
   const segments = graphHelper.createPathSegments(startTime, endTime);
-  graphHelper.appendPathElement(parentEl, segments, "enddelay-path negative");
+  graphHelper.appendShapePath(parentEl, segments, "enddelay-path negative");
 }
 
 /**

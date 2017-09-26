@@ -124,6 +124,7 @@
 #include "DisplayItemClip.h"
 #include "mozilla/layers/WebRenderLayerManager.h"
 #include "prenv.h"
+#include "TextDrawTarget.h"
 
 #ifdef MOZ_XUL
 #include "nsXULPopupManager.h"
@@ -156,6 +157,7 @@ using namespace mozilla::gfx;
 #define WEBKIT_PREFIXES_ENABLED_PREF_NAME "layout.css.prefixes.webkit"
 #define TEXT_ALIGN_UNSAFE_ENABLED_PREF_NAME "layout.css.text-align-unsafe-value.enabled"
 #define FLOAT_LOGICAL_VALUES_ENABLED_PREF_NAME "layout.css.float-logical-values.enabled"
+#define INTERCHARACTER_RUBY_ENABLED_PREF_NAME "layout.css.ruby.intercharacter.enabled"
 
 // The time in number of frames that we estimate for a refresh driver
 // to be quiescent
@@ -740,6 +742,22 @@ nsLayoutUtils::IsTextAlignUnsafeValueEnabled()
   }
 
   return sTextAlignUnsafeValueEnabled;
+}
+
+bool
+nsLayoutUtils::IsInterCharacterRubyEnabled()
+{
+  static bool sInterCharacterRubyEnabled;
+  static bool sInterCharacterRubyEnabledPrefCached = false;
+
+  if (!sInterCharacterRubyEnabledPrefCached) {
+    sInterCharacterRubyEnabledPrefCached = true;
+    Preferences::AddBoolVarCache(&sInterCharacterRubyEnabled,
+                                 INTERCHARACTER_RUBY_ENABLED_PREF_NAME,
+                                 false);
+  }
+
+  return sInterCharacterRubyEnabled;
 }
 
 void
@@ -6050,6 +6068,29 @@ nsLayoutUtils::PaintTextShadow(const nsIFrame* aFrame,
 
     nsPresContext* presCtx = aFrame->PresContext();
     nsContextBoxBlur contextBoxBlur;
+
+    nscolor shadowColor;
+    if (shadowDetails->mHasColor)
+      shadowColor = shadowDetails->mColor;
+    else
+      shadowColor = aForegroundColor;
+
+    // Webrender just needs the shadow details
+    if (auto* textDrawer = aContext->GetTextDrawer()) {
+      wr::TextShadow wrShadow;
+
+      wrShadow.offset = {
+        presCtx->AppUnitsToFloatDevPixels(shadowDetails->mXOffset),
+        presCtx->AppUnitsToFloatDevPixels(shadowDetails->mYOffset)
+      };
+
+      wrShadow.blur_radius = presCtx->AppUnitsToFloatDevPixels(shadowDetails->mRadius);
+      wrShadow.color = wr::ToColorF(ToDeviceColor(shadowColor));
+
+      textDrawer->AppendShadow(wrShadow);
+      return;
+    }
+
     gfxContext* shadowContext = contextBoxBlur.Init(shadowRect, 0, blurRadius,
                                                     presCtx->AppUnitsPerDevPixel(),
                                                     aDestCtx, aDirtyRect, nullptr,
@@ -6057,11 +6098,7 @@ nsLayoutUtils::PaintTextShadow(const nsIFrame* aFrame,
     if (!shadowContext)
       continue;
 
-    nscolor shadowColor;
-    if (shadowDetails->mHasColor)
-      shadowColor = shadowDetails->mColor;
-    else
-      shadowColor = aForegroundColor;
+    
 
     aDestCtx->Save();
     aDestCtx->NewPath();
@@ -6517,8 +6554,8 @@ ComputeSnappedImageDrawingParameters(gfxContext*     aCtx,
   // and has integer coordinates. If not, we need these properties to compute
   // the optimal drawn image size, so compute |snappedDestSize| here.
   gfxSize snappedDestSize = dest.Size();
+  gfxSize scaleFactors = currentMatrix.ScaleFactors(true);
   if (!didSnap) {
-    gfxSize scaleFactors = currentMatrix.ScaleFactors(true);
     snappedDestSize.Scale(scaleFactors.width, scaleFactors.height);
     snappedDestSize.width = NS_round(snappedDestSize.width);
     snappedDestSize.height = NS_round(snappedDestSize.height);
@@ -6530,7 +6567,7 @@ ComputeSnappedImageDrawingParameters(gfxContext*     aCtx,
   snappedDestSize.height = std::max(snappedDestSize.height, 1.0);
 
   // Bail if we're not going to end up drawing anything.
-  if (fill.IsEmpty() || snappedDestSize.IsEmpty()) {
+  if (fill.IsEmpty()) {
     return SnappedImageDrawingParameters();
   }
 
@@ -6538,12 +6575,24 @@ ComputeSnappedImageDrawingParameters(gfxContext*     aCtx,
     aImage->OptimalImageSizeForDest(snappedDestSize,
                                     imgIContainer::FRAME_CURRENT,
                                     aSamplingFilter, aImageFlags);
-  gfxSize imageSize(intImageSize.width, intImageSize.height);
 
-  // XXX(seth): May be buggy; see bug 1151016.
-  CSSIntSize svgViewportSize = currentMatrix.IsIdentity()
-    ? CSSIntSize(intImageSize.width, intImageSize.height)
-    : CSSIntSize::Truncate(devPixelDest.width, devPixelDest.height);
+  nsIntSize svgViewportSize;
+  if (scaleFactors.width == 1.0 && scaleFactors.height == 1.0) {
+    // intImageSize is scaled by currentMatrix. But since there are no scale
+    // factors in currentMatrix, it is safe to assign intImageSize to
+    // svgViewportSize directly.
+    svgViewportSize = intImageSize;
+  } else {
+    // We should not take into account any transformation of currentMatrix
+    // when computing svg viewport size. Since currentMatrix contains scale
+    // factors, we need to recompute SVG viewport by unscaled devPixelDest.
+    svgViewportSize = aImage->OptimalImageSizeForDest(devPixelDest.Size(),
+                                                      imgIContainer::FRAME_CURRENT,
+                                                      aSamplingFilter,
+                                                      aImageFlags);
+  }
+
+  gfxSize imageSize(intImageSize.width, intImageSize.height);
 
   // Compute the set of pixels that would be sampled by an ideal rendering
   gfxPoint subimageTopLeft =
@@ -6660,7 +6709,9 @@ ComputeSnappedImageDrawingParameters(gfxContext*     aCtx,
     ImageRegion::CreateWithSamplingRestriction(imageSpaceFill, subimage, extendMode);
 
   return SnappedImageDrawingParameters(transform, intImageSize,
-                                       region, svgViewportSize);
+                                       region,
+                                       CSSIntSize(svgViewportSize.width,
+                                                  svgViewportSize.height));
 }
 
 static DrawResult
@@ -6704,9 +6755,7 @@ DrawImageInternal(gfxContext&            aContext,
   {
     gfxContextMatrixAutoSaveRestore contextMatrixRestorer(&aContext);
 
-    RefPtr<gfxContext> destCtx = &aContext;
-
-    destCtx->SetMatrix(params.imageSpaceToDeviceSpace);
+    aContext.SetMatrix(params.imageSpaceToDeviceSpace);
 
     Maybe<SVGImageContext> fallbackContext;
     if (!aSVGContext) {
@@ -6714,7 +6763,7 @@ DrawImageInternal(gfxContext&            aContext,
       fallbackContext.emplace(Some(params.svgViewportSize));
     }
 
-    result = aImage->Draw(destCtx, params.size, params.region,
+    result = aImage->Draw(&aContext, params.size, params.region,
                           imgIContainer::FRAME_CURRENT, aSamplingFilter,
                           aSVGContext ? aSVGContext : fallbackContext,
                           aImageFlags, aOpacity);

@@ -488,9 +488,6 @@ public class GeckoView extends LayerView {
     private void init(final Context context, final GeckoViewSettings settings) {
         preload(context);
 
-        // Perform common initialization for Fennec/GeckoView.
-        GeckoAppShell.setLayerView(this);
-
         initializeView();
         mListener.registerListeners();
 
@@ -686,6 +683,18 @@ public class GeckoView extends LayerView {
         mEventDispatcher.dispatch("GeckoView:GoForward", null);
     }
 
+    /**
+    * Set this GeckoView as active or inactive. Setting a GeckoView to inactive will
+    * significantly reduce its memory footprint, but should only be done if the
+    * GeckoView is not currently visible.
+    * @param active A boolean determining whether the GeckoView is active
+    */
+    public void setActive(boolean active) {
+        final GeckoBundle msg = new GeckoBundle();
+        msg.putBoolean("active", active);
+        mEventDispatcher.dispatch("GeckoView:SetActive", msg);
+    }
+
     public GeckoViewSettings getSettings() {
         return mSettings;
     }
@@ -751,7 +760,8 @@ public class GeckoView extends LayerView {
                 mInputConnectionListener.onKeyMultiple(keyCode, repeatCount, event);
     }
 
-    /* package */ boolean isIMEEnabled() {
+    @Override
+    public boolean isIMEEnabled() {
         return mInputConnectionListener != null &&
                 mInputConnectionListener.isIMEEnabled();
     }
