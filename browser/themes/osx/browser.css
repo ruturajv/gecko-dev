@@ -55,6 +55,11 @@
 
 /** Begin titlebar **/
 
+#titlebar {
+  /* Centrally align content items vertically */
+  -moz-box-pack: center;
+}
+
 #titlebar-content {
   /* Ensure the the content part of the titlebar does not shrink. */
   min-height: inherit;
@@ -69,6 +74,8 @@
 #titlebar-secondary-buttonbox {
   position: relative;
   z-index: 1;
+  /* Centrally align indicators and full screen button vertically */
+  -moz-box-align: center;
 }
 
 #titlebar-buttonbox-container {
@@ -101,28 +108,6 @@
  */
 #main-window[tabsintitlebar] > #titlebar {
   min-height: calc(var(--tab-min-height) + var(--space-above-tabbar) - var(--tab-toolbar-navbar-overlap));
-}
-
-/**
- * We also vertically center the window buttons.
- */
-#titlebar-buttonbox-container {
-  -moz-box-align: start;
-}
-
-#main-window[tabsintitlebar] > #titlebar > #titlebar-content > #titlebar-buttonbox-container,
-#main-window[tabsintitlebar] > #titlebar > #titlebar-content > #titlebar-secondary-buttonbox > #titlebar-fullscreen-button {
-  /*
-   * To vertically center the window controls, we place them at half the
-   * height of the tabstrip ((tab height + drag space) / 2) - half the height
-   * of the window controls (16px / 2).
-   * */
-  margin-top: calc((var(--tab-min-height) + var(--space-above-tabbar)) / 2 - 8px);
-}
-
-#main-window:not([tabsintitlebar]) > #titlebar > #titlebar-content > #titlebar-buttonbox-container,
-#main-window:not([tabsintitlebar]) > #titlebar > #titlebar-content > #titlebar-secondary-buttonbox > #titlebar-fullscreen-button {
-  margin-top: 3px;
 }
 
 /** End titlebar **/
@@ -184,79 +169,6 @@
 #nav-bar-customization-target > #wrapper-personal-bookmarks > #personal-bookmarks {
   min-height: 32px;
   -moz-box-align: center;
-}
-
-/* ----- BOOKMARK BUTTONS ----- */
-
-.bookmark-item[container] {
-  list-style-image: url("chrome://global/skin/tree/folder.png");
-}
-
-.bookmark-item[container][livemark] {
-  list-style-image: url("chrome://browser/skin/page-livemarks.png");
-}
-
-.bookmark-item[container][livemark] .bookmark-item {
-  list-style-image: url("chrome://browser/skin/places/livemark-item.png");
-  -moz-image-region: rect(0px, 16px, 16px, 0px);
-}
-
-.bookmark-item[container][livemark] .bookmark-item[visited] {
-  -moz-image-region: rect(0px, 32px, 16px, 16px);
-}
-
-.bookmark-item[container][query] {
-  list-style-image: url("chrome://browser/skin/places/query.png");
-}
-
-.bookmark-item[query][tagContainer] {
-  list-style-image: url("chrome://browser/skin/places/tag.png");
-}
-
-.bookmark-item[query][dayContainer] {
-  list-style-image: url("chrome://browser/skin/places/history.png");
-}
-
-.bookmark-item[query][hostContainer] {
-  list-style-image: url("chrome://global/skin/tree/folder.png");
-}
-
-.bookmark-item[query][hostContainer][open] {
-  list-style-image: url("chrome://global/skin/tree/folder.png");
-}
-
-@media (min-resolution: 2dppx) {
-  .bookmark-item[container] {
-    list-style-image: url("chrome://global/skin/tree/folder@2x.png");
-  }
-
-  .bookmark-item[container][livemark] {
-    list-style-image: url("chrome://browser/skin/page-livemarks@2x.png");
-  }
-
-  .bookmark-item[container][livemark] .bookmark-item {
-    list-style-image: url("chrome://browser/skin/places/livemark-item.png");
-  }
-
-  .bookmark-item[container][query] {
-    list-style-image: url("chrome://browser/skin/places/query@2x.png");
-  }
-
-  .bookmark-item[query][tagContainer] {
-    list-style-image: url("chrome://browser/skin/places/tag@2x.png");
-  }
-
-  .bookmark-item[query][dayContainer] {
-    list-style-image: url("chrome://browser/skin/places/history@2x.png");
-  }
-
-  .bookmark-item[query][hostContainer] {
-    list-style-image: url("chrome://global/skin/tree/folder@2x.png");
-  }
-
-  .bookmark-item[query][hostContainer][open] {
-    list-style-image: url("chrome://global/skin/tree/folder@2x.png");
-  }
 }
 
 /* Workaround for native menubar inheritance */
@@ -367,10 +279,6 @@
   border-inline-end-style: none;
   padding-inline-end: 5px;
 }
-.urlbar-input-box {
-  margin: 0;
-  padding: 3px 0 2px;
-}
 
 /* ::::: URL Bar Zoom Reset Button ::::: */
 @keyframes urlbar-zoom-reset-pulse {
@@ -426,6 +334,14 @@
 
 %include ../shared/autocomplete.inc.css
 %include ../shared/urlbar-autocomplete.inc.css
+
+/* Give an extra margin top to align the top of the awesomebar with the
+ * bottom of the nav bar, OSX calculates the panel position with an missing
+ * 1px - https://bugzilla.mozilla.org/show_bug.cgi?id=1406353
+ */
+#PopupAutoCompleteRichResult {
+  margin-top: 1px;
+}
 
 #PopupAutoComplete > richlistbox > richlistitem[originaltype~="datalist-first"] {
   border-top: 1px solid #C7C7C7;
@@ -485,7 +401,7 @@ html|span.ac-emphasize-text-url {
 
 .ac-type-icon[type=keyword],
 .ac-site-icon[type=searchengine] {
-  list-style-image: url(chrome://global/skin/icons/autocomplete-search.svg);
+  list-style-image: url(chrome://browser/skin/search-glass.svg);
   -moz-context-properties: fill;
   fill: GrayText;
 }
@@ -807,11 +723,11 @@ html|span.ac-emphasize-text-url {
 #sidebar-box {
   -moz-appearance: -moz-mac-source-list;
   -moz-font-smoothing-background-color: -moz-mac-source-list;
+  /* Default font size is 11px on mac, so this is 12px */
+  font-size: 1.0909rem;
 }
 
 #sidebar-header {
-  /* system font size is a bit smaller in mac, so need more ems. */
-  font-size: 1.4545em;
   border-bottom: 1px solid hsla(240, 5%, 5%, .1);
   background-color: transparent;
 }
@@ -827,10 +743,6 @@ html|span.ac-emphasize-text-url {
   border-top: @scopeBarSeparatorBorder@;
   color: -moz-DialogText;
   text-shadow: none;
-}
-
-.bookmark-item {
-  list-style-image: url("chrome://mozapps/skin/places/defaultFavicon.svg");
 }
 
 .openintabs-menuitem {
@@ -922,6 +834,10 @@ html|span.ac-emphasize-text-url {
 /**
  * Tab Drag and Drop
  */
+
+.tab-drop-indicator-box {
+  -moz-box-align: center;
+}
 
 .tab-drop-indicator {
   list-style-image: url(chrome://browser/skin/tabbrowser/tabDragIndicator.png);

@@ -3,14 +3,18 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 :root {
-  --markup-hidden-attr-color: var(--theme-comment);
-  --markup-hidden-tag-color: #A1A1A4;
+  --markup-hidden-attr-name-color: #CA60AC;
+  --markup-hidden-attr-value-color: #5C6D87;
+  --markup-hidden-punctuation-color: #909090;
+  --markup-hidden-tag-color: #97A4B3;
   --markup-outline: var(--theme-splitter-color);
 }
 
 .theme-dark:root {
-  --markup-hidden-attr-color: var(--theme-body-color-inactive);
-  --markup-hidden-tag-color: var(--theme-content-color1);
+  --markup-hidden-attr-name-color: #CC8EC8;
+  --markup-hidden-attr-value-color: #9893A3;
+  --markup-hidden-punctuation-color: #909090;
+  --markup-hidden-tag-color: #AFB5BF;
   --markup-outline: var(--theme-selection-background);
 }
 
@@ -336,13 +340,19 @@ ul.children + .tag-line::before {
   z-index: 1;
 }
 
-
-.not-displayed .attr-name,
-.not-displayed .attr-value {
-  color: var(--markup-hidden-attr-color);
+.not-displayed {
+  color: var(--markup-hidden-punctuation-color);
 }
 
-.not-displayed .theme-fg-color3 {
+.not-displayed .attr-name {
+  color: var(--markup-hidden-attr-name-color);
+}
+
+.not-displayed .attr-value {
+  color: var(--markup-hidden-attr-value-color);
+}
+
+.not-displayed .tag {
   color: var(--markup-hidden-tag-color);
 }
 

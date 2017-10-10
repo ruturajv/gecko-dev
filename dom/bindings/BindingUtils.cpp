@@ -39,8 +39,6 @@
 
 #include "mozilla/dom/ScriptSettings.h"
 #include "mozilla/dom/CustomElementRegistry.h"
-#include "mozilla/dom/DOMError.h"
-#include "mozilla/dom/DOMErrorBinding.h"
 #include "mozilla/dom/DOMException.h"
 #include "mozilla/dom/ElementBinding.h"
 #include "mozilla/dom/HTMLObjectElement.h"
@@ -3681,6 +3679,8 @@ CreateHTMLElement(const GlobalObject& aGlobal, const JS::CallArgs& aCallArgs,
 
     newElement->SetCustomElementData(
       new CustomElementData(definition->mType, CustomElementData::State::eCustom));
+
+    newElement->SetCustomElementDefinition(definition);
 
     return newElement.forget();
   }

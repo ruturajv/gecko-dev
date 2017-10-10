@@ -237,7 +237,7 @@ AssertGCThingIsNotAnObjectSubclass(js::gc::Cell* cell) {}
  * Type T must be a public GC pointer type.
  */
 template <typename T>
-class Heap : public js::HeapBase<T, Heap<T>>
+class MOZ_NON_MEMMOVABLE Heap : public js::HeapBase<T, Heap<T>>
 {
     // Please note: this can actually also be used by nsXBLMaybeCompiled<T>, for legacy reasons.
     static_assert(js::IsHeapConstructibleType<T>::value,
@@ -402,7 +402,7 @@ class TenuredHeap : public js::HeapBase<T, TenuredHeap<T>>
 
     void setPtr(T newPtr) {
         MOZ_ASSERT((reinterpret_cast<uintptr_t>(newPtr) & flagsMask) == 0);
-        MOZ_ASSERT(js::gc::IsCellPointerValid(newPtr));
+        MOZ_ASSERT(js::gc::IsCellPointerValidOrNull(newPtr));
         if (newPtr)
             AssertGCThingMustBeTenured(newPtr);
         bits = (bits & flagsMask) | reinterpret_cast<uintptr_t>(newPtr);
@@ -1172,6 +1172,14 @@ class JS_PUBLIC_API(ObjectPtr)
     ObjectPtr() : value(nullptr) {}
 
     explicit ObjectPtr(JSObject* obj) : value(obj) {}
+
+    ObjectPtr(const ObjectPtr& other) : value(other.value) {}
+
+    ObjectPtr(ObjectPtr&& other)
+      : value(other.value)
+    {
+        other.value = nullptr;
+    }
 
     /* Always call finalize before the destructor. */
     ~ObjectPtr() { MOZ_ASSERT(!value); }
