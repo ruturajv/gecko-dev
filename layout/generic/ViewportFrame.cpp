@@ -65,7 +65,7 @@ ViewportFrame::BuildDisplayList(nsDisplayListBuilder*   aBuilder,
     BuildDisplayListForChild(aBuilder, kid, aLists);
   }
 
-  nsDisplayList topLayerList;
+  nsDisplayList topLayerList(aBuilder);
   BuildDisplayListForTopLayer(aBuilder, &topLayerList);
   if (!topLayerList.IsEmpty()) {
     // Wrap the whole top layer in a single item with maximum z-index,
@@ -102,12 +102,14 @@ BuildDisplayListForTopLayerFrame(nsDisplayListBuilder* aBuilder,
                                  nsIFrame* aFrame,
                                  nsDisplayList* aList)
 {
+  nsRect visible;
   nsRect dirty;
   DisplayListClipState::AutoClipMultiple clipState(aBuilder);
   nsDisplayListBuilder::AutoCurrentActiveScrolledRootSetter asrSetter(aBuilder);
   nsDisplayListBuilder::OutOfFlowDisplayData*
     savedOutOfFlowData = nsDisplayListBuilder::GetOutOfFlowData(aFrame);
   if (savedOutOfFlowData) {
+    visible = savedOutOfFlowData->mVisibleRect;
     dirty = savedOutOfFlowData->mDirtyRect;
     // This function is called after we've finished building display items for
     // the root scroll frame. That means that the content clip from the root
@@ -124,10 +126,10 @@ BuildDisplayListForTopLayerFrame(nsDisplayListBuilder* aBuilder,
       savedOutOfFlowData->mContainingBlockActiveScrolledRoot);
   }
   nsDisplayListBuilder::AutoBuildingDisplayList
-    buildingForChild(aBuilder, aFrame, dirty,
+    buildingForChild(aBuilder, aFrame, visible, dirty,
                      aBuilder->IsAtRootOfPseudoStackingContext());
 
-  nsDisplayList list;
+  nsDisplayList list(aBuilder);
   aFrame->BuildDisplayListForStackingContext(aBuilder, &list);
   aList->AppendToTop(&list);
 }

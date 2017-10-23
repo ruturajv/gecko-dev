@@ -15,6 +15,7 @@
 #include "mozilla/AsyncEventDispatcher.h"
 #include "mozilla/MemoryReporting.h"
 #include "mozilla/dom/Element.h"
+#include "mozilla/dom/HTMLSlotElement.h"
 #include "mozilla/dom/ShadowRoot.h"
 #include "nsIDocument.h"
 #include "nsIDOMDocument.h"
@@ -639,6 +640,7 @@ nsGenericDOMDataNode::GetChildren(uint32_t aFilter)
 nsresult
 nsGenericDOMDataNode::SetAttr(int32_t aNameSpaceID, nsAtom* aAttr,
                               nsAtom* aPrefix, const nsAString& aValue,
+                              nsIPrincipal* aContentPrincipal,
                               bool aNotify)
 {
   return NS_OK;
@@ -738,6 +740,20 @@ nsGenericDOMDataNode::GetExistingDestInsertionPoints() const
   return nullptr;
 }
 
+HTMLSlotElement*
+nsGenericDOMDataNode::GetAssignedSlot() const
+{
+  nsDataSlots *slots = GetExistingDataSlots();
+  return slots ? slots->mAssignedSlot.get() : nullptr;
+}
+
+void
+nsGenericDOMDataNode::SetAssignedSlot(HTMLSlotElement* aSlot)
+{
+  nsDataSlots *slots = DataSlots();
+  slots->mAssignedSlot = aSlot;
+}
+
 nsXBLBinding *
 nsGenericDOMDataNode::GetXBLBinding() const
 {
@@ -828,6 +844,9 @@ nsGenericDOMDataNode::nsDataSlots::Traverse(nsCycleCollectionTraversalCallback &
 
   NS_CYCLE_COLLECTION_NOTE_EDGE_NAME(cb, "mSlots->mContainingShadow");
   cb.NoteXPCOMChild(NS_ISUPPORTS_CAST(nsIContent*, mContainingShadow));
+
+  NS_CYCLE_COLLECTION_NOTE_EDGE_NAME(cb, "mSlots->mAssignedSlot");
+  cb.NoteXPCOMChild(NS_ISUPPORTS_CAST(nsIContent*, mAssignedSlot.get()));
 }
 
 void
@@ -835,6 +854,7 @@ nsGenericDOMDataNode::nsDataSlots::Unlink()
 {
   mXBLInsertionParent = nullptr;
   mContainingShadow = nullptr;
+  mAssignedSlot = nullptr;
 }
 
 //----------------------------------------------------------------------

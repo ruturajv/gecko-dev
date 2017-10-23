@@ -904,8 +904,11 @@ this.ExtensionData = class {
       result.msgs.push(bundle.formatStringFromName(permissionKey(NATIVE_MSG_PERM), [info.appName], 1));
     }
 
-    // Finally, show remaining permissions, in any order.
-    for (let permission of perms.permissions) {
+    // Finally, show remaining permissions, in the same order as AMO.
+    // The permissions are sorted alphabetically by the permission
+    // string to match AMO.
+    let permissionsCopy = perms.permissions.slice(0);
+    for (let permission of permissionsCopy.sort()) {
       // Handled above
       if (permission == "nativeMessaging") {
         continue;
@@ -1210,8 +1213,24 @@ this.Extension = class extends ExtensionData {
     return [this.id, this.version, Services.locale.getAppLocaleAsLangTag()];
   }
 
+  async _parseManifest() {
+    let manifest = await super.parseManifest();
+    if (manifest && manifest.permissions.has("mozillaAddons") &&
+        this.addonData.signedState !== AddonManager.SIGNEDSTATE_PRIVILEGED) {
+      Cu.reportError(`Stripping mozillaAddons permission from ${this.id}`);
+      manifest.permissions.delete("mozillaAddons");
+      let i = manifest.manifest.permissions.indexOf("mozillaAddons");
+      if (i >= 0) {
+        manifest.manifest.permissions.splice(i, 1);
+      } else {
+        throw new Error("Could not find mozilaAddons in original permissions array");
+      }
+    }
+    return manifest;
+  }
+
   parseManifest() {
-    return StartupCache.manifests.get(this.manifestCacheKey, () => super.parseManifest());
+    return StartupCache.manifests.get(this.manifestCacheKey, () => this._parseManifest());
   }
 
   async cachePermissions() {
@@ -1629,6 +1648,7 @@ this.Langpack = class extends ExtensionData {
   constructor(addonData, startupReason) {
     super(addonData.resourceURI);
     this.startupData = addonData.startupData;
+    this.manifestCacheKey = [addonData.id, addonData.version];
   }
 
   static getBootstrapScope(id, file) {
@@ -1648,10 +1668,6 @@ this.Langpack = class extends ExtensionData {
       .then(result => {
         this.localeData.messages.set(locale, result);
       });
-  }
-
-  get manifestCacheKey() {
-    return [this.id, this.version, Services.locale.getAppLocaleAsLangTag()];
   }
 
   async _parseManifest() {

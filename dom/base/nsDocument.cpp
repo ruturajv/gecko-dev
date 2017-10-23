@@ -111,6 +111,7 @@
 #include "nsIScriptSecurityManager.h"
 #include "nsIPermissionManager.h"
 #include "nsIPrincipal.h"
+#include "ExpandedPrincipal.h"
 #include "NullPrincipal.h"
 
 #include "nsIDOMWindow.h"
@@ -2484,6 +2485,18 @@ nsDocument::MaybeDowngradePrincipal(nsIPrincipal* aPrincipal)
 {
   if (!aPrincipal) {
     return nullptr;
+  }
+
+  // We can't load a document with an expanded principal. If we're given one,
+  // automatically downgrade it to the last principal it subsumes (which is the
+  // extension principal, in the case of extension content scripts).
+  auto* basePrin = BasePrincipal::Cast(aPrincipal);
+  if (basePrin->Is<ExpandedPrincipal>()) {
+    auto* expanded = basePrin->As<ExpandedPrincipal>();
+
+    MOZ_ASSERT(expanded->WhiteList().Length() > 0);
+
+    return do_AddRef(expanded->WhiteList().LastElement().get());
   }
 
   if (!sChromeInContentPrefCached) {
@@ -4995,6 +5008,7 @@ nsIDocument::SetContainer(nsDocShell* aContainer)
   }
 
   mAncestorPrincipals = aContainer->AncestorPrincipals();
+  mAncestorOuterWindowIDs = aContainer->AncestorOuterWindowIDs();
 }
 
 nsISupports*
@@ -6246,8 +6260,6 @@ nsDocument::CreateAttribute(const nsAString& aName,
 already_AddRefed<Attr>
 nsIDocument::CreateAttribute(const nsAString& aName, ErrorResult& rv)
 {
-  WarnOnceAbout(eCreateAttribute);
-
   if (!mNodeInfoManager) {
     rv.Throw(NS_ERROR_NOT_INITIALIZED);
     return nullptr;
@@ -6296,8 +6308,6 @@ nsIDocument::CreateAttributeNS(const nsAString& aNamespaceURI,
                                const nsAString& aQualifiedName,
                                ErrorResult& rv)
 {
-  WarnOnceAbout(eCreateAttributeNS);
-
   RefPtr<mozilla::dom::NodeInfo> nodeInfo;
   rv = nsContentUtils::GetNodeInfoFromQName(aNamespaceURI,
                                             aQualifiedName,
@@ -6422,45 +6432,6 @@ nsDocument::CustomElementConstructor(JSContext* aCx, unsigned aArgc, JS::Value* 
   // The prototype setup happens in Element::WrapObject().
   nsresult rv = nsContentUtils::WrapNative(aCx, element, element, args.rval());
   NS_ENSURE_SUCCESS(rv, true);
-
-  return true;
-}
-
-bool
-nsDocument::IsWebComponentsEnabled(JSContext* aCx, JSObject* aObject)
-{
-  if (!nsContentUtils::IsWebComponentsEnabled()) {
-    return false;
-  }
-
-  JS::Rooted<JSObject*> obj(aCx, aObject);
-
-  JSAutoCompartment ac(aCx, obj);
-  JS::Rooted<JSObject*> global(aCx, JS_GetGlobalForObject(aCx, obj));
-  nsCOMPtr<nsPIDOMWindowInner> window =
-    do_QueryInterface(nsJSUtils::GetStaticScriptGlobal(global));
-
-  nsIDocument* doc = window ? window->GetExtantDoc() : nullptr;
-  if (doc && doc->IsStyledByServo()) {
-    NS_WARNING("stylo: Web Components not supported yet");
-    return false;
-  }
-
-  return true;
-}
-
-bool
-nsDocument::IsWebComponentsEnabled(dom::NodeInfo* aNodeInfo)
-{
-  if (!nsContentUtils::IsWebComponentsEnabled()) {
-    return false;
-  }
-
-  nsIDocument* doc = aNodeInfo->GetDocument();
-  if (doc->IsStyledByServo()) {
-    NS_WARNING("stylo: Web Components not supported yet");
-    return false;
-  }
 
   return true;
 }
@@ -13644,29 +13615,6 @@ nsIDocument::ReportHasScrollLinkedEffect()
                                   "ScrollLinkedEffectFound2");
 }
 
-#ifdef MOZ_STYLO
-// URL-based blacklist for stylo.
-static bool
-ShouldUseGeckoBackend(nsIURI* aDocumentURI)
-{
-  if (!aDocumentURI) {
-    return false;
-  }
-  bool isScheme = false;
-  if (NS_SUCCEEDED(aDocumentURI->SchemeIs("about", &isScheme))) {
-    nsAutoCString path;
-    aDocumentURI->GetFilePath(path);
-    // about:reader requires support of :scope pseudo-class so we have
-    // to use Gecko backend for now. See bug 1402094.
-    // This should be fixed by bug 1204818.
-    if (path.EqualsLiteral("reader")) {
-      return true;
-    }
-  }
-  return false;
-}
-#endif // MOZ_STYLO
-
 void
 nsIDocument::UpdateStyleBackendType()
 {
@@ -13677,18 +13625,9 @@ nsIDocument::UpdateStyleBackendType()
   mStyleBackendType = StyleBackendType::Gecko;
 
 #ifdef MOZ_STYLO
-  if (nsLayoutUtils::StyloEnabled()) {
-    // Disable stylo only for system principal. Other principals aren't
-    // able to use XUL by default, and the back door to enable XUL is
-    // mostly just for testing, which means they don't matter, and we
-    // shouldn't respect them at the same time.
-    // Note that, since tests can have XUL support, we still need to
-    // explicitly exclude XUL documents here.
-    if (!nsContentUtils::IsSystemPrincipal(NodePrincipal()) &&
-        !IsXULDocument() && !ShouldUseGeckoBackend(mDocumentURI) &&
-        !nsLayoutUtils::IsInStyloBlocklist(NodePrincipal())) {
-      mStyleBackendType = StyleBackendType::Servo;
-    }
+  if (nsLayoutUtils::StyloEnabled() &&
+      nsLayoutUtils::ShouldUseStylo(mDocumentURI, NodePrincipal())) {
+    mStyleBackendType = StyleBackendType::Servo;
   }
 #endif
 }

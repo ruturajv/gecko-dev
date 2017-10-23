@@ -616,12 +616,24 @@ nsNodeUtils::CloneAndAdopt(nsINode *aNode, bool aClone, bool aDeep,
             aNode->OwnerDoc()->UnregisterActivityObserver(aNode->AsElement());
           }
           aNode->mNodeInfo.swap(newNodeInfo);
+          if (elem) {
+            elem->NodeInfoChanged(newDoc);
+          }
           if (wasRegistered) {
             aNode->OwnerDoc()->RegisterActivityObserver(aNode->AsElement());
           }
           return nullptr;
         }
       }
+    }
+  }
+
+  if (aNodesWithProperties && aNode->HasProperties()) {
+    bool ok = aNodesWithProperties->AppendObject(aNode);
+    MOZ_RELEASE_ASSERT(ok, "Out of memory");
+    if (aClone) {
+      ok = aNodesWithProperties->AppendObject(clone);
+      MOZ_RELEASE_ASSERT(ok, "Out of memory");
     }
   }
 
@@ -683,18 +695,6 @@ nsNodeUtils::CloneAndAdopt(nsINode *aNode, bool aClone, bool aDeep,
     }
   }
 #endif
-
-  if (aNodesWithProperties && aNode->HasProperties()) {
-    bool ok = aNodesWithProperties->AppendObject(aNode);
-    if (aClone) {
-      ok = ok && aNodesWithProperties->AppendObject(clone);
-    }
-
-    if (NS_WARN_IF(!ok)) {
-      aError.Throw(NS_ERROR_OUT_OF_MEMORY);
-      return nullptr;
-    }
-  }
 
   return clone.forget();
 }

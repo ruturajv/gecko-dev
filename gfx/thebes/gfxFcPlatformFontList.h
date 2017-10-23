@@ -60,7 +60,7 @@ private:
     {
         mozilla::gfx::Factory::ReleaseFTFace(mFace);
         if (mFontData) {
-            NS_Free((void*)mFontData);
+            free((void*)mFontData);
         }
     }
 
@@ -167,7 +167,7 @@ protected:
         void MoveToFront(size_t aIndex);
 
         static const size_t kNumEntries = 3;
-        mozilla::WeakPtr<mozilla::gfx::UnscaledFont> mUnscaledFonts[kNumEntries];
+        mozilla::ThreadSafeWeakPtr<mozilla::gfx::UnscaledFontFontconfig> mUnscaledFonts[kNumEntries];
     };
 
     UnscaledFontCache mUnscaledFontCache;

@@ -11,11 +11,13 @@ Cu.import("resource://gre/modules/NetUtil.jsm");
 Cu.import("resource://gre/modules/Timer.jsm");
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 
-Cu.import("chrome://marionette/content/element.js");
+const {
+  element,
+  WebElement,
+} = Cu.import("chrome://marionette/content/element.js", {});
 const {
   JavaScriptError,
   ScriptTimeoutError,
-  WebDriverError,
 } = Cu.import("chrome://marionette/content/error.js", {});
 
 const log = Log.repository.getLogger("Marionette");
@@ -188,18 +190,25 @@ evaluate.sandbox = function(sb, script, args = [],
  *
  * @param {Object} obj
  *     Arbitrary object containing web elements.
- * @param {element.Store} seenEls
- *     Element store to use for lookup of web element references.
- * @param {Window} win
- *     Window.
- * @param {ShadowRoot} shadowRoot
- *     Shadow root.
+ * @param {element.Store=} seenEls
+ *     Known element store to look up web elements from.  If undefined,
+ *     the web element references are returned instead.
+ * @param {WindowProxy=} window
+ *     Current browsing context, if <var>seenEls</var> is provided.
  *
  * @return {Object}
  *     Same object as provided by <var>obj</var> with the web elements
  *     replaced by DOM elements.
+ *
+ * @throws {NoSuchElementError}
+ *     If <var>seenEls</var> is given and the web element reference
+ *     has not been seen before.
+ * @throws {StaleElementReferenceError}
+ *     If <var>seenEls</var> is given and the element has gone stale,
+ *     indicating it is no longer attached to the DOM, or its node
+ *     document is no longer the active document.
  */
-evaluate.fromJSON = function(obj, seenEls, win, shadowRoot = undefined) {
+evaluate.fromJSON = function(obj, seenEls = undefined, window = undefined) {
   switch (typeof obj) {
     case "boolean":
     case "number":
@@ -213,26 +222,21 @@ evaluate.fromJSON = function(obj, seenEls, win, shadowRoot = undefined) {
 
       // arrays
       } else if (Array.isArray(obj)) {
-        return obj.map(e => evaluate.fromJSON(e, seenEls, win, shadowRoot));
+        return obj.map(e => evaluate.fromJSON(e, seenEls, window));
 
       // web elements
-      } else if (Object.keys(obj).includes(element.Key) ||
-          Object.keys(obj).includes(element.LegacyKey)) {
-        /* eslint-disable */
-        let uuid = obj[element.Key] || obj[element.LegacyKey];
-        let el = seenEls.get(uuid);
-        /* eslint-enable */
-        if (!el) {
-          throw new WebDriverError(`Unknown element: ${uuid}`);
+      } else if (WebElement.isReference(obj)) {
+        let webEl = WebElement.fromJSON(obj);
+        if (seenEls) {
+          return seenEls.get(webEl, window);
         }
-        return el;
-
+        return webEl;
       }
 
       // arbitrary objects
       let rv = {};
       for (let prop in obj) {
-        rv[prop] = evaluate.fromJSON(obj[prop], seenEls, win, shadowRoot);
+        rv[prop] = evaluate.fromJSON(obj[prop], seenEls, window);
       }
       return rv;
   }
@@ -271,10 +275,14 @@ evaluate.toJSON = function(obj, seenEls) {
   } else if (element.isCollection(obj)) {
     return [...obj].map(el => evaluate.toJSON(el, seenEls));
 
-  // HTMLElement
-  } else if ("nodeType" in obj && obj.nodeType == obj.ELEMENT_NODE) {
-    let uuid = seenEls.add(obj);
-    return element.makeWebElement(uuid);
+  // WebElement
+  } else if (WebElement.isReference(obj)) {
+    return obj;
+
+  // Element, SVGElement, XULElement
+  } else if (element.isElement(obj)) {
+    let webEl = seenEls.add(obj);
+    return webEl.toJSON();
 
   // custom JSON representation
   } else if (typeof obj.toJSON == "function") {

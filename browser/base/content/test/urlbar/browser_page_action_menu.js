@@ -7,10 +7,11 @@ registerCleanupFunction(function() {
   delete window.sinon;
 });
 
+const lastModifiedFixture = 1507655615.87; // Approx Oct 10th 2017
 const mockRemoteClients = [
-  { id: "0", name: "foo", type: "mobile" },
-  { id: "1", name: "bar", type: "desktop" },
-  { id: "2", name: "baz", type: "mobile" },
+  { id: "0", name: "foo", type: "mobile", serverLastModified: lastModifiedFixture },
+  { id: "1", name: "bar", type: "desktop", serverLastModified: lastModifiedFixture },
+  { id: "2", name: "baz", type: "mobile", serverLastModified: lastModifiedFixture },
 ];
 
 add_task(async function init() {
@@ -122,6 +123,53 @@ add_task(async function emailLink() {
     await hiddenPromise;
 
     Assert.ok(fnCalled);
+  });
+});
+
+add_task(async function copyURLFromPanel() {
+  // Open an actionable page so that the main page action button appears.  (It
+  // does not appear on about:blank for example.)
+  let url = "http://example.com/";
+  await BrowserTestUtils.withNewTab(url, async () => {
+    // Open the panel and click Copy URL.
+    await promisePageActionPanelOpen();
+    Assert.ok(true, "page action panel opened");
+
+    let copyURLButton =
+      document.getElementById("pageAction-panel-copyURL");
+    let hiddenPromise = promisePageActionPanelHidden();
+    EventUtils.synthesizeMouseAtCenter(copyURLButton, {});
+    await hiddenPromise;
+
+    let feedbackPanel = document.getElementById("pageActionFeedback");
+    let feedbackShownPromise = BrowserTestUtils.waitForEvent(feedbackPanel, "popupshown");
+    await feedbackShownPromise;
+    Assert.equal(feedbackPanel.anchorNode.id, "pageActionButton", "Feedback menu should be anchored on the main Page Action button");
+    let feedbackHiddenPromise = promisePanelHidden("pageActionFeedback");
+    await feedbackHiddenPromise;
+  });
+});
+
+add_task(async function copyURLFromURLBar() {
+  // Open an actionable page so that the main page action button appears.  (It
+  // does not appear on about:blank for example.)
+  let url = "http://example.com/";
+  await BrowserTestUtils.withNewTab(url, async () => {
+    // Add action to URL bar.
+    let action = PageActions._builtInActions.find(a => a.id == "copyURL");
+    action.shownInUrlbar = true;
+    registerCleanupFunction(() => action.shownInUrlbar = false);
+
+    let copyURLButton =
+      document.getElementById("pageAction-urlbar-copyURL");
+    let feedbackShownPromise = promisePanelShown("pageActionFeedback");
+    EventUtils.synthesizeMouseAtCenter(copyURLButton, {});
+
+    await feedbackShownPromise;
+    let panel = document.getElementById("pageActionFeedback");
+    Assert.equal(panel.anchorNode.id, "pageAction-urlbar-copyURL", "Feedback menu should be anchored on the main URL bar button");
+    let feedbackHiddenPromise = promisePanelHidden("pageActionFeedback");
+    await feedbackHiddenPromise;
   });
 });
 
@@ -278,6 +326,7 @@ add_task(async function sendToDevice_syncNotReady_configured() {
               clientId: client.id,
               label: client.name,
               clientType: client.type,
+              tooltiptext: gSync.formatLastSyncDate(lastModifiedFixture * 1000)
             },
           });
         }
@@ -717,7 +766,7 @@ function checkSendToDeviceItems(expectedItems, forUrlbar = false) {
     if ("attrs" in expected) {
       for (let name in expected.attrs) {
         Assert.ok(actual.hasAttribute(name));
-        let attrVal = actual.getAttribute(name)
+        let attrVal = actual.getAttribute(name);
         if (name == "label") {
           attrVal = attrVal.normalize("NFKC"); // There's a bug with …
         }

@@ -112,13 +112,11 @@ CustomElementConstructor::Construct(const char* aExecutionReason,
   JS::Rooted<JSObject*> result(cx);
   JS::Rooted<JS::Value> constructor(cx, JS::ObjectValue(*mCallback));
   if (!JS::Construct(cx, constructor, JS::HandleValueArray::empty(), &result)) {
-    aRv.Throw(NS_ERROR_DOM_INVALID_STATE_ERR);
     return nullptr;
   }
 
   RefPtr<Element> element;
   if (NS_FAILED(UNWRAP_OBJECT(Element, &result, element))) {
-    aRv.Throw(NS_ERROR_DOM_INVALID_STATE_ERR);
     return nullptr;
   }
 
@@ -410,8 +408,7 @@ CustomElementRegistry::SyncInvokeReactions(nsIDocument::ElementCallbackType aTyp
   }
 
   UniquePtr<CustomElementReaction> reaction(Move(
-    MakeUnique<CustomElementCallbackReaction>(aDefinition,
-                                              Move(callback))));
+    MakeUnique<CustomElementCallbackReaction>(Move(callback))));
 
   RefPtr<SyncInvokeReactionRunnable> runnable =
     new SyncInvokeReactionRunnable(Move(reaction), aCustomElement);
@@ -457,8 +454,7 @@ CustomElementRegistry::EnqueueLifecycleCallback(nsIDocument::ElementCallbackType
 
   CustomElementReactionsStack* reactionsStack =
     docGroup->CustomElementReactionsStack();
-  reactionsStack->EnqueueCallbackReaction(aCustomElement, definition,
-                                          Move(callback));
+  reactionsStack->EnqueueCallbackReaction(aCustomElement, Move(callback));
 }
 
 void
@@ -519,9 +515,7 @@ static const char* kLifeCycleCallbackNames[] = {
   "adoptedCallback",
   "attributeChangedCallback",
   // The life cycle callbacks from v0 spec.
-  "createdCallback",
-  "attachedCallback",
-  "detachedCallback"
+  "createdCallback"
 };
 
 static void
@@ -904,7 +898,7 @@ DoUpgrade(Element* aElement,
     return;
   }
 
-  if (constructResult.get() != aElement) {
+  if (!constructResult || constructResult.get() != aElement) {
     aRv.Throw(NS_ERROR_DOM_INVALID_STATE_ERR);
     return;
   }
@@ -1037,11 +1031,9 @@ CustomElementReactionsStack::EnqueueUpgradeReaction(Element* aElement,
 
 void
 CustomElementReactionsStack::EnqueueCallbackReaction(Element* aElement,
-                                                     CustomElementDefinition* aDefinition,
                                                      UniquePtr<CustomElementCallback> aCustomElementCallback)
 {
-  Enqueue(aElement, new CustomElementCallbackReaction(aDefinition,
-                                                      Move(aCustomElementCallback)));
+  Enqueue(aElement, new CustomElementCallbackReaction(Move(aCustomElementCallback)));
 }
 
 void
@@ -1060,6 +1052,8 @@ CustomElementReactionsStack::Enqueue(Element* aElement,
 
   // If the custom element reactions stack is empty, then:
   // Add element to the backup element queue.
+  MOZ_ASSERT(!aReaction->IsUpgradeReaction(),
+             "Upgrade reaction should not be scheduled to backup queue");
   mBackupQueue.AppendElement(aElement);
   elementData->mReactionQueue.AppendElement(aReaction);
 
@@ -1190,7 +1184,7 @@ CustomElementDefinition::CustomElementDefinition(nsAtom* aType,
                                                  nsAtom* aLocalName,
                                                  Function* aConstructor,
                                                  nsTArray<RefPtr<nsAtom>>&& aObservedAttributes,
-                                                 JSObject* aPrototype,
+                                                 JS::Handle<JSObject*> aPrototype,
                                                  LifecycleCallbacks* aCallbacks,
                                                  uint32_t aDocOrder)
   : mType(aType),

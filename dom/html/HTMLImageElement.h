@@ -10,7 +10,6 @@
 #include "mozilla/Attributes.h"
 #include "nsGenericHTMLElement.h"
 #include "nsImageLoadingContent.h"
-#include "nsIDOMHTMLImageElement.h"
 #include "imgRequestProxy.h"
 #include "Units.h"
 #include "nsCycleCollectionParticipant.h"
@@ -23,8 +22,7 @@ class ImageLoadTask;
 
 class ResponsiveImageSelector;
 class HTMLImageElement final : public nsGenericHTMLElement,
-                               public nsImageLoadingContent,
-                               public nsIDOMHTMLImageElement
+                               public nsImageLoadingContent
 {
   friend class HTMLSourceElement;
   friend class HTMLPictureElement;
@@ -51,9 +49,6 @@ public:
 
   // EventTarget
   virtual void AsyncEventRunning(AsyncEventDispatcher* aEvent) override;
-
-  // nsIDOMHTMLImageElement
-  NS_DECL_NSIDOMHTMLIMAGEELEMENT
 
   NS_IMPL_FROMCONTENT_HTML_WITH_TAG(HTMLImageElement, img)
 
@@ -89,6 +84,11 @@ public:
   nsresult CopyInnerTo(Element* aDest, bool aPreallocateChildren);
 
   void MaybeLoadImage(bool aAlwaysForceLoad);
+
+  // Overrides for nsImageLoadingContent's GetNaturalHeight/Width, since we
+  // handle responsive scaling in the element's version of these methods.
+  NS_IMETHOD GetNaturalHeight(uint32_t* aNaturalHeight) override;
+  NS_IMETHOD GetNaturalWidth(uint32_t* aNaturalWidth) override;
 
   bool IsMap()
   {
@@ -142,6 +142,10 @@ public:
   {
     SetHTMLAttr(nsGkAtoms::alt, aAlt, aError);
   }
+  void GetSrc(nsAString& aSrc, nsIPrincipal&)
+  {
+    GetSrc(aSrc);
+  }
   void GetSrc(nsAString& aSrc)
   {
     GetURIAttr(nsGkAtoms::src, nullptr, aSrc);
@@ -150,13 +154,17 @@ public:
   {
     SetHTMLAttr(nsGkAtoms::src, aSrc, aError);
   }
-  void GetSrcset(nsAString& aSrcset)
+  void SetSrc(const nsAString& aSrc, nsIPrincipal& aTriggeringPrincipal, ErrorResult& aError)
+  {
+    SetHTMLAttr(nsGkAtoms::src, aSrc, aTriggeringPrincipal, aError);
+  }
+  void GetSrcset(nsAString& aSrcset, nsIPrincipal&)
   {
     GetHTMLAttr(nsGkAtoms::srcset, aSrcset);
   }
-  void SetSrcset(const nsAString& aSrcset, ErrorResult& aError)
+  void SetSrcset(const nsAString& aSrcset, nsIPrincipal& aTriggeringPrincipal, ErrorResult& aError)
   {
-    SetHTMLAttr(nsGkAtoms::srcset, aSrcset, aError);
+    SetHTMLAttr(nsGkAtoms::srcset, aSrcset, aTriggeringPrincipal, aError);
   }
   void GetCrossOrigin(nsAString& aResult)
   {
@@ -379,6 +387,7 @@ protected:
   virtual nsresult AfterSetAttr(int32_t aNameSpaceID, nsAtom* aName,
                                 const nsAttrValue* aValue,
                                 const nsAttrValue* aOldValue,
+                                nsIPrincipal* aMaybeScriptedPrincipal,
                                 bool aNotify) override;
   virtual nsresult OnAttrSetButNotChanged(int32_t aNamespaceID, nsAtom* aName,
                                           const nsAttrValueOrString& aValue,
@@ -386,8 +395,6 @@ protected:
 
   // Override for nsImageLoadingContent.
   nsIContent* AsContent() override { return this; }
-  NS_IMETHOD GetNaturalWidth(uint32_t* aNaturalWidth) override;
-  NS_IMETHOD GetNaturalHeight(uint32_t* aNaturalHeight) override;
 
   // This is a weak reference that this element and the HTMLFormElement
   // cooperate in maintaining.
@@ -420,10 +427,13 @@ private:
   void AfterMaybeChangeAttr(int32_t aNamespaceID, nsAtom* aName,
                             const nsAttrValueOrString& aValue,
                             const nsAttrValue* aOldValue,
+                            nsIPrincipal* aMaybeScriptedPrincipal,
                             bool aValueMaybeChanged, bool aNotify);
 
   bool mInDocResponsiveContent;
   RefPtr<ImageLoadTask> mPendingImageLoadTask;
+  nsCOMPtr<nsIPrincipal> mSrcTriggeringPrincipal;
+  nsCOMPtr<nsIPrincipal> mSrcsetTriggeringPrincipal;
 
   // Last URL that was attempted to load by this element.
   nsCOMPtr<nsIURI> mLastSelectedSource;

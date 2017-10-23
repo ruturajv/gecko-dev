@@ -70,6 +70,7 @@ WebRenderLayerManager::Initialize(PCompositorBridgeChild* aCBChild,
   }
 
   mWrChild = static_cast<WebRenderBridgeChild*>(bridge);
+  WrBridge()->SetWebRenderLayerManager(this);
   WrBridge()->SendCreate(size.ToUnknownSize());
   WrBridge()->IdentifyTextureHost(textureFactoryIdentifier);
   WrBridge()->SetNamespace(id_namespace);
@@ -178,21 +179,38 @@ WebRenderLayerManager::EndEmptyTransaction(EndTransactionFlags aFlags)
   // "pending data" for empty transactions. Any place that attempts to update
   // transforms or scroll offset, for example, will get failure return values
   // back, and will fall back to a full transaction. Therefore the only piece
-  // of "pending" information we need to send in an empty transaction is the
-  // APZ focus state.
-  WrBridge()->SendSetFocusTarget(mFocusTarget);
+  // of "pending" information we need to send in an empty transaction are the
+  // APZ focus state and canvases's CompositableOperations.
 
-  // We also need to update canvases that might have changed, but this code
-  // as-is causes crashes so comment it out for now.
-  //for (auto iter = mLastCanvasDatas.Iter(); !iter.Done(); iter.Next()) {
-  //  RefPtr<WebRenderCanvasData> canvasData = iter.Get()->GetKey();
-  //  WebRenderCanvasRendererAsync* canvas = canvasData->GetCanvasRenderer();
-  //  canvas->UpdateCompositableClient();
-  //}
-
-  if (!(aFlags & EndTransactionFlags::END_NO_COMPOSITE)) {
-    ScheduleComposite();
+  if (aFlags & EndTransactionFlags::END_NO_COMPOSITE && 
+      !mWebRenderCommandBuilder.NeedsEmptyTransaction()) {
+    MOZ_ASSERT(!mTarget);
+    WrBridge()->SendSetFocusTarget(mFocusTarget);
+    return true;
   }
+
+  LayoutDeviceIntSize size = mWidget->GetClientSize();
+  WrBridge()->BeginTransaction();
+
+  mWebRenderCommandBuilder.EmptyTransaction();
+
+  WrBridge()->ClearReadLocks();
+
+  mLatestTransactionId = mTransactionIdAllocator->GetTransactionId(/*aThrottle*/ true);
+  TimeStamp transactionStart = mTransactionIdAllocator->GetTransactionStart();
+
+  // Skip the synchronization for buffer since we also skip the painting during
+  // device-reset status.
+  if (!gfxPlatform::GetPlatform()->DidRenderingDeviceReset()) {
+    if (WrBridge()->GetSyncObject() &&
+        WrBridge()->GetSyncObject()->IsSyncObjectValid()) {
+      WrBridge()->GetSyncObject()->Synchronize();
+    }
+  }
+
+  WrBridge()->EndEmptyTransaction(mFocusTarget, mLatestTransactionId, transactionStart);
+
+  MakeSnapshotIfRequired(size);
   return true;
 }
 
@@ -234,9 +252,11 @@ WebRenderLayerManager::EndTransactionWithoutLayer(nsDisplayList* aDisplayList,
   AUTO_PROFILER_TRACING("Paint", "RenderLayers");
   mTransactionIncomplete = false;
 
-  if (gfxPrefs::LayersDump()) {
-    this->Dump();
-  }
+#if 0
+  // Useful for debugging, it dumps the display list *before* we try to build
+  // WR commands from it
+  nsFrame::PrintDisplayList(aDisplayListBuilder, *aDisplayList);
+#endif
 
   // Since we don't do repeat transactions right now, just set the time
   mAnimationReadyTime = TimeStamp::Now();
@@ -279,7 +299,6 @@ WebRenderLayerManager::EndTransactionWithoutLayer(nsDisplayList* aDisplayList,
     mScrollData.SetPaintSequenceNumber(mPaintSequenceNumber);
   }
 
-  bool sync = mTarget != nullptr;
   mLatestTransactionId = mTransactionIdAllocator->GetTransactionId(/*aThrottle*/ true);
   TimeStamp transactionStart = mTransactionIdAllocator->GetTransactionStart();
 
@@ -303,9 +322,8 @@ WebRenderLayerManager::EndTransactionWithoutLayer(nsDisplayList* aDisplayList,
   mLastDisplayListSize = dl.dl.inner.capacity;
 
   {
-    AUTO_PROFILER_TRACING("Paint", sync ? "ForwardDPTransactionSync"
-                                        : "ForwardDPTransaction");
-    WrBridge()->EndTransaction(contentSize, dl, resourceUpdates, size.ToUnknownSize(), sync,
+    AUTO_PROFILER_TRACING("Paint", "ForwardDPTransaction");
+    WrBridge()->EndTransaction(contentSize, dl, resourceUpdates, size.ToUnknownSize(),
                                mLatestTransactionId, mScrollData, transactionStart);
   }
 
@@ -484,7 +502,9 @@ WebRenderLayerManager::DidComposite(uint64_t aTransactionId,
     if (listener) {
       listener->DidCompositeWindow(aTransactionId, aCompositeStart, aCompositeEnd);
     }
-    mTransactionIdAllocator->NotifyTransactionCompleted(aTransactionId);
+    if (mTransactionIdAllocator) {
+      mTransactionIdAllocator->NotifyTransactionCompleted(aTransactionId);
+    }
   }
 
   // These observers fire whether or not we were in a transaction.
@@ -515,6 +535,13 @@ WebRenderLayerManager::ClearCachedResources(Layer* aSubtree)
   WrBridge()->BeginClearCachedResources();
   DiscardImages();
   WrBridge()->EndClearCachedResources();
+}
+
+void
+WebRenderLayerManager::WrUpdated()
+{
+  mWebRenderCommandBuilder.ClearCachedResources();
+  DiscardLocalImages();
 }
 
 void

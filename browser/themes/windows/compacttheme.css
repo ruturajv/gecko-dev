@@ -18,6 +18,17 @@
   #main-window[tabsintitlebar] #titlebar:-moz-lwtheme {
     visibility: visible;
   }
+
+  /* Prevent accent color overriding the window background for
+   * light and dark theme on Aero Basic. This is copied from browser-aero.css. */
+  @media (-moz-windows-default-theme) {
+    #main-window {
+      background-color: rgb(185,209,234) !important;
+    }
+    #main-window:-moz-window-inactive {
+      background-color: rgb(215,228,242) !important;
+    }
+  }
 }
 
 #toolbar-menubar {
@@ -34,6 +45,16 @@
     /* Keep showing the correct color inside the tabs. */
     .tabbrowser-tab {
       color: var(--chrome-color) !important;
+    }
+
+    /* Because we're forcing the tabs toolbar to be [brighttext] to
+     * get white toolbar button icons, we need to manually set the
+     * correct color for the tab hover state for the light theme. */
+    .tabbrowser-tab:hover > .tab-stack > .tab-background:not([selected=true]):-moz-lwtheme-darktext {
+      background-color: rgba(0,0,0,.1) !important;
+    }
+    .tabbrowser-tab:hover > .tab-stack > .tab-background > .tab-line:not([selected=true]):-moz-lwtheme-darktext {
+      background-color: rgba(0,0,0,.2) !important;
     }
   }
 }

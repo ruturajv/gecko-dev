@@ -225,18 +225,23 @@ public:
 };
 
 static void
-DoCustomElementCreate(Element** aElement, nsIDocument* aDoc,
+DoCustomElementCreate(Element** aElement, nsIDocument* aDoc, nsAtom* aLocalName,
                       CustomElementConstructor* aConstructor, ErrorResult& aRv)
 {
   RefPtr<Element> element =
     aConstructor->Construct("Custom Element Create", aRv);
-  if (aRv.Failed() || !element->IsHTMLElement()) {
+  if (aRv.Failed()) {
+    return;
+  }
+
+  if (!element || !element->IsHTMLElement()) {
     aRv.ThrowTypeError<MSG_THIS_DOES_NOT_IMPLEMENT_INTERFACE>(NS_LITERAL_STRING("HTMLElement"));
     return;
   }
 
   if (aDoc != element->OwnerDoc() || element->GetParentNode() ||
-      element->HasChildren() || element->GetAttrCount()) {
+      element->HasChildren() || element->GetAttrCount() ||
+      element->NodeInfo()->NameAtom() != aLocalName) {
     aRv.Throw(NS_ERROR_DOM_NOT_SUPPORTED_ERR);
     return;
   }
@@ -308,19 +313,20 @@ NS_NewHTMLElement(Element** aResult, already_AddRefed<mozilla::dom::NodeInfo>&& 
       (*aResult)->SetCustomElementData(new CustomElementData(typeAtom));
       if (synchronousCustomElements) {
         CustomElementRegistry::Upgrade(*aResult, definition, rv);
+        if (rv.MaybeSetPendingException(cx)) {
+          aes.ReportException();
+        }
       } else {
         nsContentUtils::EnqueueUpgradeReaction(*aResult, definition);
       }
 
-      if (rv.MaybeSetPendingException(cx)) {
-        aes.ReportException();
-      }
       return NS_OK;
     }
 
     // Step 6.1.
     if (synchronousCustomElements) {
       DoCustomElementCreate(aResult, nodeInfo->GetDocument(),
+                            nodeInfo->NameAtom(),
                             definition->mConstructor, rv);
       if (rv.MaybeSetPendingException(cx)) {
         NS_IF_ADDREF(*aResult = NS_NewHTMLUnknownElement(nodeInfo.forget(), aFromParser));
@@ -760,21 +766,11 @@ HTMLContentSink::~HTMLContentSink()
   delete mHeadContext;
 }
 
-NS_IMPL_CYCLE_COLLECTION_CLASS(HTMLContentSink)
-
-NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN_INHERITED(HTMLContentSink, nsContentSink)
-  NS_IMPL_CYCLE_COLLECTION_UNLINK(mHTMLDocument)
-  NS_IMPL_CYCLE_COLLECTION_UNLINK(mRoot)
-  NS_IMPL_CYCLE_COLLECTION_UNLINK(mBody)
-  NS_IMPL_CYCLE_COLLECTION_UNLINK(mHead)
-NS_IMPL_CYCLE_COLLECTION_UNLINK_END
-NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN_INHERITED(HTMLContentSink,
-                                                  nsContentSink)
-  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mHTMLDocument)
-  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mRoot)
-  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mBody)
-  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mHead)
-NS_IMPL_CYCLE_COLLECTION_TRAVERSE_END
+NS_IMPL_CYCLE_COLLECTION_INHERITED(HTMLContentSink, nsContentSink,
+                                   mHTMLDocument,
+                                   mRoot,
+                                   mBody,
+                                   mHead)
 
 NS_IMPL_ISUPPORTS_CYCLE_COLLECTION_INHERITED(HTMLContentSink,
                                              nsContentSink,

@@ -7,6 +7,7 @@
 #ifndef mozilla_ServoStyleSet_h
 #define mozilla_ServoStyleSet_h
 
+#include "mozilla/AtomArray.h"
 #include "mozilla/EffectCompositor.h"
 #include "mozilla/EnumeratedArray.h"
 #include "mozilla/EventStates.h"
@@ -219,11 +220,10 @@ public:
   // Resolves style for a (possibly-pseudo) Element without assuming that the
   // style has been resolved. If the element was unstyled and a new style
   // context was resolved, it is not stored in the DOM. (That is, the element
-  // remains unstyled.) |aPeudoTag| and |aPseudoType| must match.
+  // remains unstyled.)
   already_AddRefed<ServoStyleContext>
   ResolveStyleLazily(dom::Element* aElement,
                      CSSPseudoElementType aPseudoType,
-                     nsAtom* aPseudoTag,
                      StyleRuleInclusion aRules =
                        StyleRuleInclusion::All);
 
@@ -239,6 +239,14 @@ public:
   // must be an anon box, and must be a non-inheriting one.
   already_AddRefed<ServoStyleContext>
   ResolveNonInheritingAnonymousBoxStyle(nsAtom* aPseudoTag);
+
+#ifdef MOZ_XUL
+  already_AddRefed<ServoStyleContext>
+  ResolveXULTreePseudoStyle(dom::Element* aParentElement,
+                            nsICSSAnonBoxPseudo* aPseudoTag,
+                            ServoStyleContext* aParentContext,
+                            const AtomArray& aInputWord);
+#endif
 
   // manage the set of style sheets in the style set
   nsresult AppendStyleSheet(SheetType aType, ServoStyleSheet* aSheet);
@@ -365,7 +373,7 @@ public:
    */
   already_AddRefed<ServoStyleContext> ResolveServoStyle(dom::Element* aElement);
 
-  bool GetKeyframesForName(const nsString& aName,
+  bool GetKeyframesForName(nsAtom* aName,
                            const nsTimingFunction& aTimingFunction,
                            nsTArray<Keyframe>& aKeyframes);
 
@@ -390,10 +398,23 @@ public:
   already_AddRefed<ServoStyleContext>
   GetBaseContextForElement(dom::Element* aElement,
                            nsPresContext* aPresContext,
-                           nsAtom* aPseudoTag,
                            CSSPseudoElementType aPseudoType,
                            const ServoStyleContext* aStyle);
 
+  // Get a style context that represents |aStyle|, but as though
+  // it additionally matched the rules of the newly added |aAnimaitonaValue|.
+  // We use this function to temporarily generate a ServoStyleContext for
+  // calculating the cumulative change hints.
+  // This must hold:
+  //   The additional rules must be appropriate for the transition
+  //   level of the cascade, which is the highest level of the cascade.
+  //   (This is the case for one current caller, the cover rule used
+  //   for CSS transitions.)
+  // Note: |aElement| should be the generated element if it is pseudo.
+  already_AddRefed<ServoStyleContext>
+  ResolveServoStyleByAddingAnimation(dom::Element* aElement,
+                                     const ServoStyleContext* aStyle,
+                                     RawServoAnimationValue* aAnimationValue);
   /**
    * Resolve style for a given declaration block with/without the parent style.
    * If the parent style is not specified, the document default computed values
@@ -480,6 +501,9 @@ public:
                        ServoStyleContext* aNewLayoutParent,
                        Element* aElement);
 
+  bool IsMaster() const { return mKind == Kind::Master; }
+  bool IsForXBL() const { return mKind == Kind::ForXBL; }
+
 private:
   friend class AutoSetInServoTraversal;
   friend class AutoPrepareTraversal;
@@ -490,9 +514,6 @@ private:
    * Gets the pending snapshots to handle from the restyle manager.
    */
   const SnapshotTable& Snapshots();
-
-  bool IsMaster() const { return mKind == Kind::Master; }
-  bool IsForXBL() const { return mKind == Kind::ForXBL; }
 
   /**
    * Resolve all ServoDeclarationBlocks attached to mapped
@@ -558,7 +579,6 @@ private:
   already_AddRefed<ServoStyleContext>
     ResolveStyleLazilyInternal(dom::Element* aElement,
                                CSSPseudoElementType aPseudoType,
-                               nsAtom* aPseudoTag,
                                StyleRuleInclusion aRules =
                                  StyleRuleInclusion::All,
                                bool aIgnoreExistingStyles = false);

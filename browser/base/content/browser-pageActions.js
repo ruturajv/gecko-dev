@@ -273,8 +273,12 @@ var BrowserPageActions = {
    * @return (DOM node, nonnull) The node to which the action should be
    *         anchored.
    */
-  panelAnchorNodeForAction(action) {
+  panelAnchorNodeForAction(action, event) {
     // Try each of the following nodes in order, using the first that's visible.
+    if (event && event.target.closest("panel")) {
+      return this.mainButtonNode;
+    }
+
     let potentialAnchorNodeIDs = [
       action && action.anchorIDOverride,
       action && this._urlbarButtonNodeIDForActionID(action.id),
@@ -753,7 +757,7 @@ var BrowserPageActionFeedback = {
     this.feedbackLabel.textContent = this.panelNode.getAttribute(action.id + "Feedback");
     this.panelNode.hidden = false;
 
-    let anchor = BrowserPageActions.panelAnchorNodeForAction(action);
+    let anchor = BrowserPageActions.panelAnchorNodeForAction(action, event);
     this.panelNode.openPopup(anchor, {
       position: "bottomcenter topright",
       triggerEvent: event,
@@ -851,7 +855,7 @@ BrowserPageActions.sendToDevice = {
 
     // This is on top because it also clears the device list between state
     // changes.
-    gSync.populateSendTabToDevicesMenu(bodyNode, url, title, (clientId, name, clientType) => {
+    gSync.populateSendTabToDevicesMenu(bodyNode, url, title, (clientId, name, clientType, lastModified) => {
       if (!name) {
         return document.createElement("toolbarseparator");
       }
@@ -859,8 +863,9 @@ BrowserPageActions.sendToDevice = {
       item.classList.add("pageAction-sendToDevice-device", "subviewbutton");
       if (clientId) {
         item.classList.add("subviewbutton-iconic");
+        item.setAttribute("tooltiptext", gSync.formatLastSyncDate(lastModified));
       }
-      item.setAttribute("tooltiptext", name);
+
       item.addEventListener("command", event => {
         if (panelNode) {
           panelNode.hidePopup();

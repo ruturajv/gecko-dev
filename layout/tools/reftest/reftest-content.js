@@ -218,12 +218,12 @@ function setupPrintMode() {
 // Prints current page to a PDF file and calls callback when sucessfully
 // printed and written.
 function printToPdf(callback) {
-    var currentDoc = content.document;
-    var isPrintSelection = false;
-    var printRange = '';
+    let currentDoc = content.document;
+    let isPrintSelection = false;
+    let printRange = '';
 
     if (currentDoc) {
-        var contentRootElement = currentDoc.documentElement;
+        let contentRootElement = currentDoc.documentElement;
         printRange = contentRootElement.getAttribute("reftest-print-range") || '';
     }
 
@@ -236,13 +236,13 @@ function printToPdf(callback) {
         }
     }
 
-    var fileName = "reftest-print.pdf";
-    var file = Services.dirsvc.get("TmpD", CI.nsIFile);
+    let fileName = "reftest-print.pdf";
+    let file = Services.dirsvc.get("TmpD", CI.nsIFile);
     file.append(fileName);
     file.createUnique(file.NORMAL_FILE_TYPE, 0o644);
 
-    var PSSVC = CC[PRINTSETTINGS_CONTRACTID].getService(CI.nsIPrintSettingsService);
-    var ps = PSSVC.newPrintSettings;
+    let PSSVC = CC[PRINTSETTINGS_CONTRACTID].getService(CI.nsIPrintSettingsService);
+    let ps = PSSVC.newPrintSettings;
     ps.printSilent = true;
     ps.showPrintProgress = false;
     ps.printBGImages = true;
@@ -256,12 +256,12 @@ function printToPdf(callback) {
         ps.printRange = CI.nsIPrintSettings.kRangeSelection;
     } else if (printRange) {
         ps.printRange = CI.nsIPrintSettings.kRangeSpecifiedPageRange;
-        var range = printRange.split('-');
+        let range = printRange.split('-');
         ps.startPageRange = +range[0] || 1;
         ps.endPageRange = +range[1] || 1;
     }
 
-    var webBrowserPrint = content.QueryInterface(CI.nsIInterfaceRequestor)
+    let webBrowserPrint = content.QueryInterface(CI.nsIInterfaceRequestor)
                                  .getInterface(CI.nsIWebBrowserPrint);
     webBrowserPrint.print(ps, {
         onStateChange: function(webProgress, request, stateFlags, status) {
@@ -440,6 +440,12 @@ function shouldSnapshotWholePage(contentRootElement) {
 function getNoPaintElements(contentRootElement) {
     return contentRootElement.getElementsByClassName('reftest-no-paint');
 }
+function getNoDisplayListElements(contentRootElement) {
+    return contentRootElement.getElementsByClassName('reftest-no-display-list');
+}
+function getDisplayListElements(contentRootElement) {
+    return contentRootElement.getElementsByClassName('reftest-display-list');
+}
 
 function getOpaqueLayerElements(contentRootElement) {
     return contentRootElement.getElementsByClassName('reftest-opaque-layer');
@@ -598,6 +604,14 @@ function WaitForTestEnd(contentRootElement, inPrintMode, spellCheckedElements) {
                 for (var i = 0; i < elements.length; ++i) {
                   windowUtils().checkAndClearPaintedState(elements[i]);
                 }
+                elements = getNoDisplayListElements(contentRootElement);
+                for (var i = 0; i < elements.length; ++i) {
+                  windowUtils().checkAndClearDisplayListState(elements[i]);
+                }
+                elements = getDisplayListElements(contentRootElement);
+                for (var i = 0; i < elements.length; ++i) {
+                  windowUtils().checkAndClearDisplayListState(elements[i]);
+                }
                 var notification = content.document.createEvent("Events");
                 notification.initEvent("MozReftestInvalidate", true, false);
                 contentRootElement.dispatchEvent(notification);
@@ -696,6 +710,23 @@ function WaitForTestEnd(contentRootElement, inPrintMode, spellCheckedElements) {
                   if (windowUtils().checkAndClearPaintedState(elements[i])) {
                       SendFailedNoPaint();
                   }
+              }
+              // We only support retained display lists in the content process
+              // right now, so don't fail reftest-no-display-list tests when
+              // we don't have e10s.
+              if (gBrowserIsRemote) {
+                elements = getNoDisplayListElements(contentRootElement);
+                for (var i = 0; i < elements.length; ++i) {
+                    if (windowUtils().checkAndClearDisplayListState(elements[i])) {
+                        SendFailedNoDisplayList();
+                    }
+                }
+                elements = getDisplayListElements(contentRootElement);
+                for (var i = 0; i < elements.length; ++i) {
+                    if (!windowUtils().checkAndClearDisplayListState(elements[i])) {
+                        SendFailedDisplayList();
+                    }
+                }
               }
               CheckLayerAssertions(contentRootElement);
             }
@@ -1157,6 +1188,16 @@ function SendFailedLoad(why)
 function SendFailedNoPaint()
 {
     sendAsyncMessage("reftest:FailedNoPaint");
+}
+
+function SendFailedNoDisplayList()
+{
+    sendAsyncMessage("reftest:FailedNoDisplayList");
+}
+
+function SendFailedDisplayList()
+{
+    sendAsyncMessage("reftest:FailedDisplayList");
 }
 
 function SendFailedOpaqueLayer(why)

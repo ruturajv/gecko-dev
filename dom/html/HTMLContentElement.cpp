@@ -32,7 +32,7 @@ NS_NewHTMLContentElement(already_AddRefed<mozilla::dom::NodeInfo>&& aNodeInfo,
   // We have to jump through some hoops to be able to produce both NodeInfo* and
   // already_AddRefed<NodeInfo>& for our callees.
   RefPtr<mozilla::dom::NodeInfo> nodeInfo(aNodeInfo);
-  if (!nsDocument::IsWebComponentsEnabled(nodeInfo)) {
+  if (!nsContentUtils::IsWebComponentsEnabled()) {
     already_AddRefed<mozilla::dom::NodeInfo> nodeInfoArg(nodeInfo.forget());
     return new mozilla::dom::HTMLUnknownElement(nodeInfoArg);
   }
@@ -209,7 +209,9 @@ IsValidContentSelectors(nsCSSSelector* aSelector)
 nsresult
 HTMLContentElement::AfterSetAttr(int32_t aNamespaceID, nsAtom* aName,
                                  const nsAttrValue* aValue,
-                                 const nsAttrValue* aOldValue, bool aNotify)
+                                 const nsAttrValue* aOldValue,
+                                 nsIPrincipal* aSubjectPrincipal,
+                                 bool aNotify)
 {
   if (aNamespaceID == kNameSpaceID_None && aName == nsGkAtoms::select) {
     if (aValue) {
@@ -245,8 +247,7 @@ HTMLContentElement::AfterSetAttr(int32_t aNamespaceID, nsAtom* aName,
         }
       }
 
-      ShadowRoot* containingShadow = GetContainingShadow();
-      if (containingShadow) {
+      if (ShadowRoot* containingShadow = GetContainingShadow()) {
         containingShadow->DistributeAllNodes();
       }
     } else {
@@ -255,15 +256,14 @@ HTMLContentElement::AfterSetAttr(int32_t aNamespaceID, nsAtom* aName,
       mValidSelector = true;
       mSelectorList = nullptr;
 
-      ShadowRoot* containingShadow = GetContainingShadow();
-      if (containingShadow) {
+      if (ShadowRoot* containingShadow = GetContainingShadow()) {
         containingShadow->DistributeAllNodes();
       }
     }
   }
 
   return nsGenericHTMLElement::AfterSetAttr(aNamespaceID, aName, aValue,
-                                            aOldValue, aNotify);
+                                            aOldValue, aSubjectPrincipal, aNotify);
 }
 
 bool

@@ -43,6 +43,7 @@ DEFAULTS = dict(
         tpmozafterpaint=False,
         fnbpaint=False,
         firstpaint=False,
+        format_pagename=True,
         userready=False,
         testeventmap=[],
         base_vs_ref=False,
@@ -292,11 +293,8 @@ def update_prefs(config):
     # if e10s is enabled, set prefs accordingly
     if config['e10s']:
         config['preferences']['browser.tabs.remote.autostart'] = True
-        config['preferences']['extensions.e10sBlocksEnabling'] = False
     else:
         config['preferences']['browser.tabs.remote.autostart'] = False
-        config['preferences']['browser.tabs.remote.autostart.1'] = False
-        config['preferences']['browser.tabs.remote.autostart.2'] = False
 
     # update prefs from command line
     prefs = config.pop('extraPrefs')
@@ -453,6 +451,7 @@ def get_browser_config(config):
                 'enable_stylo': False,
                 'disable_stylo': False,
                 'stylothreads': 0,
+                'subtests': None,
                 }
     browser_config = dict(title=config['title'])
     browser_config.update(dict([(i, config[i]) for i in required]))

@@ -591,27 +591,45 @@ WebRenderBridgeParent::RecvSetDisplayList(const gfx::IntSize& aSize,
 }
 
 mozilla::ipc::IPCResult
-WebRenderBridgeParent::RecvSetDisplayListSync(const gfx::IntSize &aSize,
-                                              InfallibleTArray<WebRenderParentCommand>&& aCommands,
-                                              InfallibleTArray<OpDestroy>&& aToDestroy,
-                                              const uint64_t& aFwdTransactionId,
-                                              const uint64_t& aTransactionId,
-                                              const wr::LayoutSize& aContentSize,
-                                              const wr::ByteBuffer& dl,
-                                              const wr::BuiltDisplayListDescriptor& dlDesc,
-                                              const WebRenderScrollData& aScrollData,
-                                              nsTArray<OpUpdateResource>&& aResourceUpdates,
-                                              nsTArray<ipc::Shmem>&& aSmallShmems,
-                                              nsTArray<ipc::Shmem>&& aLargeShmems,
-                                              const wr::IdNamespace& aIdNamespace,
-                                              const TimeStamp& aTxnStartTime,
-                                              const TimeStamp& aFwdTime)
+WebRenderBridgeParent::RecvEmptyTransaction(const FocusTarget& aFocusTarget,
+                                            InfallibleTArray<WebRenderParentCommand>&& aCommands,
+                                            InfallibleTArray<OpDestroy>&& aToDestroy,
+                                            const uint64_t& aFwdTransactionId,
+                                            const uint64_t& aTransactionId,
+                                            const wr::IdNamespace& aIdNamespace,
+                                            const TimeStamp& aTxnStartTime,
+                                            const TimeStamp& aFwdTime)
 {
-  return RecvSetDisplayList(aSize, Move(aCommands), Move(aToDestroy),
-                            aFwdTransactionId, aTransactionId,
-                            aContentSize, dl, dlDesc, aScrollData,
-                            Move(aResourceUpdates), Move(aSmallShmems), Move(aLargeShmems),
-                            aIdNamespace, aTxnStartTime, aFwdTime);
+  if (mDestroyed) {
+    for (const auto& op : aToDestroy) {
+      DestroyActor(op);
+    }
+    return IPC_OK();
+  }
+
+  AUTO_PROFILER_TRACING("Paint", "EmptyTransaction");
+  UpdateFwdTransactionId(aFwdTransactionId);
+  AutoClearReadLocks clearLocks(mReadLocks);
+
+  // This ensures that destroy operations are always processed. It is not safe
+  // to early-return without doing so.
+  AutoWebRenderBridgeParentAsyncMessageSender autoAsyncMessageSender(this, &aToDestroy);
+
+  if (!aCommands.IsEmpty()) {
+    mAsyncImageManager->SetCompositionTime(TimeStamp::Now());
+    ProcessWebRenderParentCommands(aCommands);
+    mCompositorScheduler->ScheduleComposition();
+  }
+
+  mScrollData.SetFocusTarget(aFocusTarget);
+  UpdateAPZ(false);
+
+  // XXX Call DidComposite at correct timing.
+  TimeStamp now = TimeStamp::Now();
+  HoldPendingTransactionId(mWrEpoch, aTransactionId, aTxnStartTime, aFwdTime);
+  mCompositorBridge->DidComposite(wr::AsUint64(mPipelineId), now, now);
+
+  return IPC_OK();
 }
 
 mozilla::ipc::IPCResult

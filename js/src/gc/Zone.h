@@ -449,8 +449,7 @@ struct Zone : public JS::shadow::Zone,
         gcMallocCounter.setMax(value, lock);
     }
     void updateMallocCounter(size_t nbytes) {
-        if (!runtime_->gc.updateMallocCounter(nbytes))
-            gcMallocCounter.update(this, nbytes);
+        gcMallocCounter.update(this, nbytes);
     }
     void adoptMallocBytes(Zone* other) {
         gcMallocCounter.adopt(other->gcMallocCounter);
@@ -695,6 +694,7 @@ struct Zone : public JS::shadow::Zone,
     js::ZoneGroupData<js::jit::JitZone*> jitZone_;
 
     js::ActiveThreadData<bool> gcScheduled_;
+    js::ActiveThreadData<bool> gcScheduledSaved_;
     js::ZoneGroupData<bool> gcPreserveCode_;
     js::ZoneGroupData<bool> keepShapeTables_;
 
