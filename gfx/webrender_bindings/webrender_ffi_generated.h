@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* Generated with cbindgen:0.1.26 */
+/* Generated with cbindgen:0.1.28 */
 
 /* DO NOT MODIFY THIS MANUALLY! This file was generated using cbindgen.
  * To generate this file:
@@ -37,6 +37,13 @@ enum class BorderStyle : uint32_t {
 enum class BoxShadowClipMode : uint32_t {
   Outset = 0,
   Inset = 1,
+
+  Sentinel /* this must be last for serialization purposes. */
+};
+
+enum class ClipMode {
+  Clip = 0,
+  ClipOut = 1,
 
   Sentinel /* this must be last for serialization purposes. */
 };
@@ -217,9 +224,38 @@ struct WrState;
 
 struct WrThreadPool;
 
-typedef Vec_u8 VecU8;
+struct IdNamespace {
+  uint32_t mHandle;
+
+  bool operator==(const IdNamespace& aOther) const {
+    return mHandle == aOther.mHandle;
+  }
+  bool operator!=(const IdNamespace& aOther) const {
+    return mHandle != aOther.mHandle;
+  }
+  bool operator<(const IdNamespace& aOther) const {
+    return mHandle < aOther.mHandle;
+  }
+  bool operator<=(const IdNamespace& aOther) const {
+    return mHandle <= aOther.mHandle;
+  }
+};
+
+struct FontKey {
+  IdNamespace mNamespace;
+  uint32_t mHandle;
+
+  bool operator==(const FontKey& aOther) const {
+    return mNamespace == aOther.mNamespace &&
+           mHandle == aOther.mHandle;
+  }
+};
+
+typedef FontKey WrFontKey;
 
 typedef Arc_VecU8 ArcVecU8;
+
+typedef Vec_u8 VecU8;
 
 struct Epoch {
   uint32_t mHandle;
@@ -368,23 +404,6 @@ struct WrTransformProperty {
   LayoutTransform transform;
 };
 
-struct IdNamespace {
-  uint32_t mHandle;
-
-  bool operator==(const IdNamespace& aOther) const {
-    return mHandle == aOther.mHandle;
-  }
-  bool operator!=(const IdNamespace& aOther) const {
-    return mHandle != aOther.mHandle;
-  }
-  bool operator<(const IdNamespace& aOther) const {
-    return mHandle < aOther.mHandle;
-  }
-  bool operator<=(const IdNamespace& aOther) const {
-    return mHandle <= aOther.mHandle;
-  }
-};
-
 typedef IdNamespace WrIdNamespace;
 
 // Represents RGBA screen colors with floating point numbers.
@@ -450,10 +469,14 @@ struct ComplexClipRegion {
   LayoutRect rect;
   // Border radii of this rectangle.
   BorderRadius radii;
+  // Whether we are clipping inside or outside
+  // the region.
+  ClipMode mode;
 
   bool operator==(const ComplexClipRegion& aOther) const {
     return rect == aOther.rect &&
-           radii == aOther.radii;
+           radii == aOther.radii &&
+           mode == aOther.mode;
   }
 };
 
@@ -761,18 +784,6 @@ struct WrImageDescriptor {
 
 typedef ExternalImageType WrExternalImageBufferType;
 
-struct FontKey {
-  IdNamespace mNamespace;
-  uint32_t mHandle;
-
-  bool operator==(const FontKey& aOther) const {
-    return mNamespace == aOther.mNamespace &&
-           mHandle == aOther.mHandle;
-  }
-};
-
-typedef FontKey WrFontKey;
-
 struct FontInstanceOptions {
   FontRenderMode render_mode;
   SubpixelDirection subpx_dir;
@@ -799,10 +810,10 @@ struct FontInstancePlatformOptions {
 
 #if defined(XP_MACOSX)
 struct FontInstancePlatformOptions {
-  uint32_t unused;
+  bool font_smoothing;
 
   bool operator==(const FontInstancePlatformOptions& aOther) const {
-    return unused == aOther.unused;
+    return font_smoothing == aOther.font_smoothing;
   }
 };
 #endif
@@ -821,12 +832,54 @@ struct FontInstancePlatformOptions {
 };
 #endif
 
+// A 2d Point tagged with a unit.
+struct TypedPoint2D_u32__DevicePixel {
+  uint32_t x;
+  uint32_t y;
+
+  bool operator==(const TypedPoint2D_u32__DevicePixel& aOther) const {
+    return x == aOther.x &&
+           y == aOther.y;
+  }
+};
+
+struct TypedSize2D_u32__DevicePixel {
+  uint32_t width;
+  uint32_t height;
+
+  bool operator==(const TypedSize2D_u32__DevicePixel& aOther) const {
+    return width == aOther.width &&
+           height == aOther.height;
+  }
+};
+
+// A 2d Rectangle optionally tagged with a unit.
+struct TypedRect_u32__DevicePixel {
+  TypedPoint2D_u32__DevicePixel origin;
+  TypedSize2D_u32__DevicePixel size;
+
+  bool operator==(const TypedRect_u32__DevicePixel& aOther) const {
+    return origin == aOther.origin &&
+           size == aOther.size;
+  }
+};
+
+typedef TypedRect_u32__DevicePixel DeviceUintRect;
+
 /* DO NOT MODIFY THIS MANUALLY! This file was generated using cbindgen.
  * To generate this file:
  *   1. Get the latest cbindgen using `cargo install --force cbindgen`
  *      a. Alternatively, you can clone `https://github.com/rlhunt/cbindgen` and use a tagged release
  *   2. Run `rustup run nightly cbindgen toolkit/library/rust/ --crate webrender_bindings -o gfx/webrender_bindings/webrender_ffi_generated.h`
  */
+
+extern void AddFontData(WrFontKey aKey,
+                        const uint8_t *aData,
+                        size_t aSize,
+                        uint32_t aIndex,
+                        const ArcVecU8 *aVec);
+
+extern void DeleteFontData(WrFontKey aKey);
 
 extern void gfx_critical_note(const char *aMsg);
 
@@ -936,6 +989,8 @@ WR_FUNC;
 
 WR_INLINE
 uint64_t wr_dp_define_clip(WrState *aState,
+                           const uint64_t *aAncestorScrollId,
+                           const uint64_t *aAncestorClipId,
                            LayoutRect aClipRect,
                            const ComplexClipRegion *aComplex,
                            size_t aComplexCount,
@@ -945,6 +1000,8 @@ WR_FUNC;
 WR_INLINE
 void wr_dp_define_scroll_layer(WrState *aState,
                                uint64_t aScrollId,
+                               const uint64_t *aAncestorScrollId,
+                               const uint64_t *aAncestorClipId,
                                LayoutRect aContentRect,
                                LayoutRect aClipRect)
 WR_FUNC;
@@ -1042,7 +1099,7 @@ void wr_dp_push_box_shadow(WrState *aState,
                            ColorF aColor,
                            float aBlurRadius,
                            float aSpreadRadius,
-                           float aBorderRadius,
+                           BorderRadius aBorderRadius,
                            BoxShadowClipMode aClipMode)
 WR_FUNC;
 
@@ -1077,14 +1134,12 @@ WR_FUNC;
 
 WR_INLINE
 void wr_dp_push_line(WrState *aState,
-                     LayoutRect aClip,
+                     const LayoutRect *aClip,
                      bool aIsBackfaceVisible,
-                     float aBaseline,
-                     float aStart,
-                     float aEnd,
+                     const LayoutRect *aBounds,
+                     float aWavyLineThickness,
                      LineOrientation aOrientation,
-                     float aWidth,
-                     ColorF aColor,
+                     const ColorF *aColor,
                      LineStyle aStyle)
 WR_FUNC;
 
@@ -1359,7 +1414,8 @@ WR_INLINE
 void wr_resource_updates_update_blob_image(ResourceUpdates *aResources,
                                            WrImageKey aImageKey,
                                            const WrImageDescriptor *aDescriptor,
-                                           WrVecU8 *aBytes)
+                                           WrVecU8 *aBytes,
+                                           DeviceUintRect aDirtyRect)
 WR_FUNC;
 
 WR_INLINE

@@ -20,24 +20,22 @@ flat varying int vBlurRadius;
 in int aBlurRenderTaskAddress;
 in int aBlurSourceTaskAddress;
 in int aBlurDirection;
+in vec4 aBlurRegion;
 
 void main(void) {
     RenderTaskData task = fetch_render_task(aBlurRenderTaskAddress);
     RenderTaskData src_task = fetch_render_task(aBlurSourceTaskAddress);
 
-    vec4 local_rect = task.data0;
+    vec4 src_rect = src_task.data0;
+    vec4 target_rect = task.data0;
 
-    vec2 pos = mix(local_rect.xy,
-                   local_rect.xy + local_rect.zw,
-                   aPosition.xy);
-
-#if defined WR_FEATURE_COLOR
+#if defined WR_FEATURE_COLOR_TARGET
     vec2 texture_size = vec2(textureSize(sCacheRGBA8, 0).xy);
 #else
     vec2 texture_size = vec2(textureSize(sCacheA8, 0).xy);
 #endif
     vUv.z = src_task.data1.x;
-    vBlurRadius = 3 * int(task.data1.y);
+    vBlurRadius = int(3.0 * task.data1.y);
     vSigma = task.data1.y;
 
     switch (aBlurDirection) {
@@ -49,12 +47,20 @@ void main(void) {
             break;
     }
 
-    vUvRect = vec4(src_task.data0.xy + vec2(0.5),
-                   src_task.data0.xy + src_task.data0.zw - vec2(0.5));
+    vUvRect = vec4(src_rect.xy + vec2(0.5),
+                   src_rect.xy + src_rect.zw - vec2(0.5));
     vUvRect /= texture_size.xyxy;
 
-    vec2 uv0 = src_task.data0.xy / texture_size;
-    vec2 uv1 = (src_task.data0.xy + src_task.data0.zw) / texture_size;
+    if (aBlurRegion.z > 0.0) {
+        vec4 blur_region = aBlurRegion * uDevicePixelRatio;
+        src_rect = vec4(src_rect.xy + blur_region.xy, blur_region.zw);
+        target_rect = vec4(target_rect.xy + blur_region.xy, blur_region.zw);
+    }
+
+    vec2 pos = target_rect.xy + target_rect.zw * aPosition.xy;
+
+    vec2 uv0 = src_rect.xy / texture_size;
+    vec2 uv1 = (src_rect.xy + src_rect.zw) / texture_size;
     vUv.xy = mix(uv0, uv1, aPosition.xy);
 
     gl_Position = uTransform * vec4(pos, 0.0, 1.0);
@@ -63,7 +69,7 @@ void main(void) {
 
 #ifdef WR_FRAGMENT_SHADER
 
-#if defined WR_FEATURE_COLOR
+#if defined WR_FEATURE_COLOR_TARGET
 #define SAMPLE_TYPE vec4
 #define SAMPLE_TEXTURE(uv)  texture(sCacheRGBA8, uv)
 #else
@@ -100,7 +106,7 @@ void main(void) {
     gauss_coefficient_sum += gauss_coefficient.x;
     gauss_coefficient.xy *= gauss_coefficient.yz;
 
-    for (int i=1 ; i <= vBlurRadius/2 ; ++i) {
+    for (int i=1 ; i <= vBlurRadius ; ++i) {
         vec2 offset = vOffsetScale * float(i);
 
         vec2 st0 = clamp(vUv.xy - offset, vUvRect.xy, vUvRect.zw);

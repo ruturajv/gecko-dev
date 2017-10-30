@@ -291,6 +291,8 @@ TimeConverter() {
     return sTimeConverterSingleton;
 }
 
+nsWindow::CSDSupportLevel nsWindow::sCSDSupportLevel = CSD_SUPPORT_UNKNOWN;
+
 namespace mozilla {
 
 class CurrentX11TimeGetter
@@ -480,6 +482,8 @@ nsWindow::nsWindow()
     mLastScrollEventTime = GDK_CURRENT_TIME;
 #endif
     mPendingConfigures = 0;
+    mIsCSDAvailable = false;
+    mIsCSDEnabled = false;
 }
 
 nsWindow::~nsWindow()
@@ -1567,6 +1571,11 @@ nsWindow::OnPropertyNotifyEvent(GtkWidget* aWidget, GdkEventProperty* aEvent)
 {
   if (aEvent->atom == gdk_atom_intern("_NET_FRAME_EXTENTS", FALSE)) {
     UpdateClientOffset();
+
+    // Send a WindowMoved notification. This ensures that TabParent
+    // picks up the new client offset and sends it to the child process
+    // if appropriate.
+    NotifyWindowMoved(mBounds.x, mBounds.y);
     return FALSE;
   }
 
@@ -3748,6 +3757,15 @@ nsWindow::Create(nsIWidget* aParent,
             GtkWindowGroup *group = gtk_window_group_new();
             gtk_window_group_add_window(group, GTK_WINDOW(mShell));
             g_object_unref(group);
+
+            if (GetCSDSupportLevel() != CSD_SUPPORT_NONE) {
+                int32_t isCSDAvailable = false;
+                nsresult rv = LookAndFeel::GetInt(LookAndFeel::eIntID_GTKCSDAvailable,
+                                                &isCSDAvailable);
+                if (NS_SUCCEEDED(rv)) {
+                   mIsCSDAvailable = isCSDAvailable;
+                }
+            }
         }
 
         // Create a container to hold child windows and child GtkWidgets.
@@ -6597,6 +6615,21 @@ nsWindow::ClearCachedResources()
     }
 }
 
+void
+nsWindow::SetDrawsInTitlebar(bool aState)
+{
+  if (!mIsCSDAvailable || aState == mIsCSDEnabled)
+      return;
+
+  if (mShell) {
+      gint wmd = aState ? GDK_DECOR_BORDER : ConvertBorderStyles(mBorderStyle);
+      gdk_window_set_decorations(gtk_widget_get_window(mShell),
+                                 (GdkWMDecoration) wmd);
+  }
+
+  mIsCSDEnabled = aState;
+}
+
 gint
 nsWindow::GdkScaleFactor()
 {
@@ -6866,6 +6899,41 @@ nsWindow::SynthesizeNativeTouchPoint(uint32_t aPointerId,
   return NS_OK;
 }
 #endif
+
+bool
+nsWindow::DoDrawTitlebar() const
+{
+    return mIsCSDEnabled && mSizeState == nsSizeMode_Normal;
+}
+
+nsWindow::CSDSupportLevel
+nsWindow::GetCSDSupportLevel() {
+    if (sCSDSupportLevel != CSD_SUPPORT_UNKNOWN) {
+        return sCSDSupportLevel;
+    }
+    // TODO: MATE
+    const char* currentDesktop = getenv("XDG_CURRENT_DESKTOP");
+    if (currentDesktop) {
+        if (strcmp(currentDesktop, "GNOME") == 0) {
+            sCSDSupportLevel = CSD_SUPPORT_FULL;
+        } else if (strcmp(currentDesktop, "XFCE") == 0) {
+            sCSDSupportLevel = CSD_SUPPORT_FULL;
+        } else if (strcmp(currentDesktop, "X-Cinnamon") == 0) {
+            sCSDSupportLevel = CSD_SUPPORT_FULL;
+        } else if (strcmp(currentDesktop, "KDE") == 0) {
+            sCSDSupportLevel = CSD_SUPPORT_FLAT;
+        } else if (strcmp(currentDesktop, "LXDE") == 0) {
+            sCSDSupportLevel = CSD_SUPPORT_FLAT;
+        } else if (strcmp(currentDesktop, "openbox") == 0) {
+            sCSDSupportLevel = CSD_SUPPORT_FLAT;
+        } else if (strcmp(currentDesktop, "i3") == 0) {
+            sCSDSupportLevel = CSD_SUPPORT_NONE;
+        } else {
+            sCSDSupportLevel = CSD_SUPPORT_NONE;
+        }
+    }
+    return sCSDSupportLevel;
+}
 
 int32_t
 nsWindow::RoundsWidgetCoordinatesTo()

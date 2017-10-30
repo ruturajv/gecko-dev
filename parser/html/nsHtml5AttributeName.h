@@ -93,7 +93,6 @@ class nsHtml5AttributeName
     }
 
     inline static nsHtml5AttributeName* nameByBuffer(char16_t* buf,
-                                                     int32_t offset,
                                                      int32_t length,
                                                      nsHtml5AtomTable* interner)
     {
@@ -107,7 +106,7 @@ class nsHtml5AttributeName
       nsHtml5AttributeName* attributeName =
         nsHtml5AttributeName::ATTRIBUTE_NAMES[index];
       nsAtom* name = attributeName->getLocal(0);
-      if (!nsHtml5Portability::localEqualsBuffer(name, buf, offset, length)) {
+      if (!nsHtml5Portability::localEqualsBuffer(name, buf, length)) {
         return nullptr;
       }
       return attributeName;
@@ -582,6 +581,7 @@ class nsHtml5AttributeName
     static nsHtml5AttributeName* ATTR_CLOSURE;
     static nsHtml5AttributeName* ATTR_CLOSE;
     static nsHtml5AttributeName* ATTR_CLASS;
+    static nsHtml5AttributeName* ATTR_IS;
     static nsHtml5AttributeName* ATTR_KEYSYSTEM;
     static nsHtml5AttributeName* ATTR_KEYSPLINES;
     static nsHtml5AttributeName* ATTR_LOWSRC;

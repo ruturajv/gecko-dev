@@ -698,12 +698,20 @@ class Marionette(object):
                 sock.settimeout(0.5)
                 sock.connect((self.host, self.port))
                 data = sock.recv(16)
+
+                # If the application starts up very slowly (eg. Fennec on Android
+                # emulator) a response package has to be received first. Otherwise
+                # start_session will fail (see bug 1410366 comment 32 ff.)
                 if ":" in data:
                     return True
             except socket.error:
                 pass
             finally:
                 if sock is not None:
+                    try:
+                        sock.shutdown(socket.SHUT_RDWR)
+                    except:
+                        pass
                     sock.close()
 
             time.sleep(poll_interval)
@@ -1088,7 +1096,10 @@ class Marionette(object):
 
         cause = None
         if in_app:
-            if callable(callback):
+            if callback is not None:
+                if not callable(callback):
+                    raise ValueError("Specified callback '{}' is not callable".format(callback))
+
                 self._send_message("acceptConnections", {"value": False})
                 callback()
             else:
@@ -1140,7 +1151,10 @@ class Marionette(object):
             if clean:
                 raise ValueError("An in_app restart cannot be triggered with the clean flag set")
 
-            if callable(callback):
+            if callback is not None:
+                if not callable(callback):
+                    raise ValueError("Specified callback '{}' is not callable".format(callback))
+
                 self._send_message("acceptConnections", {"value": False})
                 callback()
             else:
@@ -1214,7 +1228,7 @@ class Marionette(object):
         else:
             # In the case when Marionette doesn't manage the binary wait until
             # its server component has been started.
-            self.wait_for_port(timeout=timeout)
+            self.raise_for_port(timeout=timeout)
 
         self.client = transport.TcpTransport(
             self.host,

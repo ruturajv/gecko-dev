@@ -285,7 +285,7 @@ WebRenderBridgeParent::UpdateResources(const nsTArray<OpUpdateResource>& aResour
         if (!reader.Read(op.bytes(), bytes)) {
           return false;
         }
-        aUpdates.UpdateBlobImage(op.key(), op.descriptor(), bytes);
+        aUpdates.UpdateBlobImage(op.key(), op.descriptor(), bytes, wr::ToDeviceUintRect(op.dirtyRect()));
         break;
       }
       case OpUpdateResource::TOpAddExternalImage: {
@@ -782,6 +782,7 @@ WebRenderBridgeParent::RecvAddPipelineIdForCompositable(const wr::PipelineId& aP
   }
 
   wrHost->SetWrBridge(this);
+  wrHost->EnableUseAsyncImagePipeline();
   mAsyncCompositables.Put(wr::AsUint64(aPipelineId), wrHost);
   mAsyncImageManager->AddAsyncImagePipeline(aPipelineId, wrHost);
 

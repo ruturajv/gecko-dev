@@ -20,17 +20,19 @@ public:
     nsLookAndFeel();
     virtual ~nsLookAndFeel();
 
-    virtual nsresult NativeGetColor(ColorID aID, nscolor &aResult);
     virtual void NativeInit() final;
+    virtual void RefreshImpl();
+    virtual nsresult NativeGetColor(ColorID aID, nscolor &aResult);
     virtual nsresult GetIntImpl(IntID aID, int32_t &aResult);
     virtual nsresult GetFloatImpl(FloatID aID, float &aResult);
     virtual bool GetFontImpl(FontID aID, nsString& aFontName,
                              gfxFontStyle& aFontStyle,
                              float aDevPixPerCSSPixel);
 
-    virtual void RefreshImpl();
     virtual char16_t GetPasswordCharacterImpl();
     virtual bool GetEchoPasswordImpl();
+
+    bool IsCSDAvailable() const { return sCSDAvailable; }
 
 protected:
 
@@ -82,6 +84,10 @@ protected:
     char16_t sInvisibleCharacter;
     float   sCaretRatio;
     bool    sMenuSupportsDrag;
+    bool    sCSDAvailable;
+    bool    sCSDMaximizeButton;
+    bool    sCSDMinimizeButton;
+    bool    sCSDCloseButton;
     bool    mInitialized;
 
     void EnsureInit();

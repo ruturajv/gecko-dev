@@ -1,6 +1,6 @@
-/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * vim: set ts=2 sw=2 et tw=78:
- * This Source Code Form is subject to the terms of the Mozilla Public
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=8 sts=2 et sw=2 tw=80: */
+/* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
@@ -196,6 +196,7 @@ protected:
   static void DetachAGR(AnimatedGeometryRoot* aAGR) {
     aAGR->mFrame = nullptr;
     aAGR->mParentAGR = nullptr;
+    NS_RELEASE(aAGR);
   }
   NS_DECLARE_FRAME_PROPERTY_WITH_DTOR(AnimatedGeometryRootCache, AnimatedGeometryRoot, DetachAGR)
 
@@ -207,6 +208,7 @@ protected:
   {
     MOZ_ASSERT(mParentAGR || mIsAsync, "The root AGR should always be treated as an async AGR.");
     if (mIsRetained) {
+      NS_ADDREF(this);
       aFrame->SetProperty(AnimatedGeometryRootCache(), this);
     }
   }
@@ -254,7 +256,8 @@ struct ActiveScrolledRoot {
       asr = new ActiveScrolledRoot();
 
       if (aIsRetained) {
-        f->SetProperty(ActiveScrolledRootCache(), asr);
+        RefPtr<ActiveScrolledRoot> ref = asr;
+        f->SetProperty(ActiveScrolledRootCache(), ref.forget().take());
       }
     }
     asr->mParent = aParent;
@@ -308,6 +311,7 @@ private:
   static void DetachASR(ActiveScrolledRoot* aASR) {
     aASR->mParent = nullptr;
     aASR->mScrollableFrame = nullptr;
+    NS_RELEASE(aASR);
   }
   NS_DECLARE_FRAME_PROPERTY_WITH_DTOR(ActiveScrolledRootCache, ActiveScrolledRoot, DetachASR)
 
@@ -754,7 +758,7 @@ public:
    * ResetMarkedFramesForDisplayList to make sure that the results of
    * MarkFramesForDisplayList do not carry over between batches.
    */
-  void ResetMarkedFramesForDisplayList();
+  void ResetMarkedFramesForDisplayList(nsIFrame* aReferenceFrame);
   /**
    * Notify the display list builder that we're leaving a presshell.
    */
@@ -827,8 +831,8 @@ public:
    */
   void MarkFramesForDisplayList(nsIFrame* aDirtyFrame,
                                 const nsFrameList& aFrames);
-  void MarkFrameForDisplay(nsIFrame* aFrame, nsIFrame* aStopAtFrame = nullptr);
-  void MarkFrameForDisplayIfVisible(nsIFrame* aFrame, nsIFrame* aStopAtFrame = nullptr);
+  void MarkFrameForDisplay(nsIFrame* aFrame, nsIFrame* aStopAtFrame);
+  void MarkFrameForDisplayIfVisible(nsIFrame* aFrame, nsIFrame* aStopAtFrame);
 
   void ClearFixedBackgroundDisplayData();
   /**
@@ -874,25 +878,27 @@ public:
    * effects applied to them (e.g. CSS opacity or filters).
    *
    * @param aWidgetType the -moz-appearance value for the themed widget
+   * @param aItem the item associated with the theme geometry
    * @param aRect the device-pixel rect relative to the widget's displayRoot
    * for the themed widget
    */
-  void RegisterThemeGeometry(uint8_t aWidgetType, nsIFrame* aFrame,
-                             const mozilla::LayoutDeviceIntRect& aRect) {
-    if (mIsPaintingToWindow) {
-      nsTArray<ThemeGeometry>* geometries =
-        mThemeGeometries.LookupOrAdd(aFrame);
-
-      geometries->AppendElement(ThemeGeometry(aWidgetType, aRect));
+  void RegisterThemeGeometry(uint8_t aWidgetType, nsDisplayItem* aItem,
+                             const mozilla::LayoutDeviceIntRect& aRect)
+  {
+    if (!mIsPaintingToWindow) {
+      return;
     }
+
+    nsTArray<ThemeGeometry>* geometries = mThemeGeometries.LookupOrAdd(aItem);
+    geometries->AppendElement(ThemeGeometry(aWidgetType, aRect));
   }
 
   /**
-   * Removes theme geometries associated with the given frame.
+   * Removes theme geometries associated with the given display item |aItem|.
    */
-  void UnregisterThemeGeometry(nsIFrame* aFrame)
+  void UnregisterThemeGeometry(nsDisplayItem* aItem)
   {
-    mThemeGeometries.Remove(aFrame);
+    mThemeGeometries.Remove(aItem);
   }
 
   /**
@@ -1593,12 +1599,14 @@ public:
     mBuildingInvisibleItems = aBuildingInvisibleItems;
   }
 
-  void MarkFrameModifiedDuringBuilding(nsIFrame* aFrame)
+  bool MarkFrameModifiedDuringBuilding(nsIFrame* aFrame)
   {
     if (!aFrame->IsFrameModified()) {
       mModifiedFramesDuringBuilding.AppendElement(aFrame);
       aFrame->SetFrameIsModified(true);
+      return true;
     }
+    return false;
   }
 
   /**
@@ -1607,11 +1615,11 @@ public:
    */
   AnimatedGeometryRoot* AnimatedGeometryRootForASR(const ActiveScrolledRoot* aASR);
 
-  bool HitTestShouldStopAtFirstOpaque() const {
-    return mHitTestShouldStopAtFirstOpaque;
+  bool HitTestIsForVisibility() const {
+    return mHitTestIsForVisibility;
   }
-  void SetHitTestShouldStopAtFirstOpaque(bool aHitTestShouldStopAtFirstOpaque) {
-    mHitTestShouldStopAtFirstOpaque = aHitTestShouldStopAtFirstOpaque;
+  void SetHitTestIsForVisibility(bool aHitTestIsForVisibility) {
+    mHitTestIsForVisibility = aHitTestIsForVisibility;
   }
 
 private:
@@ -1703,7 +1711,7 @@ private:
   nsCOMPtr<nsISelection>         mBoundingSelection;
   AutoTArray<PresShellState,8> mPresShellStates;
   AutoTArray<nsIFrame*,400>    mFramesMarkedForDisplay;
-  nsClassHashtable<nsPtrHashKey<nsIFrame>, nsTArray<ThemeGeometry>> mThemeGeometries;
+  nsClassHashtable<nsPtrHashKey<nsDisplayItem>, nsTArray<ThemeGeometry>> mThemeGeometries;
   nsDisplayTableItem*            mCurrentTableItem;
   DisplayListClipState           mClipState;
   const ActiveScrolledRoot*      mCurrentActiveScrolledRoot;
@@ -1797,7 +1805,7 @@ private:
   bool                           mForceLayerForScrollParent;
   bool                           mAsyncPanZoomEnabled;
   bool                           mBuildingInvisibleItems;
-  bool                           mHitTestShouldStopAtFirstOpaque;
+  bool                           mHitTestIsForVisibility;
   bool                           mIsBuilding;
   bool                           mInInvalidSubtree;
 };
@@ -3858,7 +3866,7 @@ public:
 
   void Destroy(nsDisplayListBuilder* aBuilder) override
   {
-    aBuilder->UnregisterThemeGeometry(mFrame);
+    aBuilder->UnregisterThemeGeometry(this);
     nsDisplayItem::Destroy(aBuilder);
   }
 
@@ -5090,17 +5098,38 @@ public:
 
   virtual bool ShouldBuildLayerEvenIfInvisible(nsDisplayListBuilder* aBuilder) const override;
 
+  virtual bool ShouldFlattenAway(nsDisplayListBuilder* aBuilder) override
+  {
+    return mShouldFlatten;
+  }
+
+  void SetShouldFlattenAway(bool aShouldFlatten)
+  {
+    mShouldFlatten = aShouldFlatten;
+  }
+
+  virtual LayerState GetLayerState(nsDisplayListBuilder* aBuilder,
+                                   LayerManager* aManager,
+                                   const ContainerLayerParameters& aParameters) override
+  {
+    if (mShouldFlatten) {
+      return mozilla::LAYER_NONE;
+    }
+    return nsDisplayOwnLayer::GetLayerState(aBuilder, aManager, aParameters);
+  }
+
   virtual nsRegion GetOpaqueRegion(nsDisplayListBuilder* aBuilder,
                                    bool* aSnap) const override;
 
   NS_DISPLAY_DECL_NAME("SubDocument", TYPE_SUBDOCUMENT)
 
-  mozilla::UniquePtr<ScrollMetadata> ComputeScrollMetadata(Layer* aLayer,
+  mozilla::UniquePtr<ScrollMetadata> ComputeScrollMetadata(LayerManager* aLayerManager,
                                                            const ContainerLayerParameters& aContainerParameters);
 
 protected:
   ViewID mScrollParentId;
   bool mForceDispatchToContentRegion;
+  bool mShouldFlatten;
   nsSubDocumentFrame* mSubDocFrame;
 };
 
@@ -5319,7 +5348,7 @@ public:
 
   virtual void WriteDebugInfo(std::stringstream& aStream) override;
 
-  mozilla::UniquePtr<ScrollMetadata> ComputeScrollMetadata(Layer* aLayer,
+  mozilla::UniquePtr<ScrollMetadata> ComputeScrollMetadata(LayerManager* aLayerManager,
                                                            const ContainerLayerParameters& aContainerParameters);
 
   virtual bool UpdateScrollData(mozilla::layers::WebRenderScrollData* aData,
@@ -5840,15 +5869,16 @@ public:
     FrameTransformProperties(const nsIFrame* aFrame,
                              float aAppUnitsPerPixel,
                              const nsRect* aBoundsOverride);
-    FrameTransformProperties(nsCSSValueSharedList* aTransformList,
+    FrameTransformProperties(RefPtr<const nsCSSValueSharedList>&&
+                               aTransformList,
                              const Point3D& aToTransformOrigin)
       : mFrame(nullptr)
-      , mTransformList(aTransformList)
+      , mTransformList(mozilla::Move(aTransformList))
       , mToTransformOrigin(aToTransformOrigin)
     {}
 
     const nsIFrame* mFrame;
-    RefPtr<nsCSSValueSharedList> mTransformList;
+    const RefPtr<const nsCSSValueSharedList> mTransformList;
     const Point3D mToTransformOrigin;
   };
 

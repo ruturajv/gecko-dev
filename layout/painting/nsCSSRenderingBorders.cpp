@@ -1,5 +1,5 @@
-/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-// vim:cindent:ts=2:et:sw=2:
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=8 sts=2 et sw=2 tw=80: */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -3602,7 +3602,8 @@ nsCSSBorderRenderer::CanCreateWebRenderCommands()
 }
 
 void
-nsCSSBorderRenderer::CreateWebRenderCommands(wr::DisplayListBuilder& aBuilder,
+nsCSSBorderRenderer::CreateWebRenderCommands(nsDisplayItem* aItem,
+                                             wr::DisplayListBuilder& aBuilder,
                                              wr::IpcResourceUpdateQueue& aResources,
                                              const layers::StackingContextHelper& aSc)
 {
@@ -3621,8 +3622,8 @@ nsCSSBorderRenderer::CreateWebRenderCommands(wr::DisplayListBuilder& aBuilder,
   if (mLocalClip) {
     LayoutDeviceRect clip = LayoutDeviceRect::FromUnknownRect(mLocalClip.value());
     wr::LayoutRect clipRect = aSc.ToRelativeLayoutRect(clip);
-    wr::WrClipId clipId = aBuilder.DefineClip(clipRect);
-    aBuilder.PushClip(clipId, true);
+    wr::WrClipId clipId = aBuilder.DefineClip(Nothing(), Nothing(), clipRect);
+    aBuilder.PushClip(clipId, aItem->GetClipChain());
   }
 
   Range<const wr::BorderSide> wrsides(side, 4);
@@ -3634,7 +3635,7 @@ nsCSSBorderRenderer::CreateWebRenderCommands(wr::DisplayListBuilder& aBuilder,
                       borderRadius);
 
   if (mLocalClip) {
-    aBuilder.PopClip(true);
+    aBuilder.PopClip(aItem->GetClipChain());
   }
 }
 

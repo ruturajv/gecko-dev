@@ -27,10 +27,11 @@ pub use properties::animated_properties::TransitionProperty;
 pub use self::angle::Angle;
 #[cfg(feature = "gecko")]
 pub use self::align::{AlignItems, AlignJustifyContent, AlignJustifySelf, JustifyItems};
-pub use self::background::BackgroundSize;
+pub use self::background::{BackgroundRepeat, BackgroundSize};
 pub use self::border::{BorderCornerRadius, BorderImageSlice, BorderImageWidth};
 pub use self::border::{BorderImageSideWidth, BorderRadius, BorderSideWidth, BorderSpacing};
-pub use self::box_::VerticalAlign;
+pub use self::font::XTextZoom;
+pub use self::box_::{AnimationIterationCount, AnimationName, ScrollSnapType, VerticalAlign};
 pub use self::color::{Color, ColorPropertyValue, RGBAColor};
 pub use self::effects::{BoxShadow, Filter, SimpleShadow};
 pub use self::flex::FlexBasis;
@@ -48,6 +49,7 @@ pub use self::rect::LengthOrNumberRect;
 pub use self::percentage::Percentage;
 pub use self::position::{Position, PositionComponent};
 pub use self::svg::{SVGLength, SVGOpacity, SVGPaint, SVGPaintKind, SVGStrokeDashArray, SVGWidth};
+pub use self::table::XSpan;
 pub use self::text::{InitialLetter, LetterSpacing, LineHeight, WordSpacing};
 pub use self::time::Time;
 pub use self::transform::{TimingFunction, TransformOrigin};
@@ -75,6 +77,7 @@ pub mod percentage;
 pub mod position;
 pub mod rect;
 pub mod svg;
+pub mod table;
 pub mod text;
 pub mod time;
 pub mod transform;
@@ -176,8 +179,10 @@ impl BorderStyle {
     }
 }
 
+/// A CSS `<number>` specified value.
+///
+/// https://drafts.csswg.org/css-values-3/#number-value
 #[derive(Clone, Copy, Debug, MallocSizeOf, PartialEq, PartialOrd)]
-#[allow(missing_docs)]
 pub struct Number {
     /// The numeric value itself.
     value: CSSFloat,

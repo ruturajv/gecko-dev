@@ -1,4 +1,5 @@
-/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=8 sts=2 et sw=2 tw=80: */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -259,7 +260,7 @@ inDOMUtils::GetCSSStyleRules(nsIDOMElement *aElement,
       if (decl) {
         css::Rule* owningRule = decl->GetOwningRule();
         if (owningRule) {
-          rules->AppendElement(owningRule, /*weak =*/ false);
+          rules->AppendElement(owningRule);
         }
       }
     }
@@ -310,7 +311,7 @@ inDOMUtils::GetCSSStyleRules(nsIDOMElement *aElement,
         }
       }
       if (rule) {
-        rules->AppendElement(static_cast<css::Rule*>(rule), false);
+        rules->AppendElement(static_cast<css::Rule*>(rule));
       } else {
         MOZ_ASSERT_UNREACHABLE("We should be able to map a raw rule to a rule");
       }
@@ -1070,7 +1071,7 @@ inDOMUtils::GetBindingURLs(nsIDOMElement *aElement, nsIArray **_retval)
   nsXBLBinding *binding = content->GetXBLBinding();
 
   while (binding) {
-    urls->AppendElement(binding->PrototypeBinding()->BindingURI(), false);
+    urls->AppendElement(binding->PrototypeBinding()->BindingURI());
     binding = binding->GetBaseBinding();
   }
 

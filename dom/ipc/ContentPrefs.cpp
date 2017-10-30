@@ -122,6 +122,7 @@ const char* mozilla::dom::ContentPrefs::gInitPrefs[] = {
   "javascript.use_us_english_locale",
   "jsloader.shareGlobal",
 #ifdef MOZ_STYLO
+  "layout.css.servo.chrome.enabled",
   "layout.css.stylo-blocklist.blocked_domains",
   "layout.css.stylo-blocklist.enabled",
 #endif
@@ -245,6 +246,7 @@ const char* mozilla::dom::ContentPrefs::gInitPrefs[] = {
   "toolkit.telemetry.minSubsessionLength",
   "toolkit.telemetry.scheduler.idleTickInterval",
   "toolkit.telemetry.scheduler.tickInterval",
+  "toolkit.telemetry.testing.overridePreRelease",
   "toolkit.telemetry.unified",
   "ui.key.menuAccessKeyFocuses",
   "ui.popup.disable_autohide",

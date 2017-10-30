@@ -11,10 +11,6 @@ unset MAKECAB
 # These aren't supported on mingw at this time
 # Bug 1393817
 MOZ_AUTOMATION_L10N_CHECK=0
-# This might be fixed on -central now
-MOZ_AUTOMATION_BUILD_SYMBOLS=0
-# Bug 1393803
-MOZ_AUTOMATION_INSTALLER=0
 
 # Sets:
 #  build/mozconfig.common
@@ -44,7 +40,6 @@ ac_add_options --disable-optimize
 ac_add_options --disable-warnings-as-errors
 
 # Temporary config settings until we get these working on mingw
-ac_add_options --disable-tests
 ac_add_options --disable-accessibility # https://sourceforge.net/p/mingw-w64/bugs/648/
 
 # Long story

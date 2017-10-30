@@ -479,16 +479,23 @@ impl Stylist {
             .map(|(d, _)| d.selectors_for_cache_revalidation.len()).sum()
     }
 
+    /// Returns the number of entries in invalidation maps.
+    pub fn num_invalidations(&self) -> usize {
+        self.cascade_data.iter_origins()
+            .map(|(d, _)| d.invalidation_map.len()).sum()
+    }
+
     /// Invokes `f` with the `InvalidationMap` for each origin.
     ///
     /// NOTE(heycam) This might be better as an `iter_invalidation_maps`, once
     /// we have `impl trait` and can return that easily without bothering to
     /// create a whole new iterator type.
-    pub fn each_invalidation_map<F>(&self, mut f: F)
-        where F: FnMut(&InvalidationMap)
+    pub fn each_invalidation_map<'a, F>(&'a self, mut f: F)
+    where
+        F: FnMut(&'a InvalidationMap, Origin)
     {
-        for (data, _) in self.cascade_data.iter_origins() {
-            f(&data.invalidation_map)
+        for (data, origin) in self.cascade_data.iter_origins() {
+            f(&data.invalidation_map, origin)
         }
     }
 
@@ -1309,7 +1316,7 @@ impl Stylist {
                     &mut matching_context,
                     stylist.quirks_mode,
                     flags_setter,
-                    CascadeLevel::XBL,
+                    CascadeLevel::AuthorNormal,
                 );
             }
         });
@@ -1402,10 +1409,29 @@ impl Stylist {
     /// Given an id, returns whether there might be any rules for that id in any
     /// of our rule maps.
     #[inline]
-    pub fn may_have_rules_for_id(&self, id: &Atom) -> bool {
-        self.cascade_data
-            .iter_origins()
-            .any(|(d, _)| d.mapped_ids.might_contain_hash(id.get_hash()))
+    pub fn may_have_rules_for_id<E>(
+        &self,
+        id: &Atom,
+        element: E,
+    ) -> bool
+    where
+        E: TElement,
+    {
+        let hash = id.get_hash();
+        for (data, _) in self.cascade_data.iter_origins() {
+            if data.mapped_ids.might_contain_hash(hash) {
+                return true;
+            }
+        }
+
+        let mut xbl_rules_may_contain = false;
+
+        element.each_xbl_stylist(|stylist| {
+            xbl_rules_may_contain = xbl_rules_may_contain ||
+                stylist.cascade_data.author.mapped_ids.might_contain_hash(hash)
+        });
+
+        xbl_rules_may_contain
     }
 
     /// Returns the registered `@keyframes` animation for the specified name.
@@ -1421,7 +1447,7 @@ impl Stylist {
     /// revalidation selectors.
     pub fn match_revalidation_selectors<E, F>(
         &self,
-        element: &E,
+        element: E,
         bloom: Option<&BloomFilter>,
         nth_index_cache: &mut NthIndexCache,
         flags_setter: &mut F
@@ -1447,14 +1473,14 @@ impl Stylist {
         let mut results = SmallBitVec::new();
         for (data, _) in self.cascade_data.iter_origins() {
             data.selectors_for_cache_revalidation.lookup(
-                *element,
+                element,
                 self.quirks_mode,
                 &mut |selector_and_hashes| {
                     results.push(matches_selector(
                         &selector_and_hashes.selector,
                         selector_and_hashes.selector_offset,
                         Some(&selector_and_hashes.hashes),
-                        element,
+                        &element,
                         &mut matching_context,
                         flags_setter
                     ));
@@ -1462,6 +1488,24 @@ impl Stylist {
                 }
             );
         }
+
+        element.each_xbl_stylist(|stylist| {
+            stylist.cascade_data.author.selectors_for_cache_revalidation.lookup(
+                element,
+                stylist.quirks_mode,
+                &mut |selector_and_hashes| {
+                    results.push(matches_selector(
+                        &selector_and_hashes.selector,
+                        selector_and_hashes.selector_offset,
+                        Some(&selector_and_hashes.hashes),
+                        &element,
+                        &mut matching_context,
+                        flags_setter
+                    ));
+                    true
+                }
+            );
+        });
 
         results
     }
@@ -1905,32 +1949,6 @@ impl CascadeData {
         }
     }
 
-    #[cfg(feature = "gecko")]
-    fn begin_mutation(&mut self, rebuild_kind: &SheetRebuildKind) {
-        self.element_map.begin_mutation();
-        self.pseudos_map.for_each(|m| m.begin_mutation());
-        if rebuild_kind.should_rebuild_invalidation() {
-            self.invalidation_map.begin_mutation();
-            self.selectors_for_cache_revalidation.begin_mutation();
-        }
-    }
-
-    #[cfg(feature = "servo")]
-    fn begin_mutation(&mut self, _: &SheetRebuildKind) {}
-
-    #[cfg(feature = "gecko")]
-    fn end_mutation(&mut self, rebuild_kind: &SheetRebuildKind) {
-        self.element_map.end_mutation();
-        self.pseudos_map.for_each(|m| m.end_mutation());
-        if rebuild_kind.should_rebuild_invalidation() {
-            self.invalidation_map.end_mutation();
-            self.selectors_for_cache_revalidation.end_mutation();
-        }
-    }
-
-    #[cfg(feature = "servo")]
-    fn end_mutation(&mut self, _: &SheetRebuildKind) {}
-
     /// Collects all the applicable media query results into `results`.
     ///
     /// This duplicates part of the logic in `add_stylesheet`, which is
@@ -1994,7 +2012,6 @@ impl CascadeData {
             self.effective_media_query_results.saw_effective(stylesheet);
         }
 
-        self.begin_mutation(&rebuild_kind);
         for rule in stylesheet.effective_rules(device, guard) {
             match *rule {
                 CssRule::Style(ref locked) => {
@@ -2025,11 +2042,7 @@ impl CascadeData {
                             None => &mut self.element_map,
                             Some(pseudo) => {
                                 self.pseudos_map
-                                    .get_or_insert_with(&pseudo.canonical(), || {
-                                        let mut map = Box::new(SelectorMap::new());
-                                        map.begin_mutation();
-                                        map
-                                    })
+                                    .get_or_insert_with(&pseudo.canonical(), || Box::new(SelectorMap::new()))
                             }
                         };
 
@@ -2124,7 +2137,6 @@ impl CascadeData {
                 _ => {}
             }
         }
-        self.end_mutation(&rebuild_kind);
 
         Ok(())
     }

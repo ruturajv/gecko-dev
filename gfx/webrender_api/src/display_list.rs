@@ -12,7 +12,7 @@ use {LineDisplayItem, LineOrientation, LineStyle, LocalClip, MixBlendMode, Pipel
 use {PropertyBinding, PushStackingContextDisplayItem, RadialGradient, RadialGradientDisplayItem};
 use {RectangleDisplayItem, ScrollFrameDisplayItem, ScrollPolicy, ScrollSensitivity};
 use {SpecificDisplayItem, StackingContext, StickyFrameDisplayItem, StickyFrameInfo};
-use {TextDisplayItem, Shadow, TransformStyle, YuvColorSpace, YuvData};
+use {BorderRadius, TextDisplayItem, Shadow, TransformStyle, YuvColorSpace, YuvData};
 use YuvImageDisplayItem;
 use bincode;
 use serde::{Deserialize, Serialize, Serializer};
@@ -153,23 +153,25 @@ fn skip_slice<T: for<'de> Deserialize<'de>>(
     data: &mut &[u8],
 ) -> (ItemRange<T>, usize) {
     let base = list.data.as_ptr() as usize;
-    let start = data.as_ptr() as usize;
 
-    // Read through the values (this is a bit of a hack to reuse logic)
-    let mut iter = AuxIter::<T>::new(*data);
-    let count = iter.len();
-    for _ in &mut iter {}
-    let end = iter.data.as_ptr() as usize;
+    let byte_size: usize = bincode::deserialize_from(data, bincode::Infinite)
+                                    .expect("MEH: malicious input?");
+    let start = data.as_ptr() as usize;
+    let item_count: usize = bincode::deserialize_from(data, bincode::Infinite)
+                                    .expect("MEH: malicious input?");
+
+    // Remember how many bytes item_count occupied
+    let item_count_size = data.as_ptr() as usize - start;
 
     let range = ItemRange {
-        start: start - base,
-        length: end - start,
+        start: start - base,                      // byte offset to item_count
+        length: byte_size + item_count_size,      // number of bytes for item_count + payload
         _boo: PhantomData,
     };
 
     // Adjust data pointer to skip read values
-    *data = &data[range.length ..];
-    (range, count)
+    *data = &data[byte_size ..];
+    (range, item_count)
 }
 
 
@@ -489,6 +491,7 @@ impl<'a, 'b> Serialize for DisplayItemRef<'a, 'b> {
 struct UnsafeVecWriter(*mut u8);
 
 impl Write for UnsafeVecWriter {
+    #[inline(always)]
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         unsafe {
             ptr::copy_nonoverlapping(buf.as_ptr(), self.0, buf.len());
@@ -496,16 +499,36 @@ impl Write for UnsafeVecWriter {
         }
         Ok(buf.len())
     }
+
+    #[inline(always)]
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+        unsafe {
+            ptr::copy_nonoverlapping(buf.as_ptr(), self.0, buf.len());
+            self.0 = self.0.offset(buf.len() as isize);
+        }
+        Ok(())
+    }
+
+    #[inline(always)]
     fn flush(&mut self) -> io::Result<()> { Ok(()) }
 }
 
 struct SizeCounter(usize);
 
 impl<'a> Write for SizeCounter {
+    #[inline(always)]
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         self.0 += buf.len();
         Ok(buf.len())
     }
+
+    #[inline(always)]
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+        self.0 += buf.len();
+        Ok(())
+    }
+
+    #[inline(always)]
     fn flush(&mut self) -> io::Result<()> { Ok(()) }
 }
 
@@ -737,11 +760,28 @@ impl DisplayListBuilder {
         let len = iter.len();
         let mut count = 0;
 
+        // Format:
+        // payload_byte_size: usize, item_count: usize, [I; item_count]
+
+        // We write a dummy value so there's room for later
+        let byte_size_offset = self.data.len();
+        serialize_fast(&mut self.data, &0usize);
         serialize_fast(&mut self.data, &len);
+        let payload_offset = self.data.len();
+
         for elem in iter {
             count += 1;
             serialize_fast(&mut self.data, &elem);
         }
+
+        // Now write the actual byte_size
+        let final_offset = self.data.len();
+        let byte_size = final_offset - payload_offset;
+
+        // Note we don't use serialize_fast because we don't want to change the Vec's len
+        bincode::serialize_into(&mut &mut self.data[byte_size_offset..],
+                                &byte_size,
+                                bincode::Infinite).unwrap();
 
         debug_assert_eq!(len, count);
     }
@@ -754,21 +794,15 @@ impl DisplayListBuilder {
     pub fn push_line(
         &mut self,
         info: &LayoutPrimitiveInfo,
-        baseline: f32,
-        start: f32,
-        end: f32,
+        wavy_line_thickness: f32,
         orientation: LineOrientation,
-        width: f32,
-        color: ColorF,
+        color: &ColorF,
         style: LineStyle,
     ) {
         let item = SpecificDisplayItem::Line(LineDisplayItem {
-            baseline,
-            start,
-            end,
+            wavy_line_thickness,
             orientation,
-            width,
-            color,
+            color: *color,
             style,
         });
 
@@ -1024,7 +1058,7 @@ impl DisplayListBuilder {
         color: ColorF,
         blur_radius: f32,
         spread_radius: f32,
-        border_radius: f32,
+        border_radius: BorderRadius,
         clip_mode: BoxShadowClipMode,
     ) {
         let item = SpecificDisplayItem::BoxShadow(BoxShadowDisplayItem {

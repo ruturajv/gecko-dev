@@ -138,6 +138,11 @@ SERVO_BINDING_FUNC(Servo_SelectorList_Matches, bool,
                    RawGeckoElementBorrowed, RawServoSelectorListBorrowed)
 SERVO_BINDING_FUNC(Servo_SelectorList_Closest, const RawGeckoElement*,
                    RawGeckoElementBorrowed, RawServoSelectorListBorrowed)
+SERVO_BINDING_FUNC(Servo_SelectorList_QueryFirst, const RawGeckoElement*,
+                   RawGeckoNodeBorrowed, RawServoSelectorListBorrowed)
+SERVO_BINDING_FUNC(Servo_SelectorList_QueryAll, void,
+                   RawGeckoNodeBorrowed, RawServoSelectorListBorrowed,
+                   nsSimpleContentList* content_list)
 SERVO_BINDING_FUNC(Servo_StyleSet_AddSizeOfExcludingThis, void,
                    mozilla::MallocSizeOf malloc_size_of,
                    mozilla::MallocSizeOf malloc_enclosing_size_of,
@@ -365,9 +370,15 @@ SERVO_BINDING_FUNC(Servo_Shorthand_AnimationValues_Serialize, void,
                    nsAString* buffer)
 SERVO_BINDING_FUNC(Servo_AnimationValue_GetOpacity, float,
                    RawServoAnimationValueBorrowed value)
+SERVO_BINDING_FUNC(Servo_AnimationValue_Opacity,
+                   RawServoAnimationValueStrong,
+                   float)
 SERVO_BINDING_FUNC(Servo_AnimationValue_GetTransform, void,
                    RawServoAnimationValueBorrowed value,
                    RefPtr<nsCSSValueSharedList>* list)
+SERVO_BINDING_FUNC(Servo_AnimationValue_Transform,
+                   RawServoAnimationValueStrong,
+                   const nsCSSValueSharedList& list)
 SERVO_BINDING_FUNC(Servo_AnimationValue_DeepEqual, bool,
                    RawServoAnimationValueBorrowed,
                    RawServoAnimationValueBorrowed)
@@ -443,7 +454,8 @@ SERVO_BINDING_FUNC(Servo_DeclarationBlock_HasCSSWideKeyword, bool,
                    nsCSSPropertyID property)
 // Compose animation value for a given property.
 // |base_values| is nsRefPtrHashtable<nsUint32HashKey, RawServoAnimationValue>.
-// We use RawServoAnimationValueTableBorrowed to avoid exposing nsRefPtrHashtable in FFI.
+// We use RawServoAnimationValueTableBorrowed to avoid exposing
+// nsRefPtrHashtable in FFI.
 SERVO_BINDING_FUNC(Servo_AnimationCompose, void,
                    RawServoAnimationValueMapBorrowedMut animation_values,
                    RawServoAnimationValueTableBorrowed base_values,
@@ -451,7 +463,22 @@ SERVO_BINDING_FUNC(Servo_AnimationCompose, void,
                    RawGeckoAnimationPropertySegmentBorrowed animation_segment,
                    RawGeckoAnimationPropertySegmentBorrowed last_segment,
                    RawGeckoComputedTimingBorrowed computed_timing,
-                   mozilla::dom::IterationCompositeOperation iteration_composite)
+                   mozilla::dom::IterationCompositeOperation iter_composite)
+// Calculate the result of interpolating given animation segment at the given
+// progress and current iteration.
+// This includes combining the segment endpoints with the underlying value
+// and/or last value depending the composite modes specified on the
+// segment endpoints and the supplied iteration composite mode.
+// The caller is responsible for providing an underlying value and
+// last value in all situations where there are needed.
+SERVO_BINDING_FUNC(Servo_ComposeAnimationSegment,
+                   RawServoAnimationValueStrong,
+                   RawGeckoAnimationPropertySegmentBorrowed animation_segment,
+                   RawServoAnimationValueBorrowedOrNull underlying_value,
+                   RawServoAnimationValueBorrowedOrNull last_value,
+                   mozilla::dom::IterationCompositeOperation iter_composite,
+                   double progress,
+                   uint64_t current_iteration)
 
 // presentation attributes
 SERVO_BINDING_FUNC(Servo_DeclarationBlock_PropertyIsSet, bool,
@@ -516,7 +543,8 @@ SERVO_BINDING_FUNC(Servo_MediaList_Matches, bool,
 SERVO_BINDING_FUNC(Servo_MediaList_GetText, void,
                    RawServoMediaListBorrowed list, nsAString* result)
 SERVO_BINDING_FUNC(Servo_MediaList_SetText, void,
-                   RawServoMediaListBorrowed list, const nsACString* text)
+                   RawServoMediaListBorrowed list, const nsACString* text,
+                   mozilla::dom::CallerType aCallerType)
 SERVO_BINDING_FUNC(Servo_MediaList_GetLength, uint32_t,
                    RawServoMediaListBorrowed list)
 SERVO_BINDING_FUNC(Servo_MediaList_GetMediumAt, bool,

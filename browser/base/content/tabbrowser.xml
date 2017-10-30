@@ -756,6 +756,32 @@
                       aWebProgress && aWebProgress.isTopLevel) {
                     this.mTab.setAttribute("busy", "true");
                     this.mTab._notselectedsinceload = !this.mTab.selected;
+                    SchedulePressure.startMonitoring(window, {
+                      highPressureFn() {
+                        // Only switch back to the SVG loading indicator after getting
+                        // three consecutive low pressure callbacks. Used to prevent
+                        // switching quickly between the SVG and APNG loading indicators.
+                        gBrowser.tabContainer._schedulePressureCount = gBrowser.schedulePressureDefaultCount;
+                        gBrowser.tabContainer.setAttribute("schedulepressure", "true");
+                      },
+                      lowPressureFn() {
+                        if (!gBrowser.tabContainer._schedulePressureCount ||
+                            --gBrowser.tabContainer._schedulePressureCount <= 0) {
+                          gBrowser.tabContainer.removeAttribute("schedulepressure");
+                        }
+
+                        // If tabs are closed while they are loading we need to
+                        // stop monitoring schedule pressure. We don't stop monitoring
+                        // during high pressure times because we want to eventually
+                        // return to the SVG tab loading animations.
+                        let continueMonitoring = true;
+                        if (!document.querySelector(".tabbrowser-tab[busy]")) {
+                          SchedulePressure.stopMonitoring(window);
+                          continueMonitoring = false;
+                        }
+                        return {continueMonitoring};
+                      },
+                    });
                     this._syncThrobberAnimations();
                   }
 
@@ -768,6 +794,10 @@
 
                 if (this.mTab.hasAttribute("busy")) {
                   this.mTab.removeAttribute("busy");
+                  if (!document.querySelector(".tabbrowser-tab[busy]")) {
+                    SchedulePressure.stopMonitoring(window);
+                    this.mTabBrowser.tabContainer.removeAttribute("schedulepressure");
+                  }
 
                   // Only animate the "burst" indicating the page has loaded if
                   // the top-level page is the one that finished loading.
@@ -3958,20 +3988,6 @@
         </body>
       </method>
 
-      <!-- Opens a given tab to a non-remote window. -->
-      <method name="openNonRemoteWindow">
-        <parameter name="aTab"/>
-        <body>
-          <![CDATA[
-            if (!AppConstants.E10S_TESTING_ONLY) {
-              throw "This method is intended only for e10s testing!";
-            }
-            let url = aTab.linkedBrowser.currentURI.spec;
-            return window.openDialog("chrome://browser/content/", "_blank", "chrome,all,dialog=no,non-remote", url);
-          ]]>
-        </body>
-      </method>
-
       <method name="moveTabTo">
         <parameter name="aTab"/>
         <parameter name="aIndex"/>
@@ -5548,14 +5564,11 @@
             }
           } else {
             label = tab._fullLabel || tab.getAttribute("label");
-            if (AppConstants.E10S_TESTING_ONLY &&
+            if (AppConstants.NIGHTLY_BUILD &&
                 tab.linkedBrowser &&
-                tab.linkedBrowser.isRemoteBrowser) {
-              label += " - e10s";
-              if (tab.linkedBrowser.frameLoader &&
-                  Services.appinfo.maxWebProcessCount > 1) {
-                label += " (" + tab.linkedBrowser.frameLoader.tabParent.osPid + ")";
-              }
+                tab.linkedBrowser.isRemoteBrowser &&
+                tab.linkedBrowser.frameLoader) {
+              label += " (pid " + tab.linkedBrowser.frameLoader.tabParent.osPid + ")";
             }
             if (tab.userContextId) {
               label = gTabBrowserBundle.formatStringFromName("tabs.containers.tooltip", [label, ContextualIdentityService.getUserContextLabel(tab.userContextId)], 2);
@@ -5968,6 +5981,8 @@
 
           XPCOMUtils.defineLazyPreferenceGetter(this, "animationsEnabled",
                                                 "toolkit.cosmeticAnimations.enabled", true);
+          XPCOMUtils.defineLazyPreferenceGetter(this, "schedulePressureDefaultCount",
+                                                "browser.schedulePressure.defaultCount", 3);
           XPCOMUtils.defineLazyPreferenceGetter(this, "tabWarmingEnabled",
                                                 "browser.tabs.remote.warmup.enabled", false);
           XPCOMUtils.defineLazyPreferenceGetter(this, "tabWarmingMax",
@@ -6558,9 +6573,14 @@
           if (this.selectedItem.closing || selectedIndex == 0) {
             this._beforeSelectedTab = null;
           } else {
-            this._beforeSelectedTab = visibleTabs[selectedIndex - 1];
-            this._beforeSelectedTab.setAttribute("beforeselected-visible",
-                                                 "true");
+            let beforeSelectedTab = visibleTabs[selectedIndex - 1];
+            let separatedByScrollButton = this.getAttribute("overflow") == "true" &&
+              beforeSelectedTab.pinned && !this.selectedItem.pinned;
+            if (!separatedByScrollButton) {
+              this._beforeSelectedTab = beforeSelectedTab;
+              this._beforeSelectedTab.setAttribute("beforeselected-visible",
+                                                   "true");
+            }
           }
 
           if (this._firstTab)
@@ -7769,7 +7789,11 @@
                     anonid="tab-throbber"
                     class="tab-throbber"
                     layer="true"/>
-          <xul:image xbl:inherits="src=image,loadingprincipal=iconloadingprincipal,requestcontextid,fadein,pinned,selected=visuallyselected,busy,crashed,sharing"
+          <xul:image xbl:inherits="fadein,pinned,busy,progress,selected=visuallyselected"
+                     class="tab-throbber-fallback"
+                     role="presentation"
+                     layer="true"/>
+          <xul:image xbl:inherits="src=image,triggeringprincipal=iconloadingprincipal,requestcontextid,fadein,pinned,selected=visuallyselected,busy,crashed,sharing"
                      anonid="tab-icon-image"
                      class="tab-icon-image"
                      validate="never"
@@ -7946,7 +7970,10 @@
             tabContainer._beforeHoveredTab = null;
           } else {
             let candidate = visibleTabs[tabIndex - 1];
-            if (!candidate.selected) {
+            let separatedByScrollButton =
+              tabContainer.getAttribute("overflow") == "true" &&
+              candidate.pinned && !this.pinned;
+            if (!candidate.selected && !separatedByScrollButton) {
               tabContainer._beforeHoveredTab = candidate;
               candidate.setAttribute("beforehovered", "true");
             }

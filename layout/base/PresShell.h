@@ -1,6 +1,6 @@
-/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * vim: set ts=2 sw=2 et tw=78:
- * This Source Code Form is subject to the terms of the Mozilla Public
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=8 sts=2 et sw=2 tw=80: */
+/* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
@@ -111,8 +111,14 @@ public:
   virtual void BeginObservingDocument() override;
   virtual void EndObservingDocument() override;
   virtual nsresult Initialize(nscoord aWidth, nscoord aHeight) override;
-  virtual nsresult ResizeReflow(nscoord aWidth, nscoord aHeight, nscoord aOldWidth = 0, nscoord aOldHeight = 0) override;
-  virtual nsresult ResizeReflowIgnoreOverride(nscoord aWidth, nscoord aHeight, nscoord aOldWidth, nscoord aOldHeight) override;
+  virtual nsresult ResizeReflow(nscoord aWidth, nscoord aHeight,
+                                nscoord aOldWidth = 0, nscoord aOldHeight = 0,
+                                ResizeReflowOptions aOptions =
+                                ResizeReflowOptions::eBSizeExact) override;
+  virtual nsresult ResizeReflowIgnoreOverride(nscoord aWidth, nscoord aHeight,
+                                              nscoord aOldWidth, nscoord aOldHeight,
+                                              ResizeReflowOptions aOptions =
+                                              ResizeReflowOptions::eBSizeExact) override;
   virtual nsIPageSequenceFrame* GetPageSequenceFrame() const override;
   virtual nsCanvasFrame* GetCanvasFrame() const override;
 
@@ -125,7 +131,7 @@ public:
   virtual bool IsSafeToFlush() const override;
   virtual void DoFlushPendingNotifications(mozilla::FlushType aType) override;
   virtual void DoFlushPendingNotifications(mozilla::ChangesToFlush aType) override;
-  virtual void DestroyFramesFor(mozilla::dom::Element* aElement) override;
+  virtual void DestroyFramesForAndRestyle(mozilla::dom::Element* aElement) override;
 
   /**
    * Post a callback that should be handled after reflow has finished.

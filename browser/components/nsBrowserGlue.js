@@ -686,6 +686,7 @@ BrowserGlue.prototype = {
 
       let buildID = Services.appinfo.appBuildID;
       let today = new Date().getTime();
+      /* eslint-disable no-multi-spaces */
       let buildDate = new Date(buildID.slice(0, 4),     // year
                                buildID.slice(4, 6) - 1, // months are zero-based.
                                buildID.slice(6, 8),     // day
@@ -693,6 +694,7 @@ BrowserGlue.prototype = {
                                buildID.slice(10, 12),   // min
                                buildID.slice(12, 14))   // ms
       .getTime();
+      /* eslint-enable no-multi-spaces */
 
       const millisecondsIn24Hours = 86400000;
       let acceptableAge = Services.prefs.getIntPref("app.update.checkInstallTime.days") * millisecondsIn24Hours;
@@ -1112,9 +1114,7 @@ BrowserGlue.prototype = {
     }, 5000);
 
     if (AppConstants.MOZ_CRASHREPORTER) {
-      Services.tm.idleDispatchToMainThread(() => {
-        UnsubmittedCrashHandler.checkForUnsubmittedCrashReports();
-      });
+      UnsubmittedCrashHandler.scheduleCheckForUnsubmittedCrashReports();
     }
 
     if (AppConstants.platform == "win") {
@@ -1735,7 +1735,7 @@ BrowserGlue.prototype = {
 
   // eslint-disable-next-line complexity
   _migrateUI: function BG__migrateUI() {
-    const UI_VERSION = 56;
+    const UI_VERSION = 57;
     const BROWSER_DOCURL = "chrome://browser/content/browser.xul";
 
     let currentUIVersion;
@@ -2139,6 +2139,24 @@ BrowserGlue.prototype = {
       // sidebar was open. We should set the checked attribute in case it wasn't:
       if (xulStore.getValue(BROWSER_DOCURL, "sidebar-box", "sidebarcommand")) {
         xulStore.setValue(BROWSER_DOCURL, "sidebar-box", "checked", "true");
+      }
+    }
+
+    if (currentUIVersion < 57) {
+      // Beginning Firefox 57, the theme accent color is shown as highlight
+      // on top of tabs. This didn't look too good with the "A Web Browser Renaissance"
+      // theme, so we're changing its accent color.
+      let lwthemePrefs = Services.prefs.getBranch("lightweightThemes.");
+      if (lwthemePrefs.prefHasUserValue("usedThemes")) {
+        try {
+          let usedThemes = lwthemePrefs.getStringPref("usedThemes");
+          usedThemes = JSON.parse(usedThemes);
+          let renaissanceTheme = usedThemes.find(theme => theme.id == "recommended-1");
+          if (renaissanceTheme) {
+            renaissanceTheme.accentcolor = "#834d29";
+            lwthemePrefs.setStringPref("usedThemes", JSON.stringify(usedThemes));
+          }
+        } catch (e) { /* Don't panic if this pref isn't what we expect it to be. */ }
       }
     }
 

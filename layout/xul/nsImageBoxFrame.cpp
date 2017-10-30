@@ -1,4 +1,5 @@
-/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=8 sts=2 et sw=2 tw=80: */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -239,10 +240,10 @@ nsImageBoxFrame::UpdateImage()
     nsIDocument* doc = mContent->GetComposedDoc();
     if (doc) {
       nsContentPolicyType contentPolicyType;
-      nsCOMPtr<nsIPrincipal> loadingPrincipal;
+      nsCOMPtr<nsIPrincipal> triggeringPrincipal;
       uint64_t requestContextID = 0;
       nsContentUtils::GetContentPolicyTypeForUIImageLoading(mContent,
-                                                            getter_AddRefs(loadingPrincipal),
+                                                            getter_AddRefs(triggeringPrincipal),
                                                             contentPolicyType,
                                                             &requestContextID);
 
@@ -253,10 +254,14 @@ nsImageBoxFrame::UpdateImage()
                                                 doc,
                                                 baseURI);
       if (uri) {
-        nsresult rv = nsContentUtils::LoadImage(uri, mContent, doc, loadingPrincipal, requestContextID,
-                                                doc->GetDocumentURI(), doc->GetReferrerPolicy(),
+        nsresult rv = nsContentUtils::LoadImage(uri, mContent, doc,
+                                                triggeringPrincipal,
+                                                requestContextID,
+                                                doc->GetDocumentURI(),
+                                                doc->GetReferrerPolicy(),
                                                 mListener, mLoadFlags,
-                                                EmptyString(), getter_AddRefs(mImageRequest),
+                                                EmptyString(),
+                                                getter_AddRefs(mImageRequest),
                                                 contentPolicyType);
 
         if (NS_SUCCEEDED(rv) && mImageRequest) {

@@ -42,6 +42,13 @@ add_task(async function setup() {
   await generateNewKeys(Service.collectionKeys);
 });
 
+add_task(async function setup() {
+  await Service.engineManager.unregister("bookmarks");
+
+  initTestLogging("Trace");
+  generateNewKeys(Service.collectionKeys);
+});
+
 add_task(async function test_delete_invalid_roots_from_server() {
   _("Ensure that we delete the Places and Reading List roots from the server.");
 
@@ -194,6 +201,7 @@ add_task(async function test_processIncoming_error_orderChildren() {
 
   } finally {
     await store.wipe();
+    await engine.resetClient();
     Svc.Prefs.resetBranch("");
     Service.recordManager.clearCache();
     await PlacesSyncUtils.bookmarks.reset();
@@ -226,7 +234,7 @@ async function test_restoreOrImport(aReplace) {
 
   let collection = server.user("foo").collection("bookmarks");
 
-  Svc.Obs.notify("weave:engine:start-tracking");   // We skip usual startup...
+  Svc.Obs.notify("weave:engine:start-tracking"); // We skip usual startup...
 
   try {
 
@@ -379,6 +387,7 @@ async function test_restoreOrImport(aReplace) {
 
   } finally {
     await store.wipe();
+    await engine.resetClient();
     Svc.Prefs.resetBranch("");
     Service.recordManager.clearCache();
     await PlacesSyncUtils.bookmarks.reset();
@@ -477,6 +486,7 @@ add_task(async function test_mismatched_types() {
 
   } finally {
     await store.wipe();
+    await engine.resetClient();
     Svc.Prefs.resetBranch("");
     Service.recordManager.clearCache();
     await PlacesSyncUtils.bookmarks.reset();
@@ -503,7 +513,7 @@ add_task(async function test_bookmark_guidMap_fail() {
   let itemPayload = itemRecord.cleartext;
   coll.insert(itemGUID, encryptPayload(itemPayload));
 
-  engine.lastSync = 1;   // So we don't back up.
+  engine.lastSync = 1; // So we don't back up.
 
   // Make building the GUID map fail.
 
@@ -637,6 +647,7 @@ add_task(async function test_misreconciled_root() {
   do_check_eq(parentIDBefore, parentIDAfter);
 
   await store.wipe();
+  await engine.resetClient();
   await PlacesSyncUtils.bookmarks.reset();
   await promiseStopServer(server);
 });
@@ -656,7 +667,7 @@ add_task(async function test_sync_dateAdded() {
   // intermittently - reset the last sync date so that we'll get all bookmarks.
   engine.lastSync = 1;
 
-  Svc.Obs.notify("weave:engine:start-tracking");   // We skip usual startup...
+  Svc.Obs.notify("weave:engine:start-tracking"); // We skip usual startup...
 
   // Just matters that it's in the past, not how far.
   let now = Date.now();
@@ -783,6 +794,70 @@ add_task(async function test_sync_dateAdded() {
 
 
 
+  } finally {
+    await store.wipe();
+    await engine.resetClient();
+    Svc.Prefs.resetBranch("");
+    Service.recordManager.clearCache();
+    await PlacesSyncUtils.bookmarks.reset();
+    await promiseStopServer(server);
+  }
+});
+
+// Bug 890217.
+add_task(async function test_sync_imap_URLs() {
+  await Service.recordManager.clearCache();
+  await PlacesSyncUtils.bookmarks.reset();
+  let engine = new BookmarksEngine(Service);
+  await engine.initialize();
+  let store  = engine._store;
+  let server = await serverForFoo(engine);
+  await SyncTestingInfrastructure(server);
+
+  let collection = server.user("foo").collection("bookmarks");
+
+  Svc.Obs.notify("weave:engine:start-tracking"); // We skip usual startup...
+
+  try {
+    collection.insert("menu", encryptPayload({
+      id: "menu",
+      type: "folder",
+      parentid: "places",
+      title: "Bookmarks Menu",
+      children: ["bookmarkAAAA"],
+    }));
+    collection.insert("bookmarkAAAA", encryptPayload({
+      id: "bookmarkAAAA",
+      type: "bookmark",
+      parentid: "menu",
+      bmkUri: "imap://vs@eleven.vs.solnicky.cz:993/fetch%3EUID%3E/" +
+              "INBOX%3E56291?part=1.2&type=image/jpeg&filename=" +
+              "invalidazPrahy.jpg",
+      title: "invalidazPrahy.jpg (JPEG Image, 1280x1024 pixels) - Scaled (71%)",
+    }));
+
+    await PlacesUtils.bookmarks.insert({
+      guid: "bookmarkBBBB",
+      parentGuid: PlacesUtils.bookmarks.toolbarGuid,
+      url: "imap://eleven.vs.solnicky.cz:993/fetch%3EUID%3E/" +
+           "CURRENT%3E2433?part=1.2&type=text/html&filename=TomEdwards.html",
+      title: "TomEdwards.html",
+    });
+
+    await sync_engine_and_validate_telem(engine, false);
+
+    let aInfo = await PlacesUtils.bookmarks.fetch("bookmarkAAAA");
+    equal(aInfo.url.href, "imap://vs@eleven.vs.solnicky.cz:993/" +
+      "fetch%3EUID%3E/INBOX%3E56291?part=1.2&type=image/jpeg&filename=" +
+      "invalidazPrahy.jpg",
+      "Remote bookmark A with IMAP URL should exist locally");
+
+    let bPayload = JSON.parse(JSON.parse(
+      collection.payload("bookmarkBBBB")).ciphertext);
+    equal(bPayload.bmkUri, "imap://eleven.vs.solnicky.cz:993/" +
+      "fetch%3EUID%3E/CURRENT%3E2433?part=1.2&type=text/html&filename=" +
+      "TomEdwards.html",
+      "Local bookmark B with IMAP URL should exist remotely");
   } finally {
     await store.wipe();
     Svc.Prefs.resetBranch("");

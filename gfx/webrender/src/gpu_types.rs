@@ -2,6 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+use api::LayerRect;
 use gpu_cache::GpuCacheAddress;
 use render_task::RenderTaskAddress;
 use tiling::PackedLayerIndex;
@@ -18,7 +19,7 @@ impl From<PackedLayerIndex> for PackedLayerAddress {
 }
 
 #[repr(i32)]
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum BlurDirection {
     Horizontal = 0,
     Vertical,
@@ -30,6 +31,7 @@ pub struct BlurInstance {
     pub task_address: RenderTaskAddress,
     pub src_task_address: RenderTaskAddress,
     pub blur_direction: BlurDirection,
+    pub region: LayerRect,
 }
 
 /// A clipping primitive drawn into the clipping mask.
@@ -138,22 +140,28 @@ impl From<CompositePrimitiveInstance> for PrimitiveInstance {
     }
 }
 
+// Whether this brush is being drawn on a Picture
+// task (new) or an alpha batch task (legacy).
+// Can be removed once everything uses pictures.
+pub const BRUSH_FLAG_USES_PICTURE: i32 = (1 << 0);
+
+// TODO(gw): While we are comverting things over, we
+//           need to have the instance be the same
+//           size as an old PrimitiveInstance. In the
+//           future, we can compress this vertex
+//           format a lot - e.g. z, render task
+//           addresses etc can reasonably become
+//           a u16 type.
 #[repr(C)]
 pub struct BrushInstance {
-    picture_address: RenderTaskAddress,
-    prim_address: GpuCacheAddress,
-}
-
-impl BrushInstance {
-    pub fn new(
-        picture_address: RenderTaskAddress,
-        prim_address: GpuCacheAddress
-    ) -> BrushInstance {
-        BrushInstance {
-            picture_address,
-            prim_address,
-        }
-    }
+    pub picture_address: RenderTaskAddress,
+    pub prim_address: GpuCacheAddress,
+    pub layer_address: PackedLayerAddress,
+    pub clip_task_address: RenderTaskAddress,
+    pub z: i32,
+    pub flags: i32,
+    pub user_data0: i32,
+    pub user_data1: i32,
 }
 
 impl From<BrushInstance> for PrimitiveInstance {
@@ -162,12 +170,12 @@ impl From<BrushInstance> for PrimitiveInstance {
             data: [
                 instance.picture_address.0 as i32,
                 instance.prim_address.as_int(),
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
+                instance.layer_address.0,
+                instance.clip_task_address.0 as i32,
+                instance.z,
+                instance.flags,
+                instance.user_data0,
+                instance.user_data1,
             ]
         }
     }

@@ -1,4 +1,5 @@
-/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=8 sts=2 et sw=2 tw=80: */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -160,14 +161,6 @@ nsDisplayButtonBoxShadowOuter::CanBuildWebRenderDisplayItems()
     hasBorderRadius = mFrame->GetBorderRadii(sz, sz, Sides(), twipsRadii);
   }
 
-  if (hasBorderRadius) {
-    nsCSSRendering::RectCornerRadii borderRadii;
-    nsCSSRendering::GetBorderRadii(frameRect, borderRect, mFrame, borderRadii);
-    if (!borderRadii.AreRadiiSame()) {
-      return false;
-    }
-  }
-
   return true;
 }
 
@@ -219,14 +212,21 @@ nsDisplayButtonBoxShadowOuter::CreateWebRenderCommands(
   bool hasBorderRadius;
   Unused << nsCSSRendering::HasBoxShadowNativeTheme(mFrame, hasBorderRadius);
 
-  float borderRadius = 0.0;
+  LayoutDeviceSize zeroSize;
+  wr::BorderRadius borderRadius = wr::ToBorderRadius(zeroSize, zeroSize,
+                                                     zeroSize, zeroSize);
   if (hasBorderRadius) {
     mozilla::gfx::RectCornerRadii borderRadii;
     hasBorderRadius = nsCSSRendering::GetBorderRadii(
       shadowRect, shadowRect, mFrame, borderRadii);
-    // TODO: support non-uniform border radius.
-    MOZ_ASSERT(borderRadii.AreRadiiSame());
-    borderRadius = hasBorderRadius ? borderRadii.TopLeft().width : 0.0;
+    if (hasBorderRadius) {
+      borderRadius = wr::ToBorderRadius(
+        LayoutDeviceSize::FromUnknownSize(borderRadii.TopLeft()),
+        LayoutDeviceSize::FromUnknownSize(borderRadii.TopRight()),
+        LayoutDeviceSize::FromUnknownSize(borderRadii.BottomLeft()),
+        LayoutDeviceSize::FromUnknownSize(borderRadii.BottomRight()));
+    }
+
   }
 
   nsCSSShadowArray* shadows = mFrame->StyleEffects()->mBoxShadow;
@@ -384,7 +384,7 @@ nsDisplayButtonBorder::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& 
                                                                  visible,
                                                                  mFrame,
                                                                  buttonRect);
-  mBorderRenderer->CreateWebRenderCommands(aBuilder, aResources, aSc);
+  mBorderRenderer->CreateWebRenderCommands(this, aBuilder, aResources, aSc);
 
   return true;
 }
@@ -552,7 +552,7 @@ nsDisplayButtonForeground::CreateWebRenderCommands(mozilla::wr::DisplayListBuild
     return false;
   }
 
-  mBorderRenderer->CreateWebRenderCommands(aBuilder, aResources, aSc);
+  mBorderRenderer->CreateWebRenderCommands(this, aBuilder, aResources, aSc);
   return true;
 }
 

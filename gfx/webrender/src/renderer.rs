@@ -33,6 +33,7 @@ use device::{FileWatcherHandler, GpuTimer, ShaderError, TextureFilter, TextureTa
 use euclid::{rect, Transform3D};
 use frame_builder::FrameBuilderConfig;
 use gleam::gl;
+use glyph_rasterizer::GlyphFormat;
 use gpu_cache::{GpuBlockData, GpuCacheUpdate, GpuCacheUpdateList};
 use gpu_types::PrimitiveInstance;
 use internal_types::{BatchTextures, SourceTexture, ORTHO_FAR_PLANE, ORTHO_NEAR_PLANE};
@@ -55,13 +56,13 @@ use std::f32;
 use std::mem;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use texture_cache::TextureCache;
 use thread_profiler::{register_thread_with_profiler, write_profile};
 use tiling::{AlphaRenderTarget, ColorRenderTarget, RenderTargetKind};
-use tiling::{BatchKey, BatchKind, Frame, RenderTarget, TransformBatchKind};
+use tiling::{BatchKey, BatchKind, BrushBatchKind, Frame, RenderTarget, TransformBatchKind};
 use time::precise_time_ns;
 use util::TransformedRectKind;
 
@@ -70,6 +71,10 @@ pub const MAX_VERTEX_TEXTURE_WIDTH: usize = 1024;
 const GPU_TAG_BRUSH_MASK: GpuProfileTag = GpuProfileTag {
     label: "B_Mask",
     color: debug_colors::BLACK,
+};
+const GPU_TAG_BRUSH_IMAGE: GpuProfileTag = GpuProfileTag {
+    label: "B_Image",
+    color: debug_colors::SILVER,
 };
 const GPU_TAG_CACHE_CLIP: GpuProfileTag = GpuProfileTag {
     label: "C_Clip",
@@ -147,10 +152,6 @@ const GPU_TAG_PRIM_BORDER_EDGE: GpuProfileTag = GpuProfileTag {
     label: "BorderEdge",
     color: debug_colors::LAVENDER,
 };
-const GPU_TAG_PRIM_CACHE_IMAGE: GpuProfileTag = GpuProfileTag {
-    label: "CacheImage",
-    color: debug_colors::SILVER,
-};
 const GPU_TAG_BLUR: GpuProfileTag = GpuProfileTag {
     label: "Blur",
     color: debug_colors::VIOLET,
@@ -177,9 +178,14 @@ impl BatchKind {
             BatchKind::HardwareComposite => "HardwareComposite",
             BatchKind::SplitComposite => "SplitComposite",
             BatchKind::Blend => "Blend",
+            BatchKind::Brush(kind) => {
+                match kind {
+                    BrushBatchKind::Image(..) => "Brush (Image)",
+                }
+            }
             BatchKind::Transformable(_, kind) => match kind {
                 TransformBatchKind::Rectangle(..) => "Rectangle",
-                TransformBatchKind::TextRun => "TextRun",
+                TransformBatchKind::TextRun(..) => "TextRun",
                 TransformBatchKind::Image(image_buffer_kind, ..) => match image_buffer_kind {
                     ImageBufferKind::Texture2D => "Image (2D)",
                     ImageBufferKind::TextureRect => "Image (Rect)",
@@ -190,7 +196,6 @@ impl BatchKind {
                 TransformBatchKind::AlignedGradient => "AlignedGradient",
                 TransformBatchKind::AngleGradient => "AngleGradient",
                 TransformBatchKind::RadialGradient => "RadialGradient",
-                TransformBatchKind::CacheImage(..) => "CacheImage",
                 TransformBatchKind::BorderCorner => "BorderCorner",
                 TransformBatchKind::BorderEdge => "BorderEdge",
                 TransformBatchKind::Line => "Line",
@@ -218,11 +223,24 @@ enum TextShaderMode {
     Alpha = 0,
     SubpixelPass0 = 1,
     SubpixelPass1 = 2,
+    ColorBitmap = 3,
 }
 
 impl Into<ShaderMode> for TextShaderMode {
     fn into(self) -> i32 {
         self as i32
+    }
+}
+
+impl From<GlyphFormat> for TextShaderMode {
+    fn from(format: GlyphFormat) -> TextShaderMode {
+        match format {
+            GlyphFormat::Mono | GlyphFormat::Alpha => TextShaderMode::Alpha,
+            GlyphFormat::Subpixel => {
+                panic!("Subpixel glyph format must be handled separately.");
+            }
+            GlyphFormat::ColorBitmap => TextShaderMode::ColorBitmap,
+        }
     }
 }
 
@@ -324,6 +342,11 @@ const DESC_BLUR: VertexDescriptor = VertexDescriptor {
             name: "aBlurDirection",
             count: 1,
             kind: VertexAttributeKind::I32,
+        },
+        VertexAttribute {
+            name: "aBlurRegion",
+            count: 4,
+            kind: VertexAttributeKind::F32
         },
     ],
 };
@@ -830,6 +853,7 @@ impl VertexDataTexture {
 
 const TRANSFORM_FEATURE: &str = "TRANSFORM";
 const CLIP_FEATURE: &str = "CLIP";
+const ALPHA_FEATURE: &str = "ALPHA_PASS";
 
 enum ShaderKind {
     Primitive,
@@ -924,21 +948,86 @@ struct PrimitiveShader {
     transform: LazilyCompiledShader,
 }
 
+// A brush shader supports two modes:
+// opaque:
+//   Used for completely opaque primitives,
+//   or inside segments of partially
+//   opaque primitives. Assumes no need
+//   for clip masks, AA etc.
+// alpha:
+//   Used for brush primitives in the alpha
+//   pass. Assumes that AA should be applied
+//   along the primitive edge, and also that
+//   clip mask is present.
+struct BrushShader {
+    opaque: LazilyCompiledShader,
+    alpha: LazilyCompiledShader,
+}
+
+impl BrushShader {
+    fn new(
+        name: &'static str,
+        device: &mut Device,
+        features: &[&'static str],
+        precache: bool,
+    ) -> Result<BrushShader, ShaderError> {
+        let opaque = try!{
+            LazilyCompiledShader::new(ShaderKind::Brush,
+                                      name,
+                                      features,
+                                      device,
+                                      precache)
+        };
+
+        let mut alpha_features = features.to_vec();
+        alpha_features.push(ALPHA_FEATURE);
+
+        let alpha = try!{
+            LazilyCompiledShader::new(ShaderKind::Brush,
+                                      name,
+                                      &alpha_features,
+                                      device,
+                                      precache)
+        };
+
+        Ok(BrushShader { opaque, alpha })
+    }
+
+    fn bind<M>(
+        &mut self,
+        device: &mut Device,
+        blend_mode: BlendMode,
+        projection: &Transform3D<f32>,
+        mode: M,
+        renderer_errors: &mut Vec<RendererError>,
+    ) where M: Into<ShaderMode> {
+        match blend_mode {
+            BlendMode::None => {
+                self.opaque.bind(device, projection, mode, renderer_errors)
+            }
+            BlendMode::Alpha |
+            BlendMode::PremultipliedAlpha |
+            BlendMode::Subpixel => {
+                self.alpha.bind(device, projection, mode, renderer_errors)
+            }
+        }
+    }
+
+    fn deinit(self, device: &mut Device) {
+        self.opaque.deinit(device);
+        self.alpha.deinit(device);
+    }
+}
+
 struct FileWatcher {
-    notifier: Arc<Mutex<Option<Box<RenderNotifier>>>>,
+    notifier: Box<RenderNotifier>,
     result_tx: Sender<ResultMsg>,
 }
 
 impl FileWatcherHandler for FileWatcher {
     fn file_changed(&self, path: PathBuf) {
         self.result_tx.send(ResultMsg::RefreshShader(path)).ok();
-        let mut notifier = self.notifier.lock();
-        notifier
-            .as_mut()
-            .unwrap()
-            .as_mut()
-            .unwrap()
-            .new_frame_ready();
+        self.notifier.new_frame_ready();
     }
 }
 
@@ -1097,7 +1186,11 @@ pub struct Renderer {
     cs_line: LazilyCompiledShader,
     cs_blur_a8: LazilyCompiledShader,
     cs_blur_rgba8: LazilyCompiledShader,
+
+    // Brush shaders
     brush_mask: LazilyCompiledShader,
+    brush_image_rgba8: BrushShader,
+    brush_image_a8: BrushShader,
 
     /// These are "cache clip shaders". These shaders are used to
     /// draw clip instances into the cached clip mask. The results
@@ -1123,16 +1216,12 @@ pub struct Renderer {
     ps_gradient: PrimitiveShader,
     ps_angle_gradient: PrimitiveShader,
     ps_radial_gradient: PrimitiveShader,
-    ps_cache_image_rgba8: PrimitiveShader,
-    ps_cache_image_a8: PrimitiveShader,
     ps_line: PrimitiveShader,
 
     ps_blend: LazilyCompiledShader,
     ps_hw_composite: LazilyCompiledShader,
     ps_split_composite: LazilyCompiledShader,
     ps_composite: LazilyCompiledShader,
-
-    notifier: Arc<Mutex<Option<Box<RenderNotifier>>>>,
 
     max_texture_size: u32,
 
@@ -1229,6 +1318,7 @@ impl Renderer {
     /// [rendereroptions]: struct.RendererOptions.html
     pub fn new(
         gl: Rc<gl::Gl>,
+        notifier: Box<RenderNotifier>,
         mut options: RendererOptions,
     ) -> Result<(Renderer, RenderApiSender), RendererError> {
         let (api_tx, api_rx) = try!{ channel::msg_channel() };
@@ -1236,12 +1326,11 @@ impl Renderer {
         let (result_tx, result_rx) = channel();
         let gl_type = gl.get_type();
 
-        let notifier = Arc::new(Mutex::new(None));
         let debug_server = DebugServer::new(api_tx.clone());
 
         let file_watch_handler = FileWatcher {
             result_tx: result_tx.clone(),
-            notifier: Arc::clone(&notifier),
+            notifier: notifier.clone(),
         };
 
         let mut device = Device::new(
@@ -1299,10 +1388,24 @@ impl Renderer {
                                       options.precache_shaders)
         };
 
+        let brush_image_a8 = try!{
+            BrushShader::new("brush_image",
+                             &mut device,
+                             &["ALPHA_TARGET"],
+                             options.precache_shaders)
+        };
+
+        let brush_image_rgba8 = try!{
+            BrushShader::new("brush_image",
+                             &mut device,
+                             &["COLOR_TARGET"],
+                             options.precache_shaders)
+        };
+
         let cs_blur_a8 = try!{
             LazilyCompiledShader::new(ShaderKind::Cache(VertexArrayKind::Blur),
                                      "cs_blur",
-                                      &["ALPHA"],
+                                      &["ALPHA_TARGET"],
                                       &mut device,
                                       options.precache_shaders)
         };
@@ -1310,7 +1413,7 @@ impl Renderer {
         let cs_blur_rgba8 = try!{
             LazilyCompiledShader::new(ShaderKind::Cache(VertexArrayKind::Blur),
                                      "cs_blur",
-                                      &["COLOR"],
+                                      &["COLOR_TARGET"],
                                       &mut device,
                                       options.precache_shaders)
         };
@@ -1484,20 +1587,6 @@ impl Renderer {
                                  options.precache_shaders)
         };
 
-        let ps_cache_image_a8 = try!{
-            PrimitiveShader::new("ps_cache_image",
-                                 &mut device,
-                                 &["ALPHA"],
-                                 options.precache_shaders)
-        };
-
-        let ps_cache_image_rgba8 = try!{
-            PrimitiveShader::new("ps_cache_image",
-                                 &mut device,
-                                 &["COLOR"],
-                                 options.precache_shaders)
-        };
-
         let ps_blend = try!{
             LazilyCompiledShader::new(ShaderKind::Primitive,
                                      "ps_blend",
@@ -1652,7 +1741,7 @@ impl Renderer {
 
         device.end_frame();
 
-        let backend_notifier = Arc::clone(&notifier);
+        let backend_notifier = notifier.clone();
 
         let default_font_render_mode = match (options.enable_aa, options.enable_subpixel_aa) {
             (true, true) => FontRenderMode::Subpixel,
@@ -1715,6 +1804,8 @@ impl Renderer {
             cs_blur_a8,
             cs_blur_rgba8,
             brush_mask,
+            brush_image_rgba8,
+            brush_image_a8,
             cs_clip_rectangle,
             cs_clip_border,
             cs_clip_image,
@@ -1728,14 +1819,11 @@ impl Renderer {
             ps_gradient,
             ps_angle_gradient,
             ps_radial_gradient,
-            ps_cache_image_rgba8,
-            ps_cache_image_a8,
             ps_blend,
             ps_hw_composite,
             ps_split_composite,
             ps_composite,
             ps_line,
-            notifier,
             debug: debug_renderer,
             debug_flags,
             enable_batcher: options.enable_batcher,
@@ -1792,15 +1880,6 @@ impl Renderer {
     ) -> usize {
         ((buffer_kind as usize) * YUV_FORMATS.len() + (format as usize)) * YUV_COLOR_SPACES.len() +
             (color_space as usize)
-    }
-
-    /// Sets the new RenderNotifier.
-    ///
-    /// The RenderNotifier will be called when processing e.g. of a (scrolling) frame is done,
-    /// and therefore the screen should be updated.
-    pub fn set_render_notifier(&self, notifier: Box<RenderNotifier>) {
-        let mut notifier_arc = self.notifier.lock().unwrap();
-        *notifier_arc = Some(notifier);
     }
 
     /// Returns the Epoch of the current frame in a pipeline.
@@ -2357,6 +2436,24 @@ impl Renderer {
                     .bind(&mut self.device, projection, 0, &mut self.renderer_errors);
                 GPU_TAG_PRIM_BLEND
             }
+            BatchKind::Brush(brush_kind) => {
+                match brush_kind {
+                    BrushBatchKind::Image(target_kind) => {
+                        let shader = match target_kind {
+                            RenderTargetKind::Alpha => &mut self.brush_image_a8,
+                            RenderTargetKind::Color => &mut self.brush_image_rgba8,
+                        };
+                        shader.bind(
+                            &mut self.device,
+                            key.blend_mode,
+                            projection,
+                            0,
+                            &mut self.renderer_errors,
+                        );
+                        GPU_TAG_BRUSH_IMAGE
+                    }
+                }
+            }
             BatchKind::Transformable(transform_kind, batch_kind) => match batch_kind {
                 TransformBatchKind::Rectangle(needs_clipping) => {
                     debug_assert!(
@@ -2397,7 +2494,7 @@ impl Renderer {
                     );
                     GPU_TAG_PRIM_LINE
                 }
-                TransformBatchKind::TextRun => {
+                TransformBatchKind::TextRun(..) => {
                     unreachable!("bug: text batches are special cased");
                 }
                 TransformBatchKind::Image(image_buffer_kind) => {
@@ -2477,29 +2574,6 @@ impl Renderer {
                         &mut self.renderer_errors,
                     );
                     GPU_TAG_PRIM_RADIAL_GRADIENT
-                }
-                TransformBatchKind::CacheImage(target_kind) => {
-                    match target_kind {
-                        RenderTargetKind::Alpha => {
-                            self.ps_cache_image_a8.bind(
-                                &mut self.device,
-                                transform_kind,
-                                projection,
-                                0,
-                                &mut self.renderer_errors,
-                            );
-                        }
-                        RenderTargetKind::Color => {
-                            self.ps_cache_image_rgba8.bind(
-                                &mut self.device,
-                                transform_kind,
-                                projection,
-                                0,
-                                &mut self.renderer_errors,
-                            );
-                        }
-                    }
-                    GPU_TAG_PRIM_CACHE_IMAGE
                 }
             },
         };
@@ -2736,7 +2810,7 @@ impl Renderer {
                 }
 
                 match batch.key.kind {
-                    BatchKind::Transformable(transform_kind, TransformBatchKind::TextRun) => {
+                    BatchKind::Transformable(transform_kind, TransformBatchKind::TextRun(glyph_format)) => {
                         // Text run batches are handled by this special case branch.
                         // In the case of subpixel text, we draw it as a two pass
                         // effect, to ensure we can apply clip masks correctly.
@@ -2756,7 +2830,7 @@ impl Renderer {
                                     &mut self.device,
                                     transform_kind,
                                     projection,
-                                    TextShaderMode::Alpha,
+                                    TextShaderMode::from(glyph_format),
                                     &mut self.renderer_errors,
                                 );
 
@@ -2890,6 +2964,7 @@ impl Renderer {
         target: &AlphaRenderTarget,
         target_size: DeviceUintSize,
         projection: &Transform3D<f32>,
+        render_tasks: &RenderTaskTree,
     ) {
         self.gpu_profile.add_sampler(GPU_SAMPLER_TAG_ALPHA);
 
@@ -2908,6 +2983,14 @@ impl Renderer {
             let clear_color = [1.0, 1.0, 1.0, 0.0];
             self.device
                 .clear_target_rect(Some(clear_color), None, target.used_rect());
+
+            let zero_color = [0.0, 0.0, 0.0, 0.0];
+            for task_id in &target.zero_clears {
+                let task = render_tasks.get(*task_id);
+                let (rect, _) = task.get_target_rect();
+                self.device
+                    .clear_target_rect(Some(zero_color), None, rect);
+            }
         }
 
         // Draw any blurs for this target.
@@ -3238,6 +3321,7 @@ impl Renderer {
                         target,
                         pass.max_alpha_target_size,
                         &projection,
+                        &frame.render_tasks,
                     );
                 }
 
@@ -3356,21 +3440,22 @@ impl Renderer {
         let mut spacing = 16;
         let mut size = 512;
         let fb_width = framebuffer_size.width as i32;
-        let num_textures = self.color_render_targets
+        let num_layers: i32 = self.color_render_targets
             .iter()
             .chain(self.alpha_render_targets.iter())
-            .count() as i32;
+            .map(|texture| texture.get_render_target_layer_count() as i32)
+            .sum();
 
-        if num_textures * (size + spacing) > fb_width {
-            let factor = fb_width as f32 / (num_textures * (size + spacing)) as f32;
+        if num_layers * (size + spacing) > fb_width {
+            let factor = fb_width as f32 / (num_layers * (size + spacing)) as f32;
             size = (size as f32 * factor) as i32;
             spacing = (spacing as f32 * factor) as i32;
         }
 
-        for (i, texture) in self.color_render_targets
+        let mut target_index = 0;
+        for texture in self.color_render_targets
             .iter()
             .chain(self.alpha_render_targets.iter())
-            .enumerate()
         {
             let dimensions = texture.get_dimensions();
             let src_rect = DeviceIntRect::new(DeviceIntPoint::zero(), dimensions.to_i32());
@@ -3379,11 +3464,12 @@ impl Renderer {
             for layer_index in 0 .. layer_count {
                 self.device
                     .bind_read_target(Some((texture, layer_index as i32)));
-                let x = fb_width - (spacing + size) * (i as i32 + 1);
+                let x = fb_width - (spacing + size) * (target_index + 1);
                 let y = spacing;
 
                 let dest_rect = rect(x, y, size, size);
                 self.device.blit_render_target(src_rect, dest_rect);
+                target_index += 1;
             }
         }
     }
@@ -3498,6 +3584,8 @@ impl Renderer {
         self.cs_blur_a8.deinit(&mut self.device);
         self.cs_blur_rgba8.deinit(&mut self.device);
         self.brush_mask.deinit(&mut self.device);
+        self.brush_image_rgba8.deinit(&mut self.device);
+        self.brush_image_a8.deinit(&mut self.device);
         self.cs_clip_rectangle.deinit(&mut self.device);
         self.cs_clip_image.deinit(&mut self.device);
         self.cs_clip_border.deinit(&mut self.device);
@@ -3522,8 +3610,6 @@ impl Renderer {
         self.ps_gradient.deinit(&mut self.device);
         self.ps_angle_gradient.deinit(&mut self.device);
         self.ps_radial_gradient.deinit(&mut self.device);
-        self.ps_cache_image_rgba8.deinit(&mut self.device);
-        self.ps_cache_image_a8.deinit(&mut self.device);
         self.ps_line.deinit(&mut self.device);
         self.ps_blend.deinit(&mut self.device);
         self.ps_hw_composite.deinit(&mut self.device);
