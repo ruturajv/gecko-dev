@@ -753,6 +753,7 @@ WebGLContext::InitAndValidateGL(FailureReason* const out_failReason)
 
     mGenericVertexAttribTypes.reset(new GLenum[mGLMaxVertexAttribs]);
     std::fill_n(mGenericVertexAttribTypes.get(), mGLMaxVertexAttribs, LOCAL_GL_FLOAT);
+    mGenericVertexAttribTypeInvalidator.InvalidateCaches();
 
     static const float kDefaultGenericVertexAttribData[4] = { 0, 0, 0, 1 };
     memcpy(mGenericVertexAttrib0Data, kDefaultGenericVertexAttribData,
@@ -761,8 +762,16 @@ WebGLContext::InitAndValidateGL(FailureReason* const out_failReason)
     mFakeVertexAttrib0BufferObject = 0;
 
     mNeedsIndexValidation = !gl->IsSupported(gl::GLFeature::robust_buffer_access_behavior);
-    if (gfxPrefs::WebGLForceIndexValidation()) {
+    switch (gfxPrefs::WebGLForceIndexValidation()) {
+    case -1:
+        mNeedsIndexValidation = false;
+        break;
+    case 1:
         mNeedsIndexValidation = true;
+        break;
+    default:
+        MOZ_ASSERT(gfxPrefs::WebGLForceIndexValidation() == 0);
+        break;
     }
 
     return true;

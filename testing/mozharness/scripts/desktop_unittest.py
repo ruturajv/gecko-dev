@@ -663,10 +663,51 @@ class DesktopUnittest(TestingMixin, MercurialScript, BlobUploadMixin, MozbaseMix
                                                     'resources',
                                                     module))
 
+    def _report_line(self, f, tag, info):
+        try:
+            f.write("%s %s\n" % (tag, str(info)))
+        except:
+            f.write("Exception getting system info: %s" % sys.exc_info()[0])
+
+    def _report_system_info(self):
+        """
+           Create the system-info.log artifact file, containing a variety of
+           system information that might be useful in diagnosing test failures.
+        """
+        try:
+            import psutil
+        except:
+            return
+        dir = self.query_abs_dirs()['abs_blob_upload_dir']
+        self.mkdir_p(dir)
+        path = os.path.join(dir, "system-info.log")
+        with open(path, "w") as f:
+            self._report_line(f, "System info collected at ", datetime.now())
+            self._report_line(f, "\nBoot time ", datetime.fromtimestamp(psutil.boot_time()))
+            self._report_line(f, "\nVirtual memory: ", psutil.virtual_memory())
+            self._report_line(f, "\nDisk partitions: ", psutil.disk_partitions())
+            self._report_line(f, "\nDisk usage (/): ", psutil.disk_usage(os.path.sep))
+            self._report_line(f, "\nUsers: ", psutil.users())
+            self._report_line(f, "\nNetwork connections:", "")
+            try:
+                for nc in psutil.net_connections():
+                    self._report_line(f, "  ", nc)
+            except:
+                f.write("Exception getting network info: %s" % sys.exc_info()[0])
+            self._report_line(f, "\nProcesses:", "")
+            try:
+                for p in psutil.process_iter():
+                    ctime = str(datetime.fromtimestamp(p.create_time()))
+                    self._report_line(f, "  PID", "%d %s %s created at %s" %
+                                      (p.pid, p.name(), str(p.cmdline()), ctime))
+            except:
+                f.write("Exception getting process info: %s" % sys.exc_info()[0])
+
     # pull defined in VCSScript.
     # preflight_run_tests defined in TestingMixin.
 
     def run_tests(self):
+        self._report_system_info()
         self.start_time = datetime.now()
         for category in SUITE_CATEGORIES:
             if not self._run_category_suites(category):
@@ -685,6 +726,8 @@ class DesktopUnittest(TestingMixin, MercurialScript, BlobUploadMixin, MozbaseMix
         abs_res_dir = self.query_abs_res_dir()
 
         max_verify_time = timedelta(minutes=60)
+        max_verify_tests = 10
+        verified_tests = 0
 
         if suites:
             self.info('#### Running %s suites' % suite_category)
@@ -699,7 +742,9 @@ class DesktopUnittest(TestingMixin, MercurialScript, BlobUploadMixin, MozbaseMix
                     'abs_res_dir': abs_res_dir,
                 }
                 options_list = []
-                env = {}
+                env = {
+                    'TEST_SUITE': suite
+                }
                 if isinstance(suites[suite], dict):
                     options_list = suites[suite].get('options', [])
                     if self.config.get('verify') is True:
@@ -782,6 +827,15 @@ class DesktopUnittest(TestingMixin, MercurialScript, BlobUploadMixin, MozbaseMix
                         # Signal verify time exceeded, to break out of suites and
                         # suite categories loops also.
                         return False
+                    if verified_tests >= max_verify_tests:
+                        # When changesets are merged between trees or many tests are
+                        # otherwise updated at once, there probably is not enough time
+                        # to verify all tests, and attempting to do so may cause other
+                        # problems, such as generating too much log output.
+                        self.info("TinderboxPrint: Too many modified tests: Not all tests "
+                                  "were verified.<br/>")
+                        return False
+                    verified_tests = verified_tests + 1
 
                     final_cmd = copy.copy(cmd)
                     final_cmd.extend(verify_args)

@@ -1,5 +1,5 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* vim: set sw=2 sts=2 ts=8 et tw=99 : */
+/* vim: set ts=8 sts=2 et sw=2 tw=80: */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -97,6 +97,8 @@ public:
 
   void AddRawFont(wr::FontKey aKey, wr::Vec_u8& aBytes, uint32_t aIndex);
 
+  void AddFontDescriptor(wr::FontKey aKey, wr::Vec_u8& aBytes, uint32_t aIndex);
+
   void DeleteFont(wr::FontKey aKey);
 
   void AddFontInstance(wr::FontInstanceKey aKey,
@@ -129,6 +131,10 @@ public:
   static already_AddRefed<WebRenderAPI> Create(layers::CompositorBridgeParentBase* aBridge,
                                                RefPtr<widget::CompositorWidget>&& aWidget,
                                                LayoutDeviceIntSize aSize);
+
+  // Redirect the WR's log to gfxCriticalError/Note.
+  static void InitExternalLogHandler();
+  static void ShutdownExternalLogHandler();
 
   already_AddRefed<WebRenderAPI> Clone();
 
@@ -240,10 +246,13 @@ public:
   Maybe<wr::WrClipId> GetCacheOverride(const DisplayItemClipChain* aParent);
 
   wr::WrStickyId DefineStickyFrame(const wr::LayoutRect& aContentRect,
-                                   const wr::StickySideConstraint* aTop,
-                                   const wr::StickySideConstraint* aRight,
-                                   const wr::StickySideConstraint* aBottom,
-                                   const wr::StickySideConstraint* aLeft);
+                                   const float* aTopMargin,
+                                   const float* aRightMargin,
+                                   const float* aBottomMargin,
+                                   const float* aLeftMargin,
+                                   const StickyOffsetBounds& aVerticalBounds,
+                                   const StickyOffsetBounds& aHorizontalBounds,
+                                   const wr::LayoutVector2D& aAppliedOffset);
   void PushStickyFrame(const wr::WrStickyId& aStickyId,
                        const DisplayItemClipChain* aParent);
   void PopStickyFrame(const DisplayItemClipChain* aParent);
@@ -265,6 +274,8 @@ public:
                 const wr::LayoutRect& aClip,
                 bool aIsBackfaceVisible,
                 const wr::ColorF& aColor);
+
+  void PushClearRect(const wr::LayoutRect& aBounds);
 
   void PushLinearGradient(const wr::LayoutRect& aBounds,
                           const wr::LayoutRect& aClip,

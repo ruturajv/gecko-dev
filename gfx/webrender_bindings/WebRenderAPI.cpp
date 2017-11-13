@@ -1,4 +1,5 @@
-/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=8 sts=2 et sw=2 tw=80: */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -137,9 +138,21 @@ private:
   layers::SynchronousTask* mTask;
 };
 
+/*static*/ void
+WebRenderAPI::InitExternalLogHandler()
+{
+  // Redirect the webrender's log to gecko's log system.
+  // The current log level is "error".
+  mozilla::wr::wr_init_external_log_handler(wr::LogLevelFilter::Error);
+}
 
-//static
-already_AddRefed<WebRenderAPI>
+/*static*/ void
+WebRenderAPI::ShutdownExternalLogHandler()
+{
+  mozilla::wr::wr_shutdown_external_log_handler();
+}
+
+/*static*/ already_AddRefed<WebRenderAPI>
 WebRenderAPI::Create(layers::CompositorBridgeParentBase* aBridge,
                      RefPtr<widget::CompositorWidget>&& aWidget,
                      LayoutDeviceIntSize aSize)
@@ -567,6 +580,12 @@ ResourceUpdateQueue::AddRawFont(wr::FontKey aKey, wr::Vec_u8& aBytes, uint32_t a
 }
 
 void
+ResourceUpdateQueue::AddFontDescriptor(wr::FontKey aKey, wr::Vec_u8& aBytes, uint32_t aIndex)
+{
+  wr_resource_updates_add_font_descriptor(mUpdates, aKey, &aBytes.inner, aIndex);
+}
+
+void
 ResourceUpdateQueue::DeleteFont(wr::FontKey aKey)
 {
   wr_resource_updates_delete_font(mUpdates, aKey);
@@ -799,19 +818,27 @@ DisplayListBuilder::GetCacheOverride(const DisplayItemClipChain* aParent)
 
 wr::WrStickyId
 DisplayListBuilder::DefineStickyFrame(const wr::LayoutRect& aContentRect,
-                                      const wr::StickySideConstraint* aTop,
-                                      const wr::StickySideConstraint* aRight,
-                                      const wr::StickySideConstraint* aBottom,
-                                      const wr::StickySideConstraint* aLeft)
+                                      const float* aTopMargin,
+                                      const float* aRightMargin,
+                                      const float* aBottomMargin,
+                                      const float* aLeftMargin,
+                                      const StickyOffsetBounds& aVerticalBounds,
+                                      const StickyOffsetBounds& aHorizontalBounds,
+                                      const wr::LayoutVector2D& aAppliedOffset)
 {
-  uint64_t id = wr_dp_define_sticky_frame(mWrState, aContentRect, aTop,
-      aRight, aBottom, aLeft);
-  WRDL_LOG("DefineSticky id=%" PRIu64 " c=%s t=%s r=%s b=%s l=%s\n", mWrState, id,
+  uint64_t id = wr_dp_define_sticky_frame(mWrState, aContentRect, aTopMargin,
+      aRightMargin, aBottomMargin, aLeftMargin, aVerticalBounds, aHorizontalBounds,
+      aAppliedOffset);
+  WRDL_LOG("DefineSticky id=%" PRIu64 " c=%s t=%s r=%s b=%s l=%s v=%s h=%s a=%s\n",
+      mWrState, id,
       Stringify(aContentRect).c_str(),
-      aTop ? Stringify(*aTop).c_str() : "none",
-      aRight ? Stringify(*aRight).c_str() : "none",
-      aBottom ? Stringify(*aBottom).c_str() : "none",
-      aLeft ? Stringify(*aLeft).c_str() : "none");
+      aTopMargin ? Stringify(*aTopMargin).c_str() : "none",
+      aRightMargin ? Stringify(*aRightMargin).c_str() : "none",
+      aBottomMargin ? Stringify(*aBottomMargin).c_str() : "none",
+      aLeftMargin ? Stringify(*aLeftMargin).c_str() : "none",
+      Stringify(aVerticalBounds).c_str(),
+      Stringify(aHorizontalBounds).c_str(),
+      Stringify(aAppliedOffset).c_str());
   return wr::WrStickyId { id };
 }
 
@@ -917,6 +944,14 @@ DisplayListBuilder::PushRect(const wr::LayoutRect& aBounds,
       Stringify(aClip).c_str(),
       Stringify(aColor).c_str());
   wr_dp_push_rect(mWrState, aBounds, aClip, aIsBackfaceVisible, aColor);
+}
+
+void
+DisplayListBuilder::PushClearRect(const wr::LayoutRect& aBounds)
+{
+  WRDL_LOG("PushClearRect b=%s\n", mWrState,
+      Stringify(aBounds).c_str());
+  wr_dp_push_clear_rect(mWrState, aBounds);
 }
 
 void

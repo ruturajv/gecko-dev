@@ -457,7 +457,7 @@ def setup_talos(config, tests):
         # name is only required for try
         if config.params['project'] == 'try':
             extra_options.append('--branch-name')
-            extra_options.append('Try')
+            extra_options.append('try')
 
         yield test
 
@@ -558,6 +558,8 @@ def set_tier(config, tests):
                                          'windows10-64-stylo-disabled/opt',
                                          'macosx64/opt',
                                          'macosx64/debug',
+                                         'macosx64-nightly/opt',
+                                         'macosx64-devedition/opt',
                                          'macosx64-stylo-disabled/debug',
                                          'macosx64-stylo-disabled/opt',
                                          'android-4.3-arm7-api-16/opt',
@@ -664,7 +666,10 @@ def enable_code_coverage(config, tests):
             test['mozharness'].setdefault('extra-options', []).append('--code-coverage')
             test['when'] = {}
             test['instance-size'] = 'xlarge'
-            test['run-on-projects'] = ['mozilla-central']
+            # Ensure we don't run on inbound/autoland/beta, but if the test is try only, ignore it
+            if 'mozilla-central' in test['run-on-projects'] or \
+                    test['run-on-projects'] == 'built-projects':
+                test['run-on-projects'] = ['mozilla-central', 'try']
 
             if test['test-name'].startswith('talos'):
                 test['max-run-time'] = 7200
@@ -679,7 +684,11 @@ def enable_code_coverage(config, tests):
                 test['mozharness']['extra-options'].append('--add-option')
                 test['mozharness']['extra-options'].append('--tptimeout,15000')
         elif test['build-platform'] == 'linux64-jsdcov/opt':
-            test['run-on-projects'] = ['mozilla-central']
+            # Ensure we don't run on inbound/autoland/beta, but if the test is try only, ignore it
+            if 'mozilla-central' in test['run-on-projects'] or \
+                    test['run-on-projects'] == 'built-projects':
+                test['run-on-projects'] = ['mozilla-central', 'try']
+            test['mozharness'].setdefault('extra-options', []).append('--jsd-code-coverage')
         yield test
 
 
@@ -869,12 +878,16 @@ def set_worker_type(config, tests):
         elif test_platform.startswith('macosx'):
             test['worker-type'] = MACOSX_WORKER_TYPES['macosx64']
         elif test_platform.startswith('win'):
-            if test.get('suite', '') == 'talos' and \
-                    not any('taskcluster' in cfg for cfg in test['mozharness']['config']):
-                test['worker-type'] = 'buildbot-bridge/buildbot-bridge'
+            win_worker_type_platform = WINDOWS_WORKER_TYPES[
+                test_platform.split('/')[0]
+            ]
+            if test.get('suite', '') == 'talos':
+                if try_options.get('taskcluster_worker'):
+                    test['worker-type'] = win_worker_type_platform['hardware']
+                else:
+                    test['worker-type'] = 'buildbot-bridge/buildbot-bridge'
             else:
-                test['worker-type'] = \
-                    WINDOWS_WORKER_TYPES[test_platform.split('/')[0]][test['virtualization']]
+                test['worker-type'] = win_worker_type_platform[test['virtualization']]
         elif test_platform.startswith('linux') or test_platform.startswith('android'):
             if test.get('suite', '') == 'talos' and test['build-platform'] != 'linux64-ccov/opt':
                 if try_options.get('taskcluster_worker'):

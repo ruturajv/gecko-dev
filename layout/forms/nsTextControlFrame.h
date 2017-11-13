@@ -39,7 +39,7 @@ public:
   explicit nsTextControlFrame(nsStyleContext* aContext);
   virtual ~nsTextControlFrame();
 
-  virtual void DestroyFrom(nsIFrame* aDestructRoot) override;
+  virtual void DestroyFrom(nsIFrame* aDestructRoot, PostDestroyData& aPostDestroyData) override;
 
   virtual nsIScrollableFrame* GetScrollTargetFrame() override {
     return do_QueryFrame(PrincipalChildList().FirstChild());
@@ -169,7 +169,7 @@ public:
                                     nsAtom*        aAttribute,
                                     int32_t         aModType) override;
 
-  nsresult GetText(nsString& aText);
+  void GetText(nsString& aText);
 
   virtual nsresult PeekOffset(nsPeekOffsetStruct *aPos) override;
 

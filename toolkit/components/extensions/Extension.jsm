@@ -36,11 +36,8 @@ const Cc = Components.classes;
 const Cu = Components.utils;
 const Cr = Components.results;
 
-Cu.importGlobalProperties(["TextEncoder"]);
-
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 Cu.import("resource://gre/modules/Services.jsm");
-Cu.importGlobalProperties(["fetch"]);
 
 XPCOMUtils.defineLazyModuleGetters(this, {
   AddonManager: "resource://gre/modules/AddonManager.jsm",
@@ -221,13 +218,6 @@ var UUIDMap = {
   },
 };
 
-// This is the old interface that UUIDMap replaced, to be removed when
-// the references listed in bug 1291399 are updated.
-/* exported getExtensionUUID */
-function getExtensionUUID(id) {
-  return UUIDMap.get(id, true);
-}
-
 // For extensions that have called setUninstallURL(), send an event
 // so the browser can display the URL.
 var UninstallObserver = {
@@ -245,7 +235,7 @@ var UninstallObserver = {
     if (extension) {
       // Let any other interested listeners respond
       // (e.g., display the uninstall URL)
-      Management.emit("uninstall", extension);
+      Management.emit("uninstalling", extension);
     }
   },
 
@@ -851,7 +841,10 @@ this.ExtensionData = class {
         allUrls = true;
         break;
       }
-      let match = /^[htps*]+:\/\/([^/]+)\//.exec(permission);
+      if (permission.startsWith("moz-extension:")) {
+        continue;
+      }
+      let match = /^https?:\/\/([^/]+)\//.exec(permission);
       if (!match) {
         Cu.reportError(`Unparseable host permission ${permission}`);
         continue;
@@ -975,7 +968,13 @@ const shutdownPromises = new Map();
 
 class BootstrapScope {
   install(data, reason) {}
-  uninstall(data, reason) {}
+  uninstall(data, reason) {
+    Management.emit("uninstall", {id: data.id});
+  }
+
+  update(data, reason) {
+    Management.emit("update", {id: data.id});
+  }
 
   startup(data, reason) {
     this.extension = new Extension(data, this.BOOTSTRAP_REASON_TO_STRING_MAP[reason]);

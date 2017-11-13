@@ -669,11 +669,15 @@ BrowserGlue.prototype = {
 
 
     // Initialize the default l10n resource sources for L10nRegistry.
-    const locales = [AppConstants.INSTALL_LOCALE];
-    const toolkitSource = new FileSource("toolkit", locales, "resource://gre/localization/{locale}/");
-    L10nRegistry.registerSource(toolkitSource);
-    const appSource = new FileSource("app", locales, "resource://app/localization/{locale}/");
-    L10nRegistry.registerSource(appSource);
+    const multilocalePath = "resource://gre/res/multilocale.json";
+    L10nRegistry.bootstrap = fetch(multilocalePath).then(d => d.json()).then(({ locales }) => {
+      const toolkitSource = new FileSource("toolkit", locales, "resource://gre/localization/{locale}/");
+      L10nRegistry.registerSource(toolkitSource);
+      const appSource = new FileSource("app", locales, "resource://app/localization/{locale}/");
+      L10nRegistry.registerSource(appSource);
+    }).catch(e => {
+      Services.console.logStringMessage(`Could not load multilocale.json. Error: ${e}`);
+    });
 
     Services.obs.notifyObservers(null, "browser-ui-startup-complete");
   },
@@ -1111,6 +1115,12 @@ BrowserGlue.prototype = {
     // early, so we use a maximum timeout for it.
     Services.tm.idleDispatchToMainThread(() => {
       SafeBrowsing.init();
+
+      // Login reputation depends on the Safe Browsing API.
+      if (Services.prefs.getBoolPref("browser.safebrowsing.passwords.enabled")) {
+        Cc["@mozilla.org/reputationservice/login-reputation-service;1"]
+        .getService(Ci.ILoginReputationService);
+      }
     }, 5000);
 
     if (AppConstants.MOZ_CRASHREPORTER) {
@@ -1735,7 +1745,7 @@ BrowserGlue.prototype = {
 
   // eslint-disable-next-line complexity
   _migrateUI: function BG__migrateUI() {
-    const UI_VERSION = 57;
+    const UI_VERSION = 58;
     const BROWSER_DOCURL = "chrome://browser/content/browser.xul";
 
     let currentUIVersion;
@@ -2158,6 +2168,13 @@ BrowserGlue.prototype = {
           }
         } catch (e) { /* Don't panic if this pref isn't what we expect it to be. */ }
       }
+    }
+
+    if (currentUIVersion < 58) {
+      // With Firefox 57, we are doing a one time reset of the geo prefs due to bug 1413652
+      Services.prefs.clearUserPref("browser.search.countryCode");
+      Services.prefs.clearUserPref("browser.search.region");
+      Services.prefs.clearUserPref("browser.search.isUS");
     }
 
     // Update the migration version.
@@ -2907,9 +2924,11 @@ var JawsScreenReaderVersionCheck = {
 
   _checkVersionAndPrompt() {
     // Make sure we only prompt for versions of JAWS we do not
-    // support and never prompt if e10s is disabled.
+    // support and never prompt if e10s is disabled or if we're on
+    // nightly.
     if (!Services.appinfo.shouldBlockIncompatJaws ||
-        !Services.appinfo.browserTabsRemoteAutostart) {
+        !Services.appinfo.browserTabsRemoteAutostart ||
+        AppConstants.NIGHTLY_BUILD) {
       return;
     }
 

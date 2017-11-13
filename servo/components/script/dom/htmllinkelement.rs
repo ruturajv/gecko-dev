@@ -26,7 +26,6 @@ use html5ever::{LocalName, Prefix};
 use net_traits::ReferrerPolicy;
 use script_traits::{MozBrowserEvent, ScriptMsg};
 use servo_arc::Arc;
-use std::ascii::AsciiExt;
 use std::borrow::ToOwned;
 use std::cell::Cell;
 use std::default::Default;
@@ -35,7 +34,7 @@ use style::media_queries::parse_media_query_list;
 use style::parser::ParserContext as CssParserContext;
 use style::str::HTML_SPACE_CHARACTERS;
 use style::stylesheets::{CssRuleType, Stylesheet};
-use style_traits::PARSING_MODE_DEFAULT;
+use style_traits::ParsingMode;
 use stylesheet_loader::{StylesheetLoader, StylesheetContextSource, StylesheetOwner};
 
 #[derive(Clone, Copy, JSTraceable, MallocSizeOf, PartialEq)]
@@ -287,7 +286,7 @@ impl HTMLLinkElement {
         let mut css_parser = CssParser::new(&mut input);
         let doc_url = document.url();
         let context = CssParserContext::new_for_cssom(&doc_url, Some(CssRuleType::Media),
-                                                      PARSING_MODE_DEFAULT,
+                                                      ParsingMode::DEFAULT,
                                                       document.quirks_mode());
         let window = document.window();
         let media = parse_media_query_list(&context, &mut css_parser,

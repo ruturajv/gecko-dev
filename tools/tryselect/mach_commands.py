@@ -38,13 +38,14 @@ def fuzzy_parser():
     return FuzzyParser()
 
 
-def base_parser():
-    from tryselect.cli import BaseTryParser
-    return BaseTryParser()
+def empty_parser():
+    from tryselect.selectors.empty import EmptyParser
+    return EmptyParser()
 
 
 def generic_parser():
-    parser = base_parser()
+    from tryselect.cli import BaseTryParser
+    parser = BaseTryParser()
     parser.add_argument('argv', nargs=argparse.REMAINDER)
     return parser
 
@@ -82,8 +83,8 @@ class TrySelect(MachCommandBase):
         scheduling with the `syntax` selector.
         """
         from tryselect import preset
-        if kwargs['list_presets']:
-            preset.list_presets()
+        if kwargs['mod_presets']:
+            getattr(preset, kwargs['mod_presets'])()
             return
 
         # We do special handling of presets here so that `./mach try --preset foo`
@@ -149,7 +150,7 @@ class TrySelect(MachCommandBase):
     @SubCommand('try',
                 'empty',
                 description='Push to try without scheduling any tasks.',
-                parser=base_parser)
+                parser=empty_parser)
     def try_empty(self, **kwargs):
         """Push to try, running no builds or tests
 
@@ -204,7 +205,6 @@ class TrySelect(MachCommandBase):
         (available at https://github.com/glandium/git-cinnabar).
 
         """
-        from mozbuild.testing import TestResolver
         from tryselect.selectors.syntax import AutoTry
 
         try:
@@ -221,8 +221,5 @@ class TrySelect(MachCommandBase):
             print(CONFIG_ENVIRONMENT_NOT_FOUND)
             sys.exit(1)
 
-        def resolver_func():
-            return self._spawn(TestResolver)
-
-        at = AutoTry(self.topsrcdir, resolver_func, self._mach_context)
+        at = AutoTry(self.topsrcdir, self._mach_context)
         return at.run(**kwargs)

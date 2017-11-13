@@ -1,5 +1,6 @@
-/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * This Source Code Form is subject to the terms of the Mozilla Public
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=8 sts=2 et sw=2 tw=80: */
+/* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
@@ -203,17 +204,26 @@ ClientPaintedLayer::PaintThebes(nsTArray<ReadbackProcessor::Update>* aReadbackUp
  *     but block the main thread while the paint thread paints. Async OMTP doesn't block
  *     the main thread. Sync OMTP is only meant to be used as a debugging tool.
  */
-bool
+void
 ClientPaintedLayer::PaintOffMainThread()
 {
   uint32_t flags = GetPaintFlags();
 
   PaintState state = mContentClient->BeginPaint(this, flags | ContentClient::PAINT_ASYNC);
-  if (!UpdatePaintRegion(state)) {
-    return false;
+  bool didUpdate = false;
+
+  if (state.mBufferState) {
+    PaintThread::Get()->PrepareBuffer(state.mBufferState);
+    didUpdate = true;
   }
 
-  bool didUpdate = false;
+  if (!UpdatePaintRegion(state)) {
+    if (didUpdate) {
+      ClientManager()->SetQueuedAsyncPaints();
+    }
+    return;
+  }
+
   RotatedBuffer::DrawIterator iter;
 
   // Debug Protip: Change to BorrowDrawTargetForPainting if using sync OMTP.
@@ -263,9 +273,9 @@ ClientPaintedLayer::PaintOffMainThread()
 
   if (didUpdate) {
     UpdateContentClient(state);
-    ClientManager()->SetNeedTextureSyncOnPaintThread();
+    ClientManager()->SetQueuedAsyncPaints();
   }
-  return true;
+  return;
 }
 
 void
@@ -278,9 +288,8 @@ ClientPaintedLayer::RenderLayerWithReadback(ReadbackProcessor *aReadback)
   }
 
   if (CanRecordLayer(aReadback)) {
-    if (PaintOffMainThread()) {
-      return;
-    }
+    PaintOffMainThread();
+    return;
   }
 
   nsTArray<ReadbackProcessor::Update> readbackUpdates;

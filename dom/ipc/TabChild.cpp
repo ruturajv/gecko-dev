@@ -36,7 +36,7 @@
 #include "mozilla/layers/IAPZCTreeManager.h"
 #include "mozilla/layers/ImageBridgeChild.h"
 #include "mozilla/layers/InputAPZContext.h"
-#include "mozilla/layers/PLayerTransactionChild.h"
+#include "mozilla/layers/LayerTransactionChild.h"
 #include "mozilla/layers/ShadowLayers.h"
 #include "mozilla/layers/WebRenderLayerManager.h"
 #include "mozilla/layout/RenderFrameChild.h"
@@ -175,13 +175,11 @@ StaticMutex sTabChildrenMutex;
 TabChildBase::TabChildBase()
   : mTabChildGlobal(nullptr)
 {
-  mozilla::HoldJSObjects(this);
 }
 
 TabChildBase::~TabChildBase()
 {
   mAnonymousGlobalScopes.Clear();
-  mozilla::DropJSObjects(this);
 }
 
 NS_IMPL_CYCLE_COLLECTION_CLASS(TabChildBase)
@@ -444,6 +442,8 @@ TabChild::TabChild(nsIContentChild* aManager,
   , mPendingDocShellBlockers(0)
   , mWidgetNativeData(0)
 {
+  mozilla::HoldJSObjects(this);
+
   nsWeakPtr weakPtrThis(do_GetWeakReference(static_cast<nsITabChild*>(this)));  // for capture by the lambda
   mSetAllowedTouchBehaviorCallback = [weakPtrThis](uint64_t aInputBlockId,
                                                    const nsTArray<TouchBehaviorFlags>& aFlags)
@@ -463,6 +463,14 @@ TabChild::TabChild(nsIContentChild* aManager,
   if (mCoalesceMouseMoveEvents) {
     mCoalescedMouseEventFlusher = new CoalescedMouseMoveFlusher(this);
   }
+}
+
+const CompositorOptions&
+TabChild::GetCompositorOptions() const
+{
+  // If you're calling this before mCompositorOptions is set, well.. don't.
+  MOZ_ASSERT(mCompositorOptions);
+  return mCompositorOptions.ref();
 }
 
 bool
@@ -701,6 +709,19 @@ TabChild::UpdateFrameType()
   docShell->SetFrameType(IsMozBrowserElement() ? nsIDocShell::FRAME_TYPE_BROWSER :
                            nsIDocShell::FRAME_TYPE_REGULAR);
 }
+
+NS_IMPL_CYCLE_COLLECTION_CLASS(TabChild)
+
+NS_IMPL_CYCLE_COLLECTION_UNLINK_BEGIN_INHERITED(TabChild, TabChildBase)
+  NS_IMPL_CYCLE_COLLECTION_UNLINK(mWebNav)
+NS_IMPL_CYCLE_COLLECTION_UNLINK_END
+
+NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN_INHERITED(TabChild, TabChildBase)
+  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mWebNav)
+NS_IMPL_CYCLE_COLLECTION_TRAVERSE_END
+
+NS_IMPL_CYCLE_COLLECTION_TRACE_BEGIN_INHERITED(TabChild, TabChildBase)
+NS_IMPL_CYCLE_COLLECTION_TRACE_END
 
 NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(TabChild)
   NS_INTERFACE_MAP_ENTRY(nsIWebBrowserChrome)
@@ -1147,6 +1168,8 @@ TabChild::~TabChild()
   if (mHistoryListener) {
     mHistoryListener->ClearTabChild();
   }
+
+  mozilla::DropJSObjects(this);
 }
 
 mozilla::ipc::IPCResult
@@ -2532,8 +2555,8 @@ mozilla::ipc::IPCResult
 TabChild::RecvPrint(const uint64_t& aOuterWindowID, const PrintData& aPrintData)
 {
 #ifdef NS_PRINTING
-  nsGlobalWindow* outerWindow =
-    nsGlobalWindow::GetOuterWindowWithId(aOuterWindowID);
+  nsGlobalWindowOuter* outerWindow =
+    nsGlobalWindowOuter::GetOuterWindowWithId(aOuterWindowID);
   if (NS_WARN_IF(!outerWindow)) {
     return IPC_OK();
   }
@@ -2646,6 +2669,23 @@ TabChild::RemovePendingDocShellBlocker()
 }
 
 void
+TabChild::OnDocShellActivated(bool aIsActive)
+{
+  if (aIsActive) {
+    if (!sActiveTabs) {
+      sActiveTabs = new nsTHashtable<nsPtrHashKey<TabChild>>();
+    }
+    sActiveTabs->PutEntry(this);
+  } else {
+    if (sActiveTabs) {
+      sActiveTabs->RemoveEntry(this);
+      // We don't delete sActiveTabs here when it's empty since that
+      // could cause a lot of churn. Instead, we wait until ~TabChild.
+    }
+  }
+}
+
+void
 TabChild::InternalSetDocShellIsActive(bool aIsActive, bool aPreserveLayers)
 {
   auto clearForcePaint = MakeScopeExit([&] {
@@ -2687,19 +2727,6 @@ TabChild::InternalSetDocShellIsActive(bool aIsActive, bool aPreserveLayers)
     }
 
     docShell->SetIsActive(aIsActive);
-  }
-
-  if (aIsActive) {
-    if (!sActiveTabs) {
-      sActiveTabs = new nsTHashtable<nsPtrHashKey<TabChild>>();
-    }
-    sActiveTabs->PutEntry(this);
-  } else {
-    if (sActiveTabs) {
-      sActiveTabs->RemoveEntry(this);
-      // We don't delete sActiveTabs here when it's empty since that
-      // could cause a lot of churn. Instead, we wait until ~TabChild.
-    }
   }
 
   if (aIsActive) {
@@ -2915,7 +2942,7 @@ TabChild::InitRenderingState(const TextureFactoryIdentifier& aTextureFactoryIden
       gfx::VRManagerChild::IdentifyTextureHost(mTextureFactoryIdentifier);
       InitAPZState();
     } else {
-      // Fallback to BasicManager
+      NS_WARNING("Fallback to BasicLayerManager");
       mLayersConnected = Some(false);
     }
 
@@ -2935,7 +2962,7 @@ TabChild::CreateRemoteLayerManager(mozilla::layers::PCompositorBridgeChild* aCom
   MOZ_ASSERT(aCompositorChild);
 
   bool success = false;
-  if (gfxVars::UseWebRender()) {
+  if (mCompositorOptions->UseWebRender()) {
     success = mPuppetWidget->CreateRemoteLayerManager([&] (LayerManager* aLayerManager) -> bool {
       MOZ_ASSERT(aLayerManager->AsWebRenderLayerManager());
       return aLayerManager->AsWebRenderLayerManager()->Initialize(aCompositorChild,
@@ -2952,6 +2979,15 @@ TabChild::CreateRemoteLayerManager(mozilla::layers::PCompositorBridgeChild* aCom
       success = true;
     }
     if (!success) {
+      // Since no LayerManager is associated with the tab's widget, we will never
+      // have an opportunity to destroy the PLayerTransaction on the next device
+      // or compositor reset. Therefore, we make sure to forcefully close it here.
+      // Failure to do so will cause the next layer tree to fail to attach due
+      // since the compositor requires the old layer tree to be disassociated.
+      if (shadowManager) {
+        static_cast<LayerTransactionChild*>(shadowManager)->Destroy();
+        shadowManager = nullptr;
+      }
       NS_WARNING("failed to allocate layer transaction");
     } else {
       success = mPuppetWidget->CreateRemoteLayerManager([&] (LayerManager* aLayerManager) -> bool {
@@ -3299,7 +3335,9 @@ TabChild::ReinitRenderingForDeviceReset()
       fwd->SynchronouslyShutdown();
     }
   } else {
-    return;
+    if (mLayersConnected.isNothing()) {
+      return;
+    }
   }
 
   // Proceed with destroying and recreating the layer manager.
@@ -3448,7 +3486,7 @@ TabChild::AllocPPluginWidgetChild()
 #ifdef XP_WIN
   return new mozilla::plugins::PluginWidgetChild();
 #else
-  MOZ_ASSERT_UNREACHABLE();
+  MOZ_ASSERT_UNREACHABLE("AllocPPluginWidgetChild only supports Windows");
   return nullptr;
 #endif
 }

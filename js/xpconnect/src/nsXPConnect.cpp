@@ -73,7 +73,7 @@ nsXPConnect::nsXPConnect()
 
     XPCJSContext* xpccx = XPCJSContext::NewXPCJSContext(nullptr);
     if (!xpccx) {
-        NS_RUNTIMEABORT("Couldn't create XPCJSContext.");
+        MOZ_CRASH("Couldn't create XPCJSContext.");
     }
     gPrimaryContext = xpccx;
     mRuntime = xpccx->Runtime();
@@ -799,17 +799,6 @@ nsXPConnect::GetWrappedNativeOfNativeObject(JSContext * aJSContext,
     if (NS_FAILED(rv))
         return NS_ERROR_FAILURE;
     *_retval = static_cast<nsIXPConnectWrappedNative*>(wrapper);
-    return NS_OK;
-}
-
-NS_IMETHODIMP
-nsXPConnect::GetCurrentJSStack(nsIStackFrame * *aCurrentJSStack)
-{
-    MOZ_ASSERT(aCurrentJSStack, "bad param");
-
-    nsCOMPtr<nsIStackFrame> currentStack = dom::GetCurrentJSStack();
-    currentStack.forget(aCurrentJSStack);
-
     return NS_OK;
 }
 

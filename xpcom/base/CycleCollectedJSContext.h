@@ -194,6 +194,9 @@ public:
   // microtask processor entry point
   void AfterProcessMicrotask();
 
+  // Check whether we need an idle GC task.
+  void IsIdleGCTaskNeeded();
+
   uint32_t RecursionDepth();
 
   // Run in stable state (call through nsContentUtils)
@@ -241,6 +244,11 @@ public:
   void PerformMicroTaskCheckPoint();
 
   void DispatchMicroTaskRunnable(already_AddRefed<MicroTaskRunnable> aRunnable);
+
+  bool IsInStableOrMetaStableState()
+  {
+    return mDoingStableStates;
+  }
 
   // Storage for watching rejected promises waiting for some client to
   // consume their rejection.

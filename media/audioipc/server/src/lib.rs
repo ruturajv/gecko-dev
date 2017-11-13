@@ -591,12 +591,23 @@ pub struct Server {
     conns: Slab<ServerConn>
 }
 
+impl Drop for Server {
+    fn drop(&mut self) {
+        // ServerConns rely on the cubeb context, so we must free them
+        // explicitly before the context is dropped.
+        if !self.conns.is_empty() {
+            debug!("dropping Server with {} live ServerConns", self.conns.len());
+            self.conns.clear();
+        }
+    }
+}
+
 impl Server {
     pub fn new(socket: UnixListener) -> Server {
         Server {
             socket: socket,
             context: None,
-            conns: Slab::with_capacity(SERVER_CONN_CHUNK_SIZE)
+            conns: slab::Slab::with_capacity(SERVER_CONN_CHUNK_SIZE)
         }
     }
 
@@ -605,7 +616,7 @@ impl Server {
 
         let client_socket = match self.socket.accept() {
             Err(e) => {
-                error!("server accept error: {}", e);
+                warn!("server accept error: {}", e);
                 return Err(e.into());
             },
             Ok(None) => panic!("accept returned EAGAIN unexpectedly"),
@@ -662,14 +673,14 @@ impl Server {
 
         match poll.poll(&mut events, None) {
             Ok(_) => {},
-            Err(e) => error!("server poll error: {}", e),
+            Err(e) => warn!("server poll error: {}", e),
         }
 
         for event in events.iter() {
             match event.token() {
                 SERVER => {
                     if let Err(e) = self.accept(poll) {
-                        error!("server accept error: {}", e);
+                        warn!("server accept error: {}", e);
                     };
                 },
                 QUIT => {

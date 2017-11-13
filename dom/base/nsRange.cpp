@@ -1020,6 +1020,14 @@ nsRange::DoSetRange(const RawRangeBoundary& aStart,
   // sure to not use it here to determine our "old" current ancestor.
   mStart = aStart;
   mEnd = aEnd;
+
+  // If RangeBoundary is initialized with a container node and offset in it,
+  // its mRef may not have been initialized yet.  However, nsRange will need to
+  // adjust the offset when the node position is changed.  In such case,
+  // RangeBoundary::mRef needs to be initialized for recomputing offset later.
+  mStart.EnsureRef();
+  mEnd.EnsureRef();
+
   mIsPositioned = !!mStart.Container();
   if (checkCommonAncestor) {
     nsINode* oldCommonAncestor = mRegisteredCommonAncestor;
@@ -3212,21 +3220,26 @@ static void ExtractRectFromOffset(nsIFrame* aFrame,
 static nsTextFrame*
 GetTextFrameForContent(nsIContent* aContent, bool aFlushLayout)
 {
-  nsIPresShell* presShell = aContent->OwnerDoc()->GetShell();
-  if (presShell) {
-    presShell->FrameConstructor()->EnsureFrameForTextNode(
-        static_cast<nsGenericDOMDataNode*>(aContent));
-
-    if (aFlushLayout) {
-      aContent->OwnerDoc()->FlushPendingNotifications(FlushType::Layout);
-    }
-
-    nsIFrame* frame = aContent->GetPrimaryFrame();
-    if (frame && frame->IsTextFrame()) {
-      return static_cast<nsTextFrame*>(frame);
-    }
+  nsIDocument* doc = aContent->OwnerDoc();
+  nsIPresShell* presShell = doc->GetShell();
+  if (!presShell) {
+    return nullptr;
   }
-  return nullptr;
+
+  const bool frameWillBeUnsuppressed =
+    presShell->FrameConstructor()->EnsureFrameForTextNodeIsCreatedAfterFlush(
+      static_cast<nsGenericDOMDataNode*>(aContent));
+  if (aFlushLayout) {
+    doc->FlushPendingNotifications(FlushType::Layout);
+  } else if (frameWillBeUnsuppressed) {
+    doc->FlushPendingNotifications(FlushType::Frames);
+  }
+
+  nsIFrame* frame = aContent->GetPrimaryFrame();
+  if (!frame || !frame->IsTextFrame()) {
+    return nullptr;
+  }
+  return static_cast<nsTextFrame*>(frame);
 }
 
 static nsresult GetPartialTextRect(nsLayoutUtils::RectCallback* aCallback,

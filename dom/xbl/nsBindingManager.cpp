@@ -276,6 +276,12 @@ nsBindingManager::ClearBinding(Element* aElement)
   // ChangeDocument?
   nsCOMPtr<nsIDocument> doc = aElement->OwnerDoc();
 
+  // Destroy the frames here before the UnbindFromTree happens.
+  nsIPresShell* presShell = doc->GetShell();
+  if (presShell) {
+    presShell->DestroyFramesForAndRestyle(aElement);
+  }
+
   // Finally remove the binding...
   // XXXbz this doesn't remove the implementation!  Should fix!  Until
   // then we need the explicit UnhookEventHandlers here.
@@ -288,7 +294,7 @@ nsBindingManager::ClearBinding(Element* aElement)
   // been removed and style may have changed due to the removal of the
   // anonymous children.
   // XXXbz this should be using the current doc (if any), not the owner doc.
-  nsIPresShell *presShell = doc->GetShell();
+  presShell = doc->GetShell(); // get the shell again, just in case it changed
   NS_ENSURE_TRUE(presShell, NS_ERROR_FAILURE);
 
   presShell->PostRecreateFramesFor(aElement);
@@ -708,12 +714,12 @@ nsBindingManager::WalkRules(nsIStyleRuleProcessor::EnumFunc aFunc,
   return NS_OK;
 }
 
-void
+bool
 nsBindingManager::EnumerateBoundContentBindings(
   const BoundContentBindingCallback& aCallback) const
 {
   if (!mBoundContentSet) {
-    return;
+    return true;
   }
 
   for (auto iter = mBoundContentSet->Iter(); !iter.Done(); iter.Next()) {
@@ -721,9 +727,13 @@ nsBindingManager::EnumerateBoundContentBindings(
     for (nsXBLBinding* binding = boundContent->GetXBLBinding();
          binding;
          binding = binding->GetBaseBinding()) {
-      aCallback(binding);
+      if (!aCallback(binding)) {
+        return false;
+      }
     }
   }
+
+  return true;
 }
 
 void
@@ -736,6 +746,7 @@ nsBindingManager::WalkAllRules(nsIStyleRuleProcessor::EnumFunc aFunc,
     if (ruleProcessor) {
       (*(aFunc))(ruleProcessor, aData);
     }
+    return true;
   });
 }
 
@@ -775,6 +786,7 @@ nsBindingManager::MediumFeaturesChanged(nsPresContext* aPresContext)
         rulesChanged = rulesChanged || thisChanged;
       }
     }
+    return true;
   });
 
   return rulesChanged;
@@ -794,6 +806,7 @@ nsBindingManager::UpdateBoundContentBindingsForServo(nsPresContext* aPresContext
     if (styleSet && styleSet->StyleSheetsHaveChanged()) {
       protoBinding->ComputeServoStyleSet(presContext);
     }
+    return true;
   });
 }
 
@@ -802,6 +815,7 @@ nsBindingManager::AppendAllSheets(nsTArray<StyleSheet*>& aArray)
 {
   EnumerateBoundContentBindings([&aArray](nsXBLBinding* aBinding) {
     aBinding->PrototypeBinding()->AppendStyleSheetsTo(aArray);
+    return true;
   });
 }
 
@@ -1160,4 +1174,21 @@ nsBindingManager::FindNestedSingleInsertionPoint(nsIContent* aContainer,
   }
 
   return parent;
+}
+
+bool
+nsBindingManager::AnyBindingHasDocumentStateDependency(EventStates aStateMask)
+{
+  MOZ_ASSERT(mDocument->IsStyledByServo());
+
+  bool result = false;
+  EnumerateBoundContentBindings([&](nsXBLBinding* aBinding) {
+    ServoStyleSet* styleSet = aBinding->PrototypeBinding()->GetServoStyleSet();
+    if (styleSet && styleSet->HasDocumentStateDependency(aStateMask)) {
+      result = true;
+      return false;
+    }
+    return true;
+  });
+  return result;
 }

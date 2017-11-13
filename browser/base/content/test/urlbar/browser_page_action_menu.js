@@ -157,8 +157,8 @@ add_task(async function copyURLFromURLBar() {
   await BrowserTestUtils.withNewTab(url, async () => {
     // Add action to URL bar.
     let action = PageActions._builtInActions.find(a => a.id == "copyURL");
-    action.shownInUrlbar = true;
-    registerCleanupFunction(() => action.shownInUrlbar = false);
+    action.pinnedToUrlbar = true;
+    registerCleanupFunction(() => action.pinnedToUrlbar = false);
 
     let copyURLButton =
       document.getElementById("pageAction-urlbar-copyURL");
@@ -544,11 +544,11 @@ add_task(async function sendToDevice_inUrlbar() {
 
     // Add Send to Device to the urlbar.
     let action = PageActions.actionForID("sendToDevice");
-    action.shownInUrlbar = true;
+    action.pinnedToUrlbar = true;
 
     // Click it to open its panel.
     let urlbarButton = document.getElementById(
-      BrowserPageActions._urlbarButtonNodeIDForActionID(action.id)
+      BrowserPageActions.urlbarButtonNodeIDForActionID(action.id)
     );
     Assert.ok(!urlbarButton.disabled);
     let panelPromise =
@@ -622,7 +622,7 @@ add_task(async function sendToDevice_inUrlbar() {
     await promisePanelHidden(BrowserPageActionFeedback.panelNode.id);
 
     // Remove Send to Device from the urlbar.
-    action.shownInUrlbar = false;
+    action.pinnedToUrlbar = false;
 
     cleanUp();
   });
@@ -635,21 +635,21 @@ add_task(async function contextMenu() {
     // Open the panel and then open the context menu on the bookmark button.
     await promisePageActionPanelOpen();
     let bookmarkButton = document.getElementById("pageAction-panel-bookmark");
-    let contextMenuPromise = promisePanelShown("pageActionPanelContextMenu");
+    let contextMenuPromise = promisePanelShown("pageActionContextMenu");
     EventUtils.synthesizeMouseAtCenter(bookmarkButton, {
       type: "contextmenu",
       button: 2,
     });
     await contextMenuPromise;
 
-    // The context menu should show "Remove from Address Bar".  Click it.
-    let contextMenuNode = document.getElementById("pageActionPanelContextMenu");
-    Assert.equal(contextMenuNode.childNodes.length, 1,
+    // The context menu should show the "remove" item.  Click it.
+    let menuItems = collectContextMenuItems();
+    Assert.equal(menuItems.length, 1,
                  "Context menu has one child");
-    Assert.equal(contextMenuNode.childNodes[0].label, "Remove from Address Bar",
+    Assert.equal(menuItems[0].label, "Remove from Address Bar",
                  "Context menu is in the 'remove' state");
-    contextMenuPromise = promisePanelHidden("pageActionPanelContextMenu");
-    EventUtils.synthesizeMouseAtCenter(contextMenuNode.childNodes[0], {});
+    contextMenuPromise = promisePanelHidden("pageActionContextMenu");
+    EventUtils.synthesizeMouseAtCenter(menuItems[0], {});
     await contextMenuPromise;
 
     // The action should be removed from the urlbar.  In this case, the bookmark
@@ -661,20 +661,21 @@ add_task(async function contextMenu() {
 
     // Open the context menu again on the bookmark button.  (The page action
     // panel remains open.)
-    contextMenuPromise = promisePanelShown("pageActionPanelContextMenu");
+    contextMenuPromise = promisePanelShown("pageActionContextMenu");
     EventUtils.synthesizeMouseAtCenter(bookmarkButton, {
       type: "contextmenu",
       button: 2,
     });
     await contextMenuPromise;
 
-    // The context menu should show "Add to Address Bar".  Click it.
-    Assert.equal(contextMenuNode.childNodes.length, 1,
+    // The context menu should show the "add" item.  Click it.
+    menuItems = collectContextMenuItems();
+    Assert.equal(menuItems.length, 1,
                  "Context menu has one child");
-    Assert.equal(contextMenuNode.childNodes[0].label, "Add to Address Bar",
+    Assert.equal(menuItems[0].label, "Add to Address Bar",
                  "Context menu is in the 'add' state");
-    contextMenuPromise = promisePanelHidden("pageActionPanelContextMenu");
-    EventUtils.synthesizeMouseAtCenter(contextMenuNode.childNodes[0], {});
+    contextMenuPromise = promisePanelHidden("pageActionContextMenu");
+    EventUtils.synthesizeMouseAtCenter(menuItems[0], {});
     await contextMenuPromise;
 
     // The action should be added to the urlbar.
@@ -683,20 +684,21 @@ add_task(async function contextMenu() {
     }, "Waiting for star button to become unhidden");
 
     // Open the context menu on the bookmark star in the urlbar.
-    contextMenuPromise = promisePanelShown("pageActionPanelContextMenu");
+    contextMenuPromise = promisePanelShown("pageActionContextMenu");
     EventUtils.synthesizeMouseAtCenter(starButtonBox, {
       type: "contextmenu",
       button: 2,
     });
     await contextMenuPromise;
 
-    // The context menu should show "Remove from Address Bar".  Click it.
-    Assert.equal(contextMenuNode.childNodes.length, 1,
+    // The context menu should show the "remove" item.  Click it.
+    menuItems = collectContextMenuItems();
+    Assert.equal(menuItems.length, 1,
                  "Context menu has one child");
-    Assert.equal(contextMenuNode.childNodes[0].label, "Remove from Address Bar",
+    Assert.equal(menuItems[0].label, "Remove from Address Bar",
                  "Context menu is in the 'remove' state");
-    contextMenuPromise = promisePanelHidden("pageActionPanelContextMenu");
-    EventUtils.synthesizeMouseAtCenter(contextMenuNode.childNodes[0], {});
+    contextMenuPromise = promisePanelHidden("pageActionContextMenu");
+    EventUtils.synthesizeMouseAtCenter(menuItems[0], {});
     await contextMenuPromise;
 
     // The action should be removed from the urlbar.
@@ -707,18 +709,20 @@ add_task(async function contextMenu() {
     // Finally, add the bookmark star back to the urlbar so that other tests
     // that rely on it are OK.
     await promisePageActionPanelOpen();
-    contextMenuPromise = promisePanelShown("pageActionPanelContextMenu");
+    contextMenuPromise = promisePanelShown("pageActionContextMenu");
     EventUtils.synthesizeMouseAtCenter(bookmarkButton, {
       type: "contextmenu",
       button: 2,
     });
     await contextMenuPromise;
-    Assert.equal(contextMenuNode.childNodes.length, 1,
+
+    menuItems = collectContextMenuItems();
+    Assert.equal(menuItems.length, 1,
                  "Context menu has one child");
-    Assert.equal(contextMenuNode.childNodes[0].label, "Add to Address Bar",
+    Assert.equal(menuItems[0].label, "Add to Address Bar",
                  "Context menu is in the 'add' state");
-    contextMenuPromise = promisePanelHidden("pageActionPanelContextMenu");
-    EventUtils.synthesizeMouseAtCenter(contextMenuNode.childNodes[0], {});
+    contextMenuPromise = promisePanelHidden("pageActionContextMenu");
+    EventUtils.synthesizeMouseAtCenter(menuItems[0], {});
     await contextMenuPromise;
     await BrowserTestUtils.waitForCondition(() => {
       return !starButtonBox.hidden;
@@ -774,4 +778,11 @@ function checkSendToDeviceItems(expectedItems, forUrlbar = false) {
       }
     }
   }
+}
+
+function collectContextMenuItems() {
+  let contextMenu = document.getElementById("pageActionContextMenu");
+  return Array.filter(contextMenu.childNodes, node => {
+    return window.getComputedStyle(node).visibility == "visible";
+  });
 }

@@ -647,8 +647,8 @@ impl<Window: WindowMethods> IOCompositor<Window> {
         }
     }
 
-    pub fn on_resize_window_event(&mut self, new_size: DeviceUintSize) {
-        debug!("compositor resizing to {:?}", new_size.to_untyped());
+    pub fn on_resize_window_event(&mut self) {
+        debug!("compositor resize requested");
 
         // A size change could also mean a resolution change.
         let new_scale_factor = self.window.hidpi_factor();
@@ -665,7 +665,7 @@ impl<Window: WindowMethods> IOCompositor<Window> {
             return;
         }
 
-        self.frame_size = new_size;
+        self.frame_size = self.window.framebuffer_size();
         self.window_rect = new_window_rect;
 
         self.send_window_size(WindowSizeType::Resize);
@@ -1311,7 +1311,7 @@ impl<Window: WindowMethods> IOCompositor<Window> {
         // we get the current time, inform the layout thread about it and remove the
         // pending metric from the list.
         if !self.pending_paint_metrics.is_empty() {
-            let paint_time = precise_time_ns() as f64;
+            let paint_time = precise_time_ns();
             let mut to_remove = Vec::new();
             // For each pending paint metrics pipeline id
             for (id, pending_epoch) in &self.pending_paint_metrics {

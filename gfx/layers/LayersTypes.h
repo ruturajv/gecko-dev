@@ -1,5 +1,6 @@
-/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * This Source Code Form is subject to the terms of the Mozilla Public
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=8 sts=2 et sw=2 tw=80: */
+/* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
@@ -202,7 +203,7 @@ struct EventRegions {
   }
 };
 
-// Bit flags that go on a ContainerLayer (or RefLayer) and override the
+// Bit flags that go on a RefLayer and override the
 // event regions in the entire subtree below. This is needed for propagating
 // various flags across processes since the child-process layout code doesn't
 // know about parent-process listeners or CSS rules.

@@ -1,7 +1,8 @@
-/* -*- Mode: C++; tab-width: 20; indent-tabs-mode: nil; c-basic-offset: 2 -*-
-* This Source Code Form is subject to the terms of the Mozilla Public
-* License, v. 2.0. If a copy of the MPL was not distributed with this
-* file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=8 sts=2 et sw=2 tw=80: */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "PaintedLayerMLGPU.h"
 #include "LayerManagerMLGPU.h"
@@ -48,6 +49,14 @@ PaintedLayerMLGPU::SetRenderRegion(LayerIntRegion&& aRegion)
 {
   mRenderRegion = Move(aRegion);
 
+  LayerIntRect bounds(mRenderRegion.GetBounds().TopLeft(),
+                      ViewAs<LayerPixel>(mTexture->GetSize()));
+  mRenderRegion.AndWith(bounds);
+}
+
+const LayerIntRegion&
+PaintedLayerMLGPU::GetDrawRects()
+{
 #ifndef MOZ_IGNORE_PAINT_WILL_RESAMPLE
   // Note: we don't set PaintWillResample on our ContentTextureHost. The old
   // compositor must do this since ContentHost is responsible for issuing
@@ -57,13 +66,11 @@ PaintedLayerMLGPU::SetRenderRegion(LayerIntRegion&& aRegion)
   // behavior), we might break up the visible region again. If that turns
   // out to be a problem, we can factor this into ForEachDrawRect instead.
   if (MayResample()) {
-    mRenderRegion = mRenderRegion.GetBounds();
+    mDrawRects = mRenderRegion.GetBounds();
+    return mDrawRects;
   }
 #endif
-
-  LayerIntRect bounds(mRenderRegion.GetBounds().TopLeft(),
-                      ViewAs<LayerPixel>(mTexture->GetSize()));
-  mRenderRegion.AndWith(bounds);
+  return mRenderRegion;
 }
 
 bool

@@ -1,5 +1,6 @@
-/* -*- Mode: C++; tab-width: 20; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * This Source Code Form is subject to the terms of the Mozilla Public
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=8 sts=2 et sw=2 tw=80: */
+/* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
@@ -24,6 +25,10 @@
 #include "gfxVROpenVR.h"
 #include "gfxVROSVR.h"
 #endif
+#if defined(MOZ_ANDROID_GOOGLE_VR)
+#include "gfxVRGVR.h"
+#endif // MOZ_ANDROID_GOOGLE_VR
+
 #include "gfxVRPuppet.h"
 #include "ipc/VRLayerParent.h"
 
@@ -92,6 +97,14 @@ VRManager::VRManager()
       mManagers.AppendElement(mgr);
   }
 #endif
+
+#if defined(MOZ_ANDROID_GOOGLE_VR)
+   mgr = VRSystemManagerGVR::Create();
+   if (mgr) {
+     mManagers.AppendElement(mgr);
+   }
+#endif // defined(MOZ_ANDROID_GOOGLE_VR)
+
   // Enable gamepad extensions while VR is enabled.
   // Preference only can be set at the Parent process.
   if (XRE_IsParentProcess() && gfxPrefs::VREnabled()) {

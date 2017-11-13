@@ -2,19 +2,19 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use {BorderDetails, BorderDisplayItem, BorderWidths, BoxShadowClipMode, BoxShadowDisplayItem};
-use {ClipAndScrollInfo, ClipDisplayItem, ClipId, ColorF, ComplexClipRegion, DisplayItem};
-use {ExtendMode, FilterOp, FontInstanceKey, GlyphInstance};
-use {GlyphOptions, Gradient, GradientDisplayItem, GradientStop, IframeDisplayItem};
-use {ImageDisplayItem, ImageKey, ImageMask, ImageRendering, LayerPrimitiveInfo, LayoutPoint};
-use {LayoutPrimitiveInfo, LayoutRect, LayoutSize, LayoutTransform, LayoutVector2D};
-use {LineDisplayItem, LineOrientation, LineStyle, LocalClip, MixBlendMode, PipelineId};
-use {PropertyBinding, PushStackingContextDisplayItem, RadialGradient, RadialGradientDisplayItem};
-use {RectangleDisplayItem, ScrollFrameDisplayItem, ScrollPolicy, ScrollSensitivity};
-use {SpecificDisplayItem, StackingContext, StickyFrameDisplayItem, StickyFrameInfo};
-use {BorderRadius, TextDisplayItem, Shadow, TransformStyle, YuvColorSpace, YuvData};
+use {BorderDetails, BorderDisplayItem, BorderRadius, BorderWidths, BoxShadowClipMode};
+use {BoxShadowDisplayItem, ClipAndScrollInfo, ClipDisplayItem, ClipId, ColorF, ComplexClipRegion};
+use {DisplayItem, ExtendMode, FilterOp, FontInstanceKey, GlyphInstance, GlyphOptions, Gradient};
+use {GradientDisplayItem, GradientStop, IframeDisplayItem, ImageDisplayItem, ImageKey, ImageMask};
+use {ImageRendering, LayerPrimitiveInfo, LayoutPoint, LayoutPrimitiveInfo, LayoutRect, LayoutSize};
+use {LayoutTransform, LayoutVector2D, LineDisplayItem, LineOrientation, LineStyle, LocalClip};
+use {MixBlendMode, PipelineId, PropertyBinding, PushStackingContextDisplayItem, RadialGradient};
+use {RadialGradientDisplayItem, RectangleDisplayItem, ScrollFrameDisplayItem, ScrollPolicy};
+use {ScrollSensitivity, Shadow, SpecificDisplayItem, StackingContext, StickyFrameDisplayItem};
+use {StickyOffsetBounds, TextDisplayItem, TransformStyle, YuvColorSpace, YuvData};
 use YuvImageDisplayItem;
 use bincode;
+use euclid::SideOffsets2D;
 use serde::{Deserialize, Serialize, Serializer};
 use serde::ser::{SerializeMap, SerializeSeq};
 use std::io::{Read, Write};
@@ -24,8 +24,8 @@ use std::slice;
 use time::precise_time_ns;
 
 // We don't want to push a long text-run. If a text-run is too long, split it into several parts.
-// Please check the renderer::MAX_VERTEX_TEXTURE_WIDTH for the detail.
-pub const MAX_TEXT_RUN_LENGTH: usize = 2040;
+// This needs to be set to (renderer::MAX_VERTEX_TEXTURE_WIDTH - VECS_PER_PRIM_HEADER - VECS_PER_TEXT_RUN) * 2
+pub const MAX_TEXT_RUN_LENGTH: usize = 2038;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -315,6 +315,7 @@ impl<'a, 'b> DisplayItemRef<'a, 'b> {
         LayerPrimitiveInfo {
             rect: info.rect.translate(&offset),
             local_clip: info.local_clip.create_with_offset(offset),
+            edge_aa_segment_mask: info.edge_aa_segment_mask,
             is_backface_visible: info.is_backface_visible,
             tag: info.tag,
         }
@@ -669,7 +670,7 @@ impl DisplayListBuilder {
     /// Saves the current display list state, so it may be `restore()`'d.
     ///
     /// # Conditions:
-    /// 
+    ///
     /// * Doesn't support popping clips that were pushed before the save.
     /// * Doesn't support nested saves.
     /// * Must call `clear_save()` if the restore becomes unnecessary.
@@ -789,6 +790,10 @@ impl DisplayListBuilder {
     pub fn push_rect(&mut self, info: &LayoutPrimitiveInfo, color: ColorF) {
         let item = SpecificDisplayItem::Rectangle(RectangleDisplayItem { color });
         self.push_item(item, info);
+    }
+
+    pub fn push_clear_rect(&mut self, info: &LayoutPrimitiveInfo) {
+        self.push_item(SpecificDisplayItem::ClearRectangle, info);
     }
 
     pub fn push_line(
@@ -1193,13 +1198,7 @@ impl DisplayListBuilder {
             image_mask: image_mask,
             scroll_sensitivity,
         });
-
-        let info = LayoutPrimitiveInfo {
-            rect: content_rect,
-            local_clip: LocalClip::from(clip_rect),
-            is_backface_visible: true,
-            tag: None,
-        };
+        let info = LayoutPrimitiveInfo::with_clip_rect(content_rect, clip_rect);
 
         let scrollinfo = ClipAndScrollInfo::simple(parent);
         self.push_item_with_clip_scroll_info(item, &info, scrollinfo);
@@ -1257,12 +1256,19 @@ impl DisplayListBuilder {
         &mut self,
         id: Option<ClipId>,
         frame_rect: LayoutRect,
-        sticky_frame_info: StickyFrameInfo,
+        margins: SideOffsets2D<Option<f32>>,
+        vertical_offset_bounds: StickyOffsetBounds,
+        horizontal_offset_bounds: StickyOffsetBounds,
+        previously_applied_offset: LayoutVector2D,
+
     ) -> ClipId {
         let id = self.generate_clip_id(id);
         let item = SpecificDisplayItem::StickyFrame(StickyFrameDisplayItem {
             id,
-            sticky_frame_info,
+            margins,
+            vertical_offset_bounds,
+            horizontal_offset_bounds,
+            previously_applied_offset,
         });
 
         let info = LayoutPrimitiveInfo::new(frame_rect);

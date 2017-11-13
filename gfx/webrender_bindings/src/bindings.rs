@@ -7,7 +7,7 @@ use std::os::raw::{c_void, c_char, c_float};
 use gleam::gl;
 
 use webrender_api::*;
-use webrender::{ReadPixelsFormat, Renderer, RendererOptions};
+use webrender::{ReadPixelsFormat, Renderer, RendererOptions, ThreadListener};
 use webrender::{ExternalImage, ExternalImageHandler, ExternalImageSource};
 use webrender::DebugFlags;
 use webrender::{ApiRecordingReceiver, BinaryRecorder};
@@ -16,7 +16,15 @@ use moz2d_renderer::Moz2dImageRenderer;
 use app_units::Au;
 use rayon;
 use euclid::SideOffsets2D;
-use bincode;
+use log::{set_logger, shutdown_logger, LogLevelFilter, Log, LogLevel, LogMetadata, LogRecord};
+
+#[cfg(target_os = "windows")]
+use dwrote::{FontDescriptor, FontWeight, FontStretch, FontStyle};
+
+#[cfg(target_os = "macos")]
+use core_foundation::string::CFString;
+#[cfg(target_os = "macos")]
+use core_graphics::font::CGFont;
 
 extern crate webrender_api;
 
@@ -43,6 +51,8 @@ pub type WrFontKey = FontKey;
 type WrFontInstanceKey = FontInstanceKey;
 /// cbindgen:field-names=[mNamespace, mHandle]
 type WrYuvColorSpace = YuvColorSpace;
+/// cbindgen:field-names=[mNamespace, mHandle]
+type WrLogLevelFilter = LogLevelFilter;
 
 fn make_slice<'a, T>(ptr: *const T, len: usize) -> &'a [T] {
     if ptr.is_null() {
@@ -400,7 +410,13 @@ extern "C" {
     // by commenting out the path that adds an external image ID
     fn gfx_use_wrench() -> bool;
     fn gfx_wr_resource_path_override() -> *const c_char;
+    // TODO: make gfx_critical_error() work.
+    // We still have problem to pass the error message from render/render_backend
+    // thread to main thread now.
+    #[allow(dead_code)]
+    fn gfx_critical_error(msg: *const c_char);
     fn gfx_critical_note(msg: *const c_char);
+    fn gecko_printf_stderr_output(msg: *const c_char);
 }
 
 struct CppNotifier {
@@ -477,7 +493,7 @@ pub extern "C" fn wr_renderer_render(renderer: &mut Renderer,
                 let msg = CString::new(format!("wr_renderer_render: {:?}", e)).unwrap();
                 unsafe {
                     gfx_critical_note(msg.as_ptr());
-               }
+                }
             }
             false
         },
@@ -571,14 +587,48 @@ pub unsafe extern "C" fn wr_rendered_epochs_delete(pipeline_epochs: *mut WrRende
     Box::from_raw(pipeline_epochs);
 }
 
+extern "C" {
+    fn gecko_profiler_register_thread(name: *const ::std::os::raw::c_char);
+    fn gecko_profiler_unregister_thread();
+}
+
+struct GeckoProfilerThreadListener {}
+
+impl GeckoProfilerThreadListener {
+    pub fn new() -> GeckoProfilerThreadListener {
+        GeckoProfilerThreadListener{}
+    }
+}
+
+impl ThreadListener for GeckoProfilerThreadListener {
+    fn thread_started(&self, thread_name: &str) {
+        let name = CString::new(thread_name).unwrap();
+        unsafe {
+            // gecko_profiler_register_thread copies the passed name here.
+            gecko_profiler_register_thread(name.as_ptr());
+        }
+    }
+
+    fn thread_stopped(&self, _: &str) {
+        unsafe {
+            gecko_profiler_unregister_thread();
+        }
+    }
+}
+
 pub struct WrThreadPool(Arc<rayon::ThreadPool>);
 
 #[no_mangle]
 pub unsafe extern "C" fn wr_thread_pool_new() -> *mut WrThreadPool {
     let worker_config = rayon::Configuration::new()
-        .thread_name(|idx|{ format!("WebRender:Worker#{}", idx) })
+        .thread_name(|idx|{ format!("WRWorker#{}", idx) })
         .start_handler(|idx| {
-            register_thread_with_profiler(format!("WebRender:Worker#{}", idx));
+            let name = format!("WRWorker#{}", idx);
+            register_thread_with_profiler(name.clone());
+            gecko_profiler_register_thread(CString::new(name).unwrap().as_ptr());
+        })
+        .exit_handler(|_idx| {
+            gecko_profiler_unregister_thread();
         });
 
     let workers = Arc::new(rayon::ThreadPool::new(worker_config).unwrap());
@@ -634,6 +684,7 @@ pub extern "C" fn wr_window_new(window_id: WrWindowId,
         recorder: recorder,
         blob_image_renderer: Some(Box::new(Moz2dImageRenderer::new(workers.clone()))),
         workers: Some(workers.clone()),
+        thread_listener: Some(Box::new(GeckoProfilerThreadListener::new())),
         enable_render_on_scroll: false,
         resource_override_path: unsafe {
             let override_charptr = gfx_wr_resource_path_override();
@@ -646,6 +697,7 @@ pub extern "C" fn wr_window_new(window_id: WrWindowId,
                 }
             }
         },
+        renderer_id: Some(window_id.0),
         ..Default::default()
     };
 
@@ -974,6 +1026,54 @@ pub extern "C" fn wr_resource_updates_add_raw_font(
     resources.add_raw_font(key, bytes.flush_into_vec(), index);
 }
 
+#[cfg(target_os = "windows")]
+fn read_font_descriptor(
+    bytes: &mut WrVecU8,
+    index: u32
+) -> NativeFontHandle {
+    let wchars = bytes.convert_into_vec::<u16>();
+    FontDescriptor {
+        family_name: String::from_utf16(&wchars).unwrap(),
+        weight: FontWeight::from_u32(index & 0xffff),
+        stretch: FontStretch::from_u32((index >> 16) & 0xff),
+        style: FontStyle::from_u32((index >> 24) & 0xff),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn read_font_descriptor(
+    bytes: &mut WrVecU8,
+    _index: u32
+) -> NativeFontHandle {
+    let chars = bytes.flush_into_vec();
+    let name = String::from_utf8(chars).unwrap();
+    let font = CGFont::from_name(&CFString::new(&*name)).unwrap();
+    NativeFontHandle(font)
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn read_font_descriptor(
+    bytes: &mut WrVecU8,
+    index: u32
+) -> NativeFontHandle {
+    let cstr = CString::new(bytes.flush_into_vec()).unwrap();
+    NativeFontHandle {
+        pathname: String::from(cstr.to_str().unwrap()),
+        index,
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn wr_resource_updates_add_font_descriptor(
+    resources: &mut ResourceUpdates,
+    key: WrFontKey,
+    bytes: &mut WrVecU8,
+    index: u32
+) {
+    let native_font_handle = read_font_descriptor(bytes, index);
+    resources.add_native_font(key, native_font_handle);
+}
+
 #[no_mangle]
 pub extern "C" fn wr_resource_updates_delete_font(
     resources: &mut ResourceUpdates,
@@ -1027,22 +1127,6 @@ pub extern "C" fn wr_resource_updates_delete(updates: *mut ResourceUpdates) {
     unsafe {
         Box::from_raw(updates);
     }
-}
-
-#[no_mangle]
-pub extern "C" fn wr_resource_updates_serialize(resources: &mut ResourceUpdates, into: &mut VecU8) {
-    let mut data = Vec::new();
-    bincode::serialize_into(&mut data, &resources.updates, bincode::Infinite).unwrap();
-    resources.updates.clear();
-    *into = data;
-}
-
-#[no_mangle]
-pub extern "C" fn wr_resource_updates_deserialize(data: ByteSlice) -> *mut ResourceUpdates {
-    let resources: Box<ResourceUpdates> = Box::new(
-        bincode::deserialize_from(&mut data.as_slice(), bincode::Infinite).expect("Invalid wr::ResourceUpdate serialization?")
-    );
-    Box::into_raw(resources)
 }
 
 #[no_mangle]
@@ -1278,18 +1362,23 @@ pub extern "C" fn wr_dp_pop_clip(state: &mut WrState) {
 #[no_mangle]
 pub extern "C" fn wr_dp_define_sticky_frame(state: &mut WrState,
                                             content_rect: LayoutRect,
-                                            top_range: *const StickySideConstraint,
-                                            right_range: *const StickySideConstraint,
-                                            bottom_range: *const StickySideConstraint,
-                                            left_range: *const StickySideConstraint)
+                                            top_margin: *const f32,
+                                            right_margin: *const f32,
+                                            bottom_margin: *const f32,
+                                            left_margin: *const f32,
+                                            vertical_bounds: StickyOffsetBounds,
+                                            horizontal_bounds: StickyOffsetBounds,
+                                            applied_offset: LayoutVector2D)
                                             -> u64 {
     assert!(unsafe { is_in_main_thread() });
     let clip_id = state.frame_builder.dl_builder.define_sticky_frame(
-        None, content_rect, StickyFrameInfo::new(
-            unsafe { top_range.as_ref() }.cloned(),
-            unsafe { right_range.as_ref() }.cloned(),
-            unsafe { bottom_range.as_ref() }.cloned(),
-            unsafe { left_range.as_ref() }.cloned()));
+        None, content_rect, SideOffsets2D::new(
+            unsafe { top_margin.as_ref() }.cloned(),
+            unsafe { right_margin.as_ref() }.cloned(),
+            unsafe { bottom_margin.as_ref() }.cloned(),
+            unsafe { left_margin.as_ref() }.cloned()
+        ),
+        vertical_bounds, horizontal_bounds, applied_offset);
     match clip_id {
         ClipId::Clip(id, pipeline_id) => {
             assert!(pipeline_id == state.pipeline_id);
@@ -1388,6 +1477,15 @@ pub extern "C" fn wr_dp_push_rect(state: &mut WrState,
     prim_info.is_backface_visible = is_backface_visible;
     state.frame_builder.dl_builder.push_rect(&prim_info,
                                              color);
+}
+
+#[no_mangle]
+pub extern "C" fn wr_dp_push_clear_rect(state: &mut WrState,
+                                        rect: LayoutRect) {
+    debug_assert!(unsafe { !is_in_render_thread() });
+
+    let prim_info = LayoutPrimitiveInfo::new(rect);
+    state.frame_builder.dl_builder.push_clear_rect(&prim_info);
 }
 
 #[no_mangle]
@@ -1813,4 +1911,65 @@ extern "C" {
                                tile_offset: *const TileOffset,
                                output: MutByteSlice)
                                -> bool;
+}
+
+type ExternalMessageHandler = unsafe extern "C" fn(msg: *const c_char);
+
+struct WrExternalLogHandler {
+    error_msg: ExternalMessageHandler,
+    warn_msg: ExternalMessageHandler,
+    info_msg: ExternalMessageHandler,
+    debug_msg: ExternalMessageHandler,
+    trace_msg: ExternalMessageHandler,
+    log_level: LogLevel,
+}
+
+impl WrExternalLogHandler {
+    fn new(log_level: LogLevel) -> WrExternalLogHandler {
+        WrExternalLogHandler {
+            error_msg: gfx_critical_note,
+            warn_msg: gfx_critical_note,
+            info_msg: gecko_printf_stderr_output,
+            debug_msg: gecko_printf_stderr_output,
+            trace_msg: gecko_printf_stderr_output,
+            log_level: log_level,
+        }
+    }
+}
+
+impl Log for WrExternalLogHandler {
+    fn enabled(&self, metadata : &LogMetadata) -> bool {
+        metadata.level() <= self.log_level
+    }
+
+    fn log(&self, record: &LogRecord) {
+        if self.enabled(record.metadata()) {
+            // For file path and line, please check the record.location().
+            let msg = CString::new(format!("WR: {}",
+                                           record.args())).unwrap();
+            unsafe {
+                match record.level() {
+                    LogLevel::Error => (self.error_msg)(msg.as_ptr()),
+                    LogLevel::Warn => (self.warn_msg)(msg.as_ptr()),
+                    LogLevel::Info => (self.info_msg)(msg.as_ptr()),
+                    LogLevel::Debug => (self.debug_msg)(msg.as_ptr()),
+                    LogLevel::Trace => (self.trace_msg)(msg.as_ptr()),
+                }
+            }
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn wr_init_external_log_handler(log_filter: WrLogLevelFilter) {
+    let _ = set_logger(|max_log_level| {
+        max_log_level.set(log_filter);
+        Box::new(WrExternalLogHandler::new(log_filter.to_log_level()
+                                                     .unwrap_or(LogLevel::Error)))
+    });
+}
+
+#[no_mangle]
+pub extern "C" fn wr_shutdown_external_log_handler() {
+    let _ = shutdown_logger();
 }

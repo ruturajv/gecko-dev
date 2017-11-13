@@ -24,13 +24,13 @@ use dom::htmlframesetelement::HTMLFrameSetElement;
 use dom::htmlhtmlelement::HTMLHtmlElement;
 use dom::htmlinputelement::HTMLInputElement;
 use dom::htmllabelelement::HTMLLabelElement;
-use dom::node::{Node, SEQUENTIALLY_FOCUSABLE};
+use dom::node::{Node, NodeFlags};
 use dom::node::{document_from_node, window_from_node};
 use dom::nodelist::NodeList;
 use dom::virtualmethods::VirtualMethods;
 use dom_struct::dom_struct;
 use html5ever::{LocalName, Prefix};
-use std::ascii::AsciiExt;
+use std::collections::HashSet;
 use std::default::Default;
 use std::rc::Rc;
 use style::attr::AttrValue;
@@ -76,18 +76,18 @@ impl HTMLElement {
         let element = self.upcast::<Element>();
         let node = self.upcast::<Node>();
         if element.has_attribute(&local_name!("tabindex")) {
-            node.set_flag(SEQUENTIALLY_FOCUSABLE, true);
+            node.set_flag(NodeFlags::SEQUENTIALLY_FOCUSABLE, true);
         } else {
             match node.type_id() {
                 NodeTypeId::Element(ElementTypeId::HTMLElement(HTMLElementTypeId::HTMLButtonElement)) |
                 NodeTypeId::Element(ElementTypeId::HTMLElement(HTMLElementTypeId::HTMLSelectElement)) |
                 NodeTypeId::Element(ElementTypeId::HTMLElement(HTMLElementTypeId::HTMLIFrameElement)) |
                 NodeTypeId::Element(ElementTypeId::HTMLElement(HTMLElementTypeId::HTMLTextAreaElement))
-                    => node.set_flag(SEQUENTIALLY_FOCUSABLE, true),
+                    => node.set_flag(NodeFlags::SEQUENTIALLY_FOCUSABLE, true),
                 NodeTypeId::Element(ElementTypeId::HTMLElement(HTMLElementTypeId::HTMLLinkElement)) |
                 NodeTypeId::Element(ElementTypeId::HTMLElement(HTMLElementTypeId::HTMLAnchorElement)) => {
                     if element.has_attribute(&local_name!("href")) {
-                        node.set_flag(SEQUENTIALLY_FOCUSABLE, true);
+                        node.set_flag(NodeFlags::SEQUENTIALLY_FOCUSABLE, true);
                     }
                 },
                 _ => {
@@ -97,9 +97,9 @@ impl HTMLElement {
                             AttrValue::String(ref string) => string == "true",
                             _ => false,
                         };
-                        node.set_flag(SEQUENTIALLY_FOCUSABLE, is_true);
+                        node.set_flag(NodeFlags::SEQUENTIALLY_FOCUSABLE, is_true);
                     } else {
-                        node.set_flag(SEQUENTIALLY_FOCUSABLE, false);
+                        node.set_flag(NodeFlags::SEQUENTIALLY_FOCUSABLE, false);
                     }
                     //TODO set SEQUENTIALLY_FOCUSABLE flag if editing host
                     //TODO set SEQUENTIALLY_FOCUSABLE flag if "sorting interface th elements"
@@ -275,6 +275,38 @@ impl HTMLElementMethods for HTMLElement {
         } else {
             self.upcast::<EventTarget>().set_event_handler_common("scroll", listener)
         }
+    }
+
+    // https://html.spec.whatwg.org/multipage/#attr-itemtype
+    fn Itemtypes(&self) -> Option<Vec<DOMString>> {
+        let atoms = self.element.get_tokenlist_attribute(&local_name!("itemtype"), );
+
+        if atoms.is_empty() {
+            return None;
+        }
+
+        let mut item_attr_values = HashSet::new();
+        for attr_value in &atoms {
+            item_attr_values.insert(DOMString::from(String::from(attr_value.trim())));
+        }
+
+        Some(item_attr_values.into_iter().collect())
+    }
+
+    // https://html.spec.whatwg.org/multipage/#names:-the-itemprop-attribute
+    fn PropertyNames(&self) -> Option<Vec<DOMString>> {
+        let atoms = self.element.get_tokenlist_attribute(&local_name!("itemprop"), );
+
+        if atoms.is_empty() {
+            return None;
+        }
+
+        let mut item_attr_values = HashSet::new();
+        for attr_value in &atoms {
+            item_attr_values.insert(DOMString::from(String::from(attr_value.trim())));
+        }
+
+        Some(item_attr_values.into_iter().collect())
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-click
@@ -576,5 +608,18 @@ impl VirtualMethods for HTMLElement {
             s.bind_to_tree(tree_in_doc);
         }
         self.update_sequentially_focusable_status();
+    }
+
+    fn parse_plain_attribute(&self, name: &LocalName, value: DOMString) -> AttrValue {
+        match name {
+            &local_name!("itemprop") => AttrValue::from_serialized_tokenlist(value.into()),
+            &local_name!("itemtype") => AttrValue::from_serialized_tokenlist(value.into()),
+            _ => {
+                self.super_type().unwrap().parse_plain_attribute(
+                    name,
+                    value,
+                )
+            },
+        }
     }
 }

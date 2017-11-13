@@ -53,6 +53,7 @@
 #include "nsFrameSelection.h"
 #include "nsGkAtoms.h"
 #include "nsCSSAnonBoxes.h"
+#include "nsCSSClipPathInstance.h"
 
 #include "nsFrameTraversal.h"
 #include "nsRange.h"
@@ -77,6 +78,7 @@
 #include "nsDisplayList.h"
 #include "nsSVGIntegrationUtils.h"
 #include "SVGObserverUtils.h"
+#include "nsSVGMaskFrame.h"
 #include "nsChangeHint.h"
 #include "nsDeckFrame.h"
 #include "nsSubDocumentFrame.h"
@@ -241,11 +243,12 @@ nsReflowStatus::UpdateTruncated(const ReflowInput& aReflowInput,
   }
 }
 
-void
-nsIFrame::DestroyAnonymousContent(already_AddRefed<nsIContent> aContent)
+/* static */ void
+nsIFrame::DestroyAnonymousContent(nsPresContext* aPresContext,
+                                  already_AddRefed<nsIContent>&& aContent)
 {
-  PresContext()->PresShell()->FrameConstructor()
-               ->DestroyAnonymousContent(mozilla::Move(aContent));
+  aPresContext->PresShell()->FrameConstructor()
+              ->DestroyAnonymousContent(Move(aContent));
 }
 
 // Formerly the nsIFrameDebug interface
@@ -712,7 +715,7 @@ nsFrame::Init(nsIContent*       aContent,
                  "root frame should always be a container");
   }
 
-  if (PresContext()->PresShell()->AssumeAllFramesVisible() &&
+  if (PresShell()->AssumeAllFramesVisible() &&
       TrackingVisibility()) {
     IncApproximateVisibleCount();
   }
@@ -724,7 +727,7 @@ nsFrame::Init(nsIContent*       aContent,
 }
 
 void
-nsFrame::DestroyFrom(nsIFrame* aDestructRoot)
+nsFrame::DestroyFrom(nsIFrame* aDestructRoot, PostDestroyData& aPostDestroyData)
 {
   NS_ASSERTION(!nsContentUtils::IsSafeToRunScript(),
     "destroy called on frame while scripts not blocked");
@@ -760,14 +763,7 @@ nsFrame::DestroyFrom(nsIFrame* aDestructRoot)
     }
   }
 
-  // XXXneerja All instances of 'mContent->GetPrimaryFrame() == this' have been
-  // replaced with IsPrimaryFrame() except for this one.  The reason is that
-  // for native anonymous content our subclass Destroy method has already
-  // called UnbindFromTree so nsINode::mSubtreeRoot might be in use here and
-  // we don't want to call mContent->SetPrimaryFrame(nullptr) in that case.
-  // (bug 1400618 will fix that order)
-  bool isPrimaryFrame = (mContent && mContent->GetPrimaryFrame() == this);
-  if (isPrimaryFrame) {
+  if (IsPrimaryFrame()) {
     // This needs to happen before we clear our Properties() table.
     ActiveLayerTracker::TransferActivityToContent(this, mContent);
 
@@ -822,8 +818,15 @@ nsFrame::DestroyFrom(nsIFrame* aDestructRoot)
   }
 
   // Make sure that our deleted frame can't be returned from GetPrimaryFrame()
-  if (isPrimaryFrame) {
+  if (IsPrimaryFrame()) {
     mContent->SetPrimaryFrame(nullptr);
+
+    // Pass the root of a generated content subtree (e.g. ::after/::before) to
+    // aPostDestroyData to unbind it after frame destruction is done.
+    if (HasAnyStateBits(NS_FRAME_GENERATED_CONTENT) &&
+        mContent->IsRootOfNativeAnonymousSubtree()) {
+      aPostDestroyData.AddGeneratedContent(mContent.forget());
+    }
   }
 
   // Delete all properties attached to the frame, to ensure any property
@@ -966,6 +969,22 @@ nsIFrame::RemoveDisplayItemDataForDeletion()
     }
     delete items;
   }
+
+  if (IsFrameModified()) {
+    nsIFrame* rootFrame = PresContext()->PresShell()->GetRootFrame();
+    MOZ_ASSERT(rootFrame);
+
+    nsTArray<nsIFrame*>* modifiedFrames =
+      rootFrame->GetProperty(nsIFrame::ModifiedFrameList());
+    MOZ_ASSERT(modifiedFrames);
+
+    for (auto& frame : *modifiedFrames) {
+      if (frame == this) {
+        frame = nullptr;
+        break;
+      }
+    }
+  }
 }
 
 void
@@ -987,25 +1006,46 @@ nsIFrame::MarkNeedsDisplayItemRebuild()
     return;
   }
 
-  nsIFrame* viewport = nsLayoutUtils::GetViewportFrame(this);
-  MOZ_ASSERT(viewport);
+  nsIFrame* rootFrame = PresContext()->PresShell()->GetRootFrame();
+  MOZ_ASSERT(rootFrame);
 
-  std::vector<WeakFrame>* modifiedFrames =
-    viewport->GetProperty(nsIFrame::ModifiedFrameList());
-
-  if (!modifiedFrames) {
-    modifiedFrames = new std::vector<WeakFrame>();
-    viewport->SetProperty(nsIFrame::ModifiedFrameList(), modifiedFrames);
+  if (rootFrame->IsFrameModified()) {
+    return;
   }
 
-  modifiedFrames->emplace_back(this);
+  nsTArray<nsIFrame*>* modifiedFrames =
+    rootFrame->GetProperty(nsIFrame::ModifiedFrameList());
+
+  if (!modifiedFrames) {
+    modifiedFrames = new nsTArray<nsIFrame*>();
+    rootFrame->SetProperty(nsIFrame::ModifiedFrameList(), modifiedFrames);
+  }
+
+  if (this == rootFrame) {
+    // If this is the root frame, then marking us as needing a display
+    // item rebuild implies the same for all our descendents. Clear them
+    // all out to reduce the number of modified frames we keep around.
+    for (nsIFrame* f : *modifiedFrames) {
+      if (f) {
+        f->SetFrameIsModified(false);
+      }
+    }
+    modifiedFrames->Clear();
+  } else if (modifiedFrames->Length() > gfxPrefs::LayoutRebuildFrameLimit()) {
+    // If the list starts getting too big, then just mark the root frame
+    // as needing a rebuild.
+    rootFrame->MarkNeedsDisplayItemRebuild();
+    return;
+  }
+
+  modifiedFrames->AppendElement(this);
 
   // TODO: this is a bit of a hack. We are using ModifiedFrameList property to
   // decide whether we are trying to reuse the display list.
-  if (displayRoot != viewport &&
+  if (displayRoot != rootFrame &&
       !displayRoot->HasProperty(nsIFrame::ModifiedFrameList())) {
     displayRoot->SetProperty(nsIFrame::ModifiedFrameList(),
-                             new std::vector<WeakFrame>());
+                             new nsTArray<nsIFrame*>());
   }
 
   MOZ_ASSERT(PresContext()->LayoutPhaseCount(eLayoutPhase_DisplayListBuilding) == 0);
@@ -1906,7 +1946,7 @@ nsIFrame::GetVisibility() const
 void
 nsIFrame::UpdateVisibilitySynchronously()
 {
-  nsIPresShell* presShell = PresContext()->PresShell();
+  nsIPresShell* presShell = PresShell();
   if (!presShell) {
     return;
   }
@@ -1975,7 +2015,7 @@ nsIFrame::EnableVisibilityTracking()
   AddStateBits(NS_FRAME_VISIBILITY_IS_TRACKED);
   SetProperty(VisibilityStateProperty(), 0);
 
-  nsIPresShell* presShell = PresContext()->PresShell();
+  nsIPresShell* presShell = PresShell();
   if (!presShell) {
     return;
   }
@@ -2115,16 +2155,21 @@ public:
 
   virtual void Paint(nsDisplayListBuilder* aBuilder,
                      gfxContext* aCtx) override;
+  bool CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
+                               mozilla::wr::IpcResourceUpdateQueue& aResources,
+                               const StackingContextHelper& aSc,
+                               mozilla::layers::WebRenderLayerManager* aManager,
+                               nsDisplayListBuilder* aDisplayListBuilder) override;
   NS_DISPLAY_DECL_NAME("SelectionOverlay", TYPE_SELECTION_OVERLAY)
 private:
+  Color ComputeColor() const;
+
   int16_t mSelectionValue;
 };
 
-void nsDisplaySelectionOverlay::Paint(nsDisplayListBuilder* aBuilder,
-                                      gfxContext* aCtx)
+Color
+nsDisplaySelectionOverlay::ComputeColor() const
 {
-  DrawTarget& aDrawTarget = *aCtx->GetDrawTarget();
-
   LookAndFeel::ColorID colorID;
   if (mSelectionValue == nsISelectionController::SELECTION_ON) {
     colorID = LookAndFeel::eColorID_TextSelectBackground;
@@ -2136,7 +2181,14 @@ void nsDisplaySelectionOverlay::Paint(nsDisplayListBuilder* aBuilder,
 
   Color c = Color::FromABGR(LookAndFeel::GetColor(colorID, NS_RGB(255, 255, 255)));
   c.a = .5;
-  ColorPattern color(ToDeviceColor(c));
+  return ToDeviceColor(c);
+}
+
+void nsDisplaySelectionOverlay::Paint(nsDisplayListBuilder* aBuilder,
+                                      gfxContext* aCtx)
+{
+  DrawTarget& aDrawTarget = *aCtx->GetDrawTarget();
+  ColorPattern color(ComputeColor());
 
   nsIntRect pxRect =
     mVisibleRect.ToOutsidePixels(mFrame->PresContext()->AppUnitsPerDevPixel());
@@ -2144,6 +2196,22 @@ void nsDisplaySelectionOverlay::Paint(nsDisplayListBuilder* aBuilder,
   MaybeSnapToDevicePixels(rect, aDrawTarget, true);
 
   aDrawTarget.FillRect(rect, color);
+}
+
+
+bool
+nsDisplaySelectionOverlay::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
+                                                  mozilla::wr::IpcResourceUpdateQueue& aResources,
+                                                  const StackingContextHelper& aSc,
+                                                  mozilla::layers::WebRenderLayerManager* aManager,
+                                                  nsDisplayListBuilder* aDisplayListBuilder)
+{
+  wr::LayoutRect bounds = aSc.ToRelativeLayoutRect(
+    LayoutDeviceRect::FromAppUnits(nsRect(ToReferenceFrame(), Frame()->GetSize()),
+                                   mFrame->PresContext()->AppUnitsPerDevPixel()));
+  aBuilder.PushRect(bounds, bounds, !BackfaceIsHidden(),
+                    wr::ToColorF(ComputeColor()));
+  return true;
 }
 
 /********************************************************
@@ -2409,7 +2477,7 @@ DisplayDebugBorders(nsDisplayListBuilder* aBuilder, nsIFrame* aFrame,
   }
   // Draw a border around the current event target
   if (nsFrame::GetShowEventTargetFrameBorder() &&
-      aFrame->PresContext()->PresShell()->GetDrawEventTargetFrame() == aFrame) {
+      aFrame->PresShell()->GetDrawEventTargetFrame() == aFrame) {
     aLists.Outlines()->AppendNewToTop(new (aBuilder)
         nsDisplayGeneric(aBuilder, aFrame, PaintEventTargetBorder, "EventTargetBorder",
                          DisplayItemType::TYPE_EVENT_TARGET_BORDER));
@@ -2460,6 +2528,10 @@ public:
 static void
 CheckForApzAwareEventHandlers(nsDisplayListBuilder* aBuilder, nsIFrame* aFrame)
 {
+  if (aBuilder->GetAncestorHasApzAwareEventHandler()) {
+    return;
+  }
+
   nsIContent* content = aFrame->GetContent();
   if (!content) {
     return;
@@ -2517,6 +2589,109 @@ WrapSeparatorTransform(nsDisplayListBuilder* aBuilder, nsIFrame* aFrame,
     sepIdItem->SetNoExtendContext();
     aTarget->AppendToTop(sepIdItem);
   }
+}
+
+// Try to compute a clip rect to bound the contents of the mask item
+// that will be built for |aMaskedFrame|. If we're not able to compute
+// one, return an empty Maybe.
+// The returned clip rect, if there is one, is relative to |aMaskedFrame|.
+static Maybe<nsRect>
+ComputeClipForMaskItem(nsDisplayListBuilder* aBuilder, nsIFrame* aMaskedFrame,
+                       bool aHandleOpacity)
+{
+  const nsStyleSVGReset* svgReset = aMaskedFrame->StyleSVGReset();
+
+  nsSVGUtils::MaskUsage maskUsage;
+  nsSVGUtils::DetermineMaskUsage(aMaskedFrame, aHandleOpacity, maskUsage);
+
+  nsPoint offsetToUserSpace = nsLayoutUtils::ComputeOffsetToUserSpace(aBuilder, aMaskedFrame);
+  int32_t devPixelRatio = aMaskedFrame->PresContext()->AppUnitsPerDevPixel();
+  gfxPoint devPixelOffsetToUserSpace = nsLayoutUtils::PointToGfxPoint(
+      offsetToUserSpace, devPixelRatio);
+  gfxMatrix cssToDevMatrix = nsSVGUtils::GetCSSPxToDevPxMatrix(aMaskedFrame);
+
+  nsPoint toReferenceFrame;
+  aBuilder->FindReferenceFrameFor(aMaskedFrame, &toReferenceFrame);
+
+  Maybe<gfxRect> combinedClip;
+  if (maskUsage.shouldApplyBasicShape) {
+    Rect result = nsCSSClipPathInstance::GetBoundingRectForBasicShapeClip(
+        aMaskedFrame, svgReset->mClipPath);
+    combinedClip = Some(ThebesRect(result));
+  } else if (maskUsage.shouldApplyClipPath) {
+    gfxRect result = nsSVGUtils::GetBBox(aMaskedFrame,
+        nsSVGUtils::eBBoxIncludeClipped |
+        nsSVGUtils::eBBoxIncludeFill |
+        nsSVGUtils::eBBoxIncludeMarkers);
+    combinedClip = Some(cssToDevMatrix.TransformBounds(result));
+  } else {
+    // The code for this case is adapted from ComputeMaskGeometry().
+
+    nsRect borderArea(toReferenceFrame, aMaskedFrame->GetSize());
+    borderArea -= offsetToUserSpace;
+
+    // Use an infinite dirty rect to pass into nsCSSRendering::
+    // GetImageLayerClip() because we don't have an actual dirty rect to
+    // pass in. This is fine because the only time GetImageLayerClip() will
+    // not intersect the incoming dirty rect with something is in the "NoClip"
+    // case, and we handle that specially.
+    nsRect dirtyRect(nscoord_MIN/2, nscoord_MIN/2, nscoord_MAX, nscoord_MAX);
+
+    nsIFrame* firstFrame = nsLayoutUtils::FirstContinuationOrIBSplitSibling(aMaskedFrame);
+    SVGObserverUtils::EffectProperties effectProperties =
+        SVGObserverUtils::GetEffectProperties(firstFrame);
+    nsTArray<nsSVGMaskFrame*> maskFrames = effectProperties.GetMaskFrames();
+
+    for (uint32_t i = 0; i < maskFrames.Length(); ++i) {
+      gfxRect clipArea;
+      if (maskFrames[i]) {
+        clipArea = maskFrames[i]->GetMaskArea(aMaskedFrame);
+        clipArea = cssToDevMatrix.TransformBounds(clipArea);
+      } else {
+        const auto& layer = svgReset->mMask.mLayers[i];
+        if (layer.mClip == StyleGeometryBox::NoClip) {
+          return Nothing();
+        }
+
+        nsCSSRendering::ImageLayerClipState clipState;
+        nsCSSRendering::GetImageLayerClip(layer, aMaskedFrame,
+                                          *aMaskedFrame->StyleBorder(),
+                                          borderArea, dirtyRect,
+                                          false /* aWillPaintBorder */,
+                                          devPixelRatio, &clipState);
+        clipArea = clipState.mDirtyRectInDevPx;
+      }
+      combinedClip = UnionMaybeRects(combinedClip, Some(clipArea));
+    }
+  }
+  if (combinedClip) {
+    if (combinedClip->IsEmpty()) {
+      // *clipForMask might be empty if all mask references are not resolvable
+      // or the size of them are empty. We still need to create a transparent mask
+      // before bug 1276834 fixed, so don't clip ctx by an empty rectangle for for
+      // now.
+      return Nothing();
+    }
+
+    // Convert to user space.
+    *combinedClip += devPixelOffsetToUserSpace;
+
+    // Round the clip out. In FrameLayerBuilder we round clips to nearest
+    // pixels, and if we have a really thin clip here, that can cause the
+    // clip to become empty if we didn't round out here.
+    // The rounding happens in coordinates that are relative to the reference
+    // frame, which matches what FrameLayerBuilder does.
+    combinedClip->RoundOut();
+
+    // Convert to app units.
+    nsRect result = nsLayoutUtils::RoundGfxRectToAppRect(*combinedClip, devPixelRatio);
+
+    // The resulting clip is relative to the reference frame, but the caller
+    // expects it to be relative to the masked frame, so adjust it.
+    result -= toReferenceFrame;
+    return Some(result);
+  }
+  return Nothing();
 }
 
 void
@@ -2639,7 +2814,7 @@ nsIFrame::BuildDisplayListForStackingContext(nsDisplayListBuilder* aBuilder,
   // need the container even though the merged result will.
   if (aBuilder->IsRetainingDisplayList() && BuiltBlendContainer()) {
     dirtyRect = visibleRect;
-    aBuilder->MarkFrameModifiedDuringBuilding(this);
+    aBuilder->MarkCurrentFrameModifiedDuringBuilding();
   }
 
   bool usingFilter = StyleEffects()->HasFilters();
@@ -2733,6 +2908,11 @@ nsIFrame::BuildDisplayListForStackingContext(nsDisplayListBuilder* aBuilder,
     clipState.Clear();
   }
 
+  Maybe<nsRect> clipForMask;
+  if (usingMask) {
+    clipForMask = ComputeClipForMaskItem(aBuilder, this, !useOpacity);
+  }
+
   nsDisplayListCollection set(aBuilder);
   {
     DisplayListClipState::AutoSaveRestore nestedClipState(aBuilder);
@@ -2745,6 +2925,10 @@ nsIFrame::BuildDisplayListForStackingContext(nsDisplayListBuilder* aBuilder,
 
     Maybe<nsRect> contentClip =
       GetClipPropClipRect(disp, effects, GetSize());
+
+    if (usingMask) {
+      contentClip = IntersectMaybeRects(contentClip, clipForMask);
+    }
 
     if (contentClip) {
       aBuilder->IntersectDirtyRect(*contentClip);
@@ -2793,7 +2977,7 @@ nsIFrame::BuildDisplayListForStackingContext(nsDisplayListBuilder* aBuilder,
     if (aBuilder->ContainsBlendMode() != BuiltBlendContainer() &&
         aBuilder->IsRetainingDisplayList()) {
       SetBuiltBlendContainer(aBuilder->ContainsBlendMode());
-      aBuilder->MarkFrameModifiedDuringBuilding(this);
+      aBuilder->MarkCurrentFrameModifiedDuringBuilding();
 
       // If we did a partial build then delete all the items we just built
       // and repeat building with the full area.
@@ -2914,7 +3098,6 @@ nsIFrame::BuildDisplayListForStackingContext(nsDisplayListBuilder* aBuilder,
    */
   if (aBuilder->ContainsBlendMode()) {
     DisplayListClipState::AutoSaveRestore blendContainerClipState(aBuilder);
-    blendContainerClipState.ClearUpToASR(containerItemASR);
     resultList.AppendNewToTop(
       nsDisplayBlendContainer::CreateForMixBlendMode(aBuilder, this, &resultList,
                                                      containerItemASR));
@@ -2953,11 +3136,22 @@ nsIFrame::BuildDisplayListForStackingContext(nsDisplayListBuilder* aBuilder,
 
     if (usingMask) {
       DisplayListClipState::AutoSaveRestore maskClipState(aBuilder);
-      maskClipState.ClearUpToASR(containerItemASR);
+      // The mask should move with aBuilder->CurrentActiveScrolledRoot(), so
+      // that's the ASR we prefer to use for the mask item. However, we can
+      // only do this if the mask if clipped with respect to that ASR, because
+      // an item always needs to have finite bounds with respect to its ASR.
+      // If we weren't able to compute a clip for the mask, we fall back to
+      // using containerItemASR, which is the lowest common ancestor clip of
+      // the mask's contents. That's not entirely crrect, but it satisfies
+      // the base requirement of the ASR system (that items have finite bounds
+      // wrt. their ASR).
+      const ActiveScrolledRoot* maskASR = clipForMask.isSome()
+                                        ? aBuilder->CurrentActiveScrolledRoot()
+                                        : containerItemASR;
       /* List now emptied, so add the new list to the top. */
       resultList.AppendNewToTop(
-          new (aBuilder) nsDisplayMask(aBuilder, this, &resultList,
-                                       !useOpacity, containerItemASR));
+          new (aBuilder) nsDisplayMask(aBuilder, this, &resultList, !useOpacity,
+                                       maskASR));
     }
 
     // Also add the hoisted scroll info items. We need those for APZ scrolling
@@ -2977,7 +3171,6 @@ nsIFrame::BuildDisplayListForStackingContext(nsDisplayListBuilder* aBuilder,
     // The clip we would set on an element with opacity would clip
     // all descendant content, but some should not be clipped.
     DisplayListClipState::AutoSaveRestore opacityClipState(aBuilder);
-    opacityClipState.ClearUpToASR(containerItemASR);
     resultList.AppendNewToTop(
         new (aBuilder) nsDisplayOpacity(aBuilder, this, &resultList,
                                         containerItemASR,
@@ -3120,7 +3313,6 @@ nsIFrame::BuildDisplayListForStackingContext(nsDisplayListBuilder* aBuilder,
 
   if (useBlendMode) {
     DisplayListClipState::AutoSaveRestore blendModeClipState(aBuilder);
-    blendModeClipState.ClearUpToASR(containerItemASR);
     resultList.AppendNewToTop(
         new (aBuilder) nsDisplayBlendMode(aBuilder, this, &resultList,
                                           effects->mMixBlendMode,
@@ -3152,7 +3344,9 @@ WrapInWrapList(nsDisplayListBuilder* aBuilder,
     return item;
   }
 
-  return new (aBuilder) nsDisplayWrapList(aBuilder, aFrame, aList, aContainerASR);
+  // Clear clip rect for the construction of the items below. Since we're
+  // clipping all their contents, they themselves don't need to be clipped.
+  return new (aBuilder) nsDisplayWrapList(aBuilder, aFrame, aList, aContainerASR, true);
 }
 
 /**
@@ -3177,7 +3371,7 @@ DescendIntoChild(nsDisplayListBuilder* aBuilder, nsIFrame *aChild,
     // There are cases where the "ignore scroll frame" on the builder is not set
     // correctly, and so we additionally want to catch cases where the child is
     // a root scrollframe and we are ignoring scrolling on the viewport.
-    nsIPresShell* shell = child->PresContext()->PresShell();
+    nsIPresShell* shell = child->PresShell();
     bool keepDescending = child == aBuilder->GetIgnoreScrollFrame() ||
       (shell->IgnoringViewportScrolling() && child == shell->GetRootScrollFrame());
     if (!keepDescending) {
@@ -3364,7 +3558,7 @@ nsIFrame::BuildDisplayListForChild(nsDisplayListBuilder*   aBuilder,
   // (which means we're painting it, modulo occlusion), mark it as visible
   // within the displayport.
   if (aBuilder->IsPaintingToWindow() && child->TrackingVisibility()) {
-    child->PresContext()->PresShell()->EnsureFrameInApproximatelyVisibleList(child);
+    child->PresShell()->EnsureFrameInApproximatelyVisibleList(child);
     awayFromCommonPath = true;
   }
 
@@ -3387,7 +3581,6 @@ nsIFrame::BuildDisplayListForChild(nsDisplayListBuilder*   aBuilder,
        disp->mIsolation != NS_STYLE_ISOLATION_AUTO ||
        (disp->mWillChangeBitField & NS_STYLE_WILL_CHANGE_STACKING_CONTEXT) ||
       (aFlags & DISPLAY_CHILD_FORCE_STACKING_CONTEXT)) {
-    // If you change this, also change IsPseudoStackingContextFromStyle()
     pseudoStackingContext = true;
     awayFromCommonPath = true;
   }
@@ -3453,7 +3646,9 @@ nsIFrame::BuildDisplayListForChild(nsDisplayListBuilder*   aBuilder,
     nsDisplayListBuilder::AutoContainerASRTracker contASRTracker(aBuilder);
     child->BuildDisplayListForStackingContext(aBuilder, &list, &canSkipWrapList);
     wrapListASR = contASRTracker.GetContainerASR();
-    aBuilder->DisplayCaret(child, &list);
+    if (aBuilder->DisplayCaret(child, &list)) {
+      canSkipWrapList = false;
+    }
   } else {
     Maybe<nsRect> clipPropClip =
       child->GetClipPropClipRect(disp, effects, child->GetSize());
@@ -3519,7 +3714,9 @@ nsIFrame::BuildDisplayListForChild(nsDisplayListBuilder*   aBuilder,
     aBuilder->AdjustWindowDraggingRegion(child);
     nsDisplayListBuilder::AutoContainerASRTracker contASRTracker(aBuilder);
     child->BuildDisplayList(aBuilder, pseudoStack);
-    aBuilder->DisplayCaret(child, pseudoStack.Content());
+    if (aBuilder->DisplayCaret(child, pseudoStack.Content())) {
+      canSkipWrapList = false;
+    }
     wrapListASR = contASRTracker.GetContainerASR();
 
     list.AppendToTop(pseudoStack.BorderBackground());
@@ -3534,10 +3731,6 @@ nsIFrame::BuildDisplayListForChild(nsDisplayListBuilder*   aBuilder,
   }
 
   buildingForChild.RestoreBuildingInvisibleItemsValue();
-
-  // Clear clip rect for the construction of the items below. Since we're
-  // clipping all their contents, they themselves don't need to be clipped.
-  clipState.ClearUpToASR(wrapListASR);
 
   if (isPositioned || isVisuallyAtomic ||
       (aFlags & DISPLAY_CHILD_FORCE_STACKING_CONTEXT)) {
@@ -4399,7 +4592,7 @@ NS_IMETHODIMP nsFrame::HandleRelease(nsPresContext* aPresContext,
         offsets = GetContentOffsetsFromPoint(pt, SKIP_HIDDEN);
         handleTableSelection = false;
       } else {
-        GetDataForTableSelection(frameselection, PresContext()->PresShell(),
+        GetDataForTableSelection(frameselection, PresShell(),
                                  aEvent->AsMouseEvent(),
                                  getter_AddRefs(parentContent),
                                  &contentOffsetForTableSel,
@@ -6333,7 +6526,8 @@ nsIFrame* nsIFrame::GetTailContinuation()
        next = frame->GetNextContinuation())  {
     frame = next;
   }
-  NS_POSTCONDITION(frame, "illegal state in continuation chain.");
+
+  MOZ_ASSERT(frame, "illegal state in continuation chain.");
   return frame;
 }
 
@@ -7729,7 +7923,7 @@ nsIFrame::GetConstFrameSelection() const
     frame = frame->GetParent();
   }
 
-  return PresContext()->PresShell()->ConstFrameSelection();
+  return PresShell()->ConstFrameSelection();
 }
 
 bool
@@ -10692,35 +10886,12 @@ nsIFrame::IsSelected() const
 }
 
 /*static*/ void
-nsIFrame::DestroyContentArray(ContentArray* aArray)
-{
-  for (nsIContent* content : *aArray) {
-    content->UnbindFromTree();
-    NS_RELEASE(content);
-  }
-  delete aArray;
-}
-
-/*static*/ void
 nsIFrame::DestroyWebRenderUserDataTable(WebRenderUserDataTable* aTable)
 {
   for (auto iter = aTable->Iter(); !iter.Done(); iter.Next()) {
     iter.UserData()->RemoveFromTable();
   }
   delete aTable;
-}
-
-bool
-nsIFrame::IsPseudoStackingContextFromStyle() {
-  // If you change this, also change the computation of pseudoStackingContext
-  // in BuildDisplayListForChild()
-  if (StyleEffects()->mOpacity != 1.0f) {
-    return true;
-  }
-  const nsStyleDisplay* disp = StyleDisplay();
-  return disp->IsAbsPosContainingBlock(this) ||
-         disp->IsFloating(this) ||
-         (disp->mWillChangeBitField & NS_STYLE_WILL_CHANGE_STACKING_CONTEXT);
 }
 
 bool

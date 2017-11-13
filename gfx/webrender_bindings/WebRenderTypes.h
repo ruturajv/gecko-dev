@@ -1,5 +1,6 @@
-/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * This Source Code Form is subject to the terms of the Mozilla Public
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=8 sts=2 et sw=2 tw=80: */
+/* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
@@ -258,6 +259,16 @@ static inline wr::ColorF ToColorF(const gfx::Color& color)
   return c;
 }
 
+static inline wr::ColorU ToColorU(const gfx::Color& color)
+{
+  wr::ColorU c;
+  c.r = uint8_t(color.r * 255.0f);
+  c.g = uint8_t(color.g * 255.0f);
+  c.b = uint8_t(color.b * 255.0f);
+  c.a = uint8_t(color.a * 255.0f);
+  return c;
+}
+
 static inline wr::LayoutPoint ToLayoutPoint(const mozilla::LayoutDevicePoint& point)
 {
   wr::LayoutPoint p;
@@ -294,7 +305,7 @@ static inline wr::LayoutRect ToLayoutRect(const mozilla::LayoutDeviceRect& rect)
   return r;
 }
 
-static inline wr::LayoutRect ToLayoutRect(const gfxRect rect)
+static inline wr::LayoutRect ToLayoutRect(const gfxRect& rect)
 {
   wr::LayoutRect r;
   r.origin.x = rect.x;

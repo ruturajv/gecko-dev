@@ -3,18 +3,19 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use api::{ClipId, DeviceIntRect, LayerPixel, LayerPoint, LayerRect, LayerSize};
-use api::{LayerToScrollTransform, LayerToWorldTransform, LayerVector2D, PipelineId};
-use api::{ScrollClamping, ScrollEventPhase, ScrollLocation, ScrollSensitivity, StickyFrameInfo};
-use api::WorldPoint;
+use api::{LayerToScrollTransform, LayerToWorldTransform, LayerVector2D, LayoutVector2D, PipelineId};
+use api::{ScrollClamping, ScrollEventPhase, ScrollLocation, ScrollSensitivity};
+use api::{StickyOffsetBounds, WorldPoint};
 use clip::{ClipRegion, ClipSources, ClipSourcesHandle, ClipStore};
 use clip_scroll_tree::{CoordinateSystemId, TransformUpdateState};
+use euclid::SideOffsets2D;
 use geometry::ray_intersects_rect;
 use gpu_cache::GpuCache;
+use gpu_types::{ClipScrollNodeIndex, ClipScrollNodeData};
 use render_task::{ClipChain, ClipChainNode, ClipWorkItem};
 use resource_cache::ResourceCache;
 use spring::{DAMPING, STIFFNESS, Spring};
 use std::rc::Rc;
-use tiling::{PackedLayer, PackedLayerIndex};
 use util::{MatrixHelpers, MaxRect};
 
 #[cfg(target_os = "macos")]
@@ -23,14 +24,12 @@ const CAN_OVERSCROLL: bool = true;
 #[cfg(not(target_os = "macos"))]
 const CAN_OVERSCROLL: bool = false;
 
+const MAX_LOCAL_VIEWPORT: f32 = 1000000.0;
+
 #[derive(Debug)]
 pub struct ClipInfo {
     /// The clips for this node.
     pub clip_sources: ClipSourcesHandle,
-
-    /// The packed layer index for this node, which is used to render a clip mask
-    /// for it, if necessary.
-    pub packed_layer_index: PackedLayerIndex,
 
     /// Whether or not this clip node automatically creates a mask.
     pub is_masking: bool,
@@ -39,7 +38,6 @@ pub struct ClipInfo {
 impl ClipInfo {
     pub fn new(
         clip_region: ClipRegion,
-        packed_layer_index: PackedLayerIndex,
         clip_store: &mut ClipStore,
     ) -> ClipInfo {
         let clip_sources = ClipSources::from(clip_region);
@@ -47,8 +45,33 @@ impl ClipInfo {
 
         ClipInfo {
             clip_sources: clip_store.insert(clip_sources),
-            packed_layer_index,
             is_masking,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct StickyFrameInfo {
+    pub margins: SideOffsets2D<Option<f32>>,
+    pub vertical_offset_bounds: StickyOffsetBounds,
+    pub horizontal_offset_bounds: StickyOffsetBounds,
+    pub previously_applied_offset: LayoutVector2D,
+    pub current_offset: LayerVector2D,
+}
+
+impl StickyFrameInfo {
+    pub fn new(
+        margins: SideOffsets2D<Option<f32>>,
+        vertical_offset_bounds: StickyOffsetBounds,
+        horizontal_offset_bounds: StickyOffsetBounds,
+        previously_applied_offset: LayoutVector2D
+    ) -> StickyFrameInfo {
+        StickyFrameInfo {
+            margins,
+            vertical_offset_bounds,
+            horizontal_offset_bounds,
+            previously_applied_offset,
+            current_offset: LayerVector2D::zero(),
         }
     }
 }
@@ -66,10 +89,10 @@ pub enum NodeType {
     ScrollFrame(ScrollingState),
 
     /// A special kind of node that adjusts its position based on the position
-    /// of its parent node and a given set of sticky positioning constraints.
+    /// of its parent node and a given set of sticky positioning offset bounds.
     /// Sticky positioned is described in the CSS Positioned Layout Module Level 3 here:
     /// https://www.w3.org/TR/css-position-3/#sticky-pos
-    StickyFrame(StickyFrameInfo, LayerVector2D),
+    StickyFrame(StickyFrameInfo),
 }
 
 /// Contains information common among all types of ClipScrollTree nodes.
@@ -86,7 +109,8 @@ pub struct ClipScrollNode {
     /// This is in the coordinate system of the node origin.
     /// Precisely, it combines the local clipping rectangles of all the parent
     /// nodes on the way to the root, including those of `ClipRegion` rectangles.
-    /// The combined clip is lossy/concervative on `ReferenceFrame` nodes.
+    /// The combined clip is reset to maximum when an incompatible coordinate
+    /// system is encountered.
     pub combined_local_viewport_rect: LayerRect,
 
     /// World transform for the viewport rect itself. This is the parent
@@ -124,6 +148,10 @@ pub struct ClipScrollNode {
 
     /// The axis-aligned coordinate system id of this node.
     pub coordinate_system_id: CoordinateSystemId,
+
+    /// A linear ID / index of this clip-scroll node. Used as a reference to
+    /// pass to shaders, to allow them to fetch a given clip-scroll node.
+    pub id: ClipScrollNodeIndex,
 }
 
 impl ClipScrollNode {
@@ -132,7 +160,7 @@ impl ClipScrollNode {
         parent_id: Option<ClipId>,
         rect: &LayerRect,
         node_type: NodeType
-    ) -> ClipScrollNode {
+    ) -> Self {
         ClipScrollNode {
             local_viewport_rect: *rect,
             local_clip_rect: *rect,
@@ -147,6 +175,7 @@ impl ClipScrollNode {
             clip_chain_node: None,
             combined_clip_outer_bounds: DeviceIntRect::max_rect(),
             coordinate_system_id: CoordinateSystemId(0),
+            id: ClipScrollNodeIndex(0),
         }
     }
 
@@ -156,7 +185,7 @@ impl ClipScrollNode {
         frame_rect: &LayerRect,
         content_size: &LayerSize,
         scroll_sensitivity: ScrollSensitivity,
-    ) -> ClipScrollNode {
+    ) -> Self {
         let node_type = NodeType::ScrollFrame(ScrollingState::new(
             scroll_sensitivity,
             LayerSize::new(
@@ -173,7 +202,7 @@ impl ClipScrollNode {
         parent_id: ClipId,
         clip_info: ClipInfo,
         clip_rect: LayerRect,
-    ) -> ClipScrollNode {
+    ) -> Self {
         Self::new(pipeline_id, Some(parent_id), &clip_rect, NodeType::Clip(clip_info))
     }
 
@@ -183,7 +212,7 @@ impl ClipScrollNode {
         transform: &LayerToScrollTransform,
         origin_in_parent_reference_frame: LayerVector2D,
         pipeline_id: PipelineId,
-    ) -> ClipScrollNode {
+    ) -> Self {
         let info = ReferenceFrameInfo {
             transform: *transform,
             origin_in_parent_reference_frame,
@@ -196,8 +225,8 @@ impl ClipScrollNode {
         frame_rect: LayerRect,
         sticky_frame_info: StickyFrameInfo,
         pipeline_id: PipelineId,
-    ) -> ClipScrollNode {
-        let node_type = NodeType::StickyFrame(sticky_frame_info, LayerVector2D::zero());
+    ) -> Self {
+        let node_type = NodeType::StickyFrame(sticky_frame_info);
         Self::new(pipeline_id, Some(parent_id), &frame_rect, node_type)
     }
 
@@ -206,14 +235,16 @@ impl ClipScrollNode {
         self.children.push(child);
     }
 
-    pub fn apply_old_scrolling_state(&mut self, new_scrolling: &ScrollingState) {
+    pub fn apply_old_scrolling_state(&mut self, old_scrolling_state: &ScrollingState) {
         match self.node_type {
             NodeType::ScrollFrame(ref mut scrolling) => {
                 let scroll_sensitivity = scrolling.scroll_sensitivity;
-                *scrolling = *new_scrolling;
+                let scrollable_size = scrolling.scrollable_size;
+                *scrolling = *old_scrolling_state;
                 scrolling.scroll_sensitivity = scroll_sensitivity;
+                scrolling.scrollable_size = scrollable_size;
             }
-            _ if new_scrolling.offset != LayerVector2D::zero() => {
+            _ if old_scrolling_state.offset != LayerVector2D::zero() => {
                 warn!("Tried to scroll a non-scroll node.")
             }
             _ => {}
@@ -261,15 +292,11 @@ impl ClipScrollNode {
     pub fn update_clip_work_item(
         &mut self,
         state: &mut TransformUpdateState,
-        screen_rect: &DeviceIntRect,
         device_pixel_ratio: f32,
-        packed_layers: &mut Vec<PackedLayer>,
         clip_store: &mut ClipStore,
         resource_cache: &mut ResourceCache,
         gpu_cache: &mut GpuCache,
     ) {
-        self.coordinate_system_id = state.current_coordinate_system_id;
-
         let current_clip_chain = state.parent_clip_chain.clone();
         let clip_info = match self.node_type {
             NodeType::Clip(ref mut info) if info.is_masking => info,
@@ -280,29 +307,9 @@ impl ClipScrollNode {
             }
         };
 
-        // The coordinates of the mask are relative to the origin of the node itself,
-        // so we need to account for that origin in the transformation we assign to
-        // the packed layer.
-        let transform = self.world_viewport_transform
-            .pre_translate(self.local_viewport_rect.origin.to_vector().to_3d());
-
-        let packed_layer = &mut packed_layers[clip_info.packed_layer_index.0];
-        if packed_layer.set_transform(transform) {
-            // Meanwhile, the combined viewport rect is relative to the reference frame, so
-            // we move it into the local coordinate system of the node.
-            let local_viewport_rect = self.combined_local_viewport_rect
-                .translate(&-self.local_viewport_rect.origin.to_vector());
-
-            packed_layer.set_rect(
-                &local_viewport_rect,
-                screen_rect,
-                device_pixel_ratio,
-            );
-        }
-
         let clip_sources = clip_store.get_mut(&clip_info.clip_sources);
         clip_sources.update(
-            &transform,
+            &self.world_viewport_transform,
             gpu_cache,
             resource_cache,
             device_pixel_ratio,
@@ -319,7 +326,7 @@ impl ClipScrollNode {
         // TODO: Combine rectangles in the same axis-aligned clip space here?
         self.clip_chain_node = Some(Rc::new(ClipChainNode {
             work_item: ClipWorkItem {
-                layer_index: clip_info.packed_layer_index,
+                scroll_node_id: self.id,
                 clip_sources: clip_info.clip_sources.weak(),
                 coordinate_system_id: state.current_coordinate_system_id,
             },
@@ -330,7 +337,11 @@ impl ClipScrollNode {
         state.parent_clip_chain = self.clip_chain_node.clone();
     }
 
-    pub fn update_transform(&mut self, state: &mut TransformUpdateState) {
+    pub fn update_transform(
+        &mut self,
+        state: &mut TransformUpdateState,
+        node_data: &mut Vec<ClipScrollNodeData>,
+    ) {
         // We calculate this here to avoid a double-borrow later.
         let sticky_offset = self.calculate_sticky_offset(
             &state.nearest_scrolling_ancestor_offset,
@@ -359,8 +370,8 @@ impl ClipScrollNode {
                     self.reference_frame_relative_scroll_offset,
                 )
             }
-            NodeType::StickyFrame(_, ref mut node_sticky_offset) => {
-                *node_sticky_offset = sticky_offset;
+            NodeType::StickyFrame(ref mut info) => {
+                info.current_offset = sticky_offset;
                 self.combined_local_viewport_rect =
                     state.parent_combined_viewport_rect
                     .translate(&-sticky_offset)
@@ -368,10 +379,7 @@ impl ClipScrollNode {
                     .unwrap_or(LayerRect::zero());
                 self.reference_frame_relative_scroll_offset =
                     state.parent_accumulated_scroll_offset + sticky_offset;
-                (
-                    LayerToScrollTransform::identity(),
-                    self.reference_frame_relative_scroll_offset,
-                )
+                (LayerToScrollTransform::identity(), self.reference_frame_relative_scroll_offset)
             }
         };
 
@@ -420,15 +428,48 @@ impl ClipScrollNode {
                 state.nearest_scrolling_ancestor_offset = scrolling.offset;
                 state.nearest_scrolling_ancestor_viewport = self.local_viewport_rect;
             }
-            NodeType::StickyFrame(_, sticky_offset) => {
+            NodeType::StickyFrame(ref info) => {
                 // We don't translate the combined rect by the sticky offset, because sticky
                 // offsets actually adjust the node position itself, whereas scroll offsets
                 // only apply to contents inside the node.
                 state.parent_combined_viewport_rect = self.combined_local_viewport_rect;
                 state.parent_accumulated_scroll_offset =
-                    sticky_offset + state.parent_accumulated_scroll_offset;
+                    info.current_offset + state.parent_accumulated_scroll_offset;
             }
         }
+
+        // Store coord system ID, and also the ID used for shaders to reference this node.
+        self.coordinate_system_id = state.current_coordinate_system_id;
+        self.id = ClipScrollNodeIndex(node_data.len() as u32);
+
+        let local_clip_rect = if self.world_content_transform.has_perspective_component() {
+            LayerRect::new(
+                LayerPoint::new(-MAX_LOCAL_VIEWPORT, -MAX_LOCAL_VIEWPORT),
+                LayerSize::new(2.0 * MAX_LOCAL_VIEWPORT, 2.0 * MAX_LOCAL_VIEWPORT)
+            )
+        } else {
+            self.combined_local_viewport_rect
+        };
+
+        let data = match self.world_content_transform.inverse() {
+            Some(inverse) => {
+                ClipScrollNodeData {
+                    transform: self.world_content_transform,
+                    inv_transform: inverse,
+                    local_clip_rect,
+                    reference_frame_relative_scroll_offset: self.reference_frame_relative_scroll_offset,
+                    scroll_offset: self.scroll_offset(),
+                }
+            }
+            None => {
+                state.combined_outer_clip_bounds = DeviceIntRect::zero();
+
+                ClipScrollNodeData::invalid()
+            }
+        };
+
+        // Write the data that will be made available to the GPU for this node.
+        node_data.push(data);
     }
 
     fn calculate_sticky_offset(
@@ -436,39 +477,106 @@ impl ClipScrollNode {
         viewport_scroll_offset: &LayerVector2D,
         viewport_rect: &LayerRect,
     ) -> LayerVector2D {
-        let sticky_frame_info = match self.node_type {
-            NodeType::StickyFrame(info, _) => info,
+        let info = match self.node_type {
+            NodeType::StickyFrame(ref info) => info,
             _ => return LayerVector2D::zero(),
         };
 
+        if info.margins.top.is_none() && info.margins.bottom.is_none() &&
+            info.margins.left.is_none() && info.margins.right.is_none() {
+            return LayerVector2D::zero();
+        }
+
+        // The viewport and margins of the item establishes the maximum amount that it can
+        // be offset in order to keep it on screen. Since we care about the relationship
+        // between the scrolled content and unscrolled viewport we adjust the viewport's
+        // position by the scroll offset in order to work with their relative positions on the
+        // page.
         let sticky_rect = self.local_viewport_rect.translate(viewport_scroll_offset);
+
         let mut sticky_offset = LayerVector2D::zero();
-
-        if let Some(info) = sticky_frame_info.top {
-            sticky_offset.y = viewport_rect.min_y() + info.margin - sticky_rect.min_y();
-            sticky_offset.y = sticky_offset.y.max(0.0).min(info.max_offset);
+        if let Some(margin) = info.margins.top {
+            let top_viewport_edge = viewport_rect.min_y() + margin;
+            if sticky_rect.min_y() < top_viewport_edge {
+                // If the sticky rect is positioned above the top edge of the viewport (plus margin)
+                // we move it down so that it is fully inside the viewport.
+                sticky_offset.y = top_viewport_edge - sticky_rect.min_y();
+            } else if info.previously_applied_offset.y > 0.0 &&
+                sticky_rect.min_y() > top_viewport_edge {
+                // However, if the sticky rect is positioned *below* the top edge of the viewport
+                // and there is already some offset applied to the sticky rect's position, then
+                // we need to move it up so that it remains at the correct position. This
+                // makes sticky_offset.y negative and effectively reduces the amount of the
+                // offset that was already applied. We limit the reduction so that it can, at most,
+                // cancel out the already-applied offset, but should never end up adjusting the
+                // position the other way.
+                sticky_offset.y = top_viewport_edge - sticky_rect.min_y();
+                sticky_offset.y = sticky_offset.y.max(-info.previously_applied_offset.y);
+            }
+            debug_assert!(sticky_offset.y + info.previously_applied_offset.y >= 0.0);
         }
 
-        if sticky_offset.y == 0.0 {
-            if let Some(info) = sticky_frame_info.bottom {
-                sticky_offset.y = (viewport_rect.max_y() - info.margin) -
-                    (sticky_offset.y + sticky_rect.min_y() + sticky_rect.size.height);
-                sticky_offset.y = sticky_offset.y.min(0.0).max(info.max_offset);
+        // If we don't have a sticky-top offset (sticky_offset.y + info.previously_applied_offset.y
+        // == 0), or if we have a previously-applied bottom offset (previously_applied_offset.y < 0)
+        // then we check for handling the bottom margin case.
+        if sticky_offset.y + info.previously_applied_offset.y <= 0.0 {
+            if let Some(margin) = info.margins.bottom {
+                // Same as the above case, but inverted for bottom-sticky items. Here
+                // we adjust items upwards, resulting in a negative sticky_offset.y,
+                // or reduce the already-present upward adjustment, resulting in a positive
+                // sticky_offset.y.
+                let bottom_viewport_edge = viewport_rect.max_y() - margin;
+                if sticky_rect.max_y() > bottom_viewport_edge {
+                    sticky_offset.y = bottom_viewport_edge - sticky_rect.max_y();
+                } else if info.previously_applied_offset.y < 0.0 &&
+                    sticky_rect.max_y() < bottom_viewport_edge {
+                    sticky_offset.y = bottom_viewport_edge - sticky_rect.max_y();
+                    sticky_offset.y = sticky_offset.y.min(-info.previously_applied_offset.y);
+                }
+                debug_assert!(sticky_offset.y + info.previously_applied_offset.y <= 0.0);
             }
         }
 
-        if let Some(info) = sticky_frame_info.left {
-            sticky_offset.x = viewport_rect.min_x() + info.margin - sticky_rect.min_x();
-            sticky_offset.x = sticky_offset.x.max(0.0).min(info.max_offset);
+        // Same as above, but for the x-axis.
+        if let Some(margin) = info.margins.left {
+            let left_viewport_edge = viewport_rect.min_x() + margin;
+            if sticky_rect.min_x() < left_viewport_edge {
+                sticky_offset.x = left_viewport_edge - sticky_rect.min_x();
+            } else if info.previously_applied_offset.x > 0.0 &&
+                sticky_rect.min_x() > left_viewport_edge {
+                sticky_offset.x = left_viewport_edge - sticky_rect.min_x();
+                sticky_offset.x = sticky_offset.x.max(-info.previously_applied_offset.x);
+            }
+            debug_assert!(sticky_offset.x + info.previously_applied_offset.x >= 0.0);
         }
 
-        if sticky_offset.x == 0.0 {
-            if let Some(info) = sticky_frame_info.right {
-                sticky_offset.x = (viewport_rect.max_x() - info.margin) -
-                    (sticky_offset.x + sticky_rect.min_x() + sticky_rect.size.width);
-                sticky_offset.x = sticky_offset.x.min(0.0).max(info.max_offset);
+        if sticky_offset.x + info.previously_applied_offset.x <= 0.0 {
+            if let Some(margin) = info.margins.right {
+                let right_viewport_edge = viewport_rect.max_x() - margin;
+                if sticky_rect.max_x() > right_viewport_edge {
+                    sticky_offset.x = right_viewport_edge - sticky_rect.max_x();
+                } else if info.previously_applied_offset.x < 0.0 &&
+                    sticky_rect.max_x() < right_viewport_edge {
+                    sticky_offset.x = right_viewport_edge - sticky_rect.max_x();
+                    sticky_offset.x = sticky_offset.x.min(-info.previously_applied_offset.x);
+                }
+                debug_assert!(sticky_offset.x + info.previously_applied_offset.x <= 0.0);
             }
         }
+
+        // The total "sticky offset" (which is the sum that was already applied by
+        // the calling code, stored in info.previously_applied_offset, and the extra amount we
+        // computed as a result of scrolling, stored in sticky_offset) needs to be
+        // clamped to the provided bounds.
+        let clamp_adjusted = |value: f32, adjust: f32, bounds: &StickyOffsetBounds| {
+            (value + adjust).max(bounds.min).min(bounds.max) - adjust
+        };
+        sticky_offset.y = clamp_adjusted(sticky_offset.y,
+                                         info.previously_applied_offset.y,
+                                         &info.vertical_offset_bounds);
+        sticky_offset.x = clamp_adjusted(sticky_offset.x,
+                                         info.previously_applied_offset.x,
+                                         &info.horizontal_offset_bounds);
 
         sticky_offset
     }
@@ -601,6 +709,10 @@ impl ClipScrollNode {
             NodeType::ScrollFrame(ref state) => state.overscroll_amount() != LayerVector2D::zero(),
             _ => false,
         }
+    }
+
+    pub fn is_visible(&self) -> bool {
+        self.combined_clip_outer_bounds != DeviceIntRect::zero()
     }
 }
 

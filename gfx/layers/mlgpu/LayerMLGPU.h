@@ -1,7 +1,8 @@
-/* -*- Mode: C++; tab-width: 20; indent-tabs-mode: nil; c-basic-offset: 2 -*-
-* This Source Code Form is subject to the terms of the Mozilla Public
-* License, v. 2.0. If a copy of the MPL was not distributed with this
-* file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=8 sts=2 et sw=2 tw=80: */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #ifndef mozilla_gfx_layers_mlgpu_LayerMLGPU_h
 #define mozilla_gfx_layers_mlgpu_LayerMLGPU_h
@@ -74,9 +75,8 @@ public:
   // blend modes or opacity), false otherwise.
   virtual bool IsContentOpaque();
 
-  // This is used by RenderPasses for deciding which rects to draw. This
-  // region factors in occulsion culling and any layer-specific adjustments,
-  // whereas the local/shadow visible region does not.
+  // Returns the region that this layer will draw pixels to. If the layer and
+  // its content are opaque, this is the layer's opaque region.
   const LayerIntRegion& GetRenderRegion() const {
     return mRenderRegion;
   }

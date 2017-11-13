@@ -168,7 +168,7 @@ Compatibility::Init()
 
   HMODULE jawsHandle = ::GetModuleHandleW(L"jhook");
   if (jawsHandle)
-    sConsumers |= (IsModuleVersionLessThan(jawsHandle, 18, 4315)) ?
+    sConsumers |= (IsModuleVersionLessThan(jawsHandle, 19, 0)) ?
                    OLDJAWS : JAWS;
 
   if (::GetModuleHandleW(L"gwm32inc"))
@@ -229,7 +229,8 @@ Compatibility::Init()
 
   // If we have a consumer who is not NVDA, we enable detection for the
   // InSendMessageEx compatibility hack. NVDA does not require this.
-  if ((sConsumers & (~NVDA)) &&
+  // We also skip UIA, as we see crashes there.
+  if ((sConsumers & (~(UIAUTOMATION | NVDA))) &&
       BrowserTabsRemoteAutostart()) {
     sUser32Interceptor.Init("user32.dll");
     if (!sInSendMessageExStub) {

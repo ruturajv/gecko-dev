@@ -243,7 +243,7 @@ StyleSheetInfo::StyleSheetInfo(CORSMode aCORSMode,
 #endif
 {
   if (!mPrincipal) {
-    NS_RUNTIMEABORT("NullPrincipal::Init failed");
+    MOZ_CRASH("NullPrincipal::Init failed");
   }
 }
 
@@ -452,6 +452,17 @@ StyleSheet::EnsureUniqueInner()
 
   if (HasUniqueInner()) {
     // already unique
+    return;
+  }
+  // If this stylesheet is for XBL with Servo, don't bother cloning
+  // it, as it may break ServoStyleRuleMap. XBL stylesheets are not
+  // supposed to change anyway.
+  // The mDocument check is used as a fast reject path because no
+  // XBL stylesheets would have associated document, but in normal
+  // cases, content stylesheets should usually have one.
+  if (!mDocument && IsServo() &&
+      mStyleSets.Length() == 1 &&
+      mStyleSets[0]->AsServo()->IsForXBL()) {
     return;
   }
 

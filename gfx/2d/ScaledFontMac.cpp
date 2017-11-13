@@ -1,10 +1,12 @@
-/* -*- Mode: C++; tab-width: 20; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * This Source Code Form is subject to the terms of the Mozilla Public
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=8 sts=2 et sw=2 tw=80: */
+/* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "ScaledFontMac.h"
 #include "UnscaledFontMac.h"
+#include "mozilla/webrender/WebRenderTypes.h"
 #ifdef USE_SKIA
 #include "PathSkia.h"
 #include "skia/include/core/SkPaint.h"
@@ -17,6 +19,7 @@
 #include <CoreFoundation/CoreFoundation.h>
 #endif
 #include "nsCocoaFeatures.h"
+#include "mozilla/gfx/Logging.h"
 
 #ifdef MOZ_WIDGET_COCOA
 // prototype for private API
@@ -105,9 +108,13 @@ CreateCTFontFromCGFontWithVariations(CGFontRef aCGFont, CGFloat aSize)
 ScaledFontMac::ScaledFontMac(CGFontRef aFont,
                              const RefPtr<UnscaledFont>& aUnscaledFont,
                              Float aSize,
+                             const Color &aFontSmoothingBackgroundColor,
+                             bool aUseFontSmoothing,
                              bool aOwnsFont)
   : ScaledFontBase(aUnscaledFont, aSize)
   , mFont(aFont)
+  , mFontSmoothingBackgroundColor(aFontSmoothingBackgroundColor)
+  , mUseFontSmoothing(aUseFontSmoothing)
 {
   if (!sSymbolLookupDone) {
     CTFontDrawGlyphsPtr =
@@ -170,7 +177,7 @@ CalcTableChecksum(const uint32_t *tableStart, uint32_t length, bool skipChecksum
 {
     uint32_t sum = 0L;
     const uint32_t *table = tableStart;
-    const uint32_t *end = table+((length+3) & ~3) / sizeof(uint32_t);
+    const uint32_t *end = table + length / sizeof(uint32_t);
     while (table < end) {
         if (skipChecksumAdjust && (table - tableStart) == 2) {
             table++;
@@ -178,6 +185,15 @@ CalcTableChecksum(const uint32_t *tableStart, uint32_t length, bool skipChecksum
             sum += CFSwapInt32BigToHost(*table++);
         }
     }
+
+    // The length is not 4-byte aligned, but we still must process the remaining bytes.
+    if (length & 3) {
+        // Pad with zero before adding to the checksum.
+        uint32_t last = 0;
+        memcpy(&last, end, length & 3);
+        sum += CFSwapInt32BigToHost(last);
+    }
+
     return sum;
 }
 
@@ -309,6 +325,31 @@ UnscaledFontMac::GetFontFileData(FontFileDataOutput aDataCallback, void *aBaton)
     return true;
 }
 
+bool
+UnscaledFontMac::GetWRFontDescriptor(WRFontDescriptorOutput aCb, void* aBaton)
+{
+  if (mIsDataFont) {
+    return false;
+  }
+
+  CFStringRef psname = CGFontCopyPostScriptName(mFont);
+  if (!psname) {
+    return false;
+  }
+
+  char buf[256];
+  const char* cstr = CFStringGetCStringPtr(psname, kCFStringEncodingUTF8);
+  if (!cstr) {
+    if (!CFStringGetCString(psname, buf, sizeof(buf), kCFStringEncodingUTF8)) {
+      return false;
+    }
+    cstr = buf;
+  }
+
+  aCb(reinterpret_cast<const uint8_t*>(cstr), strlen(cstr), 0, aBaton);
+  return true;
+}
+
 static void
 CollectVariationsFromDictionary(const void* aKey, const void* aValue, void* aContext)
 {
@@ -363,9 +404,18 @@ ScaledFontMac::GetWRFontInstanceOptions(Maybe<wr::FontInstanceOptions>* aOutOpti
                                         Maybe<wr::FontInstancePlatformOptions>* aOutPlatformOptions,
                                         std::vector<FontVariation>* aOutVariations)
 {
-    if (!GetVariationsForCTFont(mCTFont, aOutVariations)) {
-      return false;
-    }
+    GetVariationsForCTFont(mCTFont, aOutVariations);
+
+    wr::FontInstanceOptions options;
+    options.render_mode = wr::FontRenderMode::Subpixel;
+    options.subpx_dir = wr::SubpixelDirection::Horizontal;
+    options.synthetic_italics = false;
+    options.bg_color = wr::ToColorU(mFontSmoothingBackgroundColor);
+    *aOutOptions = Some(options);
+
+    wr::FontInstancePlatformOptions platformOptions;
+    platformOptions.font_smoothing = mUseFontSmoothing;
+    *aOutPlatformOptions = Some(platformOptions);
     return true;
 }
 
@@ -505,7 +555,7 @@ UnscaledFontMac::CreateScaledFont(Float aGlyphSize,
   }
 
   RefPtr<ScaledFontMac> scaledFont =
-    new ScaledFontMac(fontRef, this, aGlyphSize, fontRef != mFont);
+    new ScaledFontMac(fontRef, this, aGlyphSize, Color(), true, fontRef != mFont);
 
   if (!scaledFont->PopulateCairoScaledFont()) {
     gfxWarning() << "Unable to create cairo scaled Mac font.";

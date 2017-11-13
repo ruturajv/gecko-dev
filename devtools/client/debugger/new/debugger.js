@@ -10204,6 +10204,10 @@ module.exports = isLength;
 
 "use strict";
 Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 // @flow
 
 const { isDevelopment } = __webpack_require__(1355);
@@ -10617,7 +10621,7 @@ module.exports = charenc;
 /*!
  * Determine if an object is a Buffer
  *
- * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
+ * @author   Feross Aboukhadijeh <https://feross.org>
  * @license  MIT
  */
 
@@ -14262,7 +14266,7 @@ module.exports = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1792 1
 /* 960 */
 /***/ (function(module, exports) {
 
-module.exports = "# This Source Code Form is subject to the terms of the Mozilla Public\n# License, v. 2.0. If a copy of the MPL was not distributed with this\n# file, You can obtain one at http://mozilla.org/MPL/2.0/.\n\n# LOCALIZATION NOTE These strings are used inside the Debugger\n# which is available from the Web Developer sub-menu -> 'Debugger'.\n# The correct localization of this file might be to keep it in\n# English, or another language commonly spoken among web developers.\n# You want to make that choice consistent across the developer tools.\n# A good criteria is the language in which you'd find the best\n# documentation on web development on the web.\n\n# LOCALIZATION NOTE (collapsePanes): This is the tooltip for the button\n# that collapses the left and right panes in the debugger UI.\ncollapsePanes=Collapse panes\n\n# LOCALIZATION NOTE (copySource): This is the text that appears in the\n# context menu to copy the selected source of file open.\ncopySource=Copy\ncopySource.accesskey=y\n\n# LOCALIZATION NOTE (copySourceUri2): This is the text that appears in the\n# context menu to copy the source URI of file open.\ncopySourceUri2=Copy source URI\ncopySourceUri2.accesskey=u\n\n# LOCALIZATION NOTE (setDirectoryRoot): This is the text that appears in the\n# context menu to set a directory as root directory\nsetDirectoryRoot.label=Set directory root\nsetDirectoryRoot.accesskey=r\n\n# LOCALIZATION NOTE (copyFunction): This is the text that appears in the\n# context menu to copy the function the user selected\ncopyFunction.label=Copy function\ncopyFunction.accesskey=F\n\n# LOCALIZATION NOTE (copyStackTrace): This is the text that appears in the\n# context menu to copy the stack trace methods, file names and row number.\ncopyStackTrace=Copy stack trace\ncopyStackTrace.accesskey=c\n\n# LOCALIZATION NOTE (expandPanes): This is the tooltip for the button\n# that expands the left and right panes in the debugger UI.\nexpandPanes=Expand panes\n\n# LOCALIZATION NOTE (pauseButtonTooltip): The tooltip that is displayed for the pause\n# button when the debugger is in a running state.\npauseButtonTooltip=Pause %S\n\n# LOCALIZATION NOTE (pausePendingButtonTooltip): The tooltip that is displayed for\n# the pause button after it's been clicked but before the next JavaScript to run.\npausePendingButtonTooltip=Waiting for next execution\n\n# LOCALIZATION NOTE (resumeButtonTooltip): The label that is displayed on the pause\n# button when the debugger is in a paused state.\nresumeButtonTooltip=Resume %S\n\n# LOCALIZATION NOTE (stepOverTooltip): The label that is displayed on the\n# button that steps over a function call.\nstepOverTooltip=Step over %S\n\n# LOCALIZATION NOTE (stepInTooltip): The label that is displayed on the\n# button that steps into a function call.\nstepInTooltip=Step in %S\n\n# LOCALIZATION NOTE (stepOutTooltip): The label that is displayed on the\n# button that steps out of a function call.\nstepOutTooltip=Step out %S\n\n# LOCALIZATION NOTE (workersHeader): The text to display in the events\n# header.\nworkersHeader=Workers\n\n# LOCALIZATION NOTE (noWorkersText): The text to display in the workers list\n# when there are no workers.\nnoWorkersText=This page has no workers.\n\n# LOCALIZATION NOTE (noSourcesText): The text to display in the sources list\n# when there are no sources.\nnoSourcesText=This page has no sources.\n\n# LOCALIZATION NOTE (noEventListenersText): The text to display in the events tab\n# when there are no events.\nnoEventListenersText=No event listeners to display.\n\n# LOCALIZATION NOTE (eventListenersHeader): The text to display in the events\n# header.\neventListenersHeader=Event listeners\n\n# LOCALIZATION NOTE (noStackFramesText): The text to display in the call stack tab\n# when there are no stack frames.\nnoStackFramesText=No stack frames to display\n\n# LOCALIZATION NOTE (eventCheckboxTooltip): The tooltip text to display when\n# the user hovers over the checkbox used to toggle an event breakpoint.\neventCheckboxTooltip=Toggle breaking on this event\n\n# LOCALIZATION NOTE (eventOnSelector): The text to display in the events tab\n# for every event item, between the event type and event selector.\neventOnSelector=on\n\n# LOCALIZATION NOTE (eventInSource): The text to display in the events tab\n# for every event item, between the event selector and listener's owner source.\neventInSource=in\n\n# LOCALIZATION NOTE (eventNodes): The text to display in the events tab when\n# an event is listened on more than one target node.\neventNodes=%S nodes\n\n# LOCALIZATION NOTE (eventNative): The text to display in the events tab when\n# a listener is added from plugins, thus getting translated to native code.\neventNative=[native code]\n\n# LOCALIZATION NOTE (*Events): The text to display in the events tab for\n# each group of sub-level event entries.\nanimationEvents=Animation\naudioEvents=Audio\nbatteryEvents=Battery\nclipboardEvents=Clipboard\ncompositionEvents=Composition\ndeviceEvents=Device\ndisplayEvents=Display\ndragAndDropEvents=Drag and Drop\ngamepadEvents=Gamepad\nindexedDBEvents=IndexedDB\ninteractionEvents=Interaction\nkeyboardEvents=Keyboard\nmediaEvents=HTML5 Media\nmouseEvents=Mouse\nmutationEvents=Mutation\nnavigationEvents=Navigation\npointerLockEvents=Pointer Lock\nsensorEvents=Sensor\nstorageEvents=Storage\ntimeEvents=Time\ntouchEvents=Touch\notherEvents=Other\n\n# LOCALIZATION NOTE (blackboxCheckboxTooltip2): The tooltip text to display when\n# the user hovers over the checkbox used to toggle blackboxing its associated\n# source.\nblackboxCheckboxTooltip2=Toggle blackboxing\n\n# LOCALIZATION NOTE (sources.search.key2): Key shortcut to open the search for\n# searching all the source files the debugger has seen.\nsources.search.key2=CmdOrCtrl+P\n\n# LOCALIZATION NOTE (sources.search.alt.key): A second key shortcut to open the\n# search for searching all the source files the debugger has seen.\nsources.search.alt.key=CmdOrCtrl+O\n\n# LOCALIZATION NOTE (projectTextSearch.key): A key shortcut to open the\n# full project text search for searching all the files the debugger has seen.\nprojectTextSearch.key=CmdOrCtrl+Shift+F\n\n# LOCALIZATION NOTE (functionSearch.key): A key shortcut to open the\n# modal for searching functions in a file.\nfunctionSearch.key=CmdOrCtrl+Shift+O\n\n# LOCALIZATION NOTE (toggleBreakpoint.key): A key shortcut to toggle\n# breakpoints.\ntoggleBreakpoint.key=CmdOrCtrl+B\n\n# LOCALIZATION NOTE (toggleCondPanel.key): A key shortcut to toggle\n# the conditional breakpoint panel.\ntoggleCondPanel.key=CmdOrCtrl+Shift+B\n\n# LOCALIZATION NOTE (stepOut.key): A key shortcut to\n# step out.\nstepOut.key=Shift+F11\n\n# LOCALIZATION NOTE (shortcuts.header.editor): Sections header in\n# the shortcuts modal for keyboard shortcuts related to editing.\nshortcuts.header.editor=Editor\n\n# LOCALIZATION NOTE (shortcuts.header.stepping): Sections header in\n# the shortcuts modal for keyboard shortcuts related to stepping.\nshortcuts.header.stepping=Stepping\n\n# LOCALIZATION NOTE (shortcuts.header.search): Sections header in\n# the shortcuts modal for keyboard shortcuts related to search.\nshortcuts.header.search=Search\n\n# LOCALIZATION NOTE (projectTextSearch.placeholder): A placeholder shown\n# when searching across all of the files in a project.\nprojectTextSearch.placeholder=Find in files…\n\n# LOCALIZATION NOTE (projectTextSearch.noResults): The center pane Text Search\n# message when the query did not match any text of all files in a project.\nprojectTextSearch.noResults=No results found\n\n# LOCALIZATION NOTE (sources.noSourcesAvailable): Text shown when the debugger\n# does not have any sources.\nsources.noSourcesAvailable=This page has no sources\n\n# LOCALIZATION NOTE (sourceSearch.search.key2): Key shortcut to open the search\n# for searching within a the currently opened files in the editor\nsourceSearch.search.key2=CmdOrCtrl+F\n\n# LOCALIZATION NOTE (sourceSearch.search.placeholder): placeholder text in\n# the source search input bar\nsourceSearch.search.placeholder=Search in file…\n\n# LOCALIZATION NOTE (sourceSearch.search.again.key2): Key shortcut to highlight\n# the next occurrence of the last search triggered from a source search\nsourceSearch.search.again.key2=CmdOrCtrl+G\n\n# LOCALIZATION NOTE (sourceSearch.search.againPrev.key2): Key shortcut to highlight\n# the previous occurrence of the last search triggered from a source search\nsourceSearch.search.againPrev.key2=CmdOrCtrl+Shift+G\n\n# LOCALIZATION NOTE (sourceSearch.resultsSummary1): Shows a summary of\n# the number of matches for autocomplete\nsourceSearch.resultsSummary1=%d results\n\n# LOCALIZATION NOTE (noMatchingStringsText): The text to display in the\n# global search results when there are no matching strings after filtering.\nnoMatchingStringsText=No matches found\n\n# LOCALIZATION NOTE (emptySearchText): This is the text that appears in the\n# filter text box when it is empty and the scripts container is selected.\nemptySearchText=Search scripts (%S)\n\n# LOCALIZATION NOTE (emptyVariablesFilterText): This is the text that\n# appears in the filter text box for the variables view container.\nemptyVariablesFilterText=Filter variables\n\n# LOCALIZATION NOTE (emptyPropertiesFilterText): This is the text that\n# appears in the filter text box for the editor's variables view bubble.\nemptyPropertiesFilterText=Filter properties\n\n# LOCALIZATION NOTE (searchPanelFilter): This is the text that appears in the\n# filter panel popup for the filter scripts operation.\nsearchPanelFilter=Filter scripts (%S)\n\n# LOCALIZATION NOTE (searchPanelGlobal): This is the text that appears in the\n# filter panel popup for the global search operation.\nsearchPanelGlobal=Search in all files (%S)\n\n# LOCALIZATION NOTE (searchPanelFunction): This is the text that appears in the\n# filter panel popup for the function search operation.\nsearchPanelFunction=Search for function definition (%S)\n\n# LOCALIZATION NOTE (searchPanelToken): This is the text that appears in the\n# filter panel popup for the token search operation.\nsearchPanelToken=Find in this file (%S)\n\n# LOCALIZATION NOTE (searchPanelGoToLine): This is the text that appears in the\n# filter panel popup for the line search operation.\nsearchPanelGoToLine=Go to line (%S)\n\n# LOCALIZATION NOTE (searchPanelVariable): This is the text that appears in the\n# filter panel popup for the variables search operation.\nsearchPanelVariable=Filter variables (%S)\n\n# LOCALIZATION NOTE (breakpointMenuItem): The text for all the elements that\n# are displayed in the breakpoints menu item popup.\nbreakpointMenuItem.setConditional=Configure conditional breakpoint\nbreakpointMenuItem.enableSelf2.label=Enable\nbreakpointMenuItem.enableSelf2.accesskey=E\nbreakpointMenuItem.disableSelf2.label=Disable\nbreakpointMenuItem.disableSelf2.accesskey=D\nbreakpointMenuItem.deleteSelf2.label=Remove\nbreakpointMenuItem.deleteSelf2.accesskey=R\nbreakpointMenuItem.enableOthers2.label=Enable others\nbreakpointMenuItem.enableOthers2.accesskey=o\nbreakpointMenuItem.disableOthers2.label=Disable others\nbreakpointMenuItem.disableOthers2.accesskey=s\nbreakpointMenuItem.deleteOthers2.label=Remove others\nbreakpointMenuItem.deleteOthers2.accesskey=h\nbreakpointMenuItem.enableAll2.label=Enable all\nbreakpointMenuItem.enableAll2.accesskey=b\nbreakpointMenuItem.disableAll2.label=Disable all\nbreakpointMenuItem.disableAll2.accesskey=k\nbreakpointMenuItem.deleteAll2.label=Remove all\nbreakpointMenuItem.deleteAll2.accesskey=a\nbreakpointMenuItem.removeCondition2.label=Remove condition\nbreakpointMenuItem.removeCondition2.accesskey=c\nbreakpointMenuItem.addCondition2.label=Add condition\nbreakpointMenuItem.addCondition2.accesskey=A\nbreakpointMenuItem.editCondition2.label=Edit condition\nbreakpointMenuItem.editCondition2.accesskey=n\nbreakpointMenuItem.enableSelf=Enable breakpoint\nbreakpointMenuItem.enableSelf.accesskey=E\nbreakpointMenuItem.disableSelf=Disable breakpoint\nbreakpointMenuItem.disableSelf.accesskey=D\nbreakpointMenuItem.deleteSelf=Remove breakpoint\nbreakpointMenuItem.deleteSelf.accesskey=R\nbreakpointMenuItem.enableOthers=Enable others\nbreakpointMenuItem.enableOthers.accesskey=o\nbreakpointMenuItem.disableOthers=Disable others\nbreakpointMenuItem.disableOthers.accesskey=s\nbreakpointMenuItem.deleteOthers=Remove others\nbreakpointMenuItem.deleteOthers.accesskey=h\nbreakpointMenuItem.enableAll=Enable all breakpoints\nbreakpointMenuItem.enableAll.accesskey=b\nbreakpointMenuItem.disableAll=Disable all breakpoints\nbreakpointMenuItem.disableAll.accesskey=k\nbreakpointMenuItem.deleteAll=Remove all breakpoints\nbreakpointMenuItem.deleteAll.accesskey=a\nbreakpointMenuItem.removeCondition.label=Remove breakpoint condition\nbreakpointMenuItem.removeCondition.accesskey=c\nbreakpointMenuItem.editCondition.label=Edit breakpoint condition\nbreakpointMenuItem.editCondition.accesskey=n\n\n# LOCALIZATION NOTE (breakpoints.header): Breakpoints right sidebar pane header.\nbreakpoints.header=Breakpoints\n\n# LOCALIZATION NOTE (breakpoints.none): The text that appears when there are\n# no breakpoints present\nbreakpoints.none=No breakpoints\n\n# LOCALIZATION NOTE (breakpoints.enable): The text that may appear as a tooltip\n# when hovering over the 'disable breakpoints' switch button in right sidebar\nbreakpoints.enable=Enable breakpoints\n\n# LOCALIZATION NOTE (breakpoints.disable): The text that may appear as a tooltip\n# when hovering over the 'disable breakpoints' switch button in right sidebar\nbreakpoints.disable=Disable breakpoints\n\n# LOCALIZATION NOTE (breakpoints.removeBreakpointTooltip): The tooltip that is displayed\n# for remove breakpoint button in right sidebar\nbreakpoints.removeBreakpointTooltip=Remove breakpoint\n\n# LOCALIZATION NOTE (callStack.header): Call Stack right sidebar pane header.\ncallStack.header=Call stack\n\n# LOCALIZATION NOTE (callStack.notPaused): Call Stack right sidebar pane\n# message when not paused.\ncallStack.notPaused=Not paused\n\n# LOCALIZATION NOTE (callStack.collapse): Call Stack right sidebar pane\n# message to hide some of the frames that are shown.\ncallStack.collapse=Collapse rows\n\n# LOCALIZATION NOTE (callStack.expand): Call Stack right sidebar pane\n# message to show more of the frames.\ncallStack.expand=Expand rows\n\n# LOCALIZATION NOTE (editor.searchResults): Editor Search bar message\n# for the summarizing the selected search result. e.g. 5 of 10 results.\neditor.searchResults=%d of %d results\n\n# LOCALIZATION NOTE (sourceSearch.singleResult): Copy shown when there is one result.\neditor.singleResult=1 result\n\n# LOCALIZATION NOTE (editor.noResults): Editor Search bar message\n# for when no results found.\neditor.noResults=No results\n\n# LOCALIZATION NOTE (editor.searchResults.nextResult): Editor Search bar\n# tooltip for traversing to the Next Result\neditor.searchResults.nextResult=Next result\n\n# LOCALIZATION NOTE (editor.searchResults.prevResult): Editor Search bar\n# tooltip for traversing to the Previous Result\neditor.searchResults.prevResult=Previous result\n\n# LOCALIZATION NOTE (editor.searchTypeToggleTitle): Search bar title for\n# toggling search type buttons(function search, variable search)\neditor.searchTypeToggleTitle=Search for:\n\n# LOCALIZATION NOTE (editor.continueToHere.label): Editor gutter context\n# menu item for jumping to a new paused location\neditor.continueToHere.label=Continue to here\neditor.continueToHere.accesskey=H\n\n# LOCALIZATION NOTE (editor.addBreakpoint): Editor gutter context menu item\n# for adding a breakpoint on a line.\neditor.addBreakpoint=Add breakpoint\n\n# LOCALIZATION NOTE (editor.disableBreakpoint): Editor gutter context menu item\n# for disabling a breakpoint on a line.\neditor.disableBreakpoint=Disable breakpoint\neditor.disableBreakpoint.accesskey=D\n\n# LOCALIZATION NOTE (editor.enableBreakpoint): Editor gutter context menu item\n# for enabling a breakpoint on a line.\neditor.enableBreakpoint=Enable breakpoint\n\n# LOCALIZATION NOTE (editor.removeBreakpoint): Editor gutter context menu item\n# for removing a breakpoint on a line.\neditor.removeBreakpoint=Remove breakpoint\n\n# LOCALIZATION NOTE (editor.editBreakpoint): Editor gutter context menu item\n# for setting a breakpoint condition on a line.\neditor.editBreakpoint=Edit breakpoint\n\n# LOCALIZATION NOTE (editor.addConditionalBreakpoint): Editor gutter context\n# menu item for adding/editing a breakpoint condition on a line.\neditor.addConditionalBreakpoint=Add/Edit conditional breakpoint\neditor.addConditionalBreakpoint.accesskey=c\n\n# LOCALIZATION NOTE (editor.conditionalPanel.placeholder): Placeholder text for\n# input element inside ConditionalPanel component\neditor.conditionalPanel.placeholder=This breakpoint will pause when the expression is true\n\n# LOCALIZATION NOTE (editor.conditionalPanel.placeholder): Tooltip text for\n# close button inside ConditionalPanel component\neditor.conditionalPanel.close=Cancel edit breakpoint and close\n\n# LOCALIZATION NOTE (editor.jumpToMappedLocation1): Context menu item\n# for navigating to a source mapped location\neditor.jumpToMappedLocation1=Jump to %S location\neditor.jumpToMappedLocation1.accesskey=m\n\n# LOCALIZATION NOTE (framework.disableGrouping): This is the text that appears in the\n# context menu to disable framework grouping.\nframework.disableGrouping=Disable framework grouping\nframework.disableGrouping.accesskey=u\n\n# LOCALIZATION NOTE (framework.enableGrouping): This is the text that appears in the\n# context menu to enable framework grouping.\nframework.enableGrouping=Enable framework grouping\nframework.enableGrouping.accesskey=u\n\n# LOCALIZATION NOTE (generated): Source Map term for a server source location\ngenerated=Generated\n\n# LOCALIZATION NOTE (original): Source Map term for a debugger UI source location\noriginal=original\n\n# LOCALIZATION NOTE (expressions.placeholder): Placeholder text for expression\n# input element\nexpressions.placeholder=Add watch expression\nexpressions.placeholder.accesskey=e\n\n# LOCALIZATION NOTE (sourceTabs.closeTab): Editor source tab context menu item\n# for closing the selected tab below the mouse.\nsourceTabs.closeTab=Close tab\nsourceTabs.closeTab.accesskey=c\n\n# LOCALIZATION NOTE (sourceTabs.closeOtherTabs): Editor source tab context menu item\n# for closing the other tabs.\nsourceTabs.closeOtherTabs=Close other tabs\nsourceTabs.closeOtherTabs.accesskey=o\n\n# LOCALIZATION NOTE (sourceTabs.closeTabsToEnd): Editor source tab context menu item\n# for closing the tabs to the end (the right for LTR languages) of the selected tab.\nsourceTabs.closeTabsToEnd=Close tabs to the right\nsourceTabs.closeTabsToEnd.accesskey=e\n\n# LOCALIZATION NOTE (sourceTabs.closeAllTabs): Editor source tab context menu item\n# for closing all tabs.\nsourceTabs.closeAllTabs=Close all tabs\nsourceTabs.closeAllTabs.accesskey=a\n\n# LOCALIZATION NOTE (sourceTabs.revealInTree): Editor source tab context menu item\n# for revealing source in tree.\nsourceTabs.revealInTree=Reveal in tree\nsourceTabs.revealInTree.accesskey=r\n\n# LOCALIZATION NOTE (sourceTabs.prettyPrint): Editor source tab context menu item\n# for pretty printing the source.\nsourceTabs.prettyPrint=Pretty print source\nsourceTabs.prettyPrint.accesskey=p\n\n# LOCALIZATION NOTE (sourceFooter.blackbox): Tooltip text associated\n# with the blackbox button\nsourceFooter.blackbox=Blackbox source\nsourceFooter.blackbox.accesskey=B\n\n# LOCALIZATION NOTE (sourceFooter.unblackbox): Tooltip text associated\n# with the blackbox button\nsourceFooter.unblackbox=Unblackbox source\nsourceFooter.unblackbox.accesskey=b\n\n# LOCALIZATION NOTE (sourceFooter.blackboxed): Text associated\n# with a blackboxed source\nsourceFooter.blackboxed=Blackboxed source\n\n# LOCALIZATION NOTE (sourceFooter.codeCoverage): Text associated\n# with a code coverage button\nsourceFooter.codeCoverage=Code coverage\n\n# LOCALIZATION NOTE (sourceTabs.closeTabButtonTooltip): The tooltip that is displayed\n# for close tab button in source tabs.\nsourceTabs.closeTabButtonTooltip=Close tab\n\n# LOCALIZATION NOTE (scopes.header): Scopes right sidebar pane header.\nscopes.header=Scopes\n\n# LOCALIZATION NOTE (scopes.notAvailable): Scopes right sidebar pane message\n# for when the debugger is paused, but there isn't pause data.\nscopes.notAvailable=Scopes unavailable\n\n# LOCALIZATION NOTE (scopes.notPaused): Scopes right sidebar pane message\n# for when the debugger is not paused.\nscopes.notPaused=Not paused\n\n# LOCALIZATION NOTE (scopes.block): Refers to a block of code in\n# the scopes pane when the debugger is paused.\nscopes.block=Block\n\n# LOCALIZATION NOTE (sources.header): Sources left sidebar header\nsources.header=Sources\n\n# LOCALIZATION NOTE (outline.header): Outline left sidebar header\noutline.header=Outline\n\n# LOCALIZATION NOTE (outline.noFunctions): Outline text when there are no functions to display\noutline.noFunctions=No functions\n\n# LOCALIZATION NOTE (sources.search): Sources left sidebar prompt\n# e.g. Cmd+P to search. On a mac, we use the command unicode character.\n# On windows, it's ctrl.\nsources.search=%S to search\n\n# LOCALIZATION NOTE (watchExpressions.header): Watch Expressions right sidebar\n# pane header.\nwatchExpressions.header=Watch expressions\n\n# LOCALIZATION NOTE (watchExpressions.refreshButton): Watch Expressions header\n# button for refreshing the expressions.\nwatchExpressions.refreshButton=Refresh\n\n# LOCALIZATION NOTE (welcome.search): The center pane welcome panel's\n# search prompt. e.g. cmd+p to search for files. On windows, it's ctrl, on\n# a mac we use the unicode character.\nwelcome.search=%S to search for sources\n\n# LOCALIZATION NOTE (welcome.findInFiles): The center pane welcome panel's\n# search prompt. e.g. cmd+f to search for files. On windows, it's ctrl+shift+f, on\n# a mac we use the unicode character.\nwelcome.findInFiles=%S to find in files\n\n# LOCALIZATION NOTE (welcome.searchFunction): Label displayed in the welcome\n# panel. %S is replaced by the keyboard shortcut to search for functions.\nwelcome.searchFunction=%S to search for functions in file\n\n# LOCALIZATION NOTE (sourceSearch.search): The center pane Source Search\n# prompt for searching for files.\nsourceSearch.search=Search sources…\n\n# LOCALIZATION NOTE (sourceSearch.noResults): The center pane Source Search\n# message when the query did not match any of the sources.\nsourceSearch.noResults2=No results found\n\n# LOCALIZATION NOTE (ignoreExceptions): The pause on exceptions button tooltip\n# when the debugger will not pause on exceptions.\nignoreExceptions=Ignore exceptions. Click to pause on uncaught exceptions\n\n# LOCALIZATION NOTE (pauseOnUncaughtExceptions): The pause on exceptions button\n# tooltip when the debugger will pause on uncaught exceptions.\npauseOnUncaughtExceptions=Pause on uncaught exceptions. Click to pause on all exceptions\n\n# LOCALIZATION NOTE (pauseOnExceptions): The pause on exceptions button tooltip\n# when the debugger will pause on all exceptions.\npauseOnExceptions=Pause on all exceptions. Click to ignore exceptions\n\n# LOCALIZATION NOTE (loadingText): The text that is displayed in the script\n# editor when the loading process has started but there is no file to display\n# yet.\nloadingText=Loading\\u2026\n\n# LOCALIZATION NOTE (errorLoadingText3): The text that is displayed in the debugger\n# viewer when there is an error loading a file\nerrorLoadingText3=Error loading this URI: %S\n\n# LOCALIZATION NOTE (addWatchExpressionText): The text that is displayed in the\n# watch expressions list to add a new item.\naddWatchExpressionText=Add watch expression\n\n# LOCALIZATION NOTE (addWatchExpressionButton): The button that is displayed in the\n# variables view popup.\naddWatchExpressionButton=Watch\n\n# LOCALIZATION NOTE (emptyVariablesText): The text that is displayed in the\n# variables pane when there are no variables to display.\nemptyVariablesText=No variables to display\n\n# LOCALIZATION NOTE (scopeLabel): The text that is displayed in the variables\n# pane as a header for each variable scope (e.g. \"Global scope, \"With scope\",\n# etc.).\nscopeLabel=%S scope\n\n# LOCALIZATION NOTE (watchExpressionsScopeLabel): The name of the watch\n# expressions scope. This text is displayed in the variables pane as a header for\n# the watch expressions scope.\nwatchExpressionsScopeLabel=Watch expressions\n\n# LOCALIZATION NOTE (globalScopeLabel): The name of the global scope. This text\n# is added to scopeLabel and displayed in the variables pane as a header for\n# the global scope.\nglobalScopeLabel=Global\n\n# LOCALIZATION NOTE (variablesViewErrorStacktrace): This is the text that is\n# shown before the stack trace in an error.\nvariablesViewErrorStacktrace=Stack trace:\n\n# LOCALIZATION NOTE (variablesViewMoreObjects): the text that is displayed\n# when you have an object preview that does not show all of the elements. At the end of the list\n# you see \"N more...\" in the web console output.\n# This is a semi-colon list of plural forms.\n# See: http://developer.mozilla.org/en/docs/Localization_and_Plurals\n# #1 number of remaining items in the object\n# example: 3 more…\nvariablesViewMoreObjects=#1 more…;#1 more…\n\n# LOCALIZATION NOTE (variablesEditableNameTooltip): The text that is displayed\n# in the variables list on an item with an editable name.\nvariablesEditableNameTooltip=Double click to edit\n\n# LOCALIZATION NOTE (variablesEditableValueTooltip): The text that is displayed\n# in the variables list on an item with an editable value.\nvariablesEditableValueTooltip=Click to change value\n\n# LOCALIZATION NOTE (variablesCloseButtonTooltip): The text that is displayed\n# in the variables list on an item which can be removed.\nvariablesCloseButtonTooltip=Click to remove\n\n# LOCALIZATION NOTE (variablesEditButtonTooltip): The text that is displayed\n# in the variables list on a getter or setter which can be edited.\nvariablesEditButtonTooltip=Click to set value\n\n# LOCALIZATION NOTE (variablesEditableValueTooltip): The text that is displayed\n# in a tooltip on the \"open in inspector\" button in the the variables list for a\n# DOMNode item.\nvariablesDomNodeValueTooltip=Click to select the node in the inspector\n\n# LOCALIZATION NOTE (configurable|...|Tooltip): The text that is displayed\n# in the variables list on certain variables or properties as tooltips.\n# Expanations of what these represent can be found at the following links:\n# https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/defineProperty\n# https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/isExtensible\n# https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/isFrozen\n# https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/isSealed\n# It's probably best to keep these in English.\nconfigurableTooltip=configurable\nenumerableTooltip=enumerable\nwritableTooltip=writable\nfrozenTooltip=frozen\nsealedTooltip=sealed\nextensibleTooltip=extensible\noverriddenTooltip=overridden\nWebIDLTooltip=WebIDL\n\n# LOCALIZATION NOTE (variablesSeparatorLabel): The text that is displayed\n# in the variables list as a separator between the name and value.\nvariablesSeparatorLabel=:\n\n# LOCALIZATION NOTE (watchExpressionsSeparatorLabel2): The text that is displayed\n# in the watch expressions list as a separator between the code and evaluation.\nwatchExpressionsSeparatorLabel2=\\u0020→\n\n# LOCALIZATION NOTE (functionSearchSeparatorLabel): The text that is displayed\n# in the functions search panel as a separator between function's inferred name\n# and its real name (if available).\nfunctionSearchSeparatorLabel=←\n\n# LOCALIZATION NOTE(gotoLineModal.placeholder): The placeholder\n# text displayed when the user searches for specific lines in a file\ngotoLineModal.placeholder=Go to line…\ngotoLineModal.key=CmdOrCtrl+Shift+;\n\n# LOCALIZATION NOTE(symbolSearch.search.functionsPlaceholder): The placeholder\n# text displayed when the user searches for functions in a file\nsymbolSearch.search.functionsPlaceholder=Search functions…\n\n# LOCALIZATION NOTE(symbolSearch.search.variablesPlaceholder): The placeholder\n# text displayed when the user searches for variables in a file\nsymbolSearch.search.variablesPlaceholder=Search variables…\n\n# LOCALIZATION NOTE(symbolSearch.search.key2): The Key Shortcut for\n# searching for a function or variable\nsymbolSearch.search.key2=CmdOrCtrl+Shift+O\n\n# LOCALIZATION NOTE(symbolSearch.searchModifier.modifiersLabel): A label\n# preceding the group of modifiers\nsymbolSearch.searchModifier.modifiersLabel=Modifiers:\n\n# LOCALIZATION NOTE(symbolSearch.searchModifier.regex): A search option\n# when searching text in a file\nsymbolSearch.searchModifier.regex=Regex\n\n# LOCALIZATION NOTE(symbolSearch.searchModifier.caseSensitive): A search option\n# when searching text in a file\nsymbolSearch.searchModifier.caseSensitive=Case sensitive\n\n# LOCALIZATION NOTE(symbolSearch.searchModifier.wholeWord): A search option\n# when searching text in a file\nsymbolSearch.searchModifier.wholeWord=Whole word\n\n# LOCALIZATION NOTE (resumptionOrderPanelTitle): This is the text that appears\n# as a description in the notification panel popup, when multiple debuggers are\n# open in separate tabs and the user tries to resume them in the wrong order.\n# The substitution parameter is the URL of the last paused window that must be\n# resumed first.\nresumptionOrderPanelTitle=There are one or more paused debuggers. Please resume the most-recently paused debugger first at: %S\n\nvariablesViewOptimizedOut=(optimized away)\nvariablesViewUninitialized=(uninitialized)\nvariablesViewMissingArgs=(unavailable)\n\nanonymousSourcesLabel=Anonymous sources\n\nexperimental=This is an experimental feature\n\n# LOCALIZATION NOTE (whyPaused.debuggerStatement): The text that is displayed\n# in a info block explaining how the debugger is currently paused due to a `debugger`\n# statement in the code\nwhyPaused.debuggerStatement=Paused on debugger statement\n\n# LOCALIZATION NOTE (whyPaused.breakpoint): The text that is displayed\n# in a info block explaining how the debugger is currently paused on a breakpoint\nwhyPaused.breakpoint=Paused on breakpoint\n\n# LOCALIZATION NOTE (whyPaused.exception): The text that is displayed\n# in a info block explaining how the debugger is currently paused on an exception\nwhyPaused.exception=Paused on exception\n\n# LOCALIZATION NOTE (whyPaused.resumeLimit): The text that is displayed\n# in a info block explaining how the debugger is currently paused while stepping\n# in or out of the stack\nwhyPaused.resumeLimit=Paused while stepping\n\n# LOCALIZATION NOTE (whyPaused.pauseOnDOMEvents): The text that is displayed\n# in a info block explaining how the debugger is currently paused on a\n# dom event\nwhyPaused.pauseOnDOMEvents=Paused on event listener\n\n# LOCALIZATION NOTE (whyPaused.breakpointConditionThrown): The text that is displayed\n# in an info block when evaluating a conditional breakpoint throws an error\nwhyPaused.breakpointConditionThrown=Error with conditional breakpoint\n\n# LOCALIZATION NOTE (whyPaused.xhr): The text that is displayed\n# in a info block explaining how the debugger is currently paused on an\n# xml http request\nwhyPaused.xhr=Paused on XMLHttpRequest\n\n# LOCALIZATION NOTE (whyPaused.promiseRejection): The text that is displayed\n# in a info block explaining how the debugger is currently paused on a\n# promise rejection\nwhyPaused.promiseRejection=Paused on promise rejection\n\n# LOCALIZATION NOTE (whyPaused.assert): The text that is displayed\n# in a info block explaining how the debugger is currently paused on an\n# assert\nwhyPaused.assert=Paused on assertion\n\n# LOCALIZATION NOTE (whyPaused.debugCommand): The text that is displayed\n# in a info block explaining how the debugger is currently paused on a\n# debugger statement\nwhyPaused.debugCommand=Paused on debugged function\n\n# LOCALIZATION NOTE (whyPaused.other): The text that is displayed\n# in a info block explaining how the debugger is currently paused on an event\n# listener breakpoint set\nwhyPaused.other=Debugger paused\n\n# LOCALIZATION NOTE (ctrl): The text that is used for documenting\n# keyboard shortcuts that use the control key\nctrl=Ctrl\n\n# LOCALIZATION NOTE (anonymous): The text that is displayed when the\n# display name is null.\nanonymous=(anonymous)\n\n# LOCALIZATION NOTE (shortcuts.toggleBreakpoint): text describing\n# keyboard shortcut action for toggling breakpoint\nshortcuts.toggleBreakpoint=Toggle Breakpoint\nshortcuts.toggleBreakpoint.accesskey=B\n\n# LOCALIZATION NOTE (shortcuts.toggleCondPanel): text describing\n# keyboard shortcut action for toggling conditional panel keyboard\nshortcuts.toggleCondPanel=Toggle Conditional Panel\n\n# LOCALIZATION NOTE (shortcuts.pauseOrResume): text describing\n# keyboard shortcut action for pause of resume\nshortcuts.pauseOrResume=Pause/Resume\n\n# LOCALIZATION NOTE (shortcuts.stepOver): text describing\n# keyboard shortcut action for stepping over\nshortcuts.stepOver=Step Over\n\n# LOCALIZATION NOTE (shortcuts.stepIn): text describing\n# keyboard shortcut action for stepping in\nshortcuts.stepIn=Step In\n\n# LOCALIZATION NOTE (shortcuts.stepOut): text describing\n# keyboard shortcut action for stepping out\nshortcuts.stepOut=Step Out\n\n# LOCALIZATION NOTE (shortcuts.fileSearch): text describing\n# keyboard shortcut action for source file search\nshortcuts.fileSearch=Source File Search\n\n# LOCALIZATION NOTE (shortcuts.searchAgain): text describing\n# keyboard shortcut action for searching again\nshortcuts.searchAgain=Search Again\n\n# LOCALIZATION NOTE (shortcuts.projectSearch): text describing\n# keyboard shortcut action for full project search\nshortcuts.projectSearch=Full Project Search\n\n# LOCALIZATION NOTE (shortcuts.functionSearch): text describing\n# keyboard shortcut action for function search\nshortcuts.functionSearch=Function Search\n\n# LOCALIZATION NOTE (shortcuts.buttonName): text describing\n# keyboard shortcut button text\nshortcuts.buttonName=Keyboard shortcuts\n"
+module.exports = "# This Source Code Form is subject to the terms of the Mozilla Public\n# License, v. 2.0. If a copy of the MPL was not distributed with this\n# file, You can obtain one at http://mozilla.org/MPL/2.0/.\n\n# LOCALIZATION NOTE These strings are used inside the Debugger\n# which is available from the Web Developer sub-menu -> 'Debugger'.\n# The correct localization of this file might be to keep it in\n# English, or another language commonly spoken among web developers.\n# You want to make that choice consistent across the developer tools.\n# A good criteria is the language in which you'd find the best\n# documentation on web development on the web.\n\n# LOCALIZATION NOTE (collapsePanes): This is the tooltip for the button\n# that collapses the left and right panes in the debugger UI.\ncollapsePanes=Collapse panes\n\n# LOCALIZATION NOTE (copySource): This is the text that appears in the\n# context menu to copy the selected source of file open.\ncopySource=Copy\ncopySource.accesskey=y\n\n# LOCALIZATION NOTE (copySourceUri2): This is the text that appears in the\n# context menu to copy the source URI of file open.\ncopySourceUri2=Copy source URI\ncopySourceUri2.accesskey=u\n\n# LOCALIZATION NOTE (setDirectoryRoot): This is the text that appears in the\n# context menu to set a directory as root directory\nsetDirectoryRoot.label=Set directory root\nsetDirectoryRoot.accesskey=r\n\n# LOCALIZATION NOTE (copyFunction): This is the text that appears in the\n# context menu to copy the function the user selected\ncopyFunction.label=Copy function\ncopyFunction.accesskey=F\n\n# LOCALIZATION NOTE (copyStackTrace): This is the text that appears in the\n# context menu to copy the stack trace methods, file names and row number.\ncopyStackTrace=Copy stack trace\ncopyStackTrace.accesskey=c\n\n# LOCALIZATION NOTE (expandPanes): This is the tooltip for the button\n# that expands the left and right panes in the debugger UI.\nexpandPanes=Expand panes\n\n# LOCALIZATION NOTE (pauseButtonTooltip): The tooltip that is displayed for the pause\n# button when the debugger is in a running state.\npauseButtonTooltip=Pause %S\n\n# LOCALIZATION NOTE (pausePendingButtonTooltip): The tooltip that is displayed for\n# the pause button after it's been clicked but before the next JavaScript to run.\npausePendingButtonTooltip=Waiting for next execution\n\n# LOCALIZATION NOTE (resumeButtonTooltip): The label that is displayed on the pause\n# button when the debugger is in a paused state.\nresumeButtonTooltip=Resume %S\n\n# LOCALIZATION NOTE (stepOverTooltip): The label that is displayed on the\n# button that steps over a function call.\nstepOverTooltip=Step over %S\n\n# LOCALIZATION NOTE (stepInTooltip): The label that is displayed on the\n# button that steps into a function call.\nstepInTooltip=Step in %S\n\n# LOCALIZATION NOTE (stepOutTooltip): The label that is displayed on the\n# button that steps out of a function call.\nstepOutTooltip=Step out %S\n\n# LOCALIZATION NOTE (workersHeader): The text to display in the events\n# header.\nworkersHeader=Workers\n\n# LOCALIZATION NOTE (noWorkersText): The text to display in the workers list\n# when there are no workers.\nnoWorkersText=This page has no workers.\n\n# LOCALIZATION NOTE (noSourcesText): The text to display in the sources list\n# when there are no sources.\nnoSourcesText=This page has no sources.\n\n# LOCALIZATION NOTE (noEventListenersText): The text to display in the events tab\n# when there are no events.\nnoEventListenersText=No event listeners to display.\n\n# LOCALIZATION NOTE (eventListenersHeader): The text to display in the events\n# header.\neventListenersHeader=Event listeners\n\n# LOCALIZATION NOTE (noStackFramesText): The text to display in the call stack tab\n# when there are no stack frames.\nnoStackFramesText=No stack frames to display\n\n# LOCALIZATION NOTE (eventCheckboxTooltip): The tooltip text to display when\n# the user hovers over the checkbox used to toggle an event breakpoint.\neventCheckboxTooltip=Toggle breaking on this event\n\n# LOCALIZATION NOTE (eventOnSelector): The text to display in the events tab\n# for every event item, between the event type and event selector.\neventOnSelector=on\n\n# LOCALIZATION NOTE (eventInSource): The text to display in the events tab\n# for every event item, between the event selector and listener's owner source.\neventInSource=in\n\n# LOCALIZATION NOTE (eventNodes): The text to display in the events tab when\n# an event is listened on more than one target node.\neventNodes=%S nodes\n\n# LOCALIZATION NOTE (eventNative): The text to display in the events tab when\n# a listener is added from plugins, thus getting translated to native code.\neventNative=[native code]\n\n# LOCALIZATION NOTE (*Events): The text to display in the events tab for\n# each group of sub-level event entries.\nanimationEvents=Animation\naudioEvents=Audio\nbatteryEvents=Battery\nclipboardEvents=Clipboard\ncompositionEvents=Composition\ndeviceEvents=Device\ndisplayEvents=Display\ndragAndDropEvents=Drag and Drop\ngamepadEvents=Gamepad\nindexedDBEvents=IndexedDB\ninteractionEvents=Interaction\nkeyboardEvents=Keyboard\nmediaEvents=HTML5 Media\nmouseEvents=Mouse\nmutationEvents=Mutation\nnavigationEvents=Navigation\npointerLockEvents=Pointer Lock\nsensorEvents=Sensor\nstorageEvents=Storage\ntimeEvents=Time\ntouchEvents=Touch\notherEvents=Other\n\n# LOCALIZATION NOTE (blackboxCheckboxTooltip2): The tooltip text to display when\n# the user hovers over the checkbox used to toggle blackboxing its associated\n# source.\nblackboxCheckboxTooltip2=Toggle blackboxing\n\n# LOCALIZATION NOTE (sources.search.key2): Key shortcut to open the search for\n# searching all the source files the debugger has seen.\nsources.search.key2=CmdOrCtrl+P\n\n# LOCALIZATION NOTE (sources.search.alt.key): A second key shortcut to open the\n# search for searching all the source files the debugger has seen.\nsources.search.alt.key=CmdOrCtrl+O\n\n# LOCALIZATION NOTE (projectTextSearch.key): A key shortcut to open the\n# full project text search for searching all the files the debugger has seen.\nprojectTextSearch.key=CmdOrCtrl+Shift+F\n\n# LOCALIZATION NOTE (functionSearch.key): A key shortcut to open the\n# modal for searching functions in a file.\nfunctionSearch.key=CmdOrCtrl+Shift+O\n\n# LOCALIZATION NOTE (toggleBreakpoint.key): A key shortcut to toggle\n# breakpoints.\ntoggleBreakpoint.key=CmdOrCtrl+B\n\n# LOCALIZATION NOTE (toggleCondPanel.key): A key shortcut to toggle\n# the conditional breakpoint panel.\ntoggleCondPanel.key=CmdOrCtrl+Shift+B\n\n# LOCALIZATION NOTE (stepOut.key): A key shortcut to\n# step out.\nstepOut.key=Shift+F11\n\n# LOCALIZATION NOTE (shortcuts.header.editor): Sections header in\n# the shortcuts modal for keyboard shortcuts related to editing.\nshortcuts.header.editor=Editor\n\n# LOCALIZATION NOTE (shortcuts.header.stepping): Sections header in\n# the shortcuts modal for keyboard shortcuts related to stepping.\nshortcuts.header.stepping=Stepping\n\n# LOCALIZATION NOTE (shortcuts.header.search): Sections header in\n# the shortcuts modal for keyboard shortcuts related to search.\nshortcuts.header.search=Search\n\n# LOCALIZATION NOTE (projectTextSearch.placeholder): A placeholder shown\n# when searching across all of the files in a project.\nprojectTextSearch.placeholder=Find in files…\n\n# LOCALIZATION NOTE (projectTextSearch.noResults): The center pane Text Search\n# message when the query did not match any text of all files in a project.\nprojectTextSearch.noResults=No results found\n\n# LOCALIZATION NOTE (sources.noSourcesAvailable): Text shown when the debugger\n# does not have any sources.\nsources.noSourcesAvailable=This page has no sources\n\n# LOCALIZATION NOTE (sourceSearch.search.key2): Key shortcut to open the search\n# for searching within a the currently opened files in the editor\nsourceSearch.search.key2=CmdOrCtrl+F\n\n# LOCALIZATION NOTE (sourceSearch.search.placeholder): placeholder text in\n# the source search input bar\nsourceSearch.search.placeholder=Search in file…\n\n# LOCALIZATION NOTE (sourceSearch.search.again.key2): Key shortcut to highlight\n# the next occurrence of the last search triggered from a source search\nsourceSearch.search.again.key2=CmdOrCtrl+G\n\n# LOCALIZATION NOTE (sourceSearch.search.againPrev.key2): Key shortcut to highlight\n# the previous occurrence of the last search triggered from a source search\nsourceSearch.search.againPrev.key2=CmdOrCtrl+Shift+G\n\n# LOCALIZATION NOTE (sourceSearch.resultsSummary1): Shows a summary of\n# the number of matches for autocomplete\nsourceSearch.resultsSummary1=%d results\n\n# LOCALIZATION NOTE (noMatchingStringsText): The text to display in the\n# global search results when there are no matching strings after filtering.\nnoMatchingStringsText=No matches found\n\n# LOCALIZATION NOTE (emptySearchText): This is the text that appears in the\n# filter text box when it is empty and the scripts container is selected.\nemptySearchText=Search scripts (%S)\n\n# LOCALIZATION NOTE (emptyVariablesFilterText): This is the text that\n# appears in the filter text box for the variables view container.\nemptyVariablesFilterText=Filter variables\n\n# LOCALIZATION NOTE (emptyPropertiesFilterText): This is the text that\n# appears in the filter text box for the editor's variables view bubble.\nemptyPropertiesFilterText=Filter properties\n\n# LOCALIZATION NOTE (searchPanelFilter): This is the text that appears in the\n# filter panel popup for the filter scripts operation.\nsearchPanelFilter=Filter scripts (%S)\n\n# LOCALIZATION NOTE (searchPanelGlobal): This is the text that appears in the\n# filter panel popup for the global search operation.\nsearchPanelGlobal=Search in all files (%S)\n\n# LOCALIZATION NOTE (searchPanelFunction): This is the text that appears in the\n# filter panel popup for the function search operation.\nsearchPanelFunction=Search for function definition (%S)\n\n# LOCALIZATION NOTE (searchPanelToken): This is the text that appears in the\n# filter panel popup for the token search operation.\nsearchPanelToken=Find in this file (%S)\n\n# LOCALIZATION NOTE (searchPanelGoToLine): This is the text that appears in the\n# filter panel popup for the line search operation.\nsearchPanelGoToLine=Go to line (%S)\n\n# LOCALIZATION NOTE (searchPanelVariable): This is the text that appears in the\n# filter panel popup for the variables search operation.\nsearchPanelVariable=Filter variables (%S)\n\n# LOCALIZATION NOTE (breakpointMenuItem): The text for all the elements that\n# are displayed in the breakpoints menu item popup.\nbreakpointMenuItem.setConditional=Configure conditional breakpoint\nbreakpointMenuItem.enableSelf2.label=Enable\nbreakpointMenuItem.enableSelf2.accesskey=E\nbreakpointMenuItem.disableSelf2.label=Disable\nbreakpointMenuItem.disableSelf2.accesskey=D\nbreakpointMenuItem.deleteSelf2.label=Remove\nbreakpointMenuItem.deleteSelf2.accesskey=R\nbreakpointMenuItem.enableOthers2.label=Enable others\nbreakpointMenuItem.enableOthers2.accesskey=o\nbreakpointMenuItem.disableOthers2.label=Disable others\nbreakpointMenuItem.disableOthers2.accesskey=s\nbreakpointMenuItem.deleteOthers2.label=Remove others\nbreakpointMenuItem.deleteOthers2.accesskey=h\nbreakpointMenuItem.enableAll2.label=Enable all\nbreakpointMenuItem.enableAll2.accesskey=b\nbreakpointMenuItem.disableAll2.label=Disable all\nbreakpointMenuItem.disableAll2.accesskey=k\nbreakpointMenuItem.deleteAll2.label=Remove all\nbreakpointMenuItem.deleteAll2.accesskey=a\nbreakpointMenuItem.removeCondition2.label=Remove condition\nbreakpointMenuItem.removeCondition2.accesskey=c\nbreakpointMenuItem.addCondition2.label=Add condition\nbreakpointMenuItem.addCondition2.accesskey=A\nbreakpointMenuItem.editCondition2.label=Edit condition\nbreakpointMenuItem.editCondition2.accesskey=n\nbreakpointMenuItem.enableSelf=Enable breakpoint\nbreakpointMenuItem.enableSelf.accesskey=E\nbreakpointMenuItem.disableSelf=Disable breakpoint\nbreakpointMenuItem.disableSelf.accesskey=D\nbreakpointMenuItem.deleteSelf=Remove breakpoint\nbreakpointMenuItem.deleteSelf.accesskey=R\nbreakpointMenuItem.enableOthers=Enable others\nbreakpointMenuItem.enableOthers.accesskey=o\nbreakpointMenuItem.disableOthers=Disable others\nbreakpointMenuItem.disableOthers.accesskey=s\nbreakpointMenuItem.deleteOthers=Remove others\nbreakpointMenuItem.deleteOthers.accesskey=h\nbreakpointMenuItem.enableAll=Enable all breakpoints\nbreakpointMenuItem.enableAll.accesskey=b\nbreakpointMenuItem.disableAll=Disable all breakpoints\nbreakpointMenuItem.disableAll.accesskey=k\nbreakpointMenuItem.deleteAll=Remove all breakpoints\nbreakpointMenuItem.deleteAll.accesskey=a\nbreakpointMenuItem.removeCondition.label=Remove breakpoint condition\nbreakpointMenuItem.removeCondition.accesskey=c\nbreakpointMenuItem.editCondition.label=Edit breakpoint condition\nbreakpointMenuItem.editCondition.accesskey=n\n\n# LOCALIZATION NOTE (breakpoints.header): Breakpoints right sidebar pane header.\nbreakpoints.header=Breakpoints\n\n# LOCALIZATION NOTE (breakpoints.none): The text that appears when there are\n# no breakpoints present\nbreakpoints.none=No breakpoints\n\n# LOCALIZATION NOTE (breakpoints.enable): The text that may appear as a tooltip\n# when hovering over the 'disable breakpoints' switch button in right sidebar\nbreakpoints.enable=Enable breakpoints\n\n# LOCALIZATION NOTE (breakpoints.disable): The text that may appear as a tooltip\n# when hovering over the 'disable breakpoints' switch button in right sidebar\nbreakpoints.disable=Disable breakpoints\n\n# LOCALIZATION NOTE (breakpoints.removeBreakpointTooltip): The tooltip that is displayed\n# for remove breakpoint button in right sidebar\nbreakpoints.removeBreakpointTooltip=Remove breakpoint\n\n# LOCALIZATION NOTE (callStack.header): Call Stack right sidebar pane header.\ncallStack.header=Call stack\n\n# LOCALIZATION NOTE (callStack.notPaused): Call Stack right sidebar pane\n# message when not paused.\ncallStack.notPaused=Not paused\n\n# LOCALIZATION NOTE (callStack.collapse): Call Stack right sidebar pane\n# message to hide some of the frames that are shown.\ncallStack.collapse=Collapse rows\n\n# LOCALIZATION NOTE (callStack.expand): Call Stack right sidebar pane\n# message to show more of the frames.\ncallStack.expand=Expand rows\n\n# LOCALIZATION NOTE (editor.searchResults): Editor Search bar message\n# for the summarizing the selected search result. e.g. 5 of 10 results.\neditor.searchResults=%d of %d results\n\n# LOCALIZATION NOTE (sourceSearch.singleResult): Copy shown when there is one result.\neditor.singleResult=1 result\n\n# LOCALIZATION NOTE (editor.noResults): Editor Search bar message\n# for when no results found.\neditor.noResults=No results\n\n# LOCALIZATION NOTE (editor.searchResults.nextResult): Editor Search bar\n# tooltip for traversing to the Next Result\neditor.searchResults.nextResult=Next result\n\n# LOCALIZATION NOTE (editor.searchResults.prevResult): Editor Search bar\n# tooltip for traversing to the Previous Result\neditor.searchResults.prevResult=Previous result\n\n# LOCALIZATION NOTE (editor.searchTypeToggleTitle): Search bar title for\n# toggling search type buttons(function search, variable search)\neditor.searchTypeToggleTitle=Search for:\n\n# LOCALIZATION NOTE (editor.continueToHere.label): Editor gutter context\n# menu item for jumping to a new paused location\neditor.continueToHere.label=Continue to here\neditor.continueToHere.accesskey=H\n\n# LOCALIZATION NOTE (editor.addBreakpoint): Editor gutter context menu item\n# for adding a breakpoint on a line.\neditor.addBreakpoint=Add breakpoint\n\n# LOCALIZATION NOTE (editor.disableBreakpoint): Editor gutter context menu item\n# for disabling a breakpoint on a line.\neditor.disableBreakpoint=Disable breakpoint\neditor.disableBreakpoint.accesskey=D\n\n# LOCALIZATION NOTE (editor.enableBreakpoint): Editor gutter context menu item\n# for enabling a breakpoint on a line.\neditor.enableBreakpoint=Enable breakpoint\n\n# LOCALIZATION NOTE (editor.removeBreakpoint): Editor gutter context menu item\n# for removing a breakpoint on a line.\neditor.removeBreakpoint=Remove breakpoint\n\n# LOCALIZATION NOTE (editor.editBreakpoint): Editor gutter context menu item\n# for setting a breakpoint condition on a line.\neditor.editBreakpoint=Edit breakpoint\n\n# LOCALIZATION NOTE (editor.addConditionalBreakpoint): Editor gutter context\n# menu item for adding a breakpoint condition on a line.\neditor.addConditionalBreakpoint=Add conditional breakpoint\neditor.addConditionalBreakpoint.accesskey=c\n\n# LOCALIZATION NOTE (editor.conditionalPanel.placeholder): Placeholder text for\n# input element inside ConditionalPanel component\neditor.conditionalPanel.placeholder=This breakpoint will pause when the expression is true\n\n# LOCALIZATION NOTE (editor.conditionalPanel.placeholder): Tooltip text for\n# close button inside ConditionalPanel component\neditor.conditionalPanel.close=Cancel edit breakpoint and close\n\n# LOCALIZATION NOTE (editor.jumpToMappedLocation1): Context menu item\n# for navigating to a source mapped location\neditor.jumpToMappedLocation1=Jump to %S location\neditor.jumpToMappedLocation1.accesskey=m\n\n# LOCALIZATION NOTE (framework.disableGrouping): This is the text that appears in the\n# context menu to disable framework grouping.\nframework.disableGrouping=Disable framework grouping\nframework.disableGrouping.accesskey=u\n\n# LOCALIZATION NOTE (framework.enableGrouping): This is the text that appears in the\n# context menu to enable framework grouping.\nframework.enableGrouping=Enable framework grouping\nframework.enableGrouping.accesskey=u\n\n# LOCALIZATION NOTE (generated): Source Map term for a server source location\ngenerated=Generated\n\n# LOCALIZATION NOTE (original): Source Map term for a debugger UI source location\noriginal=original\n\n# LOCALIZATION NOTE (expressions.placeholder): Placeholder text for expression\n# input element\nexpressions.placeholder=Add watch expression\nexpressions.label=Add watch expression\nexpressions.accesskey=e\n\n# LOCALIZATION NOTE (sourceTabs.closeTab): Editor source tab context menu item\n# for closing the selected tab below the mouse.\nsourceTabs.closeTab=Close tab\nsourceTabs.closeTab.accesskey=c\n\n# LOCALIZATION NOTE (sourceTabs.closeOtherTabs): Editor source tab context menu item\n# for closing the other tabs.\nsourceTabs.closeOtherTabs=Close other tabs\nsourceTabs.closeOtherTabs.accesskey=o\n\n# LOCALIZATION NOTE (sourceTabs.closeTabsToEnd): Editor source tab context menu item\n# for closing the tabs to the end (the right for LTR languages) of the selected tab.\nsourceTabs.closeTabsToEnd=Close tabs to the right\nsourceTabs.closeTabsToEnd.accesskey=e\n\n# LOCALIZATION NOTE (sourceTabs.closeAllTabs): Editor source tab context menu item\n# for closing all tabs.\nsourceTabs.closeAllTabs=Close all tabs\nsourceTabs.closeAllTabs.accesskey=a\n\n# LOCALIZATION NOTE (sourceTabs.revealInTree): Editor source tab context menu item\n# for revealing source in tree.\nsourceTabs.revealInTree=Reveal in tree\nsourceTabs.revealInTree.accesskey=r\n\n# LOCALIZATION NOTE (sourceTabs.prettyPrint): Editor source tab context menu item\n# for pretty printing the source.\nsourceTabs.prettyPrint=Pretty print source\nsourceTabs.prettyPrint.accesskey=p\n\n# LOCALIZATION NOTE (sourceFooter.blackbox): Tooltip text associated\n# with the blackbox button\nsourceFooter.blackbox=Blackbox source\nsourceFooter.blackbox.accesskey=B\n\n# LOCALIZATION NOTE (sourceFooter.unblackbox): Tooltip text associated\n# with the blackbox button\nsourceFooter.unblackbox=Unblackbox source\nsourceFooter.unblackbox.accesskey=b\n\n# LOCALIZATION NOTE (sourceFooter.blackboxed): Text associated\n# with a blackboxed source\nsourceFooter.blackboxed=Blackboxed source\n\n# LOCALIZATION NOTE (sourceFooter.codeCoverage): Text associated\n# with a code coverage button\nsourceFooter.codeCoverage=Code coverage\n\n# LOCALIZATION NOTE (sourceTabs.closeTabButtonTooltip): The tooltip that is displayed\n# for close tab button in source tabs.\nsourceTabs.closeTabButtonTooltip=Close tab\n\n# LOCALIZATION NOTE (scopes.header): Scopes right sidebar pane header.\nscopes.header=Scopes\n\n# LOCALIZATION NOTE (scopes.notAvailable): Scopes right sidebar pane message\n# for when the debugger is paused, but there isn't pause data.\nscopes.notAvailable=Scopes unavailable\n\n# LOCALIZATION NOTE (scopes.notPaused): Scopes right sidebar pane message\n# for when the debugger is not paused.\nscopes.notPaused=Not paused\n\n# LOCALIZATION NOTE (scopes.block): Refers to a block of code in\n# the scopes pane when the debugger is paused.\nscopes.block=Block\n\n# LOCALIZATION NOTE (sources.header): Sources left sidebar header\nsources.header=Sources\n\n# LOCALIZATION NOTE (outline.header): Outline left sidebar header\noutline.header=Outline\n\n# LOCALIZATION NOTE (outline.noFunctions): Outline text when there are no functions to display\noutline.noFunctions=No functions\n\n# LOCALIZATION NOTE (sources.search): Sources left sidebar prompt\n# e.g. Cmd+P to search. On a mac, we use the command unicode character.\n# On windows, it's ctrl.\nsources.search=%S to search\n\n# LOCALIZATION NOTE (watchExpressions.header): Watch Expressions right sidebar\n# pane header.\nwatchExpressions.header=Watch expressions\n\n# LOCALIZATION NOTE (watchExpressions.refreshButton): Watch Expressions header\n# button for refreshing the expressions.\nwatchExpressions.refreshButton=Refresh\n\n# LOCALIZATION NOTE (welcome.search): The center pane welcome panel's\n# search prompt. e.g. cmd+p to search for files. On windows, it's ctrl, on\n# a mac we use the unicode character.\nwelcome.search=%S to search for sources\n\n# LOCALIZATION NOTE (welcome.findInFiles): The center pane welcome panel's\n# search prompt. e.g. cmd+f to search for files. On windows, it's ctrl+shift+f, on\n# a mac we use the unicode character.\nwelcome.findInFiles=%S to find in files\n\n# LOCALIZATION NOTE (welcome.searchFunction): Label displayed in the welcome\n# panel. %S is replaced by the keyboard shortcut to search for functions.\nwelcome.searchFunction=%S to search for functions in file\n\n# LOCALIZATION NOTE (sourceSearch.search): The center pane Source Search\n# prompt for searching for files.\nsourceSearch.search=Search sources…\n\n# LOCALIZATION NOTE (sourceSearch.noResults): The center pane Source Search\n# message when the query did not match any of the sources.\nsourceSearch.noResults2=No results found\n\n# LOCALIZATION NOTE (ignoreExceptions): The pause on exceptions button tooltip\n# when the debugger will not pause on exceptions.\nignoreExceptions=Ignore exceptions. Click to pause on uncaught exceptions\n\n# LOCALIZATION NOTE (pauseOnUncaughtExceptions): The pause on exceptions button\n# tooltip when the debugger will pause on uncaught exceptions.\npauseOnUncaughtExceptions=Pause on uncaught exceptions. Click to pause on all exceptions\n\n# LOCALIZATION NOTE (pauseOnExceptions): The pause on exceptions button tooltip\n# when the debugger will pause on all exceptions.\npauseOnExceptions=Pause on all exceptions. Click to ignore exceptions\n\n# LOCALIZATION NOTE (loadingText): The text that is displayed in the script\n# editor when the loading process has started but there is no file to display\n# yet.\nloadingText=Loading\\u2026\n\n# LOCALIZATION NOTE (errorLoadingText3): The text that is displayed in the debugger\n# viewer when there is an error loading a file\nerrorLoadingText3=Error loading this URI: %S\n\n# LOCALIZATION NOTE (addWatchExpressionText): The text that is displayed in the\n# watch expressions list to add a new item.\naddWatchExpressionText=Add watch expression\n\n# LOCALIZATION NOTE (addWatchExpressionButton): The button that is displayed in the\n# variables view popup.\naddWatchExpressionButton=Watch\n\n# LOCALIZATION NOTE (emptyVariablesText): The text that is displayed in the\n# variables pane when there are no variables to display.\nemptyVariablesText=No variables to display\n\n# LOCALIZATION NOTE (scopeLabel): The text that is displayed in the variables\n# pane as a header for each variable scope (e.g. \"Global scope, \"With scope\",\n# etc.).\nscopeLabel=%S scope\n\n# LOCALIZATION NOTE (watchExpressionsScopeLabel): The name of the watch\n# expressions scope. This text is displayed in the variables pane as a header for\n# the watch expressions scope.\nwatchExpressionsScopeLabel=Watch expressions\n\n# LOCALIZATION NOTE (globalScopeLabel): The name of the global scope. This text\n# is added to scopeLabel and displayed in the variables pane as a header for\n# the global scope.\nglobalScopeLabel=Global\n\n# LOCALIZATION NOTE (variablesViewErrorStacktrace): This is the text that is\n# shown before the stack trace in an error.\nvariablesViewErrorStacktrace=Stack trace:\n\n# LOCALIZATION NOTE (variablesViewMoreObjects): the text that is displayed\n# when you have an object preview that does not show all of the elements. At the end of the list\n# you see \"N more...\" in the web console output.\n# This is a semi-colon list of plural forms.\n# See: http://developer.mozilla.org/en/docs/Localization_and_Plurals\n# #1 number of remaining items in the object\n# example: 3 more…\nvariablesViewMoreObjects=#1 more…;#1 more…\n\n# LOCALIZATION NOTE (variablesEditableNameTooltip): The text that is displayed\n# in the variables list on an item with an editable name.\nvariablesEditableNameTooltip=Double click to edit\n\n# LOCALIZATION NOTE (variablesEditableValueTooltip): The text that is displayed\n# in the variables list on an item with an editable value.\nvariablesEditableValueTooltip=Click to change value\n\n# LOCALIZATION NOTE (variablesCloseButtonTooltip): The text that is displayed\n# in the variables list on an item which can be removed.\nvariablesCloseButtonTooltip=Click to remove\n\n# LOCALIZATION NOTE (variablesEditButtonTooltip): The text that is displayed\n# in the variables list on a getter or setter which can be edited.\nvariablesEditButtonTooltip=Click to set value\n\n# LOCALIZATION NOTE (variablesEditableValueTooltip): The text that is displayed\n# in a tooltip on the \"open in inspector\" button in the the variables list for a\n# DOMNode item.\nvariablesDomNodeValueTooltip=Click to select the node in the inspector\n\n# LOCALIZATION NOTE (configurable|...|Tooltip): The text that is displayed\n# in the variables list on certain variables or properties as tooltips.\n# Expanations of what these represent can be found at the following links:\n# https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/defineProperty\n# https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/isExtensible\n# https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/isFrozen\n# https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object/isSealed\n# It's probably best to keep these in English.\nconfigurableTooltip=configurable\nenumerableTooltip=enumerable\nwritableTooltip=writable\nfrozenTooltip=frozen\nsealedTooltip=sealed\nextensibleTooltip=extensible\noverriddenTooltip=overridden\nWebIDLTooltip=WebIDL\n\n# LOCALIZATION NOTE (variablesSeparatorLabel): The text that is displayed\n# in the variables list as a separator between the name and value.\nvariablesSeparatorLabel=:\n\n# LOCALIZATION NOTE (watchExpressionsSeparatorLabel2): The text that is displayed\n# in the watch expressions list as a separator between the code and evaluation.\nwatchExpressionsSeparatorLabel2=\\u0020→\n\n# LOCALIZATION NOTE (functionSearchSeparatorLabel): The text that is displayed\n# in the functions search panel as a separator between function's inferred name\n# and its real name (if available).\nfunctionSearchSeparatorLabel=←\n\n# LOCALIZATION NOTE(gotoLineModal.placeholder): The placeholder\n# text displayed when the user searches for specific lines in a file\ngotoLineModal.placeholder=Go to line…\ngotoLineModal.key=CmdOrCtrl+Shift+;\n\n# LOCALIZATION NOTE(symbolSearch.search.functionsPlaceholder): The placeholder\n# text displayed when the user searches for functions in a file\nsymbolSearch.search.functionsPlaceholder=Search functions…\n\n# LOCALIZATION NOTE(symbolSearch.search.variablesPlaceholder): The placeholder\n# text displayed when the user searches for variables in a file\nsymbolSearch.search.variablesPlaceholder=Search variables…\n\n# LOCALIZATION NOTE(symbolSearch.search.key2): The Key Shortcut for\n# searching for a function or variable\nsymbolSearch.search.key2=CmdOrCtrl+Shift+O\n\n# LOCALIZATION NOTE(symbolSearch.searchModifier.modifiersLabel): A label\n# preceding the group of modifiers\nsymbolSearch.searchModifier.modifiersLabel=Modifiers:\n\n# LOCALIZATION NOTE(symbolSearch.searchModifier.regex): A search option\n# when searching text in a file\nsymbolSearch.searchModifier.regex=Regex\n\n# LOCALIZATION NOTE(symbolSearch.searchModifier.caseSensitive): A search option\n# when searching text in a file\nsymbolSearch.searchModifier.caseSensitive=Case sensitive\n\n# LOCALIZATION NOTE(symbolSearch.searchModifier.wholeWord): A search option\n# when searching text in a file\nsymbolSearch.searchModifier.wholeWord=Whole word\n\n# LOCALIZATION NOTE (resumptionOrderPanelTitle): This is the text that appears\n# as a description in the notification panel popup, when multiple debuggers are\n# open in separate tabs and the user tries to resume them in the wrong order.\n# The substitution parameter is the URL of the last paused window that must be\n# resumed first.\nresumptionOrderPanelTitle=There are one or more paused debuggers. Please resume the most-recently paused debugger first at: %S\n\nvariablesViewOptimizedOut=(optimized away)\nvariablesViewUninitialized=(uninitialized)\nvariablesViewMissingArgs=(unavailable)\n\nanonymousSourcesLabel=Anonymous sources\n\nexperimental=This is an experimental feature\n\n# LOCALIZATION NOTE (whyPaused.debuggerStatement): The text that is displayed\n# in a info block explaining how the debugger is currently paused due to a `debugger`\n# statement in the code\nwhyPaused.debuggerStatement=Paused on debugger statement\n\n# LOCALIZATION NOTE (whyPaused.breakpoint): The text that is displayed\n# in a info block explaining how the debugger is currently paused on a breakpoint\nwhyPaused.breakpoint=Paused on breakpoint\n\n# LOCALIZATION NOTE (whyPaused.exception): The text that is displayed\n# in a info block explaining how the debugger is currently paused on an exception\nwhyPaused.exception=Paused on exception\n\n# LOCALIZATION NOTE (whyPaused.resumeLimit): The text that is displayed\n# in a info block explaining how the debugger is currently paused while stepping\n# in or out of the stack\nwhyPaused.resumeLimit=Paused while stepping\n\n# LOCALIZATION NOTE (whyPaused.pauseOnDOMEvents): The text that is displayed\n# in a info block explaining how the debugger is currently paused on a\n# dom event\nwhyPaused.pauseOnDOMEvents=Paused on event listener\n\n# LOCALIZATION NOTE (whyPaused.breakpointConditionThrown): The text that is displayed\n# in an info block when evaluating a conditional breakpoint throws an error\nwhyPaused.breakpointConditionThrown=Error with conditional breakpoint\n\n# LOCALIZATION NOTE (whyPaused.xhr): The text that is displayed\n# in a info block explaining how the debugger is currently paused on an\n# xml http request\nwhyPaused.xhr=Paused on XMLHttpRequest\n\n# LOCALIZATION NOTE (whyPaused.promiseRejection): The text that is displayed\n# in a info block explaining how the debugger is currently paused on a\n# promise rejection\nwhyPaused.promiseRejection=Paused on promise rejection\n\n# LOCALIZATION NOTE (whyPaused.assert): The text that is displayed\n# in a info block explaining how the debugger is currently paused on an\n# assert\nwhyPaused.assert=Paused on assertion\n\n# LOCALIZATION NOTE (whyPaused.debugCommand): The text that is displayed\n# in a info block explaining how the debugger is currently paused on a\n# debugger statement\nwhyPaused.debugCommand=Paused on debugged function\n\n# LOCALIZATION NOTE (whyPaused.other): The text that is displayed\n# in a info block explaining how the debugger is currently paused on an event\n# listener breakpoint set\nwhyPaused.other=Debugger paused\n\n# LOCALIZATION NOTE (ctrl): The text that is used for documenting\n# keyboard shortcuts that use the control key\nctrl=Ctrl\n\n# LOCALIZATION NOTE (anonymous): The text that is displayed when the\n# display name is null.\nanonymous=(anonymous)\n\n# LOCALIZATION NOTE (shortcuts.toggleBreakpoint): text describing\n# keyboard shortcut action for toggling breakpoint\nshortcuts.toggleBreakpoint=Toggle Breakpoint\nshortcuts.toggleBreakpoint.accesskey=B\n\n# LOCALIZATION NOTE (shortcuts.toggleCondPanel): text describing\n# keyboard shortcut action for toggling conditional panel keyboard\nshortcuts.toggleCondPanel=Toggle Conditional Panel\n\n# LOCALIZATION NOTE (shortcuts.pauseOrResume): text describing\n# keyboard shortcut action for pause of resume\nshortcuts.pauseOrResume=Pause/Resume\n\n# LOCALIZATION NOTE (shortcuts.stepOver): text describing\n# keyboard shortcut action for stepping over\nshortcuts.stepOver=Step Over\n\n# LOCALIZATION NOTE (shortcuts.stepIn): text describing\n# keyboard shortcut action for stepping in\nshortcuts.stepIn=Step In\n\n# LOCALIZATION NOTE (shortcuts.stepOut): text describing\n# keyboard shortcut action for stepping out\nshortcuts.stepOut=Step Out\n\n# LOCALIZATION NOTE (shortcuts.fileSearch): text describing\n# keyboard shortcut action for source file search\nshortcuts.fileSearch=Source File Search\n\n# LOCALIZATION NOTE (shortcuts.searchAgain): text describing\n# keyboard shortcut action for searching again\nshortcuts.searchAgain=Search Again\n\n# LOCALIZATION NOTE (shortcuts.projectSearch): text describing\n# keyboard shortcut action for full project search\nshortcuts.projectSearch=Full Project Search\n\n# LOCALIZATION NOTE (shortcuts.functionSearch): text describing\n# keyboard shortcut action for function search\nshortcuts.functionSearch=Function Search\n\n# LOCALIZATION NOTE (shortcuts.buttonName): text describing\n# keyboard shortcut button text\nshortcuts.buttonName=Keyboard shortcuts\n"
 
 /***/ }),
 /* 961 */,
@@ -16191,12 +16195,7 @@ module.exports = "<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmln
 // removed by extract-text-webpack-plugin
 
 /***/ }),
-/* 1297 */
-/***/ (function(module, exports) {
-
-// removed by extract-text-webpack-plugin
-
-/***/ }),
+/* 1297 */,
 /* 1298 */
 /***/ (function(module, exports) {
 
@@ -16299,12 +16298,7 @@ module.exports = "<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmln
 // removed by extract-text-webpack-plugin
 
 /***/ }),
-/* 1315 */
-/***/ (function(module, exports) {
-
-// removed by extract-text-webpack-plugin
-
-/***/ }),
+/* 1315 */,
 /* 1316 */
 /***/ (function(module, exports) {
 
@@ -16507,7 +16501,9 @@ module.exports = "<!-- This Source Code Form is subject to the terms of the Mozi
 "use strict";
 
 
-var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 var _expressions = __webpack_require__(1417);
 
@@ -16557,9 +16553,9 @@ var _projectTextSearch = __webpack_require__(1424);
 
 var projectTextSearch = _interopRequireWildcard(_projectTextSearch);
 
-var _sourceSearch = __webpack_require__(1425);
+var _quickOpen = __webpack_require__(1635);
 
-var sourceSearch = _interopRequireWildcard(_sourceSearch);
+var quickOpen = _interopRequireWildcard(_quickOpen);
 
 var _sourceTree = __webpack_require__(1426);
 
@@ -16589,7 +16585,7 @@ function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj;
  * @param object - location
  */
 
-module.exports = _extends({}, expressions, sources, pause, debuggee, breakpoints, pendingBreakpoints, eventListeners, ui, ast, coverage, fileSearch, projectTextSearch, sourceSearch, sourceTree, {
+module.exports = _extends({}, expressions, sources, pause, debuggee, breakpoints, pendingBreakpoints, eventListeners, ui, ast, coverage, fileSearch, projectTextSearch, quickOpen, sourceTree, {
   getBreakpointAtLocation: _breakpointAtLocation2.default,
   getInScopeLines: _linesInScope2.default,
   getVisibleBreakpoints: _visibleBreakpoints2.default,
@@ -17020,6 +17016,10 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 var _breakpoints = __webpack_require__(1396);
 
 var breakpoints = _interopRequireWildcard(_breakpoints);
@@ -17036,7 +17036,7 @@ var _sources = __webpack_require__(1373);
 
 var sources = _interopRequireWildcard(_sources);
 
-var _pause = __webpack_require__(1528);
+var _pause = __webpack_require__(1639);
 
 var pause = _interopRequireWildcard(_pause);
 
@@ -17064,9 +17064,9 @@ var _projectTextSearch = __webpack_require__(1433);
 
 var projectTextSearch = _interopRequireWildcard(_projectTextSearch);
 
-var _sourceSearch = __webpack_require__(1434);
+var _quickOpen = __webpack_require__(1647);
 
-var sourceSearch = _interopRequireWildcard(_sourceSearch);
+var quickOpen = _interopRequireWildcard(_quickOpen);
 
 var _sourceTree = __webpack_require__(1532);
 
@@ -17086,7 +17086,7 @@ var toolbox = _interopRequireWildcard(_toolbox);
 
 function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
 
-exports.default = Object.assign({}, navigation, breakpoints, expressions, eventListeners, sources, pause, ui, fileSearch, ast, coverage, projectTextSearch, sourceSearch, sourceTree, loadSourceText, debuggee, toolbox);
+exports.default = _extends({}, navigation, breakpoints, expressions, eventListeners, sources, pause, ui, fileSearch, ast, coverage, projectTextSearch, quickOpen, sourceTree, loadSourceText, debuggee, toolbox);
 
 /***/ }),
 /* 1355 */
@@ -17125,7 +17125,9 @@ var _url = __webpack_require__(334);
  * @memberof utils/source
  * @static
  */
-
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /**
  * Utils for working with Source URLs
@@ -17236,7 +17238,12 @@ function getFilename(source) {
     return getFormattedSourceId(id);
   }
 
-  return getFilenameFromURL(url);
+  let filename = getFilenameFromURL(url);
+  const qMarkIdx = filename.indexOf("?");
+  if (qMarkIdx > 0) {
+    filename = filename.slice(0, qMarkIdx);
+  }
+  return filename;
 }
 
 /**
@@ -17301,11 +17308,15 @@ function getSourceLineCount(source) {
  * @static
  */
 
-function getMode(source) {
+function getMode(source, sourceMetaData) {
   const { contentType, text, isWasm, url } = source;
 
   if (!text || isWasm) {
     return { name: "text" };
+  }
+
+  if (url && url.match(/\.jsx$/i) || sourceMetaData && sourceMetaData.isReactComponent) {
+    return "jsx";
   }
 
   // if the url ends with .marko we set the name to Javascript so
@@ -17388,6 +17399,10 @@ module.exports = {
 "use strict";
 
 
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 var _devtoolsConfig = __webpack_require__(1355);
 
 var _sourceDocuments = __webpack_require__(1436);
@@ -17405,6 +17420,8 @@ var _sourceSearch = __webpack_require__(1526);
 var sourceSearchUtils = _interopRequireWildcard(_sourceSearch);
 
 var _wasm = __webpack_require__(1401);
+
+var _ui = __webpack_require__(1439);
 
 var _devtoolsSourceEditor = __webpack_require__(1386);
 
@@ -17492,6 +17509,16 @@ function toSourceLine(sourceId, line) {
   return (0, _wasm.isWasm)(sourceId) ? (0, _wasm.lineToWasmOffset)(sourceId, line) : line + 1;
 }
 
+function scrollToColumn(codeMirror, line, column) {
+  const { top, left } = codeMirror.charCoords({ line: line, ch: column }, "local");
+
+  const scroller = codeMirror.getScrollerElement();
+  const centeredX = Math.max(left - scroller.offsetWidth / 2, 0);
+  const centeredY = Math.max(top - scroller.offsetHeight / 2, 0);
+
+  codeMirror.scrollTo(centeredX, centeredY);
+}
+
 function toSourceLocation(sourceId, location) {
   return {
     line: toSourceLine(sourceId, location.line),
@@ -17523,20 +17550,22 @@ function getSourceLocationFromMouseEvent(editor, selectedLocation, e) {
   };
 }
 
-module.exports = Object.assign({}, expressionUtils, sourceDocumentUtils, sourceSearchUtils, _devtoolsSourceEditor.SourceEditorUtils, {
+module.exports = _extends({}, expressionUtils, sourceDocumentUtils, sourceSearchUtils, _devtoolsSourceEditor.SourceEditorUtils, {
   createEditor,
   isWasm: _wasm.isWasm,
   toEditorLine,
   toEditorPosition,
   toEditorRange,
   toSourceLine,
+  scrollToColumn,
   toSourceLocation,
   shouldShowPrettyPrint,
   shouldShowFooter,
   traverseResults,
   markText,
   lineAtHeight,
-  getSourceLocationFromMouseEvent
+  getSourceLocationFromMouseEvent,
+  resizeBreakpointGutter: _ui.resizeBreakpointGutter
 });
 
 /***/ }),
@@ -17557,6 +17586,10 @@ var _Svg2 = _interopRequireDefault(_Svg);
 __webpack_require__(1310);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /**
  * This file maps the SVG React Components in the assets/images directory.
@@ -17642,7 +17675,9 @@ function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj;
  */
 function makeRecord(spec) {
   return I.Record(spec);
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /**
  * When Flow 0.29 is released (very soon), we can use this Record type
@@ -17708,6 +17743,20 @@ function updateTheme(className) {
   }
 }
 
+function updatePlatform(className) {
+  if (false) {
+    const root = document.body.parentNode;
+    const appRoot = document.querySelector(".launchpad-root");
+
+    const agent = navigator.userAgent.toLowerCase();
+    const win = agent.indexOf("windows") > -1 ? "win" : "linux";
+    const platform = agent.indexOf("mac os") > -1 ? "mac" : win;
+
+    root.classList.add("html");
+    appRoot.setAttribute("platform", platform);
+  }
+}
+
 function updateDir() {
   const dir = getValue("dir");
   const root = document.body.parentNode;
@@ -17766,6 +17815,7 @@ function renderRoot(_React, _ReactDOM, component, _store, props) {
   if (isDevelopment()) {
     updateConfig();
     updateTheme(className);
+    updatePlatform();
   }
 
   if (component.props || component.propTypes) {
@@ -17999,14 +18049,19 @@ function createBreakpoint(location, overrides = {}) {
     disabled,
     hidden,
     generatedLocation,
-    astLocation
+    astLocation,
+    id
   } = overrides;
 
+  const defaultASTLocation = { name: undefined, offset: location };
   const properties = {
+    id,
     condition: condition || null,
     disabled: disabled || false,
     hidden: hidden || false,
-    astLocation: astLocation || { offset: location },
+    loading: false,
+    text: "",
+    astLocation: astLocation || defaultASTLocation,
     generatedLocation: generatedLocation || location,
     location
   };
@@ -18044,11 +18099,13 @@ function createPendingBreakpoint(bp) {
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.hasSyntaxError = exports.clearSources = exports.setSource = exports.hasSource = exports.getEmptyLines = exports.getNextStep = exports.clearASTs = exports.clearScopes = exports.clearSymbols = exports.getOutOfScopeLocations = exports.getVariablesInScope = exports.getScopes = exports.getSymbols = exports.getClosestExpression = exports.stopParserWorker = exports.startParserWorker = undefined;
+exports.replaceOriginalVariableName = exports.isReactComponent = exports.hasSyntaxError = exports.clearSources = exports.setSource = exports.hasSource = exports.getEmptyLines = exports.getNextStep = exports.clearASTs = exports.clearScopes = exports.clearSymbols = exports.getOutOfScopeLocations = exports.getVariablesInScope = exports.getScopes = exports.getSymbols = exports.getClosestExpression = exports.stopParserWorker = exports.startParserWorker = undefined;
 
 var _devtoolsUtils = __webpack_require__(1363);
 
-const { WorkerDispatcher } = _devtoolsUtils.workerUtils;
+const { WorkerDispatcher } = _devtoolsUtils.workerUtils; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                          * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                          * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 const dispatcher = new WorkerDispatcher();
 const startParserWorker = exports.startParserWorker = dispatcher.start.bind(dispatcher);
@@ -18068,6 +18125,8 @@ const hasSource = exports.hasSource = dispatcher.task("hasSource");
 const setSource = exports.setSource = dispatcher.task("setSource");
 const clearSources = exports.clearSources = dispatcher.task("clearSources");
 const hasSyntaxError = exports.hasSyntaxError = dispatcher.task("hasSyntaxError");
+const isReactComponent = exports.isReactComponent = dispatcher.task("isReactComponent");
+const replaceOriginalVariableName = exports.replaceOriginalVariableName = dispatcher.task("replaceOriginalVariableName");
 
 /***/ }),
 /* 1366 */
@@ -18079,7 +18138,9 @@ const hasSyntaxError = exports.hasSyntaxError = dispatcher.task("hasSyntaxError"
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /**
  * Utils for utils, by utils
@@ -18187,10 +18248,6 @@ function WorkerDispatcher() {
    * License, v. 2.0. If a copy of the MPL was not distributed with this
    * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-const mark = typeof window == "object" && window.performance && window.performance.mark ? window.performance.mark.bind(window.performance) : () => {};
-
-const measure = typeof window == "object" && window.performance && window.performance.measure ? window.performance.measure.bind(window.performance) : () => {};
-
 WorkerDispatcher.prototype = {
   start(url) {
     this.worker = new Worker(url);
@@ -18212,9 +18269,6 @@ WorkerDispatcher.prototype = {
     return (...args) => {
       return new Promise((resolve, reject) => {
         const id = this.msgId++;
-
-        mark(`${method}_start`);
-
         this.worker.postMessage({ id, method, args });
 
         const listener = ({ data: result }) => {
@@ -18223,14 +18277,10 @@ WorkerDispatcher.prototype = {
           }
 
           if (!this.worker) {
-            reject("Oops, The worker has shutdown!");
             return;
           }
+
           this.worker.removeEventListener("message", listener);
-
-          mark(`${method}_end`);
-          measure(`${method}`, `${method}_start`, `${method}_end`);
-
           if (result.error) {
             reject(result.error);
           } else {
@@ -18334,6 +18384,16 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 exports.getSelectedSourceText = exports.getSelectedSource = exports.getSelectedLocation = exports.getSourcesForTabs = exports.getSearchTabs = exports.getSourceTabs = exports.getSources = undefined;
+
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+/**
+ * Sources reducer
+ * @module reducers/sources
+ */
+
 exports.initialState = initialState;
 exports.removeSourceFromTabList = removeSourceFromTabList;
 exports.removeSourcesFromTabList = removeSourcesFromTabList;
@@ -18371,14 +18431,6 @@ function initialState() {
     tabs: I.List(restoreTabs())
   })();
 }
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-
-/**
- * Sources reducer
- * @module reducers/sources
- */
 
 function update(state = initialState(), action) {
   let location = null;
@@ -18404,16 +18456,14 @@ function update(state = initialState(), action) {
         return state;
       }
 
-      location = {
-        line: action.line,
+      location = _extends({}, action.location, {
         url: action.source.url
-      };
+      });
 
       _prefs.prefs.pendingSelectedLocation = location;
-      return state.set("selectedLocation", {
-        sourceId: action.source.id,
-        line: action.line
-      }).set("pendingSelectedLocation", location);
+      return state.set("selectedLocation", _extends({
+        sourceId: action.source.id
+      }, action.location)).set("pendingSelectedLocation", location);
 
     case "CLEAR_SELECTED_SOURCE":
       location = { url: "" };
@@ -18672,78 +18722,7 @@ const getSelectedSourceText = exports.getSelectedSourceText = (0, _reselect.crea
 exports.default = update;
 
 /***/ }),
-/* 1370 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.promise = exports.PROMISE = undefined;
-
-var _lodash = __webpack_require__(2);
-
-var _DevToolsUtils = __webpack_require__(1432);
-
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-
-let seqIdVal = 1;
-
-function seqIdGen() {
-  return seqIdVal++;
-}
-
-function filterAction(action) {
-  return (0, _lodash.fromPairs)((0, _lodash.toPairs)(action).filter(pair => pair[0] !== PROMISE));
-}
-
-function promiseMiddleware({ dispatch, getState }) {
-  return next => action => {
-    if (!(PROMISE in action)) {
-      return next(action);
-    }
-
-    const promiseInst = action[PROMISE];
-    const seqId = seqIdGen().toString();
-
-    // Create a new action that doesn't have the promise field and has
-    // the `seqId` field that represents the sequence id
-    action = Object.assign(filterAction(action), { seqId });
-
-    dispatch(Object.assign({}, action, { status: "start" }));
-
-    // Return the promise so action creators can still compose if they
-    // want to.
-    return new Promise((resolve, reject) => {
-      promiseInst.then(value => {
-        (0, _DevToolsUtils.executeSoon)(() => {
-          dispatch(Object.assign({}, action, {
-            status: "done",
-            value: value
-          }));
-          resolve(value);
-        });
-      }, error => {
-        (0, _DevToolsUtils.executeSoon)(() => {
-          dispatch(Object.assign({}, action, {
-            status: "error",
-            error: error.message || error
-          }));
-          reject(error);
-        });
-      });
-    });
-  };
-}
-
-const PROMISE = exports.PROMISE = "@@dispatch/promise";
-exports.promise = promiseMiddleware;
-
-/***/ }),
+/* 1370 */,
 /* 1371 */
 /***/ (function(module, exports, __webpack_require__) {
 
@@ -18766,6 +18745,10 @@ exports.getRelativePath = getRelativePath;
 var _url = __webpack_require__(334);
 
 var _source = __webpack_require__(1356);
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 const IGNORED_URLS = ["debugger eval code", "XStringBundle"];
 
@@ -19006,9 +18989,8 @@ exports.closeTabs = closeTabs;
 exports.togglePrettyPrint = togglePrettyPrint;
 exports.toggleBlackBox = toggleBlackBox;
 exports.loadAllSources = loadAllSources;
-exports.ensureParserHasSourceText = ensureParserHasSourceText;
 
-var _promise = __webpack_require__(1370);
+var _promise = __webpack_require__(1653);
 
 var _assert = __webpack_require__(1384);
 
@@ -19034,36 +19016,26 @@ var _editor = __webpack_require__(1358);
 
 var _sourceMaps = __webpack_require__(1397);
 
-var _parser = __webpack_require__(1365);
-
-var parser = _interopRequireWildcard(_parser);
-
 var _selectors = __webpack_require__(1352);
-
-function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 // If a request has been made to show this source, go ahead and
 // select it.
+async function checkSelectedSource(state, dispatch, source) {
+  const pendingLocation = (0, _selectors.getPendingSelectedLocation)(state);
 
-
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+  if (pendingLocation && !!source.url && pendingLocation.url === source.url) {
+    await dispatch(selectSource(source.id, { location: pendingLocation }));
+  }
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /**
  * Redux actions for the sources state
  * @module actions/sources
  */
-
-async function checkSelectedSource(state, dispatch, source) {
-  const pendingLocation = (0, _selectors.getPendingSelectedLocation)(state);
-
-  if (pendingLocation && !!source.url && pendingLocation.url === source.url) {
-    await dispatch(selectSource(source.id, { line: pendingLocation.line }));
-  }
-}
 
 async function checkPendingBreakpoints(state, dispatch, sourceId) {
   // source may have been modified by selectSource
@@ -19137,6 +19109,7 @@ function loadSourceMap(generatedSource) {
 
     dispatch({ type: "ADD_SOURCES", sources: originalSources });
 
+    await dispatch((0, _loadSourceText.loadSourceText)(generatedSource));
     originalSources.forEach(async source => {
       await checkSelectedSource(getState(), dispatch, source);
       checkPendingBreakpoints(getState(), dispatch, source.id);
@@ -19163,7 +19136,7 @@ function selectSourceURL(url, options = {}) {
         type: "SELECT_SOURCE_URL",
         url: url,
         tabIndex: options.tabIndex,
-        line: options.line
+        location: options.location
       });
     }
   };
@@ -19198,7 +19171,7 @@ function selectSource(id, options = {}) {
       type: "SELECT_SOURCE",
       source: source.toJS(),
       tabIndex: options.tabIndex,
-      line: options.line,
+      location: options.location || {},
       [_promise.PROMISE]: (async () => {
         await dispatch((0, _loadSourceText.loadSourceText)(source.toJS()));
         await dispatch((0, _ast.setOutOfScopeLocations)());
@@ -19225,7 +19198,7 @@ function jumpToMappedLocation(sourceLocation) {
       pairedLocation = await sourceMaps.getOriginalLocation(sourceLocation, source.toJS());
     }
 
-    return dispatch(selectSource(pairedLocation.sourceId, { line: pairedLocation.line }));
+    return dispatch(selectSource(pairedLocation.sourceId, { location: pairedLocation }));
   };
 }
 
@@ -19304,25 +19277,23 @@ function togglePrettyPrint(sourceId) {
     (0, _assert2.default)(sourceMaps.isGeneratedId(sourceId), "Pretty-printing only allowed on generated sources");
 
     const selectedLocation = (0, _selectors.getSelectedLocation)(getState());
-    const selectedOriginalLocation = selectedLocation ? await sourceMaps.getOriginalLocation(selectedLocation) : {};
-
     const url = (0, _source2.getPrettySourceURL)(source.url);
     const prettySource = (0, _selectors.getSourceByURL)(getState(), url);
 
-    if (prettySource) {
-      return dispatch(selectSource(prettySource.get("id"), {
-        line: selectedOriginalLocation.line
-      }));
+    const options = {};
+    if (selectedLocation) {
+      options.location = await sourceMaps.getOriginalLocation(selectedLocation);
     }
 
-    const { source: newPrettySource } = await dispatch((0, _createPrettySource.createPrettySource)(sourceId));
+    if (prettySource) {
+      return dispatch(selectSource(prettySource.get("id"), options));
+    }
 
+    const newPrettySource = await dispatch((0, _createPrettySource.createPrettySource)(sourceId));
     await dispatch((0, _breakpoints.remapBreakpoints)(sourceId));
     await dispatch((0, _ast.setEmptyLines)(newPrettySource.id));
 
-    return dispatch(selectSource(newPrettySource.id, {
-      line: selectedOriginalLocation.line
-    }));
+    return dispatch(selectSource(newPrettySource.id, options));
   };
 }
 
@@ -19363,21 +19334,6 @@ function loadAllSources() {
   };
 }
 
-/**
- * Ensures parser has source text
- *
- * @memberof actions/sources
- * @static
- */
-function ensureParserHasSourceText(sourceId) {
-  return async ({ dispatch, getState }) => {
-    if (!(await parser.hasSource(sourceId))) {
-      await dispatch((0, _loadSourceText.loadSourceText)((0, _selectors.getSource)(getState(), sourceId).toJS()));
-      await parser.setSource((0, _selectors.getSource)(getState(), sourceId).toJS());
-    }
-  };
-}
-
 /***/ }),
 /* 1374 */
 /***/ (function(module, exports, __webpack_require__) {
@@ -19411,7 +19367,10 @@ function CloseButton({ handleClick, buttonClass, tooltip }) {
     },
     _react2.default.createElement(_Svg2.default, { name: "close" })
   );
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 exports.default = CloseButton;
 
 /***/ }),
@@ -19505,12 +19464,10 @@ module.exports = {
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.getHiddenBreakpointLocation = exports.getHiddenBreakpoint = undefined;
 
-var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /**
  * Breakpoints reducer
@@ -19524,6 +19481,8 @@ exports.getBreakpointsDisabled = getBreakpointsDisabled;
 exports.getBreakpointsLoading = getBreakpointsLoading;
 exports.getBreakpointsForSource = getBreakpointsForSource;
 exports.getBreakpointForLine = getBreakpointForLine;
+exports.getHiddenBreakpoint = getHiddenBreakpoint;
+exports.getHiddenBreakpointLocation = getHiddenBreakpointLocation;
 
 var _immutable = __webpack_require__(146);
 
@@ -19536,8 +19495,6 @@ var _makeRecord2 = _interopRequireDefault(_makeRecord);
 var _devtoolsSourceMap = __webpack_require__(1360);
 
 var _breakpoint = __webpack_require__(1364);
-
-var _reselect = __webpack_require__(993);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -19689,17 +19646,17 @@ function getBreakpointForLine(state, sourceId, line) {
   return breakpoints.find(breakpoint => breakpoint.location.line === line);
 }
 
-const getHiddenBreakpoint = exports.getHiddenBreakpoint = (0, _reselect.createSelector)(getBreakpoints, function (breakpoints) {
-  const hiddenBreakpoints = breakpoints.valueSeq().filter(breakpoint => breakpoint.hidden).first();
-  return hiddenBreakpoints;
-});
+function getHiddenBreakpoint(state) {
+  return getBreakpoints(state).valueSeq().filter(breakpoint => breakpoint.hidden).first();
+}
 
-const getHiddenBreakpointLocation = exports.getHiddenBreakpointLocation = (0, _reselect.createSelector)(getHiddenBreakpoint, function (hiddenBreakpoint) {
+function getHiddenBreakpointLocation(state) {
+  const hiddenBreakpoint = getHiddenBreakpoint(state);
   if (!hiddenBreakpoint) {
     return null;
   }
   return hiddenBreakpoint.location;
-});
+}
 
 exports.default = update;
 
@@ -19736,8 +19693,12 @@ __webpack_require__(1313);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 const arrowBtn = (onClick, type, className, tooltip) => {
-  var props = {
+  const props = {
     onClick,
     type,
     className,
@@ -19756,10 +19717,16 @@ class SearchInput extends _react.Component {
 
   componentDidMount() {
     this.$input.focus();
+    if (this.$input.value != "") {
+      this.$input.setSelectionRange(this.$input.value.length + 1, this.$input.value.length + 1);
+    }
   }
 
   componentDidUpdate() {
     this.$input.focus();
+    if (this.$input.value != "") {
+      this.$input.setSelectionRange(this.$input.value.length + 1, this.$input.value.length + 1);
+    }
   }
 
   shouldShowErrorEmoji() {
@@ -19847,7 +19814,6 @@ SearchInput.defaultProps = {
   size: "",
   showErrorEmoji: true
 };
-
 exports.default = SearchInput;
 
 /***/ }),
@@ -19860,6 +19826,11 @@ exports.default = SearchInput;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 exports.getLibraryFromUrl = getLibraryFromUrl;
 exports.annotateFrame = annotateFrame;
 exports.simplifyDisplayName = simplifyDisplayName;
@@ -19879,168 +19850,83 @@ function getFrameUrl(frame) {
   return (0, _lodash.get)(frame, "source.url", "") || "";
 }
 
-function isBackbone(frame) {
-  return getFrameUrl(frame).match(/backbone/i);
-}
-
-function isJQuery(frame) {
-  return getFrameUrl(frame).match(/jquery/i);
-}
-
-function isReact(frame) {
-  return getFrameUrl(frame).match(/react/i);
-}
-
-function isImmutable(frame) {
-  return getFrameUrl(frame).match(/immutable/i);
-}
-
-function isWebpack(frame) {
-  return getFrameUrl(frame).match(/webpack\/bootstrap/i);
-}
-
-function isNodeInternal(frame) {
-  // starts with "internal/" OR no path, just "timers.js", "url.js" etc
-  // (normally frameUrl will be a FQ pathname)
-  return (/(^internal\/|^[^.\/]+\.js)/.test(getFrameUrl(frame))
-  );
-}
-
-function isExpress(frame) {
-  return (/node_modules\/express/.test(getFrameUrl(frame))
-  );
-}
-
-function isPug(frame) {
-  return (/node_modules\/pug/.test(getFrameUrl(frame))
-  );
-}
-
-function isExtJs(frame) {
-  return (/\/ext-all[\.\-]/.test(getFrameUrl(frame))
-  );
-}
-
-function isUnderscore(frame) {
-  return getFrameUrl(frame).match(/underscore/i);
-}
-
-function isLodash(frame) {
-  return getFrameUrl(frame).match(/lodash/i);
-}
-
-function isEmber(frame) {
-  return getFrameUrl(frame).match(/ember/i);
-}
-
-function isChoo(frame) {
-  return getFrameUrl(frame).match(/choo/i);
-}
-
-function isVueJS(frame) {
-  return getFrameUrl(frame).match(/vue\.js/i);
-}
-
-function isRxJs(frame) {
-  return getFrameUrl(frame).match(/rxjs/i);
-}
-
-function isAngular(frame) {
-  return getFrameUrl(frame).match(/angular/i);
-}
-
-function isRedux(frame) {
-  return getFrameUrl(frame).match(/redux/i);
-}
-
-function isDojo(frame) {
-  return getFrameUrl(frame).match(/dojo/i);
-}
-
-function isPreact(frame) {
-  return getFrameUrl(frame).match(/preact/i);
-}
+const libraryMap = [{
+  label: "Backbone",
+  pattern: /backbone/i
+}, {
+  label: "jQuery",
+  pattern: /jquery/i
+}, {
+  label: "Preact",
+  pattern: /preact/i
+}, {
+  label: "React",
+  pattern: /react/i
+}, {
+  label: "Immutable",
+  pattern: /immutable/i
+}, {
+  label: "Webpack",
+  pattern: /webpack\/bootstrap/i
+}, {
+  label: "Node",
+  pattern: /(^internal\/|^[^.\/]+\.js)/
+}, {
+  label: "Express",
+  pattern: /node_modules\/express/
+}, {
+  label: "Pug",
+  pattern: /node_modules\/pug/
+}, {
+  label: "ExtJS",
+  pattern: /\/ext-all[\.\-]/
+}, {
+  label: "Underscore",
+  pattern: /underscore/i
+}, {
+  label: "Lodash",
+  pattern: /lodash/i
+}, {
+  label: "Ember",
+  pattern: /ember/i
+}, {
+  label: "Choo",
+  pattern: /choo/i
+}, {
+  label: "VueJS",
+  pattern: /vue\.js/i
+}, {
+  label: "RxJS",
+  pattern: /rxjs/i
+}, {
+  label: "Angular",
+  pattern: /angular/i
+}, {
+  label: "Redux",
+  pattern: /redux/i
+}, {
+  label: "Dojo",
+  pattern: /dojo/i
+}, {
+  label: "Marko",
+  pattern: /marko/i
+}, {
+  label: "NuxtJS",
+  pattern: /[\._]nuxt/i
+}, {
+  label: "Aframe",
+  pattern: /aframe/i
+}, {
+  label: "NextJS",
+  pattern: /[\._]next/i
+}];
 
 function getLibraryFromUrl(frame) {
   // @TODO each of these fns calls getFrameUrl, just call it once
   // (assuming there's not more complex logic to identify a lib)
-
-  if (isBackbone(frame)) {
-    return "Backbone";
-  }
-
-  if (isJQuery(frame)) {
-    return "jQuery";
-  }
-
-  // Needs to remain before "react", otherwise "react" can also match "preact"
-  if (isPreact(frame)) {
-    return "Preact";
-  }
-
-  if (isReact(frame)) {
-    return "React";
-  }
-
-  if (isWebpack(frame)) {
-    return "Webpack";
-  }
-
-  if (isNodeInternal(frame)) {
-    return "Node";
-  }
-
-  if (isExpress(frame)) {
-    return "Express";
-  }
-
-  if (isChoo(frame)) {
-    return "Choo";
-  }
-
-  if (isPug(frame)) {
-    return "Pug";
-  }
-
-  if (isExtJs(frame)) {
-    return "ExtJS";
-  }
-
-  if (isUnderscore(frame)) {
-    return "Underscore";
-  }
-
-  if (isLodash(frame)) {
-    return "Lodash";
-  }
-
-  if (isEmber(frame)) {
-    return "Ember";
-  }
-
-  if (isVueJS(frame)) {
-    return "VueJS";
-  }
-
-  if (isRxJs(frame)) {
-    return "RxJS";
-  }
-
-  if (isAngular(frame)) {
-    return "Angular";
-  }
-
-  if (isRedux(frame)) {
-    return "Redux";
-  }
-
-  if (isDojo(frame)) {
-    return "Dojo";
-  }
-
-  if (isImmutable(frame)) {
-    return "Immutable";
-  }
+  const frameUrl = getFrameUrl(frame);
+  const match = (0, _lodash.find)(libraryMap, o => frameUrl.match(o.pattern));
+  return match && match.label;
 }
 
 const displayNameMap = {
@@ -20078,7 +19964,7 @@ function annotateFrame(frame) {
 
   const library = getLibraryFromUrl(frame);
   if (library) {
-    return Object.assign({}, frame, { library });
+    return _extends({}, frame, { library });
   }
 
   return frame;
@@ -20170,7 +20056,7 @@ function collapseFrames(frames) {
 }
 
 function collapseLastFrames(frames) {
-  const index = (0, _lodash.findIndex)(frames, isWebpack);
+  const index = (0, _lodash.findIndex)(frames, frame => getFrameUrl(frame).match(/webpack\/bootstrap/i));
 
   if (index == -1) {
     return { newFrames: frames, lastGroup: [] };
@@ -20414,6 +20300,7 @@ exports.isEmptyLineInSource = isEmptyLineInSource;
 exports.getEmptyLines = getEmptyLines;
 exports.getOutOfScopeLocations = getOutOfScopeLocations;
 exports.getPreview = getPreview;
+exports.getSourceMetaData = getSourceMetaData;
 
 var _immutable = __webpack_require__(146);
 
@@ -20429,7 +20316,7 @@ function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj;
 
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /**
  * Ast reducer
@@ -20441,7 +20328,8 @@ function initialState() {
     symbols: I.Map(),
     emptyLines: I.Map(),
     outOfScopeLocations: null,
-    preview: null
+    preview: null,
+    sourceMetaData: I.Map()
   })();
 }
 
@@ -20508,6 +20396,11 @@ function update(state = initialState(), action) {
         return initialState();
       }
 
+    case "SET_SOURCE_METADATA":
+      {
+        return state.setIn(["sourceMetaData", action.sourceId], action.sourceMetaData);
+      }
+
     default:
       {
         return state;
@@ -20556,6 +20449,10 @@ function getPreview(state) {
   return state.ast.get("preview");
 }
 
+function getSourceMetaData(state, sourceId) {
+  return state.ast.getIn(["sourceMetaData", sourceId]) || {};
+}
+
 exports.default = update;
 
 /***/ }),
@@ -20576,7 +20473,9 @@ function assert(condition, message) {
   if ((0, _devtoolsConfig.isDevelopment)() && !condition) {
     throw new Error(`Assertion failure: ${message}`);
   }
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /***/ }),
 /* 1385 */
@@ -20589,13 +20488,14 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 exports.setContextMenu = setContextMenu;
+exports.setPrimaryPaneTab = setPrimaryPaneTab;
 exports.closeActiveSearch = closeActiveSearch;
 exports.setActiveSearch = setActiveSearch;
 exports.toggleFrameworkGrouping = toggleFrameworkGrouping;
-exports.setSelectedSymbolType = setSelectedSymbolType;
 exports.showSource = showSource;
 exports.togglePaneCollapse = togglePaneCollapse;
 exports.highlightLineRange = highlightLineRange;
+exports.flashLineRange = flashLineRange;
 exports.clearHighlightLineRange = clearHighlightLineRange;
 exports.openConditionalPanel = openConditionalPanel;
 exports.closeConditionalPanel = closeConditionalPanel;
@@ -20604,26 +20504,22 @@ exports.setOrientation = setOrientation;
 
 var _selectors = __webpack_require__(1352);
 
-var _sourceSearch = __webpack_require__(1434);
-
 function setContextMenu(type, event) {
   return ({ dispatch }) => {
     dispatch({ type: "SET_CONTEXT_MENU", contextMenu: { type, event } });
   };
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+function setPrimaryPaneTab(tabName) {
+  return { type: "SET_PRIMARY_PANE_TAB", tabName };
 }
 
 function closeActiveSearch() {
-  return ({ getState, dispatch }) => {
-    const activeSearch = (0, _selectors.getActiveSearch)(getState());
-
-    if (activeSearch == "source") {
-      dispatch((0, _sourceSearch.clearSourceSearchQuery)());
-    }
-
-    dispatch({
-      type: "TOGGLE_ACTIVE_SEARCH",
-      value: null
-    });
+  return {
+    type: "TOGGLE_ACTIVE_SEARCH",
+    value: null
   };
 }
 
@@ -20650,19 +20546,11 @@ function toggleFrameworkGrouping(toggleValue) {
   };
 }
 
-function setSelectedSymbolType(symbolType) {
-  return ({ dispatch, getState }) => {
-    dispatch({
-      type: "SET_SYMBOL_SEARCH_TYPE",
-      symbolType
-    });
-  };
-}
-
 function showSource(sourceId) {
   return ({ dispatch, getState }) => {
     const source = (0, _selectors.getSource)(getState(), sourceId);
 
+    dispatch(setPrimaryPaneTab("sources"));
     dispatch({
       type: "SHOW_SOURCE",
       sourceUrl: ""
@@ -20676,10 +20564,17 @@ function showSource(sourceId) {
 }
 
 function togglePaneCollapse(position, paneCollapsed) {
-  return {
-    type: "TOGGLE_PANE",
-    position,
-    paneCollapsed
+  return ({ dispatch, getState }) => {
+    const prevPaneCollapse = (0, _selectors.getPaneCollapse)(getState(), position);
+    if (prevPaneCollapse === paneCollapsed) {
+      return;
+    }
+
+    dispatch({
+      type: "TOGGLE_PANE",
+      position,
+      paneCollapsed
+    });
   };
 }
 
@@ -20694,6 +20589,13 @@ function highlightLineRange(location) {
   };
 }
 
+function flashLineRange(location) {
+  return ({ dispatch }) => {
+    dispatch(highlightLineRange(location));
+    setTimeout(() => dispatch(clearHighlightLineRange()), 200);
+  };
+}
+
 /**
  * @memberof actions/sources
  * @static
@@ -20705,9 +20607,13 @@ function clearHighlightLineRange() {
 }
 
 function openConditionalPanel(line) {
+  if (!line) {
+    return;
+  }
+
   return {
     type: "OPEN_CONDITIONAL_PANEL",
-    line: line
+    line
   };
 }
 
@@ -20758,7 +20664,9 @@ exports.formatKeyShortcut = undefined;
 
 var _devtoolsModules = __webpack_require__(1376);
 
-const { appinfo } = _devtoolsModules.Services;
+const { appinfo } = _devtoolsModules.Services; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /**
  * Utils for keyboard command strings
@@ -20800,6 +20708,10 @@ exports.formatKeyShortcut = formatKeyShortcut;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 /**
  * Clipboard function taken from
  * https://dxr.mozilla.org/mozilla-central/source/devtools/shared/platform/content/clipboard.js
@@ -20975,6 +20887,10 @@ WorkerDispatcher.prototype = {
             return;
           }
 
+          if (!this.worker) {
+            reject("Oops, The worker has shutdown!");
+            return;
+          }
           this.worker.removeEventListener("message", listener);
           if (result.error) {
             reject(result.error);
@@ -21078,6 +20994,10 @@ module.exports = {
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 function basename(path) {
   return path.split("/").pop();
 }
@@ -21115,29 +21035,34 @@ exports.join = join;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.getSelectedFrame = exports.getSelectedFrameId = exports.getLoadedObjects = exports.getPause = exports.State = undefined;
+exports.getSelectedFrame = exports.getLoadedObjects = exports.getPause = exports.State = undefined;
 
-var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+/* eslint complexity: ["error", 30]*/
 
 /**
  * Pause reducer
  * @module reducers/pause
  */
 
+exports.getPauseReason = getPauseReason;
 exports.isStepping = isStepping;
 exports.isPaused = isPaused;
 exports.isEvaluatingExpression = isEvaluatingExpression;
-exports.pausedInEval = pausedInEval;
 exports.getLoadedObject = getLoadedObject;
+exports.hasLoadingObjects = hasLoadingObjects;
 exports.getObjectProperties = getObjectProperties;
 exports.getIsWaitingOnBreak = getIsWaitingOnBreak;
 exports.getShouldPauseOnExceptions = getShouldPauseOnExceptions;
 exports.getShouldIgnoreCaughtExceptions = getShouldIgnoreCaughtExceptions;
 exports.getFrames = getFrames;
-exports.getFrameScopes = getFrameScopes;
+exports.getFrameScope = getFrameScope;
+exports.getSelectedScope = getSelectedScope;
+exports.getScopes = getScopes;
+exports.getSelectedFrameId = getSelectedFrameId;
 exports.getDebuggeeUrl = getDebuggeeUrl;
 exports.getChromeScopes = getChromeScopes;
 
@@ -21145,8 +21070,11 @@ var _reselect = __webpack_require__(993);
 
 var _prefs = __webpack_require__(226);
 
+var _lodash = __webpack_require__(2);
+
 const State = exports.State = () => ({
   pause: undefined,
+  why: null,
   isWaitingOnBreak: false,
   frames: undefined,
   selectedFrameId: undefined,
@@ -21158,20 +21086,22 @@ const State = exports.State = () => ({
   command: ""
 });
 
+const emptyPauseState = {
+  pause: null,
+  frames: null,
+  frameScopes: {},
+  selectedFrameId: null,
+  loadedObjects: {}
+};
+
 function update(state = State(), action) {
   switch (action.type) {
     case "PAUSED":
       {
-        const {
-          selectedFrameId,
-          frames,
-          scopes,
-          loadedObjects,
-          pauseInfo
-        } = action;
-        pauseInfo.isInterrupted = pauseInfo.why.type === "interrupted";
+        const { selectedFrameId, frames, loadedObjects, pauseInfo } = action;
 
-        const frameScopes = { [selectedFrameId]: scopes };
+        const { why } = pauseInfo;
+        pauseInfo.isInterrupted = pauseInfo.why.type === "interrupted";
 
         // turn this into an object keyed by object id
         const objectMap = {};
@@ -21179,23 +21109,24 @@ function update(state = State(), action) {
           objectMap[obj.value.objectId] = obj;
         });
 
-        return Object.assign({}, state, {
+        return _extends({}, state, {
           isWaitingOnBreak: false,
           pause: pauseInfo,
           selectedFrameId,
           frames,
-          frameScopes,
-          loadedObjects: objectMap
+          frameScopes: {},
+          loadedObjects: objectMap,
+          why
         });
       }
 
-    case "RESUME":
-      return Object.assign({}, state, {
-        pause: null,
-        frames: null,
-        selectedFrameId: null,
-        loadedObjects: {}
-      });
+    case "ADD_SCOPES":
+    case "MAP_SCOPES":
+      const { frame, scopes } = action;
+      const selectedFrameId = frame.id;
+
+      const frameScopes = _extends({}, state.frameScopes, { [selectedFrameId]: scopes });
+      return _extends({}, state, { frameScopes });
 
     case "TOGGLE_PRETTY_PRINT":
       if (action.status == "done") {
@@ -21205,19 +21136,17 @@ function update(state = State(), action) {
           pause.frame = frames[0];
         }
 
-        return Object.assign({}, state, { pause, frames });
+        return _extends({}, state, { pause, frames });
       }
 
       break;
+
     case "BREAK_ON_NEXT":
-      return Object.assign({}, state, { isWaitingOnBreak: true });
+      return _extends({}, state, { isWaitingOnBreak: true });
 
     case "SELECT_FRAME":
-      const { frame, scopes } = action;
-      const selectedFrameId = frame.id;
       return _extends({}, state, {
-        frameScopes: _extends({}, state.frameScopes, { [selectedFrameId]: scopes }),
-        selectedFrameId
+        selectedFrameId: action.frame.id
       });
 
     case "LOAD_OBJECT_PROPERTIES":
@@ -21231,7 +21160,7 @@ function update(state = State(), action) {
 
       if (action.status === "done") {
         if (!action.value) {
-          return Object.assign({}, state);
+          return _extends({}, state);
         }
 
         const ownProperties = action.value.ownProperties;
@@ -21247,7 +21176,7 @@ function update(state = State(), action) {
       break;
 
     case "CONNECT":
-      return Object.assign({}, State(), { debuggeeUrl: action.url });
+      return _extends({}, State(), { debuggeeUrl: action.url });
 
     case "PAUSE_ON_EXCEPTIONS":
       const { shouldPauseOnExceptions, shouldIgnoreCaughtExceptions } = action;
@@ -21255,16 +21184,18 @@ function update(state = State(), action) {
       _prefs.prefs.pauseOnExceptions = shouldPauseOnExceptions;
       _prefs.prefs.ignoreCaughtExceptions = shouldIgnoreCaughtExceptions;
 
-      return Object.assign({}, state, {
+      return _extends({}, state, {
         shouldPauseOnExceptions,
         shouldIgnoreCaughtExceptions
       });
 
     case "COMMAND":
-      return _extends({}, state, { command: action.value.type });
+      return action.status === "start" ? _extends({}, state, emptyPauseState, { command: action.command }) : _extends({}, state, { command: "" });
 
-    case "CLEAR_COMMAND":
-      return _extends({}, state, { command: "" });
+    case "RESUME":
+      // We clear why on resume because we need it to decide if
+      // we shoul re-evaluate watch expressions.
+      return _extends({}, state, { why: null });
 
     case "EVALUATE_EXPRESSION":
       return _extends({}, state, {
@@ -21272,7 +21203,7 @@ function update(state = State(), action) {
       });
 
     case "NAVIGATE":
-      return _extends({}, state, { debuggeeUrl: action.url });
+      return _extends({}, state, emptyPauseState, { debuggeeUrl: action.url });
   }
 
   return state;
@@ -21295,6 +21226,10 @@ const getPause = exports.getPause = (0, _reselect.createSelector)(getPauseState,
 
 const getLoadedObjects = exports.getLoadedObjects = (0, _reselect.createSelector)(getPauseState, pauseWrapper => pauseWrapper.loadedObjects);
 
+function getPauseReason(state) {
+  return state.pause.why;
+}
+
 function isStepping(state) {
   return ["stepIn", "stepOver", "stepOut"].includes(state.pause.command);
 }
@@ -21307,21 +21242,13 @@ function isEvaluatingExpression(state) {
   return state.pause.command === "expression";
 }
 
-function pausedInEval(state) {
-  if (!state.pause.pause) {
-    return false;
-  }
-
-  const exception = state.pause.pause.why.exception;
-  if (!exception) {
-    return false;
-  }
-
-  return exception.preview.fileName === "debugger eval code";
-}
-
 function getLoadedObject(state, objectId) {
   return getLoadedObjects(state)[objectId];
+}
+
+function hasLoadingObjects(state) {
+  const objects = getLoadedObjects(state);
+  return Object.values(objects).some(_lodash.isEmpty);
 }
 
 function getObjectProperties(state, parentId) {
@@ -21344,13 +21271,27 @@ function getFrames(state) {
   return state.pause.frames;
 }
 
-function getFrameScopes(state, frameId) {
+function getFrameScope(state, frameId) {
+  if (!frameId) {
+    return null;
+  }
+
   return state.pause.frameScopes[frameId];
 }
 
-const getSelectedFrameId = exports.getSelectedFrameId = (0, _reselect.createSelector)(getPauseState, pauseWrapper => {
-  return pauseWrapper.selectedFrameId;
-});
+function getSelectedScope(state) {
+  const frameId = getSelectedFrameId(state);
+  return getFrameScope(state, frameId);
+}
+
+function getScopes(state) {
+  const selectedFrameId = getSelectedFrameId(state);
+  return state.pause.frameScopes[selectedFrameId];
+}
+
+function getSelectedFrameId(state) {
+  return state.pause.selectedFrameId;
+}
 
 const getSelectedFrame = exports.getSelectedFrame = (0, _reselect.createSelector)(getSelectedFrameId, getFrames, (selectedFrameId, frames) => {
   if (!frames) {
@@ -21385,7 +21326,9 @@ exports.findSourceMatches = exports.searchSources = exports.getMatches = exports
 
 var _devtoolsUtils = __webpack_require__(1363);
 
-const { WorkerDispatcher } = _devtoolsUtils.workerUtils;
+const { WorkerDispatcher } = _devtoolsUtils.workerUtils; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                          * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                          * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 const dispatcher = new WorkerDispatcher();
 const startSearchWorker = exports.startSearchWorker = dispatcher.start.bind(dispatcher);
@@ -21406,10 +21349,9 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
-var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /**
  * Redux actions for breakpoints
@@ -21435,7 +21377,7 @@ exports.toggleBreakpoint = toggleBreakpoint;
 exports.addOrToggleDisabledBreakpoint = addOrToggleDisabledBreakpoint;
 exports.toggleDisabledBreakpoint = toggleDisabledBreakpoint;
 
-var _promise = __webpack_require__(1370);
+var _promise = __webpack_require__(1653);
 
 var _selectors = __webpack_require__(1352);
 
@@ -21803,7 +21745,9 @@ async function getGeneratedLocation(state, source, location, sourceMaps) {
     column: column === 0 ? undefined : column,
     sourceUrl
   };
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /***/ }),
 /* 1398 */
@@ -21823,11 +21767,7 @@ exports.getMappedExpression = getMappedExpression;
 
 var _selectors = __webpack_require__(1352);
 
-var _promise = __webpack_require__(1370);
-
-var _utils = __webpack_require__(1522);
-
-var _sources = __webpack_require__(1373);
+var _promise = __webpack_require__(1653);
 
 var _devtoolsSourceMap = __webpack_require__(1360);
 
@@ -21866,7 +21806,9 @@ function addExpression(input) {
     const newExpression = (0, _selectors.getExpression)(getState(), input);
     dispatch(evaluateExpression(newExpression));
   };
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function updateExpression(input, expression) {
   return ({ dispatch, getState }) => {
@@ -21925,7 +21867,6 @@ function evaluateExpression(expression) {
     let input = expression.input;
     const error = await parser.hasSyntaxError(input);
     if (error) {
-      debugger;
       return dispatch({
         type: "EVALUATE_EXPRESSION",
         input: expression.input,
@@ -21941,14 +21882,12 @@ function evaluateExpression(expression) {
       const sourceId = source.get("id");
 
       if (!(0, _devtoolsSourceMap.isGeneratedId)(sourceId)) {
-        const generatedSourceId = generatedLocation.sourceId;
-        await dispatch((0, _sources.ensureParserHasSourceText)(generatedSourceId));
-
         input = await getMappedExpression({ sourceMaps }, generatedLocation, input);
       }
     }
 
     const frameId = (0, _selectors.getSelectedFrameId)(getState());
+
     return dispatch({
       type: "EVALUATE_EXPRESSION",
       input: expression.input,
@@ -21970,7 +21909,7 @@ async function getMappedExpression({ sourceMaps }, generatedLocation, expression
     return expression;
   }
 
-  return (0, _utils.replaceOriginalVariableName)(expression, generatedScopes);
+  return parser.replaceOriginalVariableName(expression, generatedScopes);
 }
 
 /***/ }),
@@ -21984,8 +21923,11 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
-var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
+exports.setSourceMetaData = setSourceMetaData;
 exports.setSymbols = setSymbols;
 exports.setEmptyLines = setEmptyLines;
 exports.setOutOfScopeLocations = setOutOfScopeLocations;
@@ -21994,19 +21936,42 @@ exports.setPreview = setPreview;
 
 var _selectors = __webpack_require__(1352);
 
-var _sources = __webpack_require__(1373);
-
 var _expressions = __webpack_require__(1398);
 
-var _promise = __webpack_require__(1370);
+var _promise = __webpack_require__(1653);
 
 var _parser = __webpack_require__(1365);
+
+var _ast = __webpack_require__(1638);
 
 var _devtoolsSourceMap = __webpack_require__(1360);
 
 const extraProps = {
   react: { displayName: "this._reactInternalInstance.getName()" }
 };
+
+function setSourceMetaData(sourceId) {
+  return async ({ dispatch, getState }) => {
+    const sourceRecord = (0, _selectors.getSource)(getState(), sourceId);
+    if (!sourceRecord) {
+      return;
+    }
+
+    const source = sourceRecord.toJS();
+    if (!source.text || source.isWasm) {
+      return;
+    }
+
+    const isReactComp = await (0, _parser.isReactComponent)(source);
+    dispatch({
+      type: "SET_SOURCE_METADATA",
+      sourceId: source.id,
+      sourceMetaData: {
+        isReactComponent: isReactComp
+      }
+    });
+  };
+}
 
 function setSymbols(sourceId) {
   return async ({ dispatch, getState }) => {
@@ -22016,7 +21981,7 @@ function setSymbols(sourceId) {
     }
 
     const source = sourceRecord.toJS();
-    if (!source.text || (0, _selectors.hasSymbols)(getState(), source)) {
+    if (!source.text || source.isWasm || (0, _selectors.hasSymbols)(getState(), source)) {
       return;
     }
 
@@ -22027,6 +21992,9 @@ function setSymbols(sourceId) {
       source,
       symbols
     });
+
+    dispatch(setEmptyLines(source.id));
+    dispatch(setSourceMetaData(source.id));
   };
 }
 
@@ -22038,7 +22006,7 @@ function setEmptyLines(sourceId) {
     }
 
     const source = sourceRecord.toJS();
-    if (!source.text) {
+    if (!source.text || source.isWasm) {
       return;
     }
 
@@ -22090,20 +22058,6 @@ function clearPreview() {
   };
 }
 
-function findBestMatch(symbols, tokenPos, token) {
-  const { memberExpressions, identifiers } = symbols;
-  const { line, column } = tokenPos;
-  return identifiers.concat(memberExpressions).reduce((found, expression) => {
-    const overlaps = expression.location.start.line == line && expression.location.start.column <= column && expression.location.end.column >= column;
-
-    if (overlaps) {
-      return expression;
-    }
-
-    return found;
-  }, {});
-}
-
 function setPreview(token, tokenPos, cursorPos) {
   return async ({ dispatch, getState, client, sourceMaps }) => {
     const currentSelection = (0, _selectors.getPreview)(getState());
@@ -22117,7 +22071,7 @@ function setPreview(token, tokenPos, cursorPos) {
         const source = (0, _selectors.getSelectedSource)(getState());
         const _symbols = await (0, _parser.getSymbols)(source.toJS());
 
-        const found = findBestMatch(_symbols, tokenPos, token);
+        const found = (0, _ast.findBestMatchExpression)(_symbols, tokenPos, token);
         if (!found) {
           return;
         }
@@ -22131,9 +22085,6 @@ function setPreview(token, tokenPos, cursorPos) {
         const sourceId = source.get("id");
         if (location && !(0, _devtoolsSourceMap.isGeneratedId)(sourceId)) {
           const generatedLocation = await sourceMaps.getGeneratedLocation(_extends({}, location.start, { sourceId }), source.toJS());
-
-          const generatedSourceId = generatedLocation.sourceId;
-          await dispatch((0, _sources.ensureParserHasSourceText)(generatedSourceId));
 
           expression = await (0, _expressions.getMappedExpression)({ sourceMaps }, generatedLocation, expression);
         }
@@ -22174,10 +22125,16 @@ function setPreview(token, tokenPos, cursorPos) {
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 exports.updateFrameLocations = updateFrameLocations;
 exports.updateScopeBindings = updateScopeBindings;
 exports.getPauseReason = getPauseReason;
 exports.getPausedPosition = getPausedPosition;
+exports.inDebuggerEval = inDebuggerEval;
 
 var _lodash = __webpack_require__(2);
 
@@ -22188,16 +22145,11 @@ function updateFrameLocations(frames, sourceMaps) {
     return Promise.resolve(frames);
   }
 
-  return Promise.all(frames.map(frame => {
-    return sourceMaps.getOriginalLocation(frame.location).then(loc => {
-      return Object.assign({}, frame, {
-        location: loc,
-        generatedLocation: frame.location
-      });
-    });
-  }));
+  return Promise.all(frames.map(frame => sourceMaps.getOriginalLocation(frame.location).then(loc => _extends({}, frame, {
+    location: loc,
+    generatedLocation: frame.location
+  }))));
 }
-
 
 function extendScope(scope, generatedScopes, index) {
   if (!scope) {
@@ -22206,7 +22158,7 @@ function extendScope(scope, generatedScopes, index) {
   if (index >= generatedScopes.length) {
     return scope;
   }
-  return Object.assign({}, scope, {
+  return _extends({}, scope, {
     parent: extendScope(scope.parent, generatedScopes, index + 1),
     sourceBindings: generatedScopes[index].bindings
   });
@@ -22263,6 +22215,14 @@ async function getPausedPosition(pauseInfo, sourceMaps) {
   return location;
 }
 
+function inDebuggerEval(why) {
+  if (why && why.type === "exception" && why.exception && why.exception.preview && why.exception.preview.fileName) {
+    return why.exception.preview.fileName === "debugger eval code";
+  }
+
+  return false;
+}
+
 /***/ }),
 /* 1401 */
 /***/ (function(module, exports, __webpack_require__) {
@@ -22278,6 +22238,10 @@ exports.renderWasmText = exports.clearWasmStates = exports.wasmOffsetToLine = ex
 var _WasmParser = __webpack_require__(677);
 
 var _WasmDis = __webpack_require__(678);
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 var wasmStates = Object.create(null);
 
@@ -22385,7 +22349,7 @@ function renderWasmText(sourceId, { binary }) {
     data[i] = binary.charCodeAt(i);
   }
   const { lines } = getWasmText(sourceId, data);
-  const MAX_LINES = 100000;
+  const MAX_LINES = 1000000;
   if (lines.length > MAX_LINES) {
     lines.splice(MAX_LINES, lines.length - MAX_LINES);
     lines.push(";; .... text is truncated due to the size");
@@ -22428,8 +22392,9 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 function ignoreWhiteSpace(str) {
   return (/^\s{0,2}$/.test(str) ? "(?!\\s*.*)" : str
   );
-}
-
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function wholeMatch(query, wholeWord) {
   if (query === "" || !wholeWord) {
@@ -22514,7 +22479,7 @@ __webpack_require__(1303);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-class Modal extends _react.Component {
+class Modal extends _react2.default.Component {
   constructor(...args) {
     var _temp;
 
@@ -22541,7 +22506,10 @@ class Modal extends _react.Component {
   }
 }
 
-exports.Modal = Modal;
+exports.Modal = Modal; /* This Source Code Form is subject to the terms of the Mozilla Public
+                        * License, v. 2.0. If a copy of the MPL was not distributed with this
+                        * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 Modal.contextTypes = {
   shortcuts: _propTypes2.default.object
 };
@@ -22578,7 +22546,9 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
-var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 var _react = __webpack_require__(0);
 
@@ -22590,10 +22560,7 @@ var _devtoolsComponents = __webpack_require__(1441);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-const Tree = (0, _react.createFactory)(_devtoolsComponents.Tree);
-
 class ManagedTree extends _react.Component {
-
   constructor(props) {
     super();
 
@@ -22705,7 +22672,7 @@ class ManagedTree extends _react.Component {
     return _react2.default.createElement(
       "div",
       { className: "managed-tree" },
-      _react2.default.createElement(Tree, props)
+      _react2.default.createElement(_devtoolsComponents.Tree, props)
     );
   }
 }
@@ -22728,6 +22695,10 @@ exports.getURL = getURL;
 var _url = __webpack_require__(334);
 
 var _lodash = __webpack_require__(2);
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function getFilenameFromPath(pathname) {
   let filename = "";
@@ -22831,11 +22802,13 @@ function scrollList(resultList, index) {
   const resultEl = resultList[index];
 
   if ((0, _devtoolsConfig.isFirefox)()) {
-    resultEl.scrollIntoView({ block: "end", behavior: "smooth" });
+    resultEl.scrollIntoView({ block: "center", behavior: "smooth" });
   } else {
     chromeScrollList(resultEl, index);
   }
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function chromeScrollList(elem, index) {
   const resultsEl = elem.parentNode;
@@ -22882,8 +22855,11 @@ __webpack_require__(1321);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-class PaneToggleButton extends _react.Component {
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
+class PaneToggleButton extends _react.Component {
   shouldComponentUpdate(nextProps) {
     const { collapsed, horizontal } = this.props;
 
@@ -23564,7 +23540,9 @@ function containsPosition(a, b) {
   const endsAfter = a.end.line > b.line || a.end.line === b.line && a.end.column >= b.column;
 
   return startsBefore && endsAfter;
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function findClosestScope(functions, location) {
   return functions.reduce((found, currNode) => {
@@ -23598,7 +23576,7 @@ async function getASTLocation(source, location) {
     const line = location.line - scope.location.start.line;
     return {
       name: scope.name,
-      offset: { line }
+      offset: { line, column: undefined }
     };
   }
   return { name: undefined, offset: location };
@@ -23640,10 +23618,9 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 
 const State = exports.State = (0, _makeRecord2.default)({
   expressions: (0, _immutable.List)(restoreExpressions())
-});
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+}); /* This Source Code Form is subject to the terms of the Mozilla Public
+     * License, v. 2.0. If a copy of the MPL was not distributed with this
+     * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /**
  * Expressions reducer
@@ -23752,10 +23729,9 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 
 const State = exports.State = (0, _makeRecord2.default)({
   workers: (0, _immutable.List)()
-});
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+}); /* This Source Code Form is subject to the terms of the Mozilla Public
+     * License, v. 2.0. If a copy of the MPL was not distributed with this
+     * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /**
  * Debuggee reducer
@@ -23807,7 +23783,7 @@ function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj;
 
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /**
  * Pending breakpoints reducer
@@ -23990,10 +23966,10 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 exports.State = undefined;
+exports.getSelectedPrimaryPaneTab = getSelectedPrimaryPaneTab;
 exports.getActiveSearch = getActiveSearch;
 exports.getContextMenu = getContextMenu;
 exports.getFrameworkGroupingState = getFrameworkGroupingState;
-exports.getSymbolSearchType = getSymbolSearchType;
 exports.getShownSource = getShownSource;
 exports.getPaneCollapse = getPaneCollapse;
 exports.getHighlightedLineRange = getHighlightedLineRange;
@@ -24011,7 +23987,7 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /**
  * UI reducer
@@ -24019,9 +23995,9 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
  */
 
 const State = exports.State = (0, _makeRecord2.default)({
+  selectedPrimaryPaneTab: "sources",
   activeSearch: null,
   contextMenu: {},
-  symbolSearchType: "functions",
   shownSource: "",
   projectDirectoryRoot: "",
   startPanelCollapsed: _prefs.prefs.startPanelCollapsed,
@@ -24043,11 +24019,6 @@ function update(state = State(), action) {
       {
         _prefs.prefs.frameworkGroupingOn = action.value;
         return state.set("frameworkGroupingOn", action.value);
-      }
-
-    case "SET_SYMBOL_SEARCH_TYPE":
-      {
-        return state.set("symbolSearchType", action.symbolType);
       }
 
     case "SET_CONTEXT_MENU":
@@ -24086,6 +24057,7 @@ function update(state = State(), action) {
 
       return state.set("highlightedLineRange", lineRange);
 
+    case "CLOSE_QUICK_OPEN":
     case "CLEAR_HIGHLIGHT_LINES":
       return state.set("highlightedLineRange", {});
 
@@ -24099,6 +24071,9 @@ function update(state = State(), action) {
       _prefs.prefs.projectDirectoryRoot = action.url;
       return state.set("projectDirectoryRoot", action.url);
 
+    case "SET_PRIMARY_PANE_TAB":
+      return state.set("selectedPrimaryPaneTab", action.tabName);
+
     default:
       {
         return state;
@@ -24108,6 +24083,10 @@ function update(state = State(), action) {
 
 // NOTE: we'd like to have the app state fully typed
 // https://github.com/devtools-html/debugger.html/blob/master/src/reducers/sources.js#L179-L185
+function getSelectedPrimaryPaneTab(state) {
+  return state.ui.get("selectedPrimaryPaneTab");
+}
+
 function getActiveSearch(state) {
   return state.ui.get("activeSearch");
 }
@@ -24118,10 +24097,6 @@ function getContextMenu(state) {
 
 function getFrameworkGroupingState(state) {
   return state.ui.get("frameworkGroupingOn");
-}
-
-function getSymbolSearchType(state) {
-  return state.ui.get("symbolSearchType");
 }
 
 function getShownSource(state) {
@@ -24176,6 +24151,10 @@ var _makeRecord2 = _interopRequireDefault(_makeRecord);
 var _prefs = __webpack_require__(226);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /**
  * File Search reducer
@@ -24284,10 +24263,9 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 const State = exports.State = (0, _makeRecord2.default)({
   coverageOn: false,
   hitCount: I.Map()
-});
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+}); /* This Source Code Form is subject to the terms of the Mozilla Public
+     * License, v. 2.0. If a copy of the MPL was not distributed with this
+     * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /**
  * Code coverage reducer
@@ -24347,7 +24325,7 @@ function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj;
 
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /**
  * Project text search reducer
@@ -24389,53 +24367,7 @@ function getTextSearchQuery(state) {
 exports.default = update;
 
 /***/ }),
-/* 1425 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.default = update;
-exports.getSourceSearchQuery = getSourceSearchQuery;
-
-var _makeRecord = __webpack_require__(1361);
-
-var _makeRecord2 = _interopRequireDefault(_makeRecord);
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-function InitialState() {
-  return (0, _makeRecord2.default)({
-    queryString: ""
-  })();
-} /* This Source Code Form is subject to the terms of the Mozilla Public
-   * License, v. 2.0. If a copy of the MPL was not distributed with this
-   * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-
-/**
- * Source search reducer
- * @module reducers/source-search
- */
-
-function update(state = InitialState(), action) {
-  switch (action.type) {
-    case "SET_QUERY_STRING":
-      return state.update("queryString", value => action.queryString);
-    case "CLEAR_QUERY_STRING":
-      return state.update("queryString", value => "");
-    default:
-      return state;
-  }
-}
-
-function getSourceSearchQuery(state) {
-  return state.sourceSearch.get("queryString");
-}
-
-/***/ }),
+/* 1425 */,
 /* 1426 */
 /***/ (function(module, exports, __webpack_require__) {
 
@@ -24459,10 +24391,9 @@ function InitialState() {
   return (0, _makeRecord2.default)({
     expanded: null
   })();
-}
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /**
  * Source tree reducer
@@ -24501,7 +24432,9 @@ var _devtoolsSourceMap = __webpack_require__(1360);
 
 function getLocation(breakpoint, isGeneratedSource) {
   return isGeneratedSource ? breakpoint.generatedLocation || breakpoint.location : breakpoint.location;
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function formatBreakpoint(breakpoint, selectedSource) {
   const { condition, loading, disabled, hidden } = breakpoint;
@@ -24548,10 +24481,16 @@ function getVisibleBreakpoints(state) {
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
+
 exports.createFrame = createFrame;
 exports.createSource = createSource;
 exports.createPause = createPause;
 exports.createBreakpointLocation = createBreakpointLocation;
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 // This module converts Firefox specific types to the generic types
 
@@ -24568,6 +24507,7 @@ function createFrame(frame) {
     line: frame.where.line,
     column: frame.where.column
   };
+
   return {
     id: frame.actor,
     displayName: title,
@@ -24594,7 +24534,7 @@ function createPause(packet, response) {
   // NOTE: useful when the debugger is already paused
   const frame = packet.frame || response.frames[0];
 
-  return Object.assign({}, packet, {
+  return _extends({}, packet, {
     frame: createFrame(frame),
     frames: response.frames.map(createFrame)
   });
@@ -24631,6 +24571,10 @@ exports.fromServerLocation = fromServerLocation;
 exports.toServerLocation = toServerLocation;
 exports.createFrame = createFrame;
 exports.createLoadedObject = createLoadedObject;
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 function fromServerLocation(serverLocation) {
   if (serverLocation) {
     return {
@@ -24680,6 +24624,11 @@ function createLoadedObject(serverObject, parentId) {
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 exports.bootstrapStore = bootstrapStore;
 exports.bootstrapApp = bootstrapApp;
 exports.bootstrapWorkers = bootstrapWorkers;
@@ -24707,7 +24656,7 @@ var _prettyPrint = __webpack_require__(1431);
 
 var _parser = __webpack_require__(1365);
 
-var _createStore = __webpack_require__(1510);
+var _createStore = __webpack_require__(1658);
 
 var _createStore2 = _interopRequireDefault(_createStore);
 
@@ -24729,10 +24678,10 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 
 function bootstrapStore(client, { services, toolboxActions }) {
   const createStore = (0, _createStore2.default)({
-    log: (0, _devtoolsConfig.getValue)("logging.actions"),
-    timing: (0, _devtoolsConfig.getValue)("performance.actions"),
+    log: (0, _devtoolsConfig.isTesting)() || (0, _devtoolsConfig.getValue)("logging.actions"),
+    timing: (0, _devtoolsConfig.isDevelopment)(),
     makeThunkArgs: (args, state) => {
-      return Object.assign({}, args, { client }, services, toolboxActions);
+      return _extends({}, args, { client }, services, toolboxActions);
     }
   });
 
@@ -24808,7 +24757,9 @@ var _assert2 = _interopRequireDefault(_assert);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-const { WorkerDispatcher } = _devtoolsUtils.workerUtils;
+const { WorkerDispatcher } = _devtoolsUtils.workerUtils; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                          * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                          * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 const dispatcher = new WorkerDispatcher();
 const startPrettyPrintWorker = exports.startPrettyPrintWorker = dispatcher.start.bind(dispatcher);
@@ -24849,7 +24800,9 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 function reportException(who, exception) {
   const msg = `${who} threw an exception: `;
   console.error(msg, exception);
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function executeSoon(fn) {
   setTimeout(fn, 0);
@@ -24883,7 +24836,7 @@ var _sources = __webpack_require__(1373);
 
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /**
  * Redux actions for the search state
@@ -24943,35 +24896,7 @@ function searchSource(sourceId, query) {
 }
 
 /***/ }),
-/* 1434 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.setSourceSearchQuery = setSourceSearchQuery;
-exports.clearSourceSearchQuery = clearSourceSearchQuery;
-function setSourceSearchQuery(queryString) {
-  return ({ dispatch, getState }) => {
-    dispatch({
-      type: "SET_QUERY_STRING",
-      queryString
-    });
-  };
-}
-
-function clearSourceSearchQuery() {
-  return ({ dispatch, getState }) => {
-    dispatch({
-      type: "CLEAR_QUERY_STRING"
-    });
-  };
-}
-
-/***/ }),
+/* 1434 */,
 /* 1435 */
 /***/ (function(module, exports, __webpack_require__) {
 
@@ -24983,9 +24908,31 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.loadSourceText = loadSourceText;
 
-var _promise = __webpack_require__(1370);
+var _promise = __webpack_require__(1653);
 
 var _ast = __webpack_require__(1399);
+
+var _selectors = __webpack_require__(1352);
+
+var _parser = __webpack_require__(1365);
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+async function loadSource(source, { sourceMaps, client }) {
+  if (sourceMaps.isOriginalId(source.id)) {
+    return await sourceMaps.getOriginalSourceText(source);
+  }
+
+  const response = await client.sourceContents(source.id);
+
+  return {
+    id: source.id,
+    text: response.source,
+    contentType: response.contentType || "text/javascript"
+  };
+}
 
 /**
  * @memberof actions/sources
@@ -25001,23 +24948,16 @@ function loadSourceText(source) {
     await dispatch({
       type: "LOAD_SOURCE_TEXT",
       source: source,
-      [_promise.PROMISE]: async function () {
-        if (sourceMaps.isOriginalId(source.id)) {
-          return await sourceMaps.getOriginalSourceText(source);
-        }
-
-        const response = await client.sourceContents(source.id);
-
-        return {
-          id: source.id,
-          text: response.source,
-          contentType: response.contentType || "text/javascript"
-        };
-      }()
+      [_promise.PROMISE]: loadSource(source, { sourceMaps, client })
     });
 
-    await dispatch((0, _ast.setSymbols)(source.id));
-    await dispatch((0, _ast.setEmptyLines)(source.id));
+    const newSource = (0, _selectors.getSource)(getState(), source.id).toJS();
+    if (newSource.isWasm) {
+      return;
+    }
+
+    await (0, _parser.setSource)(newSource);
+    dispatch((0, _ast.setSymbols)(source.id));
   };
 }
 
@@ -25037,11 +24977,11 @@ var _source = __webpack_require__(1356);
 
 var _wasm = __webpack_require__(1401);
 
-var _devtoolsSourceEditor = __webpack_require__(1386);
+var _ui = __webpack_require__(1439);
 
-const { resizeBreakpointGutter } = _devtoolsSourceEditor.SourceEditorUtils;
-
-let sourceDocs = {};
+let sourceDocs = {}; /* This Source Code Form is subject to the terms of the Mozilla Public
+                      * License, v. 2.0. If a copy of the MPL was not distributed with this
+                      * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function getDocument(key) {
   return sourceDocs[key];
@@ -25062,7 +25002,8 @@ function clearDocuments() {
 function resetLineNumberFormat(editor) {
   const cm = editor.codeMirror;
   cm.setOption("lineNumberFormatter", number => number);
-  resizeBreakpointGutter(cm);
+  (0, _ui.resizeBreakpointGutter)(cm);
+  (0, _ui.resizeToggleButton)(cm);
 }
 
 function updateLineNumberFormat(editor, sourceId) {
@@ -25072,7 +25013,8 @@ function updateLineNumberFormat(editor, sourceId) {
   const cm = editor.codeMirror;
   const lineNumberFormatter = (0, _wasm.getWasmLineNumberFormatter)(sourceId);
   cm.setOption("lineNumberFormatter", lineNumberFormatter);
-  resizeBreakpointGutter(cm);
+  (0, _ui.resizeBreakpointGutter)(cm);
+  (0, _ui.resizeToggleButton)(cm);
 }
 
 function updateDocument(editor, sourceId) {
@@ -25114,19 +25056,21 @@ function setEditorText(editor, source) {
  * Handle getting the source document or creating a new
  * document with the correct mode and text.
  */
-function showSourceText(editor, source) {
+function showSourceText(editor, source, sourceMetaData) {
   if (!source) {
     return;
   }
 
   let doc = getDocument(source.id);
   if (editor.codeMirror.doc === doc) {
+    editor.setMode((0, _source.getMode)(source, sourceMetaData));
     return;
   }
 
   if (doc) {
     editor.replaceDocument(doc);
     updateLineNumberFormat(editor, source.id);
+    editor.setMode((0, _source.getMode)(source, sourceMetaData));
     return doc;
   }
 
@@ -25135,7 +25079,7 @@ function showSourceText(editor, source) {
   editor.replaceDocument(doc);
 
   setEditorText(editor, source);
-  editor.setMode((0, _source.getMode)(source));
+  editor.setMode((0, _source.getMode)(source, sourceMetaData));
   updateLineNumberFormat(editor, source.id);
 }
 
@@ -25167,7 +25111,7 @@ var _indentation = __webpack_require__(1438);
 
 // replace quotes and slashes that could interfere with the evaluation.
 function sanitizeInput(input) {
-  return input.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  return input.replace(/\\/g, "\\\\").replace(/"/g, '"');
 }
 
 /*
@@ -25176,7 +25120,9 @@ function sanitizeInput(input) {
  *
  * NOTE: we add line after the expression to protect against comments.
 */
-
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function wrapExpression(input) {
   return (0, _indentation.correctIndentation)(`
@@ -25242,6 +25188,10 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 exports.correctIndentation = correctIndentation;
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 function getIndentation(lines) {
   const firstLine = lines[0];
   const secondLine = lines[1];
@@ -25273,6 +25223,13 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 exports.isVisible = isVisible;
+exports.getLineNumberWidth = getLineNumberWidth;
+exports.resizeBreakpointGutter = resizeBreakpointGutter;
+exports.resizeToggleButton = resizeToggleButton;
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 /* Checks to see if the root element is available and
  * if the element is visible. We check the width of the element
  * because it is more reliable than either checking a focus state or
@@ -25283,14 +25240,44 @@ function isVisible() {
   return el && el.getBoundingClientRect().width;
 }
 
+/* Gets the line numbers width in the code editor
+ */
+function getLineNumberWidth(editor) {
+  const gutters = editor.display.gutters;
+  const lineNumbers = gutters.querySelector(".CodeMirror-linenumbers");
+  return lineNumbers && lineNumbers.clientWidth;
+}
+
+/**
+ * Forces the breakpoint gutter to be the same size as the line
+ * numbers gutter. Editor CSS will absolutely position the gutter
+ * beneath the line numbers. This makes it easy to be flexible with
+ * how we overlay breakpoints.
+ */
+function resizeBreakpointGutter(editor) {
+  const gutters = editor.display.gutters;
+  const breakpoints = gutters.querySelector(".breakpoints");
+  if (breakpoints) {
+    breakpoints.style.width = `${getLineNumberWidth(editor)}px`;
+  }
+}
+
+/**
+ * Forces the left toggle button in source header to be the same size
+ * as the line numbers gutter.
+ */
+function resizeToggleButton(editor) {
+  const toggleButton = document.querySelector(".source-header .toggle-button-start");
+  if (toggleButton) {
+    toggleButton.style.width = `${getLineNumberWidth(editor)}px`;
+  }
+}
+
 /***/ }),
 /* 1440 */
 /***/ (function(module, exports, __webpack_require__) {
 
-"use strict";
-
-
-var SplitBox = __webpack_require__(1536);
+const SplitBox = __webpack_require__(1536);
 
 module.exports = SplitBox;
 
@@ -25477,7 +25464,9 @@ function createNodeInTree(part, path, tree, index) {
  * 2. if it does not exist create it
  * 3. if it is a file, replace it with a directory
  */
-
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function findOrCreateNode(parts, subTree, path, part, index, url, debuggeeHost) {
   const addedPartIsFile = (0, _utils.partIsFile)(index, parts, url);
@@ -25599,7 +25588,9 @@ function collapseTree(node, depth = 0) {
   }
   // Node is a leaf, not a folder, do not modify it.
   return node;
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /***/ }),
 /* 1445 */
@@ -25636,7 +25627,7 @@ class ResultList extends _react.Component {
     const props = {
       onClick: event => selectItem(event, item, index),
       key: `${item.id}${item.value}${index}`,
-      ref: index,
+      ref: String(index),
       title: item.value,
       className: (0, _classnames2.default)("result-item", {
         selected: index === selected
@@ -25669,8 +25660,10 @@ class ResultList extends _react.Component {
     );
   }
 }
+exports.default = ResultList; /* This Source Code Form is subject to the terms of the Mozilla Public
+                               * License, v. 2.0. If a copy of the MPL was not distributed with this
+                               * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
-exports.default = ResultList;
 ResultList.defaultProps = {
   size: "small"
 };
@@ -25697,6 +25690,10 @@ var _frame = __webpack_require__(1380);
 __webpack_require__(1320);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function getFunctionName(func) {
   const name = func.userDisplayName || func.displayName || func.name;
@@ -25789,7 +25786,8 @@ StringRep.propTypes = {
   object: React.PropTypes.string.isRequired,
   member: React.PropTypes.any,
   cropLimit: React.PropTypes.number,
-  openLink: React.PropTypes.func
+  openLink: React.PropTypes.func,
+  omitLinkHref: React.PropTypes.bool
 };
 
 function StringRep(props) {
@@ -25800,7 +25798,8 @@ function StringRep(props) {
     style,
     useQuotes = true,
     escapeWhitespace = true,
-    openLink
+    openLink,
+    omitLinkHref = true
   } = props;
 
   let config = { className: "objectBox objectBox-string" };
@@ -25838,7 +25837,7 @@ function StringRep(props) {
       items.push(a({
         className: "url",
         title: token,
-        href: token,
+        href: omitLinkHref === true ? null : token,
         draggable: false,
         onClick: openLink ? e => {
           e.preventDefault();
@@ -26877,6 +26876,10 @@ var _FrameMenu2 = _interopRequireDefault(_FrameMenu);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 function FrameTitle({ frame, options }) {
   const displayName = (0, _frame.formatDisplayName)(frame, options);
   return _react2.default.createElement(
@@ -26911,10 +26914,6 @@ function FrameLocation({ frame }) {
 FrameLocation.displayName = "FrameLocation";
 
 class FrameComponent extends _react.Component {
-
-  constructor() {
-    super();
-  }
 
   onContextMenu(event) {
     const {
@@ -26973,7 +26972,6 @@ FrameComponent.defaultProps = {
   hideLocation: false,
   shouldMapDisplayName: true
 };
-
 FrameComponent.displayName = "Frame";
 
 /***/ }),
@@ -26994,7 +26992,9 @@ var _clipboard = __webpack_require__(1388);
 
 var _lodash = __webpack_require__(2);
 
-const blackboxString = "sourceFooter.blackbox";
+const blackboxString = "sourceFooter.blackbox"; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                 * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                 * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 const unblackboxString = "sourceFooter.unblackbox";
 
@@ -27083,6 +27083,10 @@ var _client = __webpack_require__(1499);
 var _bootstrap = __webpack_require__(1430);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 if (false) {
   window.Perf = require("react-addons-perf");
@@ -30441,11 +30445,19 @@ var chrome = _interopRequireWildcard(_chrome);
 
 var _prefs = __webpack_require__(226);
 
+var _timings = __webpack_require__(1657);
+
+var timings = _interopRequireWildcard(_timings);
+
 var _devtoolsConfig = __webpack_require__(1355);
 
 var _bootstrap = __webpack_require__(1430);
 
 function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function loadFromPrefs(actions) {
   const { pauseOnExceptions, ignoreCaughtExceptions } = _prefs.prefs;
@@ -30486,7 +30498,8 @@ async function onConnect(connection, { services, toolboxActions }) {
       features: _prefs.features,
       connection,
       bpClients,
-      services
+      services,
+      timings
     };
   };
 
@@ -30581,7 +30594,9 @@ async function onConnect(connection, actions) {
   }
 
   return { bpClients };
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 exports.clientCommands = _commands.clientCommands;
 exports.clientEvents = _events.clientEvents;
@@ -30601,6 +30616,10 @@ exports.clientCommands = exports.setupCommands = undefined;
 var _breakpoint = __webpack_require__(1364);
 
 var _create = __webpack_require__(1428);
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 let bpClients;
 let threadClient;
@@ -30860,7 +30879,9 @@ function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj;
 
 // hasOwnProperty is defensive because it is possible that the
 // object that we're creating a map for has a `hasOwnProperty` field
-
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /**
  * Immutable JS conversion utils
@@ -30972,7 +30993,9 @@ var _devtoolsSourceMap = __webpack_require__(1360);
 function isGenerated(selectedSource) {
   const sourceId = selectedSource.get("id");
   return (0, _devtoolsSourceMap.isGeneratedId)(sourceId);
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function getColumn(column, selectedSource) {
   if (column) {
@@ -31051,7 +31074,9 @@ function getOutOfScopeLines(outOfScopeLocations) {
   }
 
   return (0, _lodash.uniq)((0, _lodash.flatMap)(outOfScopeLocations, location => (0, _lodash.range)(location.start.line, location.end.line)));
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function getInScopeLines(state) {
   const source = (0, _sources.getSelectedSource)(state);
@@ -31093,6 +31118,10 @@ var _sources = __webpack_require__(1369);
  * Checks to if the selected frame's source is currently
  * selected.
  */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 function isSelectedFrameVisible(state) {
   const selectedLocation = (0, _sources.getSelectedLocation)(state);
   const selectedFrame = (0, _pause.getSelectedFrame)(state);
@@ -31116,7 +31145,9 @@ var _create = __webpack_require__(1428);
 
 var _devtoolsConfig = __webpack_require__(1355);
 
-const CALL_STACK_PAGE_SIZE = 1000;
+const CALL_STACK_PAGE_SIZE = 1000; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                    * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                    * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 let threadClient;
 let actions;
@@ -31190,6 +31221,10 @@ var _commands = __webpack_require__(1508);
 
 var _events = __webpack_require__(1509);
 
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 async function onConnect(connection, actions) {
   const { tabConnection, connTarget: { type } } = connection;
   const { Debugger, Runtime, Page } = tabConnection;
@@ -31231,7 +31266,9 @@ exports.clientCommands = exports.setupCommands = undefined;
 
 var _create = __webpack_require__(1429);
 
-let debuggerAgent;
+let debuggerAgent; /* This Source Code Form is subject to the terms of the Mozilla Public
+                    * License, v. 2.0. If a copy of the MPL was not distributed with this
+                    * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 let runtimeAgent;
 let pageAgent;
@@ -31352,10 +31389,13 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.clientEvents = exports.pageEvents = exports.setupEvents = undefined;
 
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 var _create = __webpack_require__(1429);
 
 let actions;
-
 let pageAgent;
 let clientType;
 let runtimeAgent;
@@ -31411,9 +31451,7 @@ async function paused({
 }) {
   const frames = callFrames.map(_create.createFrame);
   const frame = frames[0];
-  const why = Object.assign({}, {
-    type: reason
-  }, data);
+  const why = _extends({ type: reason }, data);
 
   const objectId = frame.scopeChain[0].object.objectId;
   const { result } = await runtimeAgent.getProperties({
@@ -31475,281 +31513,12 @@ exports.pageEvents = pageEvents;
 exports.clientEvents = clientEvents;
 
 /***/ }),
-/* 1510 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-
-var _redux = __webpack_require__(3);
-
-var _waitService = __webpack_require__(1511);
-
-var _log = __webpack_require__(1512);
-
-var _history = __webpack_require__(1513);
-
-var _promise = __webpack_require__(1370);
-
-var _thunk = __webpack_require__(1514);
-
-var _timing = __webpack_require__(1515);
-
-/**
- * This creates a dispatcher with all the standard middleware in place
- * that all code requires. It can also be optionally configured in
- * various ways, such as logging and recording.
- *
- * @param {object} opts:
- *        - log: log all dispatched actions to console
- *        - history: an array to store every action in. Should only be
- *                   used in tests.
- *        - middleware: array of middleware to be included in the redux store
- * @memberof utils/create-store
- * @static
- */
-
-
-/**
- * @memberof utils/create-store
- * @static
- */
-const configureStore = (opts = {}) => {
-  const middleware = [(0, _thunk.thunk)(opts.makeThunkArgs), _promise.promise,
-
-  // Order is important: services must go last as they always
-  // operate on "already transformed" actions. Actions going through
-  // them shouldn't have any special fields like promises, they
-  // should just be normal JSON objects.
-  _waitService.waitUntilService];
-
-  if (opts.history) {
-    middleware.push((0, _history.history)(opts.history));
-  }
-
-  if (opts.middleware) {
-    opts.middleware.forEach(fn => middleware.push(fn));
-  }
-
-  if (opts.log) {
-    middleware.push(_log.log);
-  }
-
-  if (opts.timing) {
-    middleware.push(_timing.timing);
-  }
-
-  // Hook in the redux devtools browser extension if it exists
-  const devtoolsExt = typeof window === "object" && window.devToolsExtension ? window.devToolsExtension() : f => f;
-
-  return (0, _redux.applyMiddleware)(...middleware)(devtoolsExt(_redux.createStore));
-};
-
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-/* global window */
-
-/**
- * Redux store utils
- * @module utils/create-store
- */
-
-exports.default = configureStore;
-
-/***/ }),
-/* 1511 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.waitUntilService = waitUntilService;
-
-
-/**
- * A middleware which acts like a service, because it is stateful
- * and "long-running" in the background. It provides the ability
- * for actions to install a function to be run once when a specific
- * condition is met by an action coming through the system. Think of
- * it as a thunk that blocks until the condition is met. Example:
- *
- * ```js
- * const services = { WAIT_UNTIL: require('wait-service').NAME };
- *
- * { type: services.WAIT_UNTIL,
- *   predicate: action => action.type === "ADD_ITEM",
- *   run: (dispatch, getState, action) => {
- *     // Do anything here. You only need to accept the arguments
- *     // if you need them. `action` is the action that satisfied
- *     // the predicate.
- *   }
- * }
- * ```
- */
-const NAME = exports.NAME = "@@service/waitUntil";
-
-function waitUntilService({ dispatch, getState }) {
-  let pending = [];
-
-  function checkPending(action) {
-    const readyRequests = [];
-    const stillPending = [];
-
-    // Find the pending requests whose predicates are satisfied with
-    // this action. Wait to run the requests until after we update the
-    // pending queue because the request handler may synchronously
-    // dispatch again and run this service (that use case is
-    // completely valid).
-    for (const request of pending) {
-      if (request.predicate(action)) {
-        readyRequests.push(request);
-      } else {
-        stillPending.push(request);
-      }
-    }
-
-    pending = stillPending;
-    for (const request of readyRequests) {
-      request.run(dispatch, getState, action);
-    }
-  }
-
-  return next => action => {
-    if (action.type === NAME) {
-      pending.push(action);
-      return null;
-    }
-    const result = next(action);
-    checkPending(action);
-    return result;
-  };
-}
-
-/***/ }),
-/* 1512 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.log = log;
-/**
- * A middleware that logs all actions coming through the system
- * to the console.
- */
-function log({ dispatch, getState }) {
-  return next => action => {
-    const status = action.status == "done" ? "<-" : "->";
-    const asyncMsg = !action.status ? "" : status;
-    console.log(action, asyncMsg);
-    next(action);
-  };
-}
-
-/***/ }),
-/* 1513 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.history = undefined;
-
-var _devtoolsConfig = __webpack_require__(1355);
-
-/**
- * A middleware that stores every action coming through the store in the passed
- * in logging object. Should only be used for tests, as it collects all
- * action information, which will cause memory bloat.
- */
-const history = exports.history = (log = []) => ({
-  dispatch,
-  getState
-}) => {
-  return next => action => {
-    if ((0, _devtoolsConfig.isDevelopment)()) {
-      log.push(action);
-    }
-
-    return next(action);
-  };
-};
-
-/***/ }),
-/* 1514 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.thunk = thunk;
-
-
-/**
- * A middleware that allows thunks (functions) to be dispatched. If
- * it's a thunk, it is called with an argument that contains
- * `dispatch`, `getState`, and any additional args passed in via the
- * middleware constructure. This allows the action to create multiple
- * actions (most likely asynchronously).
- */
-function thunk(makeArgs) {
-  return ({ dispatch, getState }) => {
-    const args = { dispatch, getState };
-
-    return next => action => {
-      return typeof action === "function" ? action(makeArgs ? makeArgs(args, getState()) : args) : next(action);
-    };
-  };
-}
-
-/***/ }),
-/* 1515 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.timing = timing;
-/**
- * Redux middleware that sets performance markers for all actions such that they
- * will appear in performance tooling under the User Timing API
- */
-
-const mark = window.performance && window.performance.mark ? window.performance.mark.bind(window.performance) : () => {};
-
-const measure = window.performance && window.performance.measure ? window.performance.measure.bind(window.performance) : () => {};
-
-function timing(store) {
-  return next => action => {
-    mark(`${action.type}_start`);
-    const result = next(action);
-    mark(`${action.type}_end`);
-    measure(`${action.type}`, `${action.type}_start`, `${action.type}_end`);
-    return result;
-  };
-}
-
-/***/ }),
+/* 1510 */,
+/* 1511 */,
+/* 1512 */,
+/* 1513 */,
+/* 1514 */,
+/* 1515 */,
 /* 1516 */
 /***/ (function(module, exports, __webpack_require__) {
 
@@ -31808,9 +31577,9 @@ var _projectTextSearch = __webpack_require__(1424);
 
 var _projectTextSearch2 = _interopRequireDefault(_projectTextSearch);
 
-var _sourceSearch = __webpack_require__(1425);
+var _quickOpen = __webpack_require__(1635);
 
-var _sourceSearch2 = _interopRequireDefault(_sourceSearch);
+var _quickOpen2 = _interopRequireDefault(_quickOpen);
 
 var _sourceTree = __webpack_require__(1426);
 
@@ -31835,7 +31604,7 @@ exports.default = {
   ast: _ast2.default,
   coverage: _coverage2.default,
   projectTextSearch: _projectTextSearch2.default,
-  sourceSearch: _sourceSearch2.default,
+  quickOpen: _quickOpen2.default,
   sourceTree: _sourceTree2.default,
   debuggee: _debuggee2.default
 }; /* This Source Code Form is subject to the terms of the Mozilla Public
@@ -31962,15 +31731,15 @@ var _Tabs = __webpack_require__(1614);
 
 var _Tabs2 = _interopRequireDefault(_Tabs);
 
-var _SymbolModal = __webpack_require__(1616);
+var _QuickOpenModal = __webpack_require__(1652);
 
-var _SymbolModal2 = _interopRequireDefault(_SymbolModal);
-
-var _GotoLineModal = __webpack_require__(1617);
-
-var _GotoLineModal2 = _interopRequireDefault(_GotoLineModal);
+var _QuickOpenModal2 = _interopRequireDefault(_QuickOpenModal);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 const shortcuts = new _devtoolsModules.KeyShortcuts({ window });
 
@@ -31992,8 +31761,7 @@ class App extends _react.Component {
 
     this.getChildContext = this.getChildContext.bind(this);
     this.onLayoutChange = this.onLayoutChange.bind(this);
-    this.toggleSymbolModal = this.toggleSymbolModal.bind(this);
-    this.toggleGoToLineModal = this.toggleGoToLineModal.bind(this);
+    this.toggleQuickOpenModal = this.toggleQuickOpenModal.bind(this);
     this.renderEditorPane = this.renderEditorPane.bind(this);
     this.renderVerticalLayout = this.renderVerticalLayout.bind(this);
     this.onEscape = this.onEscape.bind(this);
@@ -32007,9 +31775,12 @@ class App extends _react.Component {
   componentDidMount() {
     verticalLayoutBreakpoint.addListener(this.onLayoutChange);
 
-    shortcuts.on(L10N.getStr("symbolSearch.search.key2"), this.toggleSymbolModal);
+    shortcuts.on(L10N.getStr("symbolSearch.search.key2"), (_, e) => this.toggleQuickOpenModal(_, e, "@"));
 
-    shortcuts.on(L10N.getStr("gotoLineModal.key"), this.toggleGoToLineModal);
+    const searchKeys = [L10N.getStr("sources.search.key2"), L10N.getStr("sources.search.alt.key")];
+    searchKeys.forEach(key => shortcuts.on(key, this.toggleQuickOpenModal));
+
+    shortcuts.on(L10N.getStr("gotoLineModal.key"), (_, e) => this.toggleQuickOpenModal(_, e, ":"));
 
     shortcuts.on("Escape", this.onEscape);
     shortcuts.on("Cmd+/", this.onCommandSlash);
@@ -32017,19 +31788,31 @@ class App extends _react.Component {
 
   componentWillUnmount() {
     verticalLayoutBreakpoint.removeListener(this.onLayoutChange);
-    shortcuts.off(L10N.getStr("symbolSearch.search.key2"), this.toggleSymbolModal);
+    shortcuts.off(L10N.getStr("symbolSearch.search.key2"), this.toggleQuickOpenModal);
 
-    shortcuts.off(L10N.getStr("gotoLineModal.key"), this.toggleGoToLineModal);
+    const searchKeys = [L10N.getStr("sources.search.key2"), L10N.getStr("sources.search.alt.key")];
+    searchKeys.forEach(key => shortcuts.off(key, this.toggleQuickOpenModal));
+
+    shortcuts.off(L10N.getStr("gotoLineModal.key"), this.toggleQuickOpenModal);
 
     shortcuts.off("Escape", this.onEscape);
   }
 
   onEscape(_, e) {
-    const { activeSearch, closeActiveSearch } = this.props;
+    const {
+      activeSearch,
+      quickOpenEnabled,
+      closeActiveSearch,
+      closeQuickOpen
+    } = this.props;
 
     if (activeSearch) {
       e.preventDefault();
       closeActiveSearch();
+    }
+
+    if (quickOpenEnabled === true) {
+      closeQuickOpen();
     }
   }
 
@@ -32041,53 +31824,29 @@ class App extends _react.Component {
     return this.props.orientation === "horizontal";
   }
 
-  toggleSymbolModal(_, e) {
-    const {
-      selectedSource,
-      activeSearch,
-      closeActiveSearch,
-      setActiveSearch
-    } = this.props;
+  toggleQuickOpenModal(_, e, query) {
+    const { quickOpenEnabled, openQuickOpen, closeQuickOpen } = this.props;
 
     e.preventDefault();
     e.stopPropagation();
 
-    if (!selectedSource) {
+    if (quickOpenEnabled === true) {
+      closeQuickOpen();
       return;
     }
 
-    if (activeSearch == "symbol") {
-      return closeActiveSearch();
-    }
-
-    setActiveSearch("symbol");
-  }
-
-  toggleGoToLineModal(_, e) {
-    const {
-      selectedSource,
-      activeSearch,
-      closeActiveSearch,
-      setActiveSearch
-    } = this.props;
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (!selectedSource) {
+    if (query != null) {
+      openQuickOpen(query);
       return;
     }
-
-    if (activeSearch == "line") {
-      return closeActiveSearch();
-    }
-
-    setActiveSearch("line");
+    openQuickOpen();
+    return;
   }
 
   onLayoutChange() {
+    const orientation = verticalLayoutBreakpoint.matches ? "horizontal" : "vertical";
     if ((0, _ui.isVisible)()) {
-      this.props.setOrientation(verticalLayoutBreakpoint.matches ? "horizontal" : "vertical");
+      this.props.setOrientation(orientation);
     }
   }
 
@@ -32189,32 +31948,6 @@ class App extends _react.Component {
     });
   }
 
-  renderSymbolModal() {
-    const { selectSource, selectedSource, activeSearch } = this.props;
-
-    if (activeSearch !== "symbol") {
-      return;
-    }
-
-    return _react2.default.createElement(_SymbolModal2.default, {
-      selectSource: selectSource,
-      selectedSource: selectedSource
-    });
-  }
-
-  renderGotoLineModal() {
-    const { selectSource, selectedSource, activeSearch } = this.props;
-
-    if (activeSearch !== "line") {
-      return;
-    }
-
-    return _react2.default.createElement(_GotoLineModal2.default, {
-      selectSource: selectSource,
-      selectedSource: selectedSource
-    });
-  }
-
   renderShortcutsModal() {
     const additionalClass = isMacOS ? "mac" : "";
 
@@ -32230,12 +31963,12 @@ class App extends _react.Component {
   }
 
   render() {
+    const { quickOpenEnabled } = this.props;
     return _react2.default.createElement(
       "div",
       { className: "debugger" },
       this.isHorizontal() ? this.renderHorizontalLayout() : this.renderVerticalLayout(),
-      this.renderSymbolModal(),
-      this.renderGotoLineModal(),
+      quickOpenEnabled === true && _react2.default.createElement(_QuickOpenModal2.default, null),
       this.renderShortcutsModal()
     );
   }
@@ -32249,6 +31982,7 @@ function mapStateToProps(state) {
     startPanelCollapsed: (0, _selectors.getPaneCollapse)(state, "start"),
     endPanelCollapsed: (0, _selectors.getPaneCollapse)(state, "end"),
     activeSearch: (0, _selectors.getActiveSearch)(state),
+    quickOpenEnabled: (0, _selectors.getQuickOpenEnabled)(state),
     orientation: (0, _selectors.getOrientation)(state)
   };
 }
@@ -32266,7 +32000,9 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
-var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 var _breakpoint = __webpack_require__(1364);
 
@@ -32334,6 +32070,10 @@ Object.defineProperty(exports, "__esModule", {
 var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
 
 exports.default = remapLocations;
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 function remapLocations(breakpoints, sourceId, sourceMaps) {
   const sourceBreakpoints = breakpoints.map(async breakpoint => {
     if (breakpoint.location.sourceId !== sourceId) {
@@ -32357,7 +32097,9 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
-var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 exports.syncClientBreakpoint = syncClientBreakpoint;
 
@@ -32383,8 +32125,8 @@ async function makeScopedLocation({ name, offset }, location, source) {
   };
 }
 
-function createSyncData(pendingBreakpoint, location, generatedLocation, previousLocation = null) {
-  const overrides = _extends({}, pendingBreakpoint, { generatedLocation });
+function createSyncData(id, pendingBreakpoint, location, generatedLocation, previousLocation = null) {
+  const overrides = _extends({}, pendingBreakpoint, { generatedLocation, id });
   const breakpoint = (0, _breakpoint.createBreakpoint)(location, overrides);
 
   (0, _breakpoint.assertBreakpoint)(breakpoint);
@@ -32420,7 +32162,8 @@ async function syncClientBreakpoint(getState, client, sourceMaps, sourceId, pend
   // early return if breakpoint is disabled or we are in the sameLocation
   // send update only to redux
   if (pendingBreakpoint.disabled || existingClient && isSameLocation) {
-    return createSyncData(pendingBreakpoint, scopedLocation, scopedGeneratedLocation);
+    const id = pendingBreakpoint.disabled ? "" : existingClient.id;
+    return createSyncData(id, pendingBreakpoint, scopedLocation, scopedGeneratedLocation);
   }
 
   // clear server breakpoints if they exist and we have moved
@@ -32431,50 +32174,18 @@ async function syncClientBreakpoint(getState, client, sourceMaps, sourceId, pend
   /** ******* Case 2: Add New Breakpoint ***********/
   // If we are not disabled, set the breakpoint on the server and get
   // that info so we can set it on our breakpoints.
-  const clientBreakpoint = await client.setBreakpoint(scopedGeneratedLocation, pendingBreakpoint.condition, sourceMaps.isOriginalId(sourceId));
+  const { id, actualLocation } = await client.setBreakpoint(scopedGeneratedLocation, pendingBreakpoint.condition, sourceMaps.isOriginalId(sourceId));
 
   // the breakpoint might have slid server side, so we want to get the location
   // based on the server's return value
-  const newGeneratedLocation = clientBreakpoint.actualLocation;
+  const newGeneratedLocation = actualLocation;
   const newLocation = await sourceMaps.getOriginalLocation(newGeneratedLocation);
 
-  return createSyncData(pendingBreakpoint, newLocation, newGeneratedLocation, previousLocation);
+  return createSyncData(id, pendingBreakpoint, newLocation, newGeneratedLocation, previousLocation);
 }
 
 /***/ }),
-/* 1522 */
-/***/ (function(module, exports) {
-
-
-
-function replaceOriginalVariableName(expression, generatedScopes) {
-  // JavaScript indetifier is a complex thing: it can contain '$', '\', ZWJ, any
-  // unicode letter or number. Simplifing that to latin character set for now.
-  // For simplicity, search only first characters of the expression to find an
-  // identifier/variable name.
-  const possibleVarNameRegex = /^([$\w]+)/;
-  const matchedVarName = possibleVarNameRegex.exec(expression);
-  if (!matchedVarName) {
-    return expression;
-  }
-
-  const originalName = matchedVarName[1];
-  // The generatedScopes sorted in inner-to-outer scope order, finding first.
-  const foundScope = generatedScopes.find(({ bindings }) => originalName in bindings);
-  if (!foundScope) {
-    return expression;
-  }
-
-  // Replace original name (which will be at the beginning of the expression)
-  // with found generated name.
-  const generatedName = foundScope.bindings[originalName];
-  const expressionWoOriginalName = expression.substring(originalName.length);
-  return `${generatedName}${expressionWoOriginalName}`;
-}
-
-module.exports = { replaceOriginalVariableName };
-
-/***/ }),
+/* 1522 */,
 /* 1523 */
 /***/ (function(module, exports, __webpack_require__) {
 
@@ -32493,6 +32204,10 @@ var _prettyPrint = __webpack_require__(1431);
 var _pause = __webpack_require__(1400);
 
 var _source = __webpack_require__(1356);
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function createPrettySource(sourceId) {
   return async ({ dispatch, getState, sourceMaps }) => {
@@ -32522,10 +32237,12 @@ function createPrettySource(sourceId) {
       loadedState: "loaded"
     };
 
-    return dispatch({
+    dispatch({
       type: "ADD_SOURCE",
       source: prettySource
     });
+
+    return prettySource;
   };
 }
 
@@ -32575,26 +32292,12 @@ function getTokenLocation(codeMirror, tokenEl) {
   };
 }
 
-/**
- * Forces the breakpoint gutter to be the same size as the line
- * numbers gutter. Editor CSS will absolutely position the gutter
- * beneath the line numbers. This makes it easy to be flexible with
- * how we overlay breakpoints.
- */
-function resizeBreakpointGutter(editor) {
-  const gutters = editor.display.gutters;
-  const lineNumbers = gutters.querySelector(".CodeMirror-linenumbers");
-  const breakpoints = gutters.querySelector(".breakpoints");
-  breakpoints.style.width = `${lineNumbers.clientWidth}px`;
-}
-
 module.exports = {
   removeLineClass,
   clearLineClass,
   getTextForLine,
   getCursorLine,
-  getTokenLocation,
-  resizeBreakpointGutter
+  getTokenLocation
 };
 
 /***/ }),
@@ -32623,7 +32326,9 @@ function getTokenLocation(codeMirror, tokenEl) {
     line: line + 1,
     column: ch
   };
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function updatePreview(target, editor, { linesInScope, preview, setPreview, clearPreview }) {
   const location = getTokenLocation(editor.codeMirror, target);
@@ -32690,7 +32395,9 @@ function getSearchCursor(cm, query, pos, modifiers) {
  * @memberof utils/source-search
  * @static
  */
-
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function SearchState() {
   this.posFrom = this.posTo = this.query = null;
@@ -32963,6 +32670,7 @@ var _selectors = __webpack_require__(1352);
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 /* global window gThreadClient setNamedTimeout services EVENTS */
 /* eslint no-shadow: 0  */
 
@@ -33120,328 +32828,7 @@ function updateEventBreakpoints(eventNames) {
 }
 
 /***/ }),
-/* 1528 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-exports.resumed = resumed;
-exports.continueToHere = continueToHere;
-exports.paused = paused;
-exports.pauseOnExceptions = pauseOnExceptions;
-exports.command = command;
-exports.stepIn = stepIn;
-exports.stepOver = stepOver;
-exports.stepOut = stepOut;
-exports.resume = resume;
-exports.breakOnNext = breakOnNext;
-exports.selectFrame = selectFrame;
-exports.loadObjectProperties = loadObjectProperties;
-exports.astCommand = astCommand;
-
-var _sources = __webpack_require__(1373);
-
-var _promise = __webpack_require__(1370);
-
-var _selectors = __webpack_require__(1352);
-
-var _pause = __webpack_require__(1400);
-
-var _expressions = __webpack_require__(1398);
-
-var _breakpoints = __webpack_require__(1396);
-
-var _breakpoints2 = __webpack_require__(1378);
-
-var _parser = __webpack_require__(1365);
-
-var parser = _interopRequireWildcard(_parser);
-
-var _prefs = __webpack_require__(226);
-
-var _devtoolsSourceMap = __webpack_require__(1360);
-
-function _interopRequireWildcard(obj) { if (obj && obj.__esModule) { return obj; } else { var newObj = {}; if (obj != null) { for (var key in obj) { if (Object.prototype.hasOwnProperty.call(obj, key)) newObj[key] = obj[key]; } } newObj.default = obj; return newObj; } }
-
-async function _getScopeBindings({ dispatch, getState, sourceMaps }, generatedLocation, scopes) {
-  const { sourceId } = generatedLocation;
-  const sourceRecord = (0, _selectors.getSource)(getState(), sourceId);
-  if (sourceRecord.get("isWasm")) {
-    return scopes;
-  }
-
-  await dispatch((0, _sources.ensureParserHasSourceText)(sourceId));
-
-  return await (0, _pause.updateScopeBindings)(scopes, generatedLocation, sourceMaps);
-}
-
-/**
- * Redux actions for the pause state
- * @module actions/pause
- */
-
-/**
- * Debugger has just resumed
- *
- * @memberof actions/pause
- * @static
- */
-function resumed() {
-  return ({ dispatch, client, getState }) => {
-    if (!(0, _selectors.isPaused)(getState())) {
-      return;
-    }
-
-    const wasPausedInEval = (0, _selectors.pausedInEval)(getState());
-
-    dispatch({
-      type: "RESUME",
-      value: undefined
-    });
-
-    if (!(0, _selectors.isStepping)(getState()) && !wasPausedInEval) {
-      dispatch((0, _expressions.evaluateExpressions)());
-    }
-  };
-}
-
-function continueToHere(line) {
-  return async function ({ dispatch, getState, client, sourceMaps }) {
-    const source = (0, _selectors.getSelectedSource)(getState()).toJS();
-
-    await dispatch((0, _breakpoints.addHiddenBreakpoint)({
-      line,
-      column: undefined,
-      sourceId: source.id
-    }));
-
-    dispatch(command("resume"));
-  };
-}
-
-/**
- * Debugger has just paused
- *
- * @param {object} pauseInfo
- * @memberof actions/pause
- * @static
- */
-function paused(pauseInfo) {
-  return async function ({ dispatch, getState, client, sourceMaps }) {
-    let { frames, why, loadedObjects } = pauseInfo;
-
-    frames = await (0, _pause.updateFrameLocations)(frames, sourceMaps);
-    const frame = frames[0];
-
-    const frameScopes = await client.getFrameScopes(frame);
-    const scopes = !(0, _devtoolsSourceMap.isGeneratedId)(frame.location.sourceId) ? await _getScopeBindings({ dispatch, getState, sourceMaps }, frame.generatedLocation, frameScopes) : frameScopes;
-
-    dispatch({
-      type: "PAUSED",
-      pauseInfo: { why, frame, frames },
-      frames: frames,
-      scopes,
-      selectedFrameId: frame.id,
-      loadedObjects: loadedObjects || []
-    });
-
-    const hiddenBreakpointLocation = (0, _breakpoints2.getHiddenBreakpointLocation)(getState());
-    if (hiddenBreakpointLocation) {
-      dispatch((0, _breakpoints.removeBreakpoint)(hiddenBreakpointLocation));
-    }
-
-    if (!(0, _selectors.isEvaluatingExpression)(getState())) {
-      dispatch((0, _expressions.evaluateExpressions)());
-    }
-
-    dispatch((0, _sources.selectSource)(frame.location.sourceId, { line: frame.location.line }));
-  };
-}
-
-/**
- *
- * @memberof actions/pause
- * @static
- */
-function pauseOnExceptions(shouldPauseOnExceptions, shouldIgnoreCaughtExceptions) {
-  return ({ dispatch, client }) => {
-    dispatch({
-      type: "PAUSE_ON_EXCEPTIONS",
-      shouldPauseOnExceptions,
-      shouldIgnoreCaughtExceptions,
-      [_promise.PROMISE]: client.pauseOnExceptions(shouldPauseOnExceptions, shouldIgnoreCaughtExceptions)
-    });
-  };
-}
-
-/**
- * Debugger commands like stepOver, stepIn, stepUp
- *
- * @param string $0.type
- * @memberof actions/pause
- * @static
- */
-function command(type) {
-  return async ({ dispatch, client }) => {
-    // execute debugger thread command e.g. stepIn, stepOver
-    dispatch({ type: "COMMAND", value: { type } });
-
-    await client[type]();
-
-    dispatch({ type: "CLEAR_COMMAND" });
-  };
-}
-
-/**
- * StepIn
- * @memberof actions/pause
- * @static
- * @returns {Function} {@link command}
- */
-function stepIn() {
-  return ({ dispatch, getState }) => {
-    if ((0, _selectors.getPause)(getState())) {
-      return dispatch(command("stepIn"));
-    }
-  };
-}
-
-/**
- * stepOver
- * @memberof actions/pause
- * @static
- * @returns {Function} {@link command}
- */
-function stepOver() {
-  return ({ dispatch, getState }) => {
-    if ((0, _selectors.getPause)(getState())) {
-      return dispatch(astCommand("stepOver"));
-    }
-  };
-}
-
-/**
- * stepOut
- * @memberof actions/pause
- * @static
- * @returns {Function} {@link command}
- */
-function stepOut() {
-  return ({ dispatch, getState }) => {
-    if ((0, _selectors.getPause)(getState())) {
-      return dispatch(command("stepOut"));
-    }
-  };
-}
-
-/**
- * resume
- * @memberof actions/pause
- * @static
- * @returns {Function} {@link command}
- */
-function resume() {
-  return ({ dispatch, getState }) => {
-    if ((0, _selectors.getPause)(getState())) {
-      return dispatch(command("resume"));
-    }
-  };
-}
-
-/**
- * Debugger breakOnNext command.
- * It's different from the comand action because we also want to
- * highlight the pause icon.
- *
- * @memberof actions/pause
- * @static
- */
-function breakOnNext() {
-  return ({ dispatch, client }) => {
-    client.breakOnNext();
-
-    return dispatch({
-      type: "BREAK_ON_NEXT",
-      value: true
-    });
-  };
-}
-
-/**
- * @memberof actions/pause
- * @static
- */
-function selectFrame(frame) {
-  return async ({ dispatch, client, getState, sourceMaps }) => {
-    const frameScopes = await client.getFrameScopes(frame);
-    const scopes = !(0, _devtoolsSourceMap.isGeneratedId)(frame.location.sourceId) ? await _getScopeBindings({ dispatch, getState, sourceMaps }, frame.generatedLocation, frameScopes) : frameScopes;
-
-    dispatch({
-      type: "SELECT_FRAME",
-      frame,
-      scopes
-    });
-
-    dispatch((0, _sources.selectSource)(frame.location.sourceId, { line: frame.location.line }));
-
-    dispatch((0, _expressions.evaluateExpressions)());
-  };
-}
-
-/**
- * @memberof actions/pause
- * @static
- */
-function loadObjectProperties(object) {
-  return ({ dispatch, client, getState }) => {
-    const objectId = object.actor || object.objectId;
-
-    if ((0, _selectors.getLoadedObject)(getState(), objectId)) {
-      return;
-    }
-
-    dispatch({
-      type: "LOAD_OBJECT_PROPERTIES",
-      objectId,
-      [_promise.PROMISE]: client.getProperties(object)
-    });
-  };
-}
-
-/**
- * @memberOf actions/pause
- * @static
- * @param stepType
- * @returns {function(ThunkArgs)}
- */
-function astCommand(stepType) {
-  return async ({ dispatch, getState, sourceMaps }) => {
-    if (!_prefs.features.asyncStepping) {
-      return dispatch(command(stepType));
-    }
-
-    const pauseInfo = (0, _selectors.getPause)(getState());
-    const source = (0, _selectors.getSelectedSource)(getState()).toJS();
-
-    const pausedPosition = await (0, _pause.getPausedPosition)(pauseInfo, sourceMaps);
-
-    if (stepType == "stepOver") {
-      const nextLocation = await parser.getNextStep(source, pausedPosition);
-      if (nextLocation) {
-        await dispatch((0, _breakpoints.addHiddenBreakpoint)(nextLocation));
-        return dispatch(command("resume"));
-      }
-    }
-
-    return dispatch(command(stepType));
-  };
-}
-
-/***/ }),
+/* 1528 */,
 /* 1529 */
 /***/ (function(module, exports, __webpack_require__) {
 
@@ -33477,6 +32864,10 @@ var _wasm = __webpack_require__(1401);
  * @memberof actions/navigation
  * @static
  */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 function willNavigate(_, event) {
   return async function ({ dispatch, getState, client, sourceMaps }) {
     await sourceMaps.clearSourceMaps();
@@ -33544,6 +32935,10 @@ var _search = __webpack_require__(1395);
 var _selectors = __webpack_require__(1352);
 
 var _ui = __webpack_require__(1385);
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function doSearch(query, editor) {
   return ({ getState, dispatch }) => {
@@ -33662,7 +33057,9 @@ function recordCoverage() {
       value: { coverage }
     });
   };
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /***/ }),
 /* 1532 */
@@ -33682,7 +33079,9 @@ function setExpandedState(expanded) {
       expanded
     });
   };
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /***/ }),
 /* 1533 */
@@ -33695,6 +33094,10 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 exports.setWorkers = setWorkers;
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 function setWorkers(workers) {
   return {
     type: "SET_WORKERS",
@@ -33713,11 +33116,10 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 exports.openLink = openLink;
-
-
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 const { isDevelopment } = __webpack_require__(1355);
 
 /**
@@ -33766,7 +33168,6 @@ __webpack_require__(1304);
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 class ShortcutsModal extends _react.Component {
-
   renderPrettyCombos(combo) {
     return combo.split(" ").map(c => _react2.default.createElement(
       "span",
@@ -33880,25 +33281,22 @@ class ShortcutsModal extends _react.Component {
     );
   }
 }
-exports.ShortcutsModal = ShortcutsModal;
+exports.ShortcutsModal = ShortcutsModal; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                          * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                          * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /***/ }),
 /* 1536 */
 /***/ (function(module, exports, __webpack_require__) {
 
-"use strict";
-
-
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-var React = __webpack_require__(0);
-var ReactDOM = __webpack_require__(4);
-var Draggable = React.createFactory(__webpack_require__(1537));
-var dom = React.DOM,
-    PropTypes = React.PropTypes;
-
+const React = __webpack_require__(0);
+const ReactDOM = __webpack_require__(4);
+const Draggable = React.createFactory(__webpack_require__(1537));
+const { DOM: dom, PropTypes } = React;
 
 __webpack_require__(1309);
 
@@ -33906,7 +33304,7 @@ __webpack_require__(1309);
  * This component represents a Splitter. The splitter supports vertical
  * as well as horizontal mode.
  */
-var SplitBox = React.createClass({
+const SplitBox = React.createClass({
   propTypes: {
     // Custom class name. You can use more names separated by a space.
     className: PropTypes.string,
@@ -33942,7 +33340,7 @@ var SplitBox = React.createClass({
 
   displayName: "SplitBox",
 
-  getDefaultProps: function getDefaultProps() {
+  getDefaultProps() {
     return {
       splitterSize: 5,
       vert: true,
@@ -33952,13 +33350,12 @@ var SplitBox = React.createClass({
     };
   },
 
-
   /**
    * The state stores the current orientation (vertical or horizontal)
    * and the current size (width/height). All these values can change
    * during the component's life time.
    */
-  getInitialState: function getInitialState() {
+  getInitialState() {
     return {
       vert: this.props.vert,
       // We use integers for these properties
@@ -33966,12 +33363,12 @@ var SplitBox = React.createClass({
       height: parseInt(this.props.initialHeight || this.props.initialSize)
     };
   },
-  componentWillReceiveProps: function componentWillReceiveProps(nextProps) {
+
+  componentWillReceiveProps(nextProps) {
     if (this.props.vert !== nextProps.vert) {
       this.setState({ vert: nextProps.vert });
     }
   },
-
 
   // Dragging Events
 
@@ -33980,10 +33377,10 @@ var SplitBox = React.createClass({
    * This avoids cursor-flickering that happens when the mouse leaves
    * the splitter bar area (happens frequently).
    */
-  onStartMove: function onStartMove() {
-    var splitBox = ReactDOM.findDOMNode(this);
-    var doc = splitBox.ownerDocument;
-    var defaultCursor = doc.documentElement.style.cursor;
+  onStartMove() {
+    const splitBox = ReactDOM.findDOMNode(this);
+    const doc = splitBox.ownerDocument;
+    let defaultCursor = doc.documentElement.style.cursor;
     doc.documentElement.style.cursor = this.state.vert ? "ew-resize" : "ns-resize";
 
     splitBox.classList.add("dragging");
@@ -33992,9 +33389,10 @@ var SplitBox = React.createClass({
       defaultCursor: defaultCursor
     });
   },
-  onStopMove: function onStopMove() {
-    var splitBox = ReactDOM.findDOMNode(this);
-    var doc = splitBox.ownerDocument;
+
+  onStopMove() {
+    const splitBox = ReactDOM.findDOMNode(this);
+    const doc = splitBox.ownerDocument;
     doc.documentElement.style.cursor = this.state.defaultCursor;
 
     splitBox.classList.remove("dragging");
@@ -34004,18 +33402,14 @@ var SplitBox = React.createClass({
     }
   },
 
-
   /**
    * Adjust size of the controlled panel. Depending on the current
    * orientation we either remember the width or height of
    * the splitter box.
    */
-  onMove: function onMove(_ref) {
-    var movementX = _ref.movementX,
-        movementY = _ref.movementY;
-
-    var node = ReactDOM.findDOMNode(this);
-    var doc = node.ownerDocument;
+  onMove({ movementX, movementY }) {
+    const node = ReactDOM.findDOMNode(this);
+    const doc = node.ownerDocument;
 
     if (this.props.endPanelControl) {
       // For the end panel we need to increase the width/height when the
@@ -34025,44 +33419,38 @@ var SplitBox = React.createClass({
     }
 
     if (this.state.vert) {
-      var isRtl = doc.dir === "rtl";
+      const isRtl = doc.dir === "rtl";
       if (isRtl) {
         // In RTL we need to reverse the movement again -- but only for vertical
         // splitters
         movementX = -movementX;
       }
 
-      this.setState(function (state, props) {
-        return {
-          width: state.width + movementX
-        };
-      });
+      this.setState((state, props) => ({
+        width: state.width + movementX
+      }));
     } else {
-      this.setState(function (state, props) {
-        return {
-          height: state.height + movementY
-        };
-      });
+      this.setState((state, props) => ({
+        height: state.height + movementY
+      }));
     }
   },
 
-
   // Rendering
-  preparePanelStyles: function preparePanelStyles() {
-    var vert = this.state.vert;
-    var _props = this.props,
-        minSize = _props.minSize,
-        maxSize = _props.maxSize,
-        startPanelCollapsed = _props.startPanelCollapsed,
-        endPanelControl = _props.endPanelControl,
-        endPanelCollapsed = _props.endPanelCollapsed;
-
-    var leftPanelStyle = void 0,
-        rightPanelStyle = void 0;
+  preparePanelStyles() {
+    const vert = this.state.vert;
+    const {
+      minSize,
+      maxSize,
+      startPanelCollapsed,
+      endPanelControl,
+      endPanelCollapsed
+    } = this.props;
+    let leftPanelStyle, rightPanelStyle;
 
     // Set proper size for panels depending on the current state.
     if (vert) {
-      var startWidth = endPanelControl ? null : this.state.width,
+      let startWidth = endPanelControl ? null : this.state.width,
           endWidth = endPanelControl ? this.state.width : null;
 
       leftPanelStyle = {
@@ -34076,7 +33464,7 @@ var SplitBox = React.createClass({
         width: endPanelCollapsed ? 0 : endWidth
       };
     } else {
-      var startHeight = endPanelControl ? null : this.state.height,
+      let startHeight = endPanelControl ? null : this.state.height,
           endHeight = endPanelControl ? this.state.height : null;
 
       leftPanelStyle = {
@@ -34091,37 +33479,34 @@ var SplitBox = React.createClass({
       };
     }
 
-    return { leftPanelStyle: leftPanelStyle, rightPanelStyle: rightPanelStyle };
+    return { leftPanelStyle, rightPanelStyle };
   },
-  render: function render() {
-    var vert = this.state.vert;
-    var _props2 = this.props,
-        startPanelCollapsed = _props2.startPanelCollapsed,
-        startPanel = _props2.startPanel,
-        endPanel = _props2.endPanel,
-        endPanelControl = _props2.endPanelControl,
-        splitterSize = _props2.splitterSize,
-        endPanelCollapsed = _props2.endPanelCollapsed;
 
+  render() {
+    const vert = this.state.vert;
+    const {
+      startPanelCollapsed,
+      startPanel,
+      endPanel,
+      endPanelControl,
+      splitterSize,
+      endPanelCollapsed
+    } = this.props;
 
-    var style = Object.assign({}, this.props.style);
+    let style = Object.assign({}, this.props.style);
 
     // Calculate class names list.
-    var classNames = ["split-box"];
+    let classNames = ["split-box"];
     classNames.push(vert ? "vert" : "horz");
     if (this.props.className) {
       classNames = classNames.concat(this.props.className.split(" "));
     }
 
-    var _preparePanelStyles = this.preparePanelStyles(),
-        leftPanelStyle = _preparePanelStyles.leftPanelStyle,
-        rightPanelStyle = _preparePanelStyles.rightPanelStyle;
+    const { leftPanelStyle, rightPanelStyle } = this.preparePanelStyles();
 
     // Calculate splitter size
-
-
-    var splitterStyle = {
-      flex: "0 0 " + splitterSize + "px"
+    let splitterStyle = {
+      flex: `0 0 ${splitterSize}px`
     };
 
     return dom.div({
@@ -34149,20 +33534,15 @@ module.exports = SplitBox;
 /* 1537 */
 /***/ (function(module, exports, __webpack_require__) {
 
-"use strict";
-
-
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-var React = __webpack_require__(0);
-var ReactDOM = __webpack_require__(4);
-var dom = React.DOM,
-    PropTypes = React.PropTypes;
+const React = __webpack_require__(0);
+const ReactDOM = __webpack_require__(4);
+const { DOM: dom, PropTypes } = React;
 
-
-var Draggable = React.createClass({
+const Draggable = React.createClass({
   displayName: "Draggable",
 
   propTypes: {
@@ -34173,27 +33553,30 @@ var Draggable = React.createClass({
     className: PropTypes.string
   },
 
-  startDragging: function startDragging(ev) {
+  startDragging(ev) {
     ev.preventDefault();
-    var doc = ReactDOM.findDOMNode(this).ownerDocument;
+    const doc = ReactDOM.findDOMNode(this).ownerDocument;
     doc.addEventListener("mousemove", this.onMove);
     doc.addEventListener("mouseup", this.onUp);
     this.props.onStart && this.props.onStart();
   },
-  onMove: function onMove(ev) {
+
+  onMove(ev) {
     ev.preventDefault();
     // We pass the whole event because we don't know which properties
     // the callee needs.
     this.props.onMove(ev);
   },
-  onUp: function onUp(ev) {
+
+  onUp(ev) {
     ev.preventDefault();
-    var doc = ReactDOM.findDOMNode(this).ownerDocument;
+    const doc = ReactDOM.findDOMNode(this).ownerDocument;
     doc.removeEventListener("mousemove", this.onMove);
     doc.removeEventListener("mouseup", this.onUp);
     this.props.onStop && this.props.onStop();
   },
-  render: function render() {
+
+  render() {
     return dom.div({
       style: this.props.style,
       className: this.props.className,
@@ -34235,26 +33618,20 @@ var _TextSearch = __webpack_require__(1539);
 
 var _TextSearch2 = _interopRequireDefault(_TextSearch);
 
-var _SourceSearch = __webpack_require__(1548);
-
-var _SourceSearch2 = _interopRequireDefault(_SourceSearch);
-
-var _ToggleSearch = __webpack_require__(1550);
-
-var _ToggleSearch2 = _interopRequireDefault(_ToggleSearch);
-
 var _selectors = __webpack_require__(1352);
 
 __webpack_require__(1317);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 class ProjectSearch extends _react.Component {
 
   constructor(props) {
     super(props);
-
-    this.toggleSourceSearch = this.toggleSourceSearch.bind(this);
     this.toggleProjectTextSearch = this.toggleProjectTextSearch.bind(this);
   }
 
@@ -34262,17 +33639,11 @@ class ProjectSearch extends _react.Component {
     const shortcuts = this.context.shortcuts;
 
     shortcuts.on(L10N.getStr("projectTextSearch.key"), this.toggleProjectTextSearch);
-
-    const searchKeys = [L10N.getStr("sources.search.key2"), L10N.getStr("sources.search.alt.key")];
-    searchKeys.forEach(key => shortcuts.on(key, this.toggleSourceSearch));
   }
 
   componentWillUnmount() {
     const shortcuts = this.context.shortcuts;
     shortcuts.off(L10N.getStr("projectTextSearch.key"), this.toggleProjectTextSearch);
-
-    const searchKeys = [L10N.getStr("sources.search.key2"), L10N.getStr("sources.search.alt.key")];
-    searchKeys.forEach(key => shortcuts.off(key, this.toggleSourceSearch));
   }
 
   toggleProjectTextSearch(key, e) {
@@ -34287,44 +33658,8 @@ class ProjectSearch extends _react.Component {
     return setActiveSearch("project");
   }
 
-  toggleSourceSearch(key, e) {
-    const { closeActiveSearch, setActiveSearch } = this.props;
-    if (e) {
-      e.preventDefault();
-    }
-
-    if (this.isSourceSearchEnabled()) {
-      return closeActiveSearch();
-    }
-    return setActiveSearch("source");
-  }
-
   isProjectSearchEnabled() {
     return this.props.activeSearch === "project";
-  }
-
-  isSourceSearchEnabled() {
-    return this.props.activeSearch === "source";
-  }
-
-  renderSourceSearch() {
-    const {
-      sources,
-      selectSource,
-      closeActiveSearch,
-      sourceSearchQuery,
-      setSourceSearchQuery,
-      clearSourceSearchQuery
-    } = this.props;
-    return _react2.default.createElement(_SourceSearch2.default, {
-      sources: sources,
-      selectSource: selectSource,
-      closeActiveSearch: closeActiveSearch,
-      searchBottomBar: _react2.default.createElement(_ToggleSearch2.default, { kind: "sources", toggle: this.toggleProjectTextSearch }),
-      query: sourceSearchQuery,
-      setQuery: setSourceSearchQuery,
-      clearQuery: clearSourceSearchQuery
-    });
   }
 
   renderTextSearch() {
@@ -34343,20 +33678,19 @@ class ProjectSearch extends _react.Component {
       searchSources: searchSources,
       closeActiveSearch: closeActiveSearch,
       selectSource: selectSource,
-      query: textSearchQuery,
-      searchBottomBar: _react2.default.createElement(_ToggleSearch2.default, { kind: "project", toggle: this.toggleSourceSearch })
+      query: textSearchQuery
     });
   }
 
   render() {
-    if (!(this.isProjectSearchEnabled() || this.isSourceSearchEnabled())) {
+    if (!this.isProjectSearchEnabled()) {
       return null;
     }
 
     return _react2.default.createElement(
       "div",
       { className: "search-container" },
-      this.isProjectSearchEnabled() ? this.renderTextSearch() : this.renderSourceSearch()
+      this.renderTextSearch()
     );
   }
 }
@@ -34369,10 +33703,7 @@ ProjectSearch.propTypes = {
   closeActiveSearch: _propTypes2.default.func.isRequired,
   searchSources: _propTypes2.default.func,
   activeSearch: _propTypes2.default.string,
-  selectSource: _propTypes2.default.func.isRequired,
-  sourceSearchQuery: _propTypes2.default.string,
-  setSourceSearchQuery: _propTypes2.default.func,
-  clearSourceSearchQuery: _propTypes2.default.func
+  selectSource: _propTypes2.default.func.isRequired
 };
 
 ProjectSearch.contextTypes = {
@@ -34383,8 +33714,7 @@ exports.default = (0, _reactRedux.connect)(state => ({
   sources: (0, _selectors.getSources)(state),
   activeSearch: (0, _selectors.getActiveSearch)(state),
   results: (0, _selectors.getTextSearchResults)(state),
-  textSearchQuery: (0, _selectors.getTextSearchQuery)(state),
-  sourceSearchQuery: (0, _selectors.getSourceSearchQuery)(state)
+  textSearchQuery: (0, _selectors.getTextSearchQuery)(state)
 }), dispatch => (0, _redux.bindActionCreators)(_actions2.default, dispatch))(ProjectSearch);
 
 /***/ }),
@@ -34457,7 +33787,8 @@ class TextSearch extends _react.Component {
   }
 
   selectMatchItem(matchItem) {
-    this.props.selectSource(matchItem.sourceId, { line: matchItem.line });
+    const { line, column } = matchItem;
+    this.props.selectSource(matchItem.sourceId, { location: { line, column } });
   }
 
   getResults() {
@@ -34516,7 +33847,7 @@ class TextSearch extends _react.Component {
         onClick: e => setExpanded(file, !expanded)
       },
       _react2.default.createElement(_Svg2.default, { name: "arrow", className: (0, _classnames2.default)({ expanded }) }),
-      _react2.default.createElement(_Svg2.default, { name: "file" }),
+      _react2.default.createElement("img", { className: "file" }),
       _react2.default.createElement(
         "span",
         { className: "file-path" },
@@ -34555,6 +33886,7 @@ class TextSearch extends _react.Component {
 
   renderResults() {
     const results = this.getResults().filter(result => result.matches.length > 0);
+
     function getFilePath(item, index) {
       return item.filepath ? `${item.sourceId}-${index}` : `${item.sourceId}-${item.line}-${item.column}-${index}`;
     }
@@ -34585,14 +33917,13 @@ class TextSearch extends _react.Component {
 
   renderInput() {
     const resultCount = this.getResultCount();
-    const summaryMsg = L10N.getFormatStr("sourceSearch.resultsSummary1", resultCount);
 
     return _react2.default.createElement(_SearchInput2.default, {
       query: this.state.inputValue,
       count: resultCount,
       placeholder: L10N.getStr("projectTextSearch.placeholder"),
       size: "big",
-      summaryMsg: summaryMsg,
+      summaryMsg: this.props.query !== "" ? L10N.getFormatStr("sourceSearch.resultsSummary1", resultCount) : "",
       onChange: e => this.inputOnChange(e),
       onFocus: () => this.inputFocused = true,
       onBlur: () => this.inputFocused = false,
@@ -34618,7 +33949,10 @@ class TextSearch extends _react.Component {
   }
 }
 
-exports.default = TextSearch;
+exports.default = TextSearch; /* This Source Code Form is subject to the terms of the Mozilla Public
+                               * License, v. 2.0. If a copy of the MPL was not distributed with this
+                               * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 TextSearch.propTypes = {
   sources: _propTypes2.default.object,
   results: _propTypes2.default.array,
@@ -34672,6 +34006,7 @@ const svg = {
   "pause-exceptions": __webpack_require__(359),
   plus: __webpack_require__(360),
   preact: __webpack_require__(1233),
+  aframe: __webpack_require__(1648),
   prettyPrint: __webpack_require__(361),
   react: __webpack_require__(1000),
   "regex-match": __webpack_require__(362),
@@ -34694,8 +34029,11 @@ const svg = {
   express: __webpack_require__(1003),
   pug: __webpack_require__(1004),
   extjs: __webpack_require__(1043),
+  marko: __webpack_require__(1649),
+  nextjs: __webpack_require__(1650),
   showSources: __webpack_require__(1044),
-  showOutline: __webpack_require__(1045)
+  showOutline: __webpack_require__(1045),
+  nuxtjs: __webpack_require__(1651)
 };
 
 function Svg({ name, className, onClick, "aria-label": ariaLabel }) {
@@ -35304,7 +34642,9 @@ function formatTree(tree, depth = 0, str = "") {
   }
 
   return str;
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /***/ }),
 /* 1543 */
@@ -35327,6 +34667,10 @@ var _utils = __webpack_require__(1371);
 /*
  * Gets domain from url (without www prefix)
  */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 function getDomain(url) {
   // TODO: define how files should be ordered on the browser debugger
   if (!url) {
@@ -35448,7 +34792,9 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
-var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 exports.sortEntireTree = sortEntireTree;
 exports.sortTree = sortTree;
@@ -35512,6 +34858,10 @@ exports.getDirectories = getDirectories;
 var _utils = __webpack_require__(1371);
 
 var _getURL = __webpack_require__(1405);
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function findSource(sourceTree, sourceUrl) {
   let returnTarget = null;
@@ -35590,7 +34940,9 @@ function createTree(sources, debuggeeUrl, projectRoot) {
     parentMap: (0, _utils.createParentMap)(sourceTree),
     focusedItem: null
   };
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /***/ }),
 /* 1547 */
@@ -35633,294 +34985,16 @@ function highlightMatches(lineMatch) {
       value.slice(column + len, value.length)
     )
   );
-} // Maybe reuse file search's functions?
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+// Maybe reuse file search's functions?
 
 /***/ }),
-/* 1548 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-
-var _propTypes = __webpack_require__(20);
-
-var _propTypes2 = _interopRequireDefault(_propTypes);
-
-var _react = __webpack_require__(0);
-
-var _react2 = _interopRequireDefault(_react);
-
-var _source = __webpack_require__(1356);
-
-var _utils = __webpack_require__(1366);
-
-var _Autocomplete = __webpack_require__(1549);
-
-var _Autocomplete2 = _interopRequireDefault(_Autocomplete);
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-class SourceSearch extends _react.Component {
-
-  searchResults(sources) {
-    return sources.valueSeq().toJS().filter(source => !(0, _source.isPretty)(source) && !(0, _source.isThirdParty)(source)).map(source => ({
-      value: (0, _source.getSourcePath)(source),
-      title: (0, _source.getSourcePath)(source).split("/").pop(),
-      subtitle: (0, _utils.endTruncateStr)((0, _source.getSourcePath)(source), 100),
-      id: source.id
-    }));
-  }
-
-  render() {
-    const {
-      sources,
-      searchBottomBar,
-      selectSource,
-      query,
-      setQuery
-    } = this.props;
-    return _react2.default.createElement(
-      _Autocomplete2.default,
-      {
-        selectItem: (e, result) => selectSource(result.id),
-        close: this.props.closeActiveSearch,
-        items: this.searchResults(sources),
-        inputValue: query,
-        placeholder: L10N.getStr("sourceSearch.search"),
-        onChangeHandler: setQuery,
-        size: "big"
-      },
-      searchBottomBar
-    );
-  }
-}
-
-exports.default = SourceSearch;
-SourceSearch.contextTypes = {
-  shortcuts: _propTypes2.default.object
-};
-
-/***/ }),
-/* 1549 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-
-var _react = __webpack_require__(0);
-
-var _react2 = _interopRequireDefault(_react);
-
-var _fuzzaldrinPlus = __webpack_require__(161);
-
-var _classnames = __webpack_require__(175);
-
-var _classnames2 = _interopRequireDefault(_classnames);
-
-var _resultList = __webpack_require__(1406);
-
-__webpack_require__(1315);
-
-var _SearchInput = __webpack_require__(1379);
-
-var _SearchInput2 = _interopRequireDefault(_SearchInput);
-
-var _ResultList = __webpack_require__(1445);
-
-var _ResultList2 = _interopRequireDefault(_ResultList);
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-class Autocomplete extends _react.Component {
-
-  constructor(props) {
-    super(props);
-
-    this.onKeyDown = this.onKeyDown.bind(this);
-    this.state = {
-      selectedIndex: 0,
-      focused: false
-    };
-  }
-
-  componentDidUpdate() {
-    if (this.refs.resultList && this.refs.resultList.refs) {
-      (0, _resultList.scrollList)(this.refs.resultList.refs, this.state.selectedIndex);
-    }
-  }
-
-  getSearchResults() {
-    const inputValue = this.props.inputValue;
-    if (inputValue == "") {
-      return [];
-    }
-
-    return (0, _fuzzaldrinPlus.filter)(this.props.items, inputValue, {
-      key: "value"
-    });
-  }
-
-  onKeyDown(e) {
-    const searchResults = this.getSearchResults(),
-          resultCount = searchResults.length;
-
-    if (e.key === "ArrowUp") {
-      const selectedIndex = Math.max(0, this.state.selectedIndex - 1);
-      this.setState({ selectedIndex });
-      if (this.props.onSelectedItem) {
-        this.props.onSelectedItem(searchResults[selectedIndex]);
-      }
-      e.preventDefault();
-    } else if (e.key === "ArrowDown") {
-      const selectedIndex = Math.min(resultCount - 1, this.state.selectedIndex + 1);
-      this.setState({ selectedIndex });
-      if (this.props.onSelectedItem) {
-        this.props.onSelectedItem(searchResults[selectedIndex]);
-      }
-      e.preventDefault();
-    } else if (e.key === "Enter") {
-      if (searchResults.length) {
-        this.props.selectItem(e, searchResults[this.state.selectedIndex]);
-      } else {
-        this.props.close(this.props.inputValue);
-      }
-      e.preventDefault();
-    } else if (e.key === "Tab") {
-      this.props.close(this.props.inputValue);
-      e.preventDefault();
-    }
-  }
-
-  renderResults(results) {
-    const { size } = this.props;
-
-    if (results.length) {
-      const props = {
-        items: results,
-        selected: this.state.selectedIndex,
-        selectItem: this.props.selectItem,
-        close: this.props.close,
-        size,
-        ref: "resultList"
-      };
-
-      return _react2.default.createElement(_ResultList2.default, props);
-    } else if (this.props.inputValue && !results.length) {
-      return _react2.default.createElement(
-        "div",
-        { className: "no-result-msg absolute-center" },
-        L10N.getStr("sourceSearch.noResults2")
-      );
-    }
-  }
-
-  render() {
-    const { focused } = this.state;
-    const { size, children } = this.props;
-    const searchResults = this.getSearchResults();
-    const summaryMsg = L10N.getFormatStr("sourceSearch.resultsSummary1", searchResults.length);
-
-    const searchProps = {
-      query: this.props.inputValue,
-      count: searchResults.length,
-      placeholder: this.props.placeholder,
-      size,
-      showErrorEmoji: true,
-      summaryMsg,
-      onChange: e => {
-        this.props.onChangeHandler(e.target.value);
-        this.setState({
-          selectedIndex: 0
-        });
-      },
-      onFocus: () => this.setState({ focused: true }),
-      onBlur: () => this.setState({ focused: false }),
-      onKeyDown: this.onKeyDown,
-      handleClose: this.props.close
-    };
-
-    return _react2.default.createElement(
-      "div",
-      { className: (0, _classnames2.default)("autocomplete", { focused }) },
-      _react2.default.createElement(_SearchInput2.default, searchProps),
-      children,
-      this.renderResults(searchResults)
-    );
-  }
-}
-
-exports.default = Autocomplete;
-Autocomplete.defaultProps = {
-  size: ""
-};
-
-/***/ }),
-/* 1550 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-
-var _propTypes = __webpack_require__(20);
-
-var _propTypes2 = _interopRequireDefault(_propTypes);
-
-var _react = __webpack_require__(0);
-
-var _react2 = _interopRequireDefault(_react);
-
-var _classnames = __webpack_require__(175);
-
-var _classnames2 = _interopRequireDefault(_classnames);
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-class ToggleSearch extends _react.Component {
-  render() {
-    const { kind, toggle } = this.props;
-    const isSourcesActive = kind === "sources";
-    return _react2.default.createElement(
-      "div",
-      { className: "toggle-search" },
-      _react2.default.createElement(
-        "span",
-        {
-          className: (0, _classnames2.default)("text", { active: isSourcesActive }),
-          onClick: toggle
-        },
-        L10N.getStr("sourceSearch.search")
-      ),
-      _react2.default.createElement(
-        "span",
-        {
-          className: (0, _classnames2.default)("text", { active: !isSourcesActive }),
-          onClick: toggle
-        },
-        L10N.getStr("projectTextSearch.placeholder")
-      )
-    );
-  }
-}
-
-exports.default = ToggleSearch;
-ToggleSearch.propTypes = {
-  kind: _propTypes2.default.string.isRequired,
-  toggle: _propTypes2.default.func.isRequired
-};
-
-/***/ }),
+/* 1548 */,
+/* 1549 */,
+/* 1550 */,
 /* 1551 */
 /***/ (function(module, exports, __webpack_require__) {
 
@@ -35969,7 +35043,6 @@ class PrimaryPanes extends _react.Component {
 
   constructor(props) {
     super(props);
-    this.state = { selectedPane: "sources" };
 
     this.renderShortcut = this.renderShortcut.bind(this);
     this.showPane = this.showPane.bind(this);
@@ -35977,7 +35050,7 @@ class PrimaryPanes extends _react.Component {
   }
 
   showPane(selectedPane) {
-    this.setState({ selectedPane });
+    this.props.setPrimaryPaneTab(selectedPane);
   }
 
   renderOutlineTabs() {
@@ -35993,7 +35066,7 @@ class PrimaryPanes extends _react.Component {
       "div",
       {
         className: (0, _classnames2.default)("tab", {
-          active: this.state.selectedPane === "sources"
+          active: this.props.selectedTab === "sources"
         }),
         onClick: () => this.showPane("sources"),
         key: "sources-tab"
@@ -36003,7 +35076,7 @@ class PrimaryPanes extends _react.Component {
       "div",
       {
         className: (0, _classnames2.default)("tab", {
-          active: this.state.selectedPane === "outline"
+          active: this.props.selectedTab === "outline"
         }),
         onClick: () => this.showPane("outline"),
         key: "outline-tab"
@@ -36050,18 +35123,21 @@ class PrimaryPanes extends _react.Component {
   }
 
   render() {
-    const { selectedPane } = this.state;
+    const { selectedTab } = this.props;
 
     return _react2.default.createElement(
       "div",
       { className: "sources-panel" },
       this.renderTabs(),
-      selectedPane === "sources" ? this.renderSources() : this.renderOutline()
+      selectedTab === "sources" ? this.renderSources() : this.renderOutline()
     );
   }
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 exports.default = (0, _reactRedux.connect)(state => ({
+  selectedTab: (0, _selectors.getSelectedPrimaryPaneTab)(state),
   sources: (0, _selectors.getSources)(state),
   sourceSearchOn: (0, _selectors.getActiveSearch)(state) === "source"
 }), dispatch => (0, _redux.bindActionCreators)(_actions2.default, dispatch))(PrimaryPanes);
@@ -36102,8 +35178,11 @@ var _lodash = __webpack_require__(2);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-class Outline extends _react.Component {
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
+class Outline extends _react.Component {
   selectItem(location) {
     const { selectedSource, selectSource } = this.props;
     if (!selectedSource) {
@@ -36257,6 +35336,7 @@ class SourcesTree extends _react.Component {
     this.state = (0, _sourcesTree.createTree)(this.props.sources, this.props.debuggeeUrl, this.props.projectRoot);
     this.focusItem = this.focusItem.bind(this);
     this.selectItem = this.selectItem.bind(this);
+    this.getPath = this.getPath.bind(this);
     this.getIcon = this.getIcon.bind(this);
     this.onContextMenu = this.onContextMenu.bind(this);
     this.renderItem = this.renderItem.bind(this);
@@ -36289,7 +35369,6 @@ class SourcesTree extends _react.Component {
       this.setState((0, _sourcesTree.createTree)(nextProps.sources, nextProps.debuggeeUrl, nextProps.projectRoot));
       return;
     }
-    const { selectedSource } = this.props;
     if (nextProps.shownSource && nextProps.shownSource != this.props.shownSource) {
       const listItems = (0, _sourcesTree.getDirectories)(nextProps.shownSource, this.state.sourceTree);
 
@@ -36300,7 +35379,7 @@ class SourcesTree extends _react.Component {
       return this.setState({ listItems });
     }
 
-    if (nextProps.selectedSource && nextProps.selectedSource != selectedSource) {
+    if (nextProps.selectedSource && nextProps.selectedSource != this.props.selectedSource) {
       const highlightItems = (0, _sourcesTree.getDirectories)(nextProps.selectedSource.get("url"), this.state.sourceTree);
 
       return this.setState({ highlightItems });
@@ -36353,20 +35432,36 @@ class SourcesTree extends _react.Component {
     }
   }
 
-  getIcon(item, depth) {
+  getPath(item) {
+    const { sources } = this.props;
+    const blackBoxedPart = item.contents.get && sources.get(item.contents.get("id")).get("isBlackBoxed") ? "update" : "";
+    return `${item.path}/${item.name}/${blackBoxedPart}`;
+  }
+
+  getIcon(sources, item, depth) {
+    const { debuggeeUrl } = this.props;
+
     if (item.path === "/Webpack") {
       return _react2.default.createElement(_Svg2.default, { name: "webpack" });
     }
 
     if (depth === 0) {
-      return _react2.default.createElement(_Svg2.default, { name: "domain" });
+      return _react2.default.createElement("img", {
+        className: (0, _classnames2.default)("domain", {
+          debuggee: debuggeeUrl && debuggeeUrl.includes(item.name)
+        })
+      });
     }
 
     if (!(0, _sourcesTree.nodeHasChildren)(item)) {
-      return _react2.default.createElement(_Svg2.default, { name: "file" });
+      const source = sources.get(item.contents.get("id"));
+      if (source.get("isBlackBoxed")) {
+        return _react2.default.createElement("img", { className: "blackBox" });
+      }
+      return _react2.default.createElement("img", { className: "file" });
     }
 
-    return _react2.default.createElement(_Svg2.default, { name: "folder" });
+    return _react2.default.createElement("img", { className: "folder" });
   }
 
   onContextMenu(event, item) {
@@ -36413,8 +35508,8 @@ class SourcesTree extends _react.Component {
         setExpanded(item, !expanded, e.altKey);
       }
     }) : _react2.default.createElement("i", { className: "no-arrow" });
-
-    const icon = this.getIcon(item, depth);
+    const { sources } = this.props;
+    const icon = this.getIcon(sources, item, depth);
     let paddingDir = "paddingRight";
     if (document.body && document.body.parentElement) {
       paddingDir = document.body.parentElement.dir == "ltr" ? "paddingLeft" : "paddingRight";
@@ -36460,7 +35555,7 @@ class SourcesTree extends _react.Component {
       getParent: item => parentMap.get(item),
       getChildren: item => (0, _sourcesTree.nodeHasChildren)(item) ? item.contents : [],
       getRoots: () => sourceTree.contents,
-      getPath: item => `${item.path}/${item.name}`,
+      getPath: this.getPath,
       itemHeight: 21,
       autoExpandDepth: expanded ? 0 : 1,
       autoExpandAll: false,
@@ -36507,7 +35602,9 @@ class SourcesTree extends _react.Component {
 
 
 // Redux
-
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 // React
 exports.default = (0, _reactRedux.connect)(state => {
@@ -36516,7 +35613,8 @@ exports.default = (0, _reactRedux.connect)(state => {
     selectedSource: (0, _selectors.getSelectedSource)(state),
     debuggeeUrl: (0, _selectors.getDebuggeeUrl)(state),
     expanded: (0, _selectors.getExpandedState)(state),
-    projectRoot: (0, _selectors.getProjectDirectoryRoot)(state)
+    projectRoot: (0, _selectors.getProjectDirectoryRoot)(state),
+    sources: (0, _selectors.getSources)(state)
   };
 }, dispatch => (0, _redux.bindActionCreators)(_actions2.default, dispatch))(SourcesTree);
 
@@ -36543,12 +35641,6 @@ var _reactDom = __webpack_require__(4);
 
 var _reactDom2 = _interopRequireDefault(_reactDom);
 
-var _reactImmutableProptypes = __webpack_require__(150);
-
-var _reactImmutableProptypes2 = _interopRequireDefault(_reactImmutableProptypes);
-
-var _redux = __webpack_require__(3);
-
 var _reactRedux = __webpack_require__(1189);
 
 var _classnames = __webpack_require__(175);
@@ -36564,6 +35656,8 @@ var _devtoolsConfig = __webpack_require__(1355);
 var _devtoolsSourceEditor = __webpack_require__(1386);
 
 var _selectors = __webpack_require__(1352);
+
+var _redux = __webpack_require__(3);
 
 var _actions = __webpack_require__(1354);
 
@@ -36619,11 +35713,18 @@ var _ConditionalPanel2 = _interopRequireDefault(_ConditionalPanel);
 
 var _editor = __webpack_require__(1358);
 
+var _ui = __webpack_require__(1439);
+
 __webpack_require__(1332);
 
 __webpack_require__(1333);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+// Redux actions
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 const cssVars = {
   searchbarHeight: "var(--editor-searchbar-height)",
@@ -36638,20 +35739,18 @@ class Editor extends _react.PureComponent {
 
     this.onToggleBreakpoint = (key, e) => {
       e.preventDefault();
-      const { codeMirror } = this.state.editor;
       const { selectedSource } = this.props;
-      const line = (0, _editor.getCursorLine)(codeMirror);
 
       if (!selectedSource) {
         return;
       }
 
-      const sourceLine = (0, _editor.toSourceLine)(selectedSource.get("id"), line);
+      const line = this.getCurrentLine();
 
       if (e.shiftKey) {
-        this.toggleConditionalPanel(sourceLine);
+        this.toggleConditionalPanel(line);
       } else {
-        this.props.toggleBreakpoint(sourceLine);
+        this.props.toggleBreakpoint(line);
       }
     };
 
@@ -36668,21 +35767,16 @@ class Editor extends _react.PureComponent {
     };
 
     this.onSearchAgain = (_, e) => {
-      const { query, searchModifiers } = this.props;
-      const { editor: { codeMirror } } = this.state.editor;
-      const ctx = { ed: this.state.editor, cm: codeMirror };
-
-      const direction = e.shiftKey ? "prev" : "next";
-      (0, _editor.traverseResults)(e, ctx, query, direction, searchModifiers.toJS());
+      this.props.traverseResults(e.shiftKey, this.state.editor);
     };
 
     this.onGutterClick = (cm, line, gutter, ev) => {
       const {
         selectedSource,
-        toggleBreakpoint,
         conditionalPanelLine,
         closeConditionalPanel,
         addOrToggleDisabledBreakpoint,
+        toggleBreakpoint,
         continueToHere
       } = this.props;
 
@@ -36712,6 +35806,8 @@ class Editor extends _react.PureComponent {
     };
 
     this.onGutterContextMenu = event => {
+      event.stopPropagation();
+      event.preventDefault();
       return this.props.setContextMenu("Gutter", event);
     };
 
@@ -36721,6 +35817,11 @@ class Editor extends _react.PureComponent {
         closeConditionalPanel,
         openConditionalPanel
       } = this.props;
+
+      if (!line || isNaN(line)) {
+        line = this.getCurrentLine();
+      }
+
       if (conditionalPanelLine) {
         return closeConditionalPanel();
       }
@@ -36747,6 +35848,7 @@ class Editor extends _react.PureComponent {
     }
 
     (0, _editor.resizeBreakpointGutter)(this.state.editor.codeMirror);
+    (0, _ui.resizeToggleButton)(this.state.editor.codeMirror);
   }
 
   setupEditor() {
@@ -36765,6 +35867,8 @@ class Editor extends _react.PureComponent {
     const codeMirrorWrapper = codeMirror.getWrapperElement();
 
     (0, _editor.resizeBreakpointGutter)(codeMirror);
+    (0, _ui.resizeToggleButton)(codeMirror);
+
     (0, _devtoolsLaunchpad.debugGlobal)("cm", codeMirror);
 
     codeMirror.on("gutterClick", this.onGutterClick);
@@ -36787,19 +35891,10 @@ class Editor extends _react.PureComponent {
     codeMirrorGutter.addEventListener("mouseenter", toggleFoldMarkerVisibility);
 
     if (!(0, _devtoolsConfig.isFirefox)()) {
-      codeMirror.on("gutterContextMenu", (cm, line, eventName, event) => {
-        event.stopPropagation();
-        event.preventDefault();
-        return this.onGutterContextMenu(event);
-      });
-
+      codeMirror.on("gutterContextMenu", (cm, line, eventName, event) => this.onGutterContextMenu(event));
       codeMirror.on("contextmenu", (cm, event) => this.openMenu(event));
     } else {
-      codeMirrorWrapper.addEventListener("contextmenu", event => {
-        event.stopPropagation();
-        event.preventDefault();
-        return this.openMenu(event);
-      });
+      codeMirrorWrapper.addEventListener("contextmenu", event => this.openMenu(event));
     }
 
     this.setState({ editor });
@@ -36857,6 +35952,7 @@ class Editor extends _react.PureComponent {
     // update the pending jump line. Note that if jumping to a line in
     // a source where the text hasn't been loaded yet, we will set the
     // line here but not jump until rendering the actual source.
+
     if (prevProps.selectedLocation !== selectedLocation) {
       if (selectedLocation && selectedLocation.line != undefined) {
         this.pendingJumpLocation = selectedLocation;
@@ -36868,9 +35964,17 @@ class Editor extends _react.PureComponent {
     // Only update and jump around in real source texts. This will
     // keep the jump state around until the real source text is
     // loaded.
-    if (selectedSource && selectedSource.has("text")) {
-      this.flashLine();
+    if (selectedSource && (0, _source.isLoaded)(selectedSource.toJS())) {
+      this.highlightLine();
     }
+  }
+
+  getCurrentLine() {
+    const { codeMirror } = this.state.editor;
+    const { selectedSource } = this.props;
+    const line = (0, _editor.getCursorLine)(codeMirror);
+
+    return (0, _editor.toSourceLine)(selectedSource.get("id"), line);
   }
 
   onKeyDown(e) {
@@ -36899,8 +36003,10 @@ class Editor extends _react.PureComponent {
 
 
   openMenu(event) {
-    const { setContextMenu } = this.props;
+    event.stopPropagation();
+    event.preventDefault();
 
+    const { setContextMenu } = this.props;
     if (event.target.classList.contains("CodeMirror-linenumber")) {
       return setContextMenu("Gutter", event);
     }
@@ -36919,8 +36025,9 @@ class Editor extends _react.PureComponent {
 
   // If the location has changed and a specific line is requested,
   // move to that line and flash it.
-  flashLine() {
-    if (!this.pendingJumpLocation) {
+  highlightLine() {
+    const { selectedLocation, selectedFrame } = this.props;
+    if (!selectedLocation) {
       return;
     }
 
@@ -36928,24 +36035,32 @@ class Editor extends _react.PureComponent {
     // cancel any existing animation, but it avoids it from
     // happening ever again (in case CodeMirror re-applies the
     // class, etc).
-    if (this.lastJumpLine) {
+    if (this.lastJumpLine !== null) {
       (0, _editor.clearLineClass)(this.state.editor.codeMirror, "highlight-line");
     }
 
-    const { sourceId, line: sourceLine } = this.pendingJumpLocation;
-    const line = (0, _editor.toEditorLine)(sourceId, sourceLine);
-    this.state.editor.alignLine(line);
+    let line = null;
+    if (selectedLocation.line >= 0) {
+      line = this.scrollToPosition();
+    }
 
     // We only want to do the flashing animation if it's not a debug
     // line, which has it's own styling.
     // Also, if it the first time the debugger is being loaded, we don't want
     // to flash the previously saved selected line.
-    if (this.lastJumpLine && (!this.props.selectedFrame || this.props.selectedFrame.location.line !== line)) {
+    if (line !== null && this.lastJumpLine !== null && (!selectedFrame || selectedFrame.location.line !== line)) {
       this.state.editor.codeMirror.addLineClass(line, "line", "highlight-line");
     }
 
     this.lastJumpLine = line;
     this.pendingJumpLocation = null;
+  }
+
+  scrollToPosition() {
+    const { sourceId, line, column } = this.props.selectedLocation;
+    const editorLine = (0, _editor.toEditorLine)(sourceId, line);
+    (0, _editor.scrollToColumn)(this.state.editor.codeMirror, editorLine, column);
+    return editorLine;
   }
 
   setSize(nextProps) {
@@ -36959,7 +36074,7 @@ class Editor extends _react.PureComponent {
   }
 
   setText(props) {
-    const { selectedSource } = props;
+    const { selectedSource, sourceMetaData } = props;
     if (!this.state.editor) {
       return;
     }
@@ -36977,7 +36092,7 @@ class Editor extends _react.PureComponent {
     }
 
     if (selectedSource) {
-      return (0, _editor.showSourceText)(this.state.editor, selectedSource.toJS());
+      return (0, _editor.showSourceText)(this.state.editor, selectedSource.toJS(), sourceMetaData);
     }
   }
 
@@ -37078,34 +36193,11 @@ class Editor extends _react.PureComponent {
   }
 }
 
-Editor.propTypes = {
-  hitCount: _propTypes2.default.object,
-  selectedLocation: _propTypes2.default.object,
-  selectedSource: _reactImmutableProptypes2.default.map,
-  searchOn: _propTypes2.default.bool,
-  addOrToggleDisabledBreakpoint: _propTypes2.default.func,
-  toggleBreakpoint: _propTypes2.default.func,
-  selectSource: _propTypes2.default.func,
-  jumpToMappedLocation: _propTypes2.default.func,
-  coverageOn: _propTypes2.default.bool,
-  selectedFrame: _propTypes2.default.object,
-  searchModifiers: _propTypes2.default.object,
-  query: _propTypes2.default.string,
-  horizontal: _propTypes2.default.bool,
-  startPanelSize: _propTypes2.default.number,
-  endPanelSize: _propTypes2.default.number,
-  conditionalPanelLine: _propTypes2.default.number,
-  openConditionalPanel: _propTypes2.default.func,
-  closeConditionalPanel: _propTypes2.default.func,
-  continueToHere: _propTypes2.default.func,
-  setContextMenu: _propTypes2.default.func
-};
-
 Editor.contextTypes = {
   shortcuts: _propTypes2.default.object
 };
 
-exports.default = (0, _reactRedux.connect)(state => {
+const mapStateToProps = state => {
   const selectedSource = (0, _selectors.getSelectedSource)(state);
   const sourceId = selectedSource ? selectedSource.get("id") : "";
   return {
@@ -37114,12 +36206,13 @@ exports.default = (0, _reactRedux.connect)(state => {
     searchOn: (0, _selectors.getActiveSearch)(state) === "file",
     hitCount: (0, _selectors.getHitCountForSource)(state, sourceId),
     selectedFrame: (0, _selectors.getSelectedFrame)(state),
-    query: (0, _selectors.getFileSearchQuery)(state),
-    modifiers: (0, _selectors.getFileSearchModifiers)(state),
     coverageOn: (0, _selectors.getCoverageEnabled)(state),
-    conditionalPanelLine: (0, _selectors.getConditionalPanelLine)(state)
+    conditionalPanelLine: (0, _selectors.getConditionalPanelLine)(state),
+    sourceMetaData: (0, _selectors.getSourceMetaData)(state, sourceId)
   };
-}, dispatch => (0, _redux.bindActionCreators)(_actions2.default, dispatch))(Editor);
+};
+
+exports.default = (0, _reactRedux.connect)(mapStateToProps, dispatch => (0, _redux.bindActionCreators)(_actions2.default, dispatch))(Editor);
 
 /***/ }),
 /* 1555 */
@@ -37165,7 +36258,6 @@ __webpack_require__(1322);
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 class SourceFooter extends _react.PureComponent {
-
   prettyPrintButton() {
     const { selectedSource, togglePrettyPrint } = this.props;
     const sourceLoaded = selectedSource && (0, _source.isLoaded)(selectedSource.toJS());
@@ -37293,7 +36385,10 @@ class SourceFooter extends _react.PureComponent {
       this.renderToggleButton()
     );
   }
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 exports.default = (0, _reactRedux.connect)(state => {
   const selectedSource = (0, _selectors.getSelectedSource)(state);
   const selectedId = selectedSource && selectedSource.get("id");
@@ -37357,6 +36452,10 @@ __webpack_require__(1323);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 function getShortcuts() {
   const searchAgainKey = L10N.getStr("sourceSearch.search.again.key2");
   const searchAgainPrevKey = L10N.getStr("sourceSearch.search.againPrev.key2");
@@ -37370,7 +36469,6 @@ function getShortcuts() {
 }
 
 class SearchBar extends _react.Component {
-
   constructor(props) {
     super(props);
 
@@ -37451,7 +36549,7 @@ class SearchBar extends _react.Component {
       return this.doSearch(e.target.value);
     };
 
-    this.onKeyUp = e => {
+    this.onKeyDown = e => {
       if (e.key !== "Enter" && e.key !== "F3") {
         return;
       }
@@ -37575,21 +36673,6 @@ class SearchBar extends _react.Component {
     return L10N.getFormatStr("editor.searchResults", matchIndex + 1, count);
   }
 
-  renderSearchType() {
-    return _react2.default.createElement(
-      "div",
-      { className: "search-type-toggles" },
-      _react2.default.createElement(
-        "span",
-        {
-          className: "search-type-name",
-          onClick: () => this.props.setActiveSearch("symbol")
-        },
-        L10N.getStr("symbolSearch.search.functionsPlaceholder")
-      )
-    );
-  }
-
   render() {
     const { searchResults: { count }, searchOn } = this.props;
 
@@ -37606,7 +36689,7 @@ class SearchBar extends _react.Component {
         placeholder: L10N.getStr("sourceSearch.search.placeholder"),
         summaryMsg: this.buildSummaryMsg(),
         onChange: this.onChange,
-        onKeyUp: this.onKeyUp,
+        onKeyDown: this.onKeyDown,
         handleNext: e => this.traverseResults(e, false),
         handlePrev: e => this.traverseResults(e, true),
         handleClose: this.closeSearch
@@ -37614,7 +36697,6 @@ class SearchBar extends _react.Component {
       _react2.default.createElement(
         "div",
         { className: "search-bottom-bar" },
-        this.renderSearchType(),
         this.renderSearchModifiers()
       )
     );
@@ -37719,7 +36801,10 @@ class HighlightLines extends _react.Component {
   render() {
     return null;
   }
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 exports.default = (0, _reactRedux.connect)(state => ({
   highlightedLineRange: (0, _selectors.getHighlightedLineRange)(state)
 }))(HighlightLines);
@@ -37759,6 +36844,10 @@ var _editor = __webpack_require__(1358);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 class Preview extends _react.PureComponent {
 
   constructor() {
@@ -37767,6 +36856,9 @@ class Preview extends _react.PureComponent {
     const self = this;
     self.onScroll = this.onScroll.bind(this);
     self.onMouseOver = (0, _lodash.debounce)(this.onMouseOver, 40);
+    self.onMouseOver = this.onMouseOver.bind(this);
+    self.onMouseUp = this.onMouseUp.bind(this);
+    self.onMouseDown = this.onMouseDown.bind(this);
   }
 
   componentDidMount() {
@@ -37774,9 +36866,19 @@ class Preview extends _react.PureComponent {
     const codeMirrorWrapper = codeMirror.getWrapperElement();
 
     codeMirror.on("scroll", this.onScroll);
-    codeMirrorWrapper.addEventListener("mouseover", e => this.onMouseOver(e));
-    codeMirrorWrapper.addEventListener("mouseup", e => this.onMouseUp(e));
-    codeMirrorWrapper.addEventListener("mousedown", e => this.onMouseDown(e));
+    codeMirrorWrapper.addEventListener("mouseover", this.onMouseOver);
+    codeMirrorWrapper.addEventListener("mouseup", this.onMouseUp);
+    codeMirrorWrapper.addEventListener("mousedown", this.onMouseDown);
+  }
+
+  componentWillUnmount() {
+    const codeMirror = this.props.editor.codeMirror;
+    const codeMirrorWrapper = codeMirror.getWrapperElement();
+    codeMirrorWrapper.removeEventListener("mouseover", this.onMouseOver);
+    codeMirrorWrapper.removeEventListener("mouseup", this.onMouseUp);
+    codeMirrorWrapper.removeEventListener("mousedown", this.onMouseDown);
+
+    codeMirror.off("scroll", this.onScroll);
   }
 
   onMouseOver(e) {
@@ -37886,7 +36988,9 @@ __webpack_require__(1328);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-const { REPS: { Rep }, MODE, ObjectInspectorUtils } = _devtoolsReps2.default;
+const { REPS: { Rep }, MODE, ObjectInspectorUtils } = _devtoolsReps2.default; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                               * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                               * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 const { ObjectInspector } = _devtoolsReps2.default;
 const { getChildren } = ObjectInspectorUtils;
@@ -40644,13 +39748,14 @@ class Popover extends _react.Component {
 
     return this.renderPopover();
   }
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 Popover.defaultProps = {
   onMouseLeave: () => {},
   type: "popover"
 };
-
 exports.default = Popover;
 
 /***/ }),
@@ -40686,7 +39791,9 @@ const BracketArrow = ({
     className: (0, _classnames2.default)("bracket-arrow", orientation || "up"),
     style: { left, top, bottom }
   });
-};
+}; /* This Source Code Form is subject to the terms of the Mozilla Public
+    * License, v. 2.0. If a copy of the MPL was not distributed with this
+    * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 exports.default = BracketArrow;
 
@@ -40730,7 +39837,6 @@ var _source = __webpack_require__(1356);
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 class Breakpoints extends _react.Component {
-
   shouldComponentUpdate(nextProps) {
     if (nextProps.selectedSource && !(0, _source.isLoaded)(nextProps.selectedSource.toJS())) {
       return false;
@@ -40740,7 +39846,7 @@ class Breakpoints extends _react.Component {
   }
 
   render() {
-    const { breakpoints, selectedSource, editor } = this.props;
+    const { breakpoints, selectedSource, editor, sourceMetaData } = this.props;
 
     if (!selectedSource || !breakpoints || selectedSource.get("isBlackBoxed")) {
       return null;
@@ -40754,15 +39860,20 @@ class Breakpoints extends _react.Component {
           key: (0, _breakpoint.makeLocationId)(bp.location),
           breakpoint: bp,
           selectedSource: selectedSource,
+          sourceMetaData: sourceMetaData,
           editor: editor
         });
       })
     );
   }
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 exports.default = (0, _reactRedux.connect)(state => ({
   breakpoints: (0, _visibleBreakpoints2.default)(state),
-  selectedSource: (0, _selectors.getSelectedSource)(state)
+  selectedSource: (0, _selectors.getSelectedSource)(state),
+  sourceMetaData: (0, _selectors.getSourceMetaData)(state, (0, _selectors.getSelectedSource)(state).id)
 }), dispatch => (0, _redux.bindActionCreators)(_actions2.default, dispatch))(Breakpoints);
 
 /***/ }),
@@ -40798,6 +39909,10 @@ var _editor = __webpack_require__(1358);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 const breakpointSvg = document.createElement("div");
 _reactDom2.default.render(_react2.default.createElement(_Svg2.default, { name: "breakpoint" }), breakpointSvg);
 
@@ -40819,7 +39934,7 @@ class Breakpoint extends _react.Component {
   }
 
   addBreakpoint() {
-    const { breakpoint, editor, selectedSource } = this.props;
+    const { breakpoint, editor, selectedSource, sourceMetaData } = this.props;
 
     // Hidden Breakpoints are never rendered on the client
     if (breakpoint.hidden) {
@@ -40835,7 +39950,7 @@ class Breakpoint extends _react.Component {
     const sourceId = selectedSource.get("id");
     const line = (0, _editor.toEditorLine)(sourceId, breakpoint.location.line);
 
-    (0, _editor.showSourceText)(editor, selectedSource.toJS());
+    (0, _editor.showSourceText)(editor, selectedSource.toJS(), sourceMetaData);
 
     editor.codeMirror.setGutterMarker(line, "breakpoints", makeMarker(breakpoint.disabled));
 
@@ -40910,8 +40025,9 @@ Object.defineProperty(exports, "__esModule", {
 
 var _react = __webpack_require__(0);
 
-const markerEl = document.createElement("div");
-
+const markerEl = document.createElement("div"); /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                 * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                 * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function makeMarker() {
   const marker = markerEl.cloneNode(true);
@@ -40920,7 +40036,6 @@ function makeMarker() {
 }
 
 class HitMarker extends _react.Component {
-
   addMarker() {
     const hitData = this.props.hitData;
     const line = hitData.line - 1;
@@ -40968,7 +40083,9 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
-var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 var _react = __webpack_require__(0);
 
@@ -41197,6 +40314,10 @@ var _react = __webpack_require__(0);
 
 var _editor = __webpack_require__(1358);
 
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 __webpack_require__(1329);
 
 class CallSite extends _react.Component {
@@ -41295,39 +40416,46 @@ var _reactRedux = __webpack_require__(1189);
 var _selectors = __webpack_require__(1352);
 
 class DebugLine extends _react.Component {
-
   constructor() {
     super();
     this.state = { debugExpression: { clear: () => {} } };
   }
 
   componentDidMount() {
-    this.setDebugLine(this.props.selectedFrame, this.props.selectedLocation, this.props.editor);
+    this.setDebugLine(this.props.pauseInfo, this.props.selectedFrame, this.props.selectedLocation, this.props.editor);
   }
 
   componentWillReceiveProps(nextProps) {
     this.clearDebugLine(this.props.selectedFrame, this.props.editor);
-    this.setDebugLine(nextProps.selectedFrame, nextProps.selectedLocation, nextProps.editor);
+    this.setDebugLine(nextProps.pauseInfo, nextProps.selectedFrame, nextProps.selectedLocation, nextProps.editor);
   }
 
   componentWillUnmount() {
     this.clearDebugLine(this.props.selectedFrame, this.props.editor);
   }
 
-  setDebugLine(selectedFrame, selectedLocation, editor) {
+  setDebugLine(pauseInfo, selectedFrame, selectedLocation, editor) {
     if (!selectedFrame) {
       return;
     }
-    const { location, location: { sourceId } } = selectedFrame;
-    const { line, column } = (0, _editor.toEditorPosition)(sourceId, location);
 
+    const { location, location: { sourceId } } = selectedFrame;
     const doc = (0, _sourceDocuments.getDocument)(sourceId);
     if (!doc) {
       return;
     }
 
-    doc.addLineClass(line, "line", "new-debug-line");
-    const debugExpression = (0, _editor.markText)(editor, "debug-expression", {
+    const { line, column } = (0, _editor.toEditorPosition)(sourceId, location);
+
+    // make sure the line is visible
+    if (editor && editor.alignLine) {
+      editor.alignLine(line);
+    }
+
+    const { markTextClass, lineClass } = this.getTextClasses(pauseInfo);
+    doc.addLineClass(line, "line", lineClass);
+
+    const debugExpression = (0, _editor.markText)(editor, markTextClass, {
       start: { line, column },
       end: { line, column: null }
     });
@@ -41351,6 +40479,17 @@ class DebugLine extends _react.Component {
     }
 
     doc.removeLineClass(editorLine, "line", "new-debug-line");
+    doc.removeLineClass(editorLine, "line", "new-debug-line-error");
+  }
+
+  getTextClasses(pauseInfo) {
+    if (pauseInfo && pauseInfo.why.type === "exception") {
+      return {
+        markTextClass: "debug-expression-error",
+        lineClass: "new-debug-line-error"
+      };
+    }
+    return { markTextClass: "debug-expression", lineClass: "new-debug-line" };
   }
 
   render() {
@@ -41358,10 +40497,14 @@ class DebugLine extends _react.Component {
   }
 }
 
-exports.DebugLine = DebugLine;
+exports.DebugLine = DebugLine; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 exports.default = (0, _reactRedux.connect)(state => ({
   selectedLocation: (0, _selectors.getSelectedLocation)(state),
-  selectedFrame: (0, _selectors.getSelectedFrame)(state)
+  selectedFrame: (0, _selectors.getSelectedFrame)(state),
+  pauseInfo: (0, _selectors.getPause)(state)
 }))(DebugLine);
 
 /***/ }),
@@ -41434,7 +40577,9 @@ class EmptyLines extends _react.Component {
   render() {
     return null;
   }
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 exports.default = (0, _reactRedux.connect)(state => {
   const selectedSource = (0, _selectors.getSelectedSource)(state);
@@ -41455,7 +40600,9 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
-var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 exports.gutterMenu = gutterMenu;
 
@@ -41525,7 +40672,7 @@ function gutterMenu({
     }
   };
 
-  const toggleBreakpointItem = Object.assign({
+  const toggleBreakpointItem = _extends({
     accesskey: L10N.getStr("shortcuts.toggleBreakpoint.accesskey"),
     disabled: false,
     click: () => {
@@ -41536,7 +40683,7 @@ function gutterMenu({
     }
   }, breakpoint ? gutterItems.removeBreakpoint : gutterItems.addBreakpoint);
 
-  const conditionalBreakpoint = Object.assign({
+  const conditionalBreakpoint = _extends({
     accesskey: L10N.getStr("editor.addConditionalBreakpoint.accesskey"),
     disabled: false,
     click: () => openConditionalPanel(line)
@@ -41554,7 +40701,7 @@ function gutterMenu({
   }
 
   if (breakpoint) {
-    const disableBreakpoint = Object.assign({
+    const disableBreakpoint = _extends({
       accesskey: L10N.getStr("editor.disableBreakpoint.accesskey"),
       disabled: false,
       click: () => toggleDisabledBreakpoint(line)
@@ -41589,6 +40736,10 @@ class GutterContextMenuComponent extends _react.PureComponent {
     const line = (0, _editor.lineAtHeight)(props.editor, sourceId, event);
     const breakpoint = nextProps.breakpoints.find(bp => bp.location.line === line);
 
+    if (props.emptyLines.includes(line)) {
+      return;
+    }
+
     gutterMenu(_extends({ event, sourceId, line, breakpoint }, props));
   }
 
@@ -41598,12 +40749,14 @@ class GutterContextMenuComponent extends _react.PureComponent {
 }
 
 exports.default = (0, _reactRedux.connect)(state => {
+  const selectedSource = (0, _selectors.getSelectedSource)(state);
   return {
     selectedLocation: (0, _selectors.getSelectedLocation)(state),
-    selectedSource: (0, _selectors.getSelectedSource)(state),
+    selectedSource: selectedSource,
     breakpoints: (0, _selectors.getVisibleBreakpoints)(state),
     pauseData: (0, _selectors.getPause)(state),
-    contextMenu: (0, _selectors.getContextMenu)(state)
+    contextMenu: (0, _selectors.getContextMenu)(state),
+    emptyLines: selectedSource ? (0, _selectors.getEmptyLines)(state, selectedSource.toJS()) : []
   };
 }, dispatch => (0, _redux.bindActionCreators)(_actions2.default, dispatch))(GutterContextMenuComponent);
 
@@ -41626,6 +40779,8 @@ var _devtoolsSourceMap = __webpack_require__(1360);
 
 var _clipboard = __webpack_require__(1388);
 
+var _source = __webpack_require__(1356);
+
 var _editor = __webpack_require__(1358);
 
 var _redux = __webpack_require__(3);
@@ -41633,6 +40788,8 @@ var _redux = __webpack_require__(3);
 var _reactRedux = __webpack_require__(1189);
 
 var _function = __webpack_require__(1597);
+
+var _astBreakpointLocation = __webpack_require__(1416);
 
 var _selectors = __webpack_require__(1352);
 
@@ -41642,7 +40799,9 @@ var _actions2 = _interopRequireDefault(_actions);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-function _objectWithoutProperties(obj, keys) { var target = {}; for (var i in obj) { if (keys.indexOf(i) >= 0) continue; if (!Object.prototype.hasOwnProperty.call(obj, i)) continue; target[i] = obj[i]; } return target; }
+function _objectWithoutProperties(obj, keys) { var target = {}; for (var i in obj) { if (keys.indexOf(i) >= 0) continue; if (!Object.prototype.hasOwnProperty.call(obj, i)) continue; target[i] = obj[i]; } return target; } /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                              * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                              * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function getMenuItems(event, {
   editor,
@@ -41653,7 +40812,9 @@ function getMenuItems(event, {
   jumpToMappedLocation,
   toggleBlackBox,
   addExpression,
-  getFunctionText
+  getFunctionText,
+  getFunctionLocation,
+  flashLineRange
 }) {
   const copySourceLabel = L10N.getStr("copySource");
   const copySourceKey = L10N.getStr("copySource.accesskey");
@@ -41686,23 +40847,26 @@ function getMenuItems(event, {
   };
 
   const { line } = editor.codeMirror.coordsChar({
-    left: event.clientX
+    left: event.clientX,
+    top: event.clientY
   });
 
   const sourceLocation = (0, _editor.getSourceLocationFromMouseEvent)(editor, selectedLocation, event);
 
-  const pairedType = (0, _devtoolsSourceMap.isOriginalId)(selectedLocation.sourceId) ? L10N.getStr("generated") : L10N.getStr("original");
+  const isOriginal = (0, _devtoolsSourceMap.isOriginalId)(selectedLocation.sourceId);
+  const hasSourceMap = selectedSource.get("sourceMapURL");
+  const isPrettyPrinted = (0, _source.isPretty)(selectedSource.toJS());
 
   const jumpLabel = {
     accesskey: L10N.getStr("editor.jumpToMappedLocation1.accesskey"),
-    disabled: false,
-    label: L10N.getFormatStr("editor.jumpToMappedLocation1", pairedType),
+    disabled: _devtoolsSourceMap.isGeneratedId && !hasSourceMap,
+    label: L10N.getFormatStr("editor.jumpToMappedLocation1", isOriginal ? L10N.getStr("generated") : L10N.getStr("original")),
     click: () => jumpToMappedLocation(sourceLocation)
   };
 
   const watchExpressionLabel = {
-    accesskey: L10N.getStr("expressions.placeholder.accesskey"),
-    label: L10N.getStr("expressions.placeholder"),
+    accesskey: L10N.getStr("expressions.accesskey"),
+    label: L10N.getStr("expressions.label"),
     click: () => addExpression(editor.codeMirror.getSelection())
   };
 
@@ -41710,7 +40874,7 @@ function getMenuItems(event, {
     id: "node-menu-blackbox",
     label: toggleBlackBoxLabel,
     accesskey: blackboxKey,
-    disabled: false,
+    disabled: isOriginal || isPrettyPrinted || hasSourceMap,
     click: () => toggleBlackBox(selectedSource.toJS())
   };
 
@@ -41721,7 +40885,7 @@ function getMenuItems(event, {
     id: "node-menu-show-source",
     label: revealInTreeLabel,
     accesskey: revealInTreeKey,
-    disabled: false,
+    disabled: isPrettyPrinted,
     click: () => showSource(selectedSource.get("id"))
   };
 
@@ -41731,7 +40895,15 @@ function getMenuItems(event, {
     label: copyFunctionLabel,
     accesskey: copyFunctionKey,
     disabled: !functionText,
-    click: () => (0, _clipboard.copyToTheClipboard)(functionText)
+    click: () => {
+      const { location: { start, end } } = getFunctionLocation(line);
+      flashLineRange({
+        start: start.line,
+        end: end.line,
+        sourceId: selectedLocation.sourceId
+      });
+      return (0, _clipboard.copyToTheClipboard)(functionText);
+    }
   };
 
   const menuItems = [copySource, copySourceUri2, copyFunction, { type: "separator" }, jumpLabel, showSourceMenuItem, blackBoxMenuItem];
@@ -41777,7 +40949,11 @@ exports.default = (0, _reactRedux.connect)(state => {
     selectedLocation: (0, _selectors.getSelectedLocation)(state),
     selectedSource,
     contextMenu: (0, _selectors.getContextMenu)(state),
-    getFunctionText: line => (0, _function.findFunctionText)(line, selectedSource.toJS(), (0, _selectors.getSymbols)(state, selectedSource.toJS()))
+    getFunctionText: line => (0, _function.findFunctionText)(line, selectedSource.toJS(), (0, _selectors.getSymbols)(state, selectedSource.toJS())),
+    getFunctionLocation: line => (0, _astBreakpointLocation.findClosestScope)((0, _selectors.getSymbols)(state, selectedSource.toJS()).functions, {
+      line,
+      column: Infinity
+    })
   };
 }, dispatch => (0, _redux.bindActionCreators)(_actions2.default, dispatch))(EditorMenu);
 
@@ -41796,6 +40972,10 @@ exports.findFunctionText = findFunctionText;
 var _astBreakpointLocation = __webpack_require__(1416);
 
 var _indentation = __webpack_require__(1438);
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function findFunctionText(line, source, symbols) {
   const func = (0, _astBreakpointLocation.findClosestScope)(symbols.functions, { line, column: Infinity });
@@ -41859,10 +41039,6 @@ class ConditionalPanel extends _react.PureComponent {
   constructor() {
     super();
 
-    this.setInput = node => {
-      this.input = node;
-    };
-
     this.saveAndClose = () => {
       if (this.input) {
         this.setBreakpoint(this.input.value);
@@ -41880,7 +41056,12 @@ class ConditionalPanel extends _react.PureComponent {
     };
 
     this.cbPanel = null;
-    this.input = {};
+  }
+
+  keepFocusOnInput() {
+    if (this.input) {
+      this.input.focus();
+    }
   }
 
   setBreakpoint(condition) {
@@ -41913,7 +41094,9 @@ class ConditionalPanel extends _react.PureComponent {
       coverGutter: true,
       noHScroll: false
     });
-    this.input.focus();
+    if (this.input) {
+      this.input.focus();
+    }
   }
 
   renderConditionalPanel(props) {
@@ -41922,7 +41105,11 @@ class ConditionalPanel extends _react.PureComponent {
     const panel = document.createElement("div");
     _reactDom2.default.render(_react2.default.createElement(
       "div",
-      { className: "conditional-breakpoint-panel" },
+      {
+        className: "conditional-breakpoint-panel",
+        onClick: () => this.keepFocusOnInput(),
+        onBlur: this.props.closeConditionalPanel
+      },
       _react2.default.createElement(
         "div",
         { className: "prompt" },
@@ -41932,7 +41119,7 @@ class ConditionalPanel extends _react.PureComponent {
         defaultValue: condition,
         placeholder: L10N.getStr("editor.conditionalPanel.placeholder"),
         onKeyDown: this.onKey,
-        ref: this.setInput
+        ref: input => this.input = input
       }),
       _react2.default.createElement(_Close2.default, {
         handleClick: this.props.closeConditionalPanel,
@@ -41948,7 +41135,10 @@ class ConditionalPanel extends _react.PureComponent {
   }
 }
 
-exports.ConditionalPanel = ConditionalPanel;
+exports.ConditionalPanel = ConditionalPanel; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                              * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                              * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 exports.default = (0, _reactRedux.connect)(state => {
   const line = (0, _selectors.getConditionalPanelLine)(state);
   const selectedLocation = (0, _selectors.getSelectedLocation)(state);
@@ -42048,6 +41238,10 @@ __webpack_require__(1342);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 const Scopes = (0, _devtoolsConfig.isEnabled)("chromeScopes") ? _ChromeScopes2.default : _Scopes3.default;
 
 function debugBtn(onClick, type, className, tooltip) {
@@ -42112,6 +41306,7 @@ class SecondaryPanes extends _react.Component {
 
     return {
       header: L10N.getStr("scopes.header"),
+      className: "scopes-pane",
       component: Scopes,
       opened: _prefs.prefs.scopesVisible,
       onToggle: opened => {
@@ -42124,6 +41319,7 @@ class SecondaryPanes extends _react.Component {
   getWatchItem() {
     return {
       header: L10N.getStr("watchExpressions.header"),
+      className: "watch-expressions-pane",
       buttons: this.watchExpressionHeaderButtons(),
       component: _Expressions2.default,
       opened: true
@@ -42136,11 +41332,13 @@ class SecondaryPanes extends _react.Component {
 
     const items = [{
       header: L10N.getStr("breakpoints.header"),
+      className: "breakpoints-pane",
       buttons: this.renderBreakpointsToggle(),
       component: _Breakpoints2.default,
       opened: true
     }, {
       header: L10N.getStr("callStack.header"),
+      className: "call-stack-pane",
       component: _Frames2.default,
       opened: _prefs.prefs.callStackVisible,
       onToggle: opened => {
@@ -42152,6 +41350,7 @@ class SecondaryPanes extends _react.Component {
     if ((0, _devtoolsConfig.isEnabled)("eventListeners")) {
       items.push({
         header: L10N.getStr("eventListenersHeader"),
+        className: "event-listeners-pane",
         component: _EventListeners2.default
       });
     }
@@ -42159,6 +41358,7 @@ class SecondaryPanes extends _react.Component {
     if ((0, _devtoolsConfig.isEnabled)("workers")) {
       items.push({
         header: L10N.getStr("workersHeader"),
+        className: "workers-pane",
         component: _Workers2.default
       });
     }
@@ -42262,6 +41462,10 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 var _react = __webpack_require__(0);
 
 var _react2 = _interopRequireDefault(_react);
@@ -42340,7 +41544,6 @@ function renderSourceLocation(source, line, column) {
 }
 
 class Breakpoints extends _react.PureComponent {
-
   shouldComponentUpdate(nextProps, nextState) {
     const { breakpoints } = this.props;
     return breakpoints !== nextProps.breakpoints;
@@ -42367,7 +41570,7 @@ class Breakpoints extends _react.PureComponent {
       toggleAllBreakpoints,
       toggleDisabledBreakpoint,
       setBreakpointCondition,
-      toggleConditionalBreakpointPanel,
+      openConditionalPanel,
       breakpoints
     } = this.props;
 
@@ -42490,7 +41693,7 @@ class Breakpoints extends _react.PureComponent {
       accesskey: addConditionKey,
       click: () => {
         this.selectBreakpoint(breakpoint);
-        toggleConditionalBreakpointPanel(breakpoint.location.line);
+        openConditionalPanel(breakpoint.location.line);
       }
     };
 
@@ -42500,7 +41703,7 @@ class Breakpoints extends _react.PureComponent {
       accesskey: editConditionKey,
       click: () => {
         this.selectBreakpoint(breakpoint);
-        toggleConditionalBreakpointPanel(breakpoint.location.line);
+        openConditionalPanel(breakpoint.location.line);
       }
     };
 
@@ -42535,17 +41738,13 @@ class Breakpoints extends _react.PureComponent {
 
   selectBreakpoint(breakpoint) {
     const sourceId = breakpoint.location.sourceId;
-    const line = breakpoint.location.line;
-    this.props.selectSource(sourceId, { line });
+    const { location } = breakpoint;
+    this.props.selectSource(sourceId, { location });
   }
 
   removeBreakpoint(event, breakpoint) {
     event.stopPropagation();
     this.props.removeBreakpoint(breakpoint.location);
-  }
-
-  toggleConditionalBreakpointPanel(line) {
-    this.props.toggleConditionalBreakpointPanel(line);
   }
 
   renderBreakpoint(breakpoint) {
@@ -42620,12 +41819,8 @@ function updateLocation(sources, pause, bp) {
   const isCurrentlyPaused = isCurrentlyPausedAtBreakpoint(pause, bp);
   const locationId = (0, _breakpoint.makeLocationId)(bp.location);
 
-  const location = Object.assign({}, bp.location, { source });
-  const localBP = Object.assign({}, bp, {
-    location,
-    locationId,
-    isCurrentlyPaused
-  });
+  const location = _extends({}, bp.location, { source });
+  const localBP = _extends({}, bp, { location, locationId, isCurrentlyPaused });
 
   return localBP;
 }
@@ -42835,7 +42030,10 @@ class Expressions extends _react.PureComponent {
       this.renderNewExpressionInput()
     );
   }
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 exports.default = (0, _reactRedux.connect)(state => ({
   pauseInfo: (0, _selectors.getPause)(state),
   expressions: (0, _selectors.getExpressions)(state),
@@ -42852,6 +42050,11 @@ exports.default = (0, _reactRedux.connect)(state => ({
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 exports.getAndProcessFrames = getAndProcessFrames;
 
 var _propTypes = __webpack_require__(20);
@@ -42900,8 +42103,8 @@ const NUM_FRAMES_SHOWN = 7;
 
 class Frames extends _react.Component {
 
-  constructor(...args) {
-    super(...args);
+  constructor(props) {
+    super(props);
 
     this.state = {
       showAllFrames: false
@@ -42972,7 +42175,7 @@ class Frames extends _react.Component {
         selectFrame: selectFrame,
         selectedFrame: selectedFrame,
         toggleBlackBox: toggleBlackBox,
-        key: frameOrGroup.id
+        key: String(frameOrGroup.id)
       }) : _react2.default.createElement(_Group2.default, {
         group: frameOrGroup,
         toggleFrameworkGrouping: this.toggleFrameworkGrouping,
@@ -43041,9 +42244,7 @@ function getSourceForFrame(sources, frame) {
 }
 
 function appendSource(sources, frame) {
-  return Object.assign({}, frame, {
-    source: getSourceForFrame(sources, frame).toJS()
-  });
+  return _extends({}, frame, { source: getSourceForFrame(sources, frame).toJS() });
 }
 
 function getAndProcessFrames(frames, sources) {
@@ -43114,8 +42315,9 @@ function FrameLocation({ frame }) {
     library,
     _react2.default.createElement(_Svg2.default, { name: library.toLowerCase(), className: "annotation-logo" })
   );
-}
-
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 FrameLocation.displayName = "FrameLocation";
 
@@ -43247,8 +42449,9 @@ function renderExceptionSummary(exception) {
   const name = (0, _lodash.get)(exception, "preview.name");
 
   return `${name}: ${message}`;
-}
-
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function renderMessage(pauseInfo) {
   if (!pauseInfo) {
@@ -43306,6 +42509,10 @@ renderWhyPaused.displayName = "whyPaused";
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 var _react = __webpack_require__(0);
 
@@ -43400,13 +42607,16 @@ class EventListeners extends _react.Component {
     );
   }
 }
+
 exports.default = (0, _reactRedux.connect)(state => {
-  const listeners = (0, _selectors.getEventListeners)(state).map(l => Object.assign({}, l, {
-    breakpoint: (0, _selectors.getBreakpoint)(state, {
-      sourceId: l.sourceId,
-      line: l.line
-    })
-  }));
+  const listeners = (0, _selectors.getEventListeners)(state).map(l => {
+    return _extends({}, l, {
+      breakpoint: (0, _selectors.getBreakpoint)(state, {
+        sourceId: l.sourceId,
+        line: l.line
+      })
+    });
+  });
 
   return { listeners };
 }, dispatch => (0, _redux.bindActionCreators)(_actions2.default, dispatch))(EventListeners);
@@ -43434,6 +42644,10 @@ var _reactRedux = __webpack_require__(1189);
 var _selectors = __webpack_require__(1352);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 class Workers extends _react.PureComponent {
 
@@ -43493,17 +42707,15 @@ __webpack_require__(1341);
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 class Accordion extends _react.Component {
-
   constructor(props) {
     super();
 
     this.renderContainer = (item, i) => {
       const { opened, created } = this.state;
-      const containerClassName = `${item.header.toLowerCase().replace(/\s/g, "-")}-pane`;
 
       return _react2.default.createElement(
         "div",
-        { className: containerClassName, key: i },
+        { className: item.className, key: i },
         _react2.default.createElement(
           "div",
           { className: "_header", onClick: () => this.handleHeaderClick(i) },
@@ -43568,7 +42780,10 @@ class Accordion extends _react.Component {
       this.props.items.map(this.renderContainer)
     );
   }
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 exports.default = Accordion;
 
 /***/ }),
@@ -43582,7 +42797,9 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
-var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 var _propTypes = __webpack_require__(20);
 
@@ -43601,10 +42818,6 @@ var _classnames = __webpack_require__(175);
 var _classnames2 = _interopRequireDefault(_classnames);
 
 var _selectors = __webpack_require__(1352);
-
-var _Svg = __webpack_require__(1359);
-
-var _Svg2 = _interopRequireDefault(_Svg);
 
 var _text = __webpack_require__(1387);
 
@@ -43680,12 +42893,11 @@ function debugBtn(onClick, type, className, tooltip, disabled = false) {
   return _react2.default.createElement(
     "button",
     _extends({ className: (0, _classnames2.default)(type, className) }, props),
-    _react2.default.createElement(_Svg2.default, { name: type })
+    _react2.default.createElement("img", { className: type })
   );
 }
 
 class CommandBar extends _react.Component {
-
   componentWillUnmount() {
     const shortcuts = this.context.shortcuts;
     COMMANDS.forEach(action => shortcuts.off(getKey(action)));
@@ -43798,7 +43010,9 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
-var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; };
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 var _react = __webpack_require__(0);
 
@@ -43829,7 +43043,6 @@ function debugBtn(onClick, type, className, tooltip, disabled = false) {
 }
 
 class UtilsBar extends _react.Component {
-
   renderUtilButtons() {
     return [debugBtn(this.props.toggleShortcutsModal, "shortcut", "active", L10N.getStr("shortcuts.buttonName"), false)];
   }
@@ -43893,8 +43106,9 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 // check to see if its an object with propertie
 function nodeHasProperties(item) {
   return !nodeHasChildren(item) && item.contents.value.type === "object";
-}
-
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function nodeIsPrimitive(item) {}
 
@@ -44119,8 +43333,11 @@ __webpack_require__(1296);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-class Scopes extends _react.PureComponent {
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
+class Scopes extends _react.PureComponent {
   constructor(props, ...args) {
     const { pauseInfo, selectedFrame, frameScopes } = props;
 
@@ -44132,11 +43349,12 @@ class Scopes extends _react.PureComponent {
   }
 
   componentWillReceiveProps(nextProps) {
-    const { pauseInfo, selectedFrame } = this.props;
+    const { pauseInfo, selectedFrame, frameScopes } = this.props;
     const pauseInfoChanged = pauseInfo !== nextProps.pauseInfo;
-    const selectedFrameChange = selectedFrame !== nextProps.selectedFrame;
+    const selectedFrameChanged = selectedFrame !== nextProps.selectedFrame;
+    const frameScopesChanged = frameScopes !== nextProps.frameScopes;
 
-    if (pauseInfoChanged || selectedFrameChange) {
+    if (pauseInfoChanged || selectedFrameChanged || frameScopesChanged) {
       this.setState({
         scopes: (0, _scopes.getScopes)(nextProps.pauseInfo, nextProps.selectedFrame, nextProps.frameScopes)
       });
@@ -44153,6 +43371,7 @@ class Scopes extends _react.PureComponent {
         { className: "pane scopes-list" },
         _react2.default.createElement(_devtoolsReps.ObjectInspector, {
           roots: scopes,
+          autoExpandAll: false,
           autoExpandDepth: 1,
           getObjectProperties: id => loadedObjects[id],
           loadObjectProperties: loadObjectProperties,
@@ -44179,7 +43398,7 @@ class Scopes extends _react.PureComponent {
 
 exports.default = (0, _reactRedux.connect)(state => {
   const selectedFrame = (0, _selectors.getSelectedFrame)(state);
-  const frameScopes = selectedFrame ? (0, _selectors.getFrameScopes)(state, selectedFrame.id) : null;
+  const frameScopes = selectedFrame ? (0, _selectors.getFrameScope)(state, selectedFrame.id) : null;
   return {
     selectedFrame,
     pauseInfo: (0, _selectors.getPause)(state),
@@ -44198,7 +43417,12 @@ exports.default = (0, _reactRedux.connect)(state => {
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.getSpecialVariables = getSpecialVariables;
+
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+exports.getFramePopVariables = getFramePopVariables;
 exports.getScopes = getScopes;
 
 var _lodash = __webpack_require__(2);
@@ -44254,29 +43478,33 @@ function getSourceBindingVariables(bindings, sourceBindings, parentName) {
   return bound.concat(unused);
 }
 
-function getSpecialVariables(pauseInfo, path) {
-  const thrown = (0, _lodash.get)(pauseInfo, "why.frameFinished.throw", undefined);
-
-  const returned = (0, _lodash.get)(pauseInfo, "why.frameFinished.return", undefined);
-
+function getFramePopVariables(pauseInfo, path) {
   const vars = [];
 
-  if (thrown !== undefined) {
-    vars.push({
-      name: "<exception>",
-      path: `${path}/<exception>`,
-      contents: { value: thrown }
-    });
-  }
+  if (pauseInfo.why && pauseInfo.why.frameFinished) {
+    const frameFinished = pauseInfo.why.frameFinished;
 
-  if (returned !== undefined) {
-    // Do not display a return value of "undefined",
-    if (!returned || !returned.type || returned.type !== "undefined") {
+    // Always display a `throw` property if present, even if it is falsy.
+    if (Object.prototype.hasOwnProperty.call(frameFinished, "throw")) {
       vars.push({
-        name: "<return>",
-        path: `${path}/<return>`,
-        contents: { value: returned }
+        name: "<exception>",
+        path: `${path}/<exception>`,
+        contents: { value: frameFinished.throw }
       });
+    }
+
+    if (Object.prototype.hasOwnProperty.call(frameFinished, "return")) {
+      const returned = frameFinished.return;
+
+      // Do not display undefined. Do display falsy values like 0 and false. The
+      // protocol grip for undefined is a JSON object: { type: "undefined" }.
+      if (typeof returned !== "object" || returned.type !== "undefined") {
+        vars.push({
+          name: "<return>",
+          path: `${path}/<return>`,
+          contents: { value: returned }
+        });
+      }
     }
   }
 
@@ -44313,7 +43541,6 @@ function getScopes(pauseInfo, selectedFrame, selectedScope) {
   const scopes = [];
 
   let scope = selectedScope;
-  const pausedScopeActor = (0, _lodash.get)(pauseInfo, "frame.scope.actor");
   let scopeIndex = 1;
 
   do {
@@ -44331,9 +43558,10 @@ function getScopes(pauseInfo, selectedFrame, selectedScope) {
 
       let vars = sourceBindings ? getSourceBindingVariables(bindings, sourceBindings, key) : getBindingVariables(bindings, key);
 
-      // show exception, return, and this variables in innermost scope
-      if (scope.actor === pausedScopeActor) {
-        vars = vars.concat(getSpecialVariables(pauseInfo, key));
+      // On the innermost scope of a frame that is just about to be popped, show
+      // the return value or the exception being thrown as special variables.
+      if (scope.actor === selectedScope.actor && selectedFrame.id === pauseInfo.frame.id) {
+        vars = vars.concat(getFramePopVariables(pauseInfo, key));
       }
 
       if (scope.actor === selectedScope.actor) {
@@ -44357,7 +43585,7 @@ function getScopes(pauseInfo, selectedFrame, selectedScope) {
       // If this is the global window scope, mark it as such so that it will
       // preview Window: Global instead of Window: Window
       if (value.class === "Window") {
-        value = Object.assign({}, scope.object, { displayClass: "Global" });
+        value = _extends({}, scope.object, { displayClass: "Global" });
       }
       scopes.push({
         name: scope.object.class,
@@ -44406,8 +43634,11 @@ __webpack_require__(1343);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-class WelcomeBox extends _react.Component {
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
+class WelcomeBox extends _react.Component {
   renderToggleButton() {
     const { horizontal, endPanelCollapsed, togglePaneCollapse } = this.props;
     if (horizontal) {
@@ -44429,7 +43660,7 @@ class WelcomeBox extends _react.Component {
 
     const searchSourcesLabel = L10N.getStr("welcome.search").substring(2);
     const searchProjectLabel = L10N.getStr("welcome.findInFiles").substring(2);
-    const { setActiveSearch } = this.props;
+    const { setActiveSearch, openQuickOpen } = this.props;
 
     return _react2.default.createElement(
       "div",
@@ -44442,7 +43673,7 @@ class WelcomeBox extends _react.Component {
           { className: "shortcutFunction" },
           _react2.default.createElement(
             "p",
-            { onClick: setActiveSearch.bind(null, "source") },
+            { onClick: () => openQuickOpen() },
             _react2.default.createElement(
               "span",
               { className: "shortcutKey" },
@@ -44471,7 +43702,7 @@ class WelcomeBox extends _react.Component {
           { className: "shortcutKeys" },
           _react2.default.createElement(
             "p",
-            { onClick: setActiveSearch.bind(null, "source") },
+            { onClick: () => openQuickOpen() },
             searchSourcesShortcut
           ),
           _react2.default.createElement(
@@ -44485,7 +43716,7 @@ class WelcomeBox extends _react.Component {
           { className: "shortcutFunction" },
           _react2.default.createElement(
             "p",
-            { onClick: setActiveSearch.bind(null, "source") },
+            { onClick: () => openQuickOpen() },
             searchSourcesLabel
           ),
           _react2.default.createElement(
@@ -44595,7 +43826,9 @@ function getHiddenTabs(sourceTabs, sourceTabEls) {
  * Clipboard function taken from
  * https://dxr.mozilla.org/mozilla-central/source/devtools/shared/platform/content/clipboard.js
  */
-
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function copyToTheClipboard(string) {
   const doCopy = function (e) {
@@ -44986,6 +44219,10 @@ __webpack_require__(1345);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 class Dropdown extends _react.Component {
 
   constructor(props) {
@@ -45048,7 +44285,100 @@ class Dropdown extends _react.Component {
 exports.default = Dropdown;
 
 /***/ }),
-/* 1616 */
+/* 1616 */,
+/* 1617 */,
+/* 1618 */,
+/* 1619 */,
+/* 1620 */,
+/* 1621 */,
+/* 1622 */,
+/* 1623 */,
+/* 1624 */,
+/* 1625 */,
+/* 1626 */,
+/* 1627 */,
+/* 1628 */,
+/* 1629 */,
+/* 1630 */,
+/* 1631 */,
+/* 1632 */,
+/* 1633 */,
+/* 1634 */,
+/* 1635 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.State = undefined;
+exports.default = update;
+exports.getQuickOpenEnabled = getQuickOpenEnabled;
+exports.getQuickOpenQuery = getQuickOpenQuery;
+exports.getQuickOpenType = getQuickOpenType;
+
+var _makeRecord = __webpack_require__(1361);
+
+var _makeRecord2 = _interopRequireDefault(_makeRecord);
+
+var _quickOpen = __webpack_require__(1636);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/**
+ * Quick Open reducer
+ * @module reducers/quick-open
+ */
+
+const State = exports.State = (0, _makeRecord2.default)({
+  enabled: false,
+  query: "",
+  searchType: "sources"
+});
+
+function update(state = State(), action) {
+  switch (action.type) {
+    case "OPEN_QUICK_OPEN":
+      if (action.query != null) {
+        return state.merge({
+          enabled: true,
+          query: action.query,
+          searchType: (0, _quickOpen.parseQuickOpenQuery)(action.query)
+        });
+      }
+      return state.set("enabled", true);
+    case "CLOSE_QUICK_OPEN":
+      return State();
+    case "SET_QUICK_OPEN_QUERY":
+      return state.merge({
+        query: action.query,
+        searchType: (0, _quickOpen.parseQuickOpenQuery)(action.query)
+      });
+    default:
+      return state;
+  }
+}
+
+function getQuickOpenEnabled(state) {
+  return state.quickOpen.get("enabled");
+}
+
+function getQuickOpenQuery(state) {
+  return state.quickOpen.get("query");
+}
+
+function getQuickOpenType(state) {
+  return state.quickOpen.get("searchType");
+}
+
+/***/ }),
+/* 1636 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -45058,9 +44388,719 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
-var _propTypes = __webpack_require__(20);
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
-var _propTypes2 = _interopRequireDefault(_propTypes);
+exports.parseQuickOpenQuery = parseQuickOpenQuery;
+exports.parseLineColumn = parseLineColumn;
+exports.formatSymbol = formatSymbol;
+exports.formatSymbols = formatSymbols;
+exports.formatSources = formatSources;
+
+var _utils = __webpack_require__(1366);
+
+var _source = __webpack_require__(1356);
+
+function parseQuickOpenQuery(query) {
+  const modifierPattern = /^@|#|\:$/;
+  const gotoSourcePattern = /^(\w+)\:/;
+  const startsWithModifier = modifierPattern.test(query[0]);
+  const isGotoSource = gotoSourcePattern.test(query);
+
+  if (startsWithModifier) {
+    const modifiers = {
+      "@": "functions",
+      "#": "variables",
+      ":": "goto"
+    };
+    const modifier = query[0];
+    return modifiers[modifier];
+  }
+
+  if (isGotoSource) {
+    return "gotoSource";
+  }
+
+  return "sources";
+}
+
+function parseLineColumn(query) {
+  const [, line, column] = query.split(":");
+  const lineNumber = parseInt(line, 10);
+  const columnNumber = parseInt(column, 10);
+  if (!isNaN(lineNumber)) {
+    return _extends({
+      line: lineNumber
+    }, !isNaN(columnNumber) ? { column: columnNumber } : null);
+  }
+}
+
+function formatSymbol(symbol) {
+  return {
+    id: `${symbol.name}:${symbol.location.start.line}`,
+    title: symbol.name,
+    subtitle: `${symbol.location.start.line}`,
+    value: symbol.name,
+    location: symbol.location
+  };
+}
+
+function formatSymbols(symbols) {
+  if (!symbols) {
+    return { variables: [], functions: [] };
+  }
+
+  const { variables, functions } = symbols;
+
+  return {
+    variables: variables.map(formatSymbol),
+    functions: functions.map(formatSymbol)
+  };
+}
+
+function formatSources(sources) {
+  return sources.valueSeq().toJS().filter(source => !(0, _source.isPretty)(source) && !(0, _source.isThirdParty)(source)).map(source => ({
+    value: (0, _source.getSourcePath)(source),
+    title: (0, _source.getSourcePath)(source).split("/").pop(),
+    subtitle: (0, _utils.endTruncateStr)((0, _source.getSourcePath)(source), 100),
+    id: source.id
+  })).filter(formattedSource => formattedSource.value != "");
+}
+
+/***/ }),
+/* 1637 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.command = command;
+exports.stepIn = stepIn;
+exports.stepOver = stepOver;
+exports.stepOut = stepOut;
+exports.resume = resume;
+exports.astCommand = astCommand;
+
+var _selectors = __webpack_require__(1352);
+
+var _pause = __webpack_require__(1400);
+
+var _promise = __webpack_require__(1653);
+
+var _parser = __webpack_require__(1365);
+
+var _breakpoints = __webpack_require__(1396);
+
+var _prefs = __webpack_require__(226);
+
+/**
+ * Debugger commands like stepOver, stepIn, stepUp
+ *
+ * @param string $0.type
+ * @memberof actions/pause
+ * @static
+ */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+function command(type) {
+  return async ({ dispatch, client }) => {
+    return dispatch({
+      type: "COMMAND",
+      command: type,
+      [_promise.PROMISE]: client[type]()
+    });
+  };
+}
+
+/**
+ * StepIn
+ * @memberof actions/pause
+ * @static
+ * @returns {Function} {@link command}
+ */
+function stepIn() {
+  return ({ dispatch, getState }) => {
+    if ((0, _selectors.getPause)(getState())) {
+      return dispatch(command("stepIn"));
+    }
+  };
+}
+
+/**
+ * stepOver
+ * @memberof actions/pause
+ * @static
+ * @returns {Function} {@link command}
+ */
+function stepOver() {
+  return ({ dispatch, getState }) => {
+    if ((0, _selectors.getPause)(getState())) {
+      return dispatch(astCommand("stepOver"));
+    }
+  };
+}
+
+/**
+ * stepOut
+ * @memberof actions/pause
+ * @static
+ * @returns {Function} {@link command}
+ */
+function stepOut() {
+  return ({ dispatch, getState }) => {
+    if ((0, _selectors.getPause)(getState())) {
+      return dispatch(command("stepOut"));
+    }
+  };
+}
+
+/**
+ * resume
+ * @memberof actions/pause
+ * @static
+ * @returns {Function} {@link command}
+ */
+function resume() {
+  return ({ dispatch, getState }) => {
+    if ((0, _selectors.getPause)(getState())) {
+      return dispatch(command("resume"));
+    }
+  };
+}
+
+/**
+ * @memberOf actions/pause
+ * @static
+ * @param stepType
+ * @returns {function(ThunkArgs)}
+ */
+function astCommand(stepType) {
+  return async ({ dispatch, getState, sourceMaps }) => {
+    if (!_prefs.features.asyncStepping) {
+      return dispatch(command(stepType));
+    }
+
+    const pauseInfo = (0, _selectors.getPause)(getState());
+    const source = (0, _selectors.getSelectedSource)(getState()).toJS();
+
+    const pausedPosition = await (0, _pause.getPausedPosition)(pauseInfo, sourceMaps);
+
+    if (stepType == "stepOver") {
+      const nextLocation = await (0, _parser.getNextStep)(source, pausedPosition);
+      if (nextLocation) {
+        await dispatch((0, _breakpoints.addHiddenBreakpoint)(nextLocation));
+        return dispatch(command("resume"));
+      }
+    }
+
+    return dispatch(command(stepType));
+  };
+}
+
+/***/ }),
+/* 1638 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.findBestMatchExpression = findBestMatchExpression;
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+function findBestMatchExpression(symbols, tokenPos, token) {
+  const { memberExpressions, identifiers } = symbols;
+  const { line, column } = tokenPos;
+  return identifiers.concat(memberExpressions).reduce((found, expression) => {
+    const overlaps = expression.location.start.line == line && expression.location.start.column <= column && expression.location.end.column >= column && !expression.computed;
+
+    if (overlaps) {
+      return expression;
+    }
+
+    return found;
+  }, {});
+}
+
+/***/ }),
+/* 1639 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+
+var _commands = __webpack_require__(1637);
+
+Object.defineProperty(exports, "stepIn", {
+  enumerable: true,
+  get: function () {
+    return _commands.stepIn;
+  }
+});
+Object.defineProperty(exports, "stepOver", {
+  enumerable: true,
+  get: function () {
+    return _commands.stepOver;
+  }
+});
+Object.defineProperty(exports, "stepOut", {
+  enumerable: true,
+  get: function () {
+    return _commands.stepOut;
+  }
+});
+Object.defineProperty(exports, "resume", {
+  enumerable: true,
+  get: function () {
+    return _commands.resume;
+  }
+});
+
+var _fetchScopes = __webpack_require__(1655);
+
+Object.defineProperty(exports, "fetchScopes", {
+  enumerable: true,
+  get: function () {
+    return _fetchScopes.fetchScopes;
+  }
+});
+
+var _paused = __webpack_require__(1640);
+
+Object.defineProperty(exports, "paused", {
+  enumerable: true,
+  get: function () {
+    return _paused.paused;
+  }
+});
+
+var _resumed = __webpack_require__(1641);
+
+Object.defineProperty(exports, "resumed", {
+  enumerable: true,
+  get: function () {
+    return _resumed.resumed;
+  }
+});
+
+var _continueToHere = __webpack_require__(1642);
+
+Object.defineProperty(exports, "continueToHere", {
+  enumerable: true,
+  get: function () {
+    return _continueToHere.continueToHere;
+  }
+});
+
+var _breakOnNext = __webpack_require__(1643);
+
+Object.defineProperty(exports, "breakOnNext", {
+  enumerable: true,
+  get: function () {
+    return _breakOnNext.breakOnNext;
+  }
+});
+
+var _loadObjectProperties = __webpack_require__(1644);
+
+Object.defineProperty(exports, "loadObjectProperties", {
+  enumerable: true,
+  get: function () {
+    return _loadObjectProperties.loadObjectProperties;
+  }
+});
+
+var _pauseOnExceptions = __webpack_require__(1645);
+
+Object.defineProperty(exports, "pauseOnExceptions", {
+  enumerable: true,
+  get: function () {
+    return _pauseOnExceptions.pauseOnExceptions;
+  }
+});
+
+var _selectFrame = __webpack_require__(1646);
+
+Object.defineProperty(exports, "selectFrame", {
+  enumerable: true,
+  get: function () {
+    return _selectFrame.selectFrame;
+  }
+});
+
+/***/ }),
+/* 1640 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.paused = paused;
+
+var _selectors = __webpack_require__(1352);
+
+var _pause = __webpack_require__(1400);
+
+var _breakpoints = __webpack_require__(1396);
+
+var _expressions = __webpack_require__(1398);
+
+var _sources = __webpack_require__(1373);
+
+var _ui = __webpack_require__(1385);
+
+var _fetchScopes = __webpack_require__(1655);
+
+/**
+ * Debugger has just paused
+ *
+ * @param {object} pauseInfo
+ * @memberof actions/pause
+ * @static
+ */
+function paused(pauseInfo) {
+  return async function ({ dispatch, getState, client, sourceMaps }) {
+    const { frames, why, loadedObjects } = pauseInfo;
+
+    const mappedFrames = await (0, _pause.updateFrameLocations)(frames, sourceMaps);
+    const frame = mappedFrames[0];
+
+    dispatch({
+      type: "PAUSED",
+      pauseInfo: { why, frame, frames },
+      frames: mappedFrames,
+      selectedFrameId: frame.id,
+      loadedObjects: loadedObjects || []
+    });
+
+    const hiddenBreakpointLocation = (0, _selectors.getHiddenBreakpointLocation)(getState());
+    if (hiddenBreakpointLocation) {
+      dispatch((0, _breakpoints.removeBreakpoint)(hiddenBreakpointLocation));
+    }
+
+    if (!(0, _selectors.isEvaluatingExpression)(getState())) {
+      dispatch((0, _expressions.evaluateExpressions)());
+    }
+
+    const { line, column } = frame.location;
+    await dispatch((0, _sources.selectSource)(frame.location.sourceId, { location: { line, column } }));
+
+    dispatch((0, _ui.togglePaneCollapse)("end", false));
+    dispatch((0, _fetchScopes.fetchScopes)());
+  };
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+/***/ }),
+/* 1641 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.resumed = resumed;
+
+var _selectors = __webpack_require__(1352);
+
+var _expressions = __webpack_require__(1398);
+
+var _pause = __webpack_require__(1400);
+
+/**
+ * Debugger has just resumed
+ *
+ * @memberof actions/pause
+ * @static
+ */
+function resumed() {
+  return async ({ dispatch, client, getState }) => {
+    const why = (0, _selectors.getPauseReason)(getState());
+    const wasPausedInEval = (0, _pause.inDebuggerEval)(why);
+
+    if (!(0, _selectors.isStepping)(getState()) && !wasPausedInEval) {
+      await dispatch((0, _expressions.evaluateExpressions)());
+    }
+
+    dispatch({
+      type: "RESUME"
+    });
+  };
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+/***/ }),
+/* 1642 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.continueToHere = continueToHere;
+
+var _selectors = __webpack_require__(1352);
+
+var _breakpoints = __webpack_require__(1396);
+
+var _commands = __webpack_require__(1637);
+
+function continueToHere(line) {
+  return async function ({ dispatch, getState }) {
+    const source = (0, _selectors.getSelectedSource)(getState()).toJS();
+
+    await dispatch((0, _breakpoints.addHiddenBreakpoint)({
+      line,
+      column: undefined,
+      sourceId: source.id
+    }));
+
+    dispatch((0, _commands.resume)());
+  };
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+/***/ }),
+/* 1643 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.breakOnNext = breakOnNext;
+
+
+/**
+ * Debugger breakOnNext command.
+ * It's different from the comand action because we also want to
+ * highlight the pause icon.
+ *
+ * @memberof actions/pause
+ * @static
+ */
+function breakOnNext() {
+  return ({ dispatch, client }) => {
+    client.breakOnNext();
+
+    return dispatch({
+      type: "BREAK_ON_NEXT",
+      value: true
+    });
+  };
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+/***/ }),
+/* 1644 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.loadObjectProperties = loadObjectProperties;
+
+var _promise = __webpack_require__(1653);
+
+var _selectors = __webpack_require__(1352);
+
+/**
+ * @memberof actions/pause
+ * @static
+ */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+function loadObjectProperties(object) {
+  return ({ dispatch, client, getState }) => {
+    const objectId = object.actor || object.objectId;
+
+    if ((0, _selectors.getLoadedObject)(getState(), objectId)) {
+      return;
+    }
+
+    dispatch({
+      type: "LOAD_OBJECT_PROPERTIES",
+      objectId,
+      [_promise.PROMISE]: client.getProperties(object)
+    });
+  };
+}
+
+/***/ }),
+/* 1645 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.pauseOnExceptions = pauseOnExceptions;
+
+var _promise = __webpack_require__(1653);
+
+/**
+ *
+ * @memberof actions/pause
+ * @static
+ */
+function pauseOnExceptions(shouldPauseOnExceptions, shouldIgnoreCaughtExceptions) {
+  return ({ dispatch, client }) => {
+    dispatch({
+      type: "PAUSE_ON_EXCEPTIONS",
+      shouldPauseOnExceptions,
+      shouldIgnoreCaughtExceptions,
+      [_promise.PROMISE]: client.pauseOnExceptions(shouldPauseOnExceptions, shouldIgnoreCaughtExceptions)
+    });
+  };
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+/***/ }),
+/* 1646 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.selectFrame = selectFrame;
+
+var _sources = __webpack_require__(1373);
+
+var _expressions = __webpack_require__(1398);
+
+var _fetchScopes = __webpack_require__(1655);
+
+/**
+ * @memberof actions/pause
+ * @static
+ */
+function selectFrame(frame) {
+  return async ({ dispatch, client, getState, sourceMaps }) => {
+    dispatch({
+      type: "SELECT_FRAME",
+      frame
+    });
+
+    const { line, column } = frame.location;
+    dispatch((0, _sources.selectSource)(frame.location.sourceId, { line, column }));
+
+    dispatch((0, _expressions.evaluateExpressions)());
+    dispatch((0, _fetchScopes.fetchScopes)());
+  };
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+/***/ }),
+/* 1647 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.setQuickOpenQuery = setQuickOpenQuery;
+exports.openQuickOpen = openQuickOpen;
+exports.closeQuickOpen = closeQuickOpen;
+function setQuickOpenQuery(query) {
+  return {
+    type: "SET_QUICK_OPEN_QUERY",
+    query
+  };
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+function openQuickOpen(query) {
+  if (query != null) {
+    return { type: "OPEN_QUICK_OPEN", query };
+  }
+  return { type: "OPEN_QUICK_OPEN" };
+}
+
+function closeQuickOpen() {
+  return { type: "CLOSE_QUICK_OPEN" };
+}
+
+/***/ }),
+/* 1648 */
+/***/ (function(module, exports) {
+
+module.exports = "<svg id=\"svg2\" xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\" xmlns=\"http://www.w3.org/2000/svg\" version=\"1.1\" xmlns:cc=\"http://creativecommons.org/ns#\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" viewBox=\"0 0 354.33071 354.33071\"><metadata id=\"metadata7\"><rdf:RDF><cc:Work rdf:about><dc:format>image/svg+xml</dc:format><dc:type rdf:resource=\"http://purl.org/dc/dcmitype/StillImage\"></dc><dc:title></dc></cc:Work></rdf:RDF></metadata><g id=\"layer1\" fill=\"#EF2D5E\" transform=\"translate(0 -698.03)\"><path id=\"text3336\" d=\"m102.28 749.3-88.657 293.97h72.114l14.848-63.206h86.112l14.845 63.206h73.81l-34.36-113.69-128.53 0.00011 30.967-129.8v-50.48z\"></path><rect id=\"rect3356\" transform=\"rotate(237.21)\" height=\"79.557\" width=\"79.557\" y=\"-311.53\" x=\"-785.82\"></rect><rect id=\"rect3362\" transform=\"matrix(-.78208 .62317 -.62317 -.78208 0 0)\" height=\"95.238\" width=\"95.238\" y=\"-885.85\" x=\"318.72\"></rect><rect id=\"rect3364\" transform=\"rotate(12.582)\" height=\"95.238\" width=\"95.238\" y=\"633.02\" x=\"396.31\"></rect></g></svg>"
+
+/***/ }),
+/* 1649 */
+/***/ (function(module, exports) {
+
+module.exports = "<svg viewBox=\"0 0 256 140\" version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" preserveAspectRatio=\"xMidYMid\"><defs><linearGradient x1=\"49.9109718%\" y1=\"99.9084071%\" x2=\"49.9109718%\" y2=\"-0.0902654867%\" id=\"linearGradient-1\"><stop stop-color=\"#8AC23E\" offset=\"0%\"></stop><stop stop-color=\"#8AC23E\" stop-opacity=\"0\" offset=\"100%\"></stop></linearGradient><linearGradient x1=\"49.9835165%\" y1=\"0.0637125664%\" x2=\"49.9835165%\" y2=\"100.062389%\" id=\"linearGradient-2\"><stop stop-color=\"#698932\" offset=\"0%\"></stop><stop stop-color=\"#698932\" stop-opacity=\"0\" offset=\"100%\"></stop></linearGradient><linearGradient x1=\"50.0595611%\" y1=\"0.0637125664%\" x2=\"50.0595611%\" y2=\"100.062389%\" id=\"linearGradient-3\"><stop stop-color=\"#FFED01\" offset=\"0%\"></stop><stop stop-color=\"#FFED01\" stop-opacity=\"0\" offset=\"100%\"></stop></linearGradient><linearGradient x1=\"50.0170846%\" y1=\"0.0637125664%\" x2=\"50.0170846%\" y2=\"100.092699%\" id=\"linearGradient-4\"><stop stop-color=\"#E02A89\" offset=\"0%\"></stop><stop stop-color=\"#E02A89\" stop-opacity=\"0\" offset=\"100%\"></stop></linearGradient><linearGradient x1=\"49.9631661%\" y1=\"-0.0915929204%\" x2=\"49.9631661%\" y2=\"99.9070796%\" id=\"linearGradient-5\"><stop stop-color=\"#7F1E4F\" offset=\"0%\"></stop><stop stop-color=\"#7F1E4F\" stop-opacity=\"0\" offset=\"100%\"></stop></linearGradient><linearGradient x1=\"49.9652038%\" y1=\"-0.0915929204%\" x2=\"49.9652038%\" y2=\"99.9070796%\" id=\"linearGradient-6\"><stop stop-color=\"#E95506\" offset=\"0%\"></stop><stop stop-color=\"#E95506\" stop-opacity=\"0\" offset=\"100%\"></stop></linearGradient><linearGradient x1=\"49.9766458%\" y1=\"99.9084071%\" x2=\"49.9766458%\" y2=\"-0.0265486726%\" id=\"linearGradient-7\"><stop stop-color=\"#88D0F1\" offset=\"0%\"></stop><stop stop-color=\"#88D0F1\" stop-opacity=\"0\" offset=\"100%\"></stop></linearGradient><linearGradient x1=\"50.0205329%\" y1=\"0.0637125664%\" x2=\"50.0205329%\" y2=\"99.9986726%\" id=\"linearGradient-8\"><stop stop-color=\"#00828B\" offset=\"0%\"></stop><stop stop-color=\"#00828B\" stop-opacity=\"0\" offset=\"83.25%\"></stop></linearGradient><linearGradient x1=\"50.078022%\" y1=\"99.9752212%\" x2=\"50.078022%\" y2=\"0.0705752212%\" id=\"linearGradient-9\"><stop stop-color=\"#2073BA\" offset=\"0%\"></stop><stop stop-color=\"#2073BA\" stop-opacity=\"0\" offset=\"100%\"></stop></linearGradient><linearGradient x1=\"50.0177116%\" y1=\"0.0637125664%\" x2=\"50.0177116%\" y2=\"99.9986726%\" id=\"linearGradient-10\"><stop stop-color=\"#8ED0E1\" offset=\"0%\"></stop><stop stop-color=\"#88D0F1\" stop-opacity=\"0\" offset=\"100%\"></stop></linearGradient></defs><g><path d=\"M128.1,0 L164.2,0 C150.9,21.8 136.2,45.8 121.5,69.7 L85.4,69.7 C100.1,45.8 114.8,21.8 128.1,0 Z\" fill=\"#8DC220\"></path><path d=\"M42.7,0 L78.8,0 C71.7,11.6 64.5,23.3 57.4,34.9 C50.3,46.5 43.2,58.1 36.1,69.7 C43.2,81.3 50.3,93 57.4,104.6 C64.5,116.2 71.6,127.8 78.8,139.4 L42.7,139.4 C35.6,127.8 28.4,116.2 21.3,104.6 C14.2,93.1 7.1,81.4 0,69.8 C7.1,58.2 14.2,46.6 21.3,35 C28.4,23.3 35.6,11.7 42.7,0 Z\" fill=\"#44BFEF\"></path><path d=\"M42.7,0 L42.7,0 C57.4,24 72.1,48 85.4,69.7 L121.5,69.7 C108.2,48 93.5,24 78.8,0 L78.8,0 L42.7,0 Z\" fill=\"#00AC71\"></path><path d=\"M164.2,0 L128.1,0 C135.2,11.6 142.3,23.3 149.5,34.9 C156.6,46.5 163.7,58.1 170.9,69.7 C163.8,81.3 156.6,93 149.5,104.6 C142.4,116.2 135.3,127.8 128.1,139.4 L164.2,139.4 C171.3,127.8 178.4,116.2 185.6,104.6 C192.7,93 199.8,81.4 207,69.7 C199.8,58.1 192.7,46.5 185.6,34.9 C178.5,23.3 171.3,11.7 164.2,0 Z\" fill=\"#F9BC00\"></path><path d=\"M149.3,24.6 L113.2,24.6 C108.6,32.1 104,39.7 99.4,47.2 C94.8,54.7 90.2,62.3 85.5,69.8 L121.6,69.8 C126.2,62.3 130.9,54.7 135.5,47.2 C140,39.6 144.6,32.1 149.3,24.6 Z\" fill=\"url(#linearGradient-1)\"></path><path d=\"M100.5,45.2 L136.6,45.2 C141.2,37.7 145.8,30.1 150.4,22.6 C155,15.1 159.6,7.5 164.2,0 L128.1,0 C123.5,7.5 118.9,15.1 114.3,22.6 C109.7,30.2 105.1,37.7 100.5,45.2 Z\" fill=\"url(#linearGradient-2)\"></path><path d=\"M191.9,45.2 L155.8,45.2 C151.2,37.7 146.5,30.1 141.9,22.6 C137.3,15.1 132.7,7.5 128.1,0 L164.2,0 C168.8,7.5 173.4,15.1 178,22.6 C182.7,30.2 187.3,37.7 191.9,45.2 Z\" fill=\"url(#linearGradient-3)\"></path><path d=\"M213.2,0 L177.1,0 C184.2,11.7 191.3,23.3 198.4,34.9 C205.5,46.5 212.7,58.1 219.8,69.7 C212.7,81.3 205.5,93 198.4,104.6 C191.3,116.2 184.2,127.8 177,139.4 L213.1,139.4 C220.2,127.8 227.3,116.2 234.5,104.6 C241.6,93 248.7,81.4 255.9,69.7 C248.8,58.1 241.7,46.5 234.5,34.9 C227.5,23.3 220.3,11.7 213.2,0 Z\" fill=\"#DF1B1C\"></path><path d=\"M240.9,45.2 L204.8,45.2 C200.1,37.7 195.5,30.1 190.9,22.6 C186.3,15.1 181.7,7.5 177.1,0 L213.2,0 C217.8,7.5 222.4,15.1 227,22.6 C231.6,30.2 236.3,37.7 240.9,45.2 Z\" fill=\"url(#linearGradient-4)\"></path><path d=\"M192.2,115 L228.3,115 C232.9,107.5 237.5,100 242.1,92.4 C246.7,84.9 251.3,77.3 256,69.8 L219.8,69.8 C215.2,77.3 210.6,84.9 206,92.4 C201.4,99.9 196.8,107.4 192.2,115 Z\" fill=\"url(#linearGradient-5)\"></path><path d=\"M143.2,115 L179.3,115 C183.9,107.5 188.5,99.9 193.1,92.4 C197.7,84.9 202.3,77.3 207,69.8 L170.9,69.8 C166.3,77.3 161.7,84.9 157.1,92.4 C152.4,99.9 147.8,107.4 143.2,115 Z\" fill=\"url(#linearGradient-6)\"></path><path d=\"M63.8,24.6 L27.7,24.6 C23.1,32.1 18.5,39.7 13.9,47.2 C9.2,54.7 4.6,62.3 0,69.8 L36.1,69.8 C40.7,62.3 45.3,54.8 49.9,47.2 C54.5,39.7 59.1,32.1 63.8,24.6 Z\" fill=\"url(#linearGradient-7)\"></path><path d=\"M15,45.2 L51.1,45.2 C55.7,37.7 60.3,30.1 64.9,22.6 C69.6,15.1 74.2,7.5 78.8,0 L42.7,0 C38.1,7.5 33.5,15 28.9,22.6 C24.3,30.1 19.7,37.7 15,45.2 Z\" fill=\"url(#linearGradient-8)\"></path><path d=\"M15,94.3 L51.1,94.3 C55.7,101.8 60.3,109.4 64.9,116.9 C69.5,124.4 74.1,132 78.7,139.5 L42.6,139.5 C38,132 33.3,124.5 28.7,116.9 C24.2,109.4 19.6,101.9 15,94.3 Z\" fill=\"url(#linearGradient-9)\"></path><path d=\"M106.5,45.2 L70.4,45.2 C65.8,37.7 61.2,30.1 56.6,22.6 C51.9,15.1 47.3,7.5 42.7,0 L78.8,0 C83.4,7.5 88,15 92.6,22.6 C97.3,30.1 101.9,37.7 106.5,45.2 Z\" fill=\"url(#linearGradient-10)\"></path></g></svg>"
+
+/***/ }),
+/* 1650 */
+/***/ (function(module, exports) {
+
+module.exports = "<svg viewBox=\"0 0 512 512\" version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" style=\"background: #FFFFFF;\"><title>Zeit - Black on white logo</title><defs><linearGradient x1=\"114.720775%\" y1=\"181.283245%\" x2=\"39.5399306%\" y2=\"100%\" id=\"linearGradient-1\"><stop stop-color=\"#FFFFFF\" offset=\"0%\"></stop><stop stop-color=\"#000000\" offset=\"100%\"></stop></linearGradient></defs><g id=\"Page-1\" stroke=\"none\" stroke-width=\"1\" fill=\"none\" fill-rule=\"evenodd\"><g id=\"Black-on-white\" fill=\"url(#linearGradient-1)\"><polygon id=\"Triangle-3-Copy\" points=\"254 156 367 356 141 356\"></polygon></g></g></svg>"
+
+/***/ }),
+/* 1651 */
+/***/ (function(module, exports) {
+
+module.exports = "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" viewBox=\"0 0 1000 1000\"><style>.st0{display:none}.st1{display:inline}.st2{fill:#222}.st3{fill:#41b883}.st4{fill:#328170}.st5{fill:#35495e}</style><g id=\"express\" class=\"st0\"><g class=\"st1\"><path class=\"st2\" d=\"M24.5 870.5v-376H494v-22H24.5v-343h499.1v-22H2.5v785H528v-22H24.5z\"></path><path class=\"st2\" d=\"M951.3 327.4L756.7 583.6 566.5 327.4h-28.6l205.6 272.7-225.4 292.4h26.4l212.2-276 213.3 276h27.5L771 600l206.7-272.6h-26.4z\"></path></g></g><g id=\"nuxt\"><path class=\"st3\" d=\"M317.9 852H3.7l408.1-704 408.1 704H507.7\"></path><path class=\"st4\" d=\"M779.8 852h216.5l-354-608.5-351 608.5h216.5\"></path><path class=\"st5\" d=\"M651.2 852h159.5L549.9 403.8 291.3 852h159.5\"></path></g></svg>"
+
+/***/ }),
+/* 1652 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.QuickOpenModal = undefined;
+
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 var _react = __webpack_require__(0);
 
@@ -45072,13 +45112,15 @@ var _redux = __webpack_require__(3);
 
 var _fuzzaldrinPlus = __webpack_require__(161);
 
-var _selectors = __webpack_require__(1352);
-
 var _actions = __webpack_require__(1354);
 
 var _actions2 = _interopRequireDefault(_actions);
 
+var _selectors = __webpack_require__(1352);
+
 var _resultList = __webpack_require__(1406);
+
+var _quickOpen = __webpack_require__(1636);
 
 var _Modal = __webpack_require__(1403);
 
@@ -45092,205 +45134,232 @@ var _ResultList = __webpack_require__(1445);
 
 var _ResultList2 = _interopRequireDefault(_ResultList);
 
-__webpack_require__(1297);
-
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-function formatSymbol(symbol) {
-  return {
-    id: `${symbol.name}:${symbol.location.start.line}`,
-    title: symbol.name,
-    subtitle: `:${symbol.location.start.line}`,
-    value: symbol.name,
-    location: symbol.location
-  };
-}
-
-class SymbolModal extends _react.Component {
-
+class QuickOpenModal extends _react.Component {
   constructor(props) {
     super(props);
 
-    this.onClick = e => {
-      e.stopPropagation();
+    this.closeModal = () => {
+      this.props.closeQuickOpen();
     };
 
-    this.onChange = e => {
-      const { selectedSource } = this.props;
-      if (!selectedSource || !selectedSource.get("text")) {
+    this.searchSources = query => {
+      if (query == "") {
+        const results = this.props.sources;
+        this.setState({ results });
         return;
       }
 
-      this.setState({ query: e.target.value });
-      return this.updateResults(e.target.value);
+      const { searchType } = this.props;
+
+      if (searchType === "gotoSource") {
+        const [baseQuery] = query.split(":");
+        const results = (0, _fuzzaldrinPlus.filter)(this.props.sources, baseQuery, { key: "value" });
+        this.setState({ results });
+      } else {
+        const results = (0, _fuzzaldrinPlus.filter)(this.props.sources, query, { key: "value" });
+        this.setState({ results });
+      }
     };
 
-    this.closeModal = () => {
-      this.props.closeActiveSearch();
-      this.props.clearHighlightLineRange();
+    this.searchSymbols = query => {
+      const { symbols: { functions, variables }, searchType } = this.props;
+
+      let results = functions;
+      if (searchType === "variables") {
+        results = variables;
+      }
+      if (query === "@" || query === "#") {
+        this.setState({ results });
+        return;
+      }
+
+      results = (0, _fuzzaldrinPlus.filter)(results, query.slice(1), {
+        key: "value"
+      });
+
+      this.setState({ results });
+    };
+
+    this.updateResults = query => {
+      if (this.isSymbolSearch()) {
+        return this.searchSymbols(query);
+      }
+      return this.searchSources(query);
     };
 
     this.selectResultItem = (e, item) => {
-      const { selectSource, selectedSource } = this.props;
-
-      if (!selectedSource || !item) {
+      if (item == null) {
         return;
       }
-
-      selectSource(selectedSource.get("id"), {
-        line: item.location.start.line
-      });
+      const { selectSource, selectedSource, query, searchType } = this.props;
+      if (this.isSymbolSearch()) {
+        if (selectedSource == null) {
+          return;
+        }
+        selectSource(selectedSource.get("id"), {
+          location: _extends({}, item.location != null ? { line: item.location.start.line } : {})
+        });
+      } else if (searchType === "gotoSource") {
+        const location = (0, _quickOpen.parseLineColumn)(query);
+        if (location != null) {
+          selectSource(item.id, { location });
+        }
+      } else {
+        selectSource(item.id);
+      }
 
       this.closeModal();
     };
 
-    this.updateResults = query => {
-      const { symbolType, symbols } = this.props;
-
-      let symbolSearchResults = symbols[symbolType];
-      if (query == "") {
-        this.setState({ results: symbolSearchResults });
+    this.onSelectResultItem = item => {
+      const {
+        selectSource,
+        selectedSource,
+        highlightLineRange,
+        searchType
+      } = this.props;
+      if (!this.isSymbolSearch() || selectedSource == null) {
         return;
       }
 
-      symbolSearchResults = (0, _fuzzaldrinPlus.filter)(symbolSearchResults, query, {
-        key: "value"
-      });
+      if (searchType === "variables") {
+        selectSource(selectedSource.get("id"), {
+          location: _extends({}, item.location != null ? { line: item.location.start.line } : {})
+        });
+      }
 
-      this.setState({ results: symbolSearchResults });
+      if (searchType === "functions") {
+        highlightLineRange(_extends({}, item.location != null ? { start: item.location.start.line, end: item.location.end.line } : {}, {
+          sourceId: selectedSource.get("id")
+        }));
+      }
     };
 
     this.traverseResults = direction => {
-      const { resultsIndex, results } = this.state;
-      const resultCount = this.resultsCount();
-      const index = resultsIndex + direction;
+      const { selectedIndex, results } = this.state;
+      const resultCount = this.resultCount();
+      const index = selectedIndex + direction;
       const nextIndex = (index + resultCount) % resultCount;
 
-      this.setState({ resultsIndex: nextIndex });
+      this.setState({ selectedIndex: nextIndex });
 
-      if (results) {
+      if (results != null) {
         this.onSelectResultItem(results[nextIndex]);
       }
     };
 
-    this.onKeyUp = e => {
-      e.preventDefault();
-      const { enabled } = this.props;
-      const { results, resultsIndex } = this.state;
+    this.onChange = e => {
+      const { selectedSource, setQuickOpenQuery } = this.props;
+      setQuickOpenQuery(e.target.value);
+      const noSource = !selectedSource || !selectedSource.get("text");
+      if (this.isSymbolSearch() && noSource) {
+        return;
+      }
+      this.updateResults(e.target.value);
+    };
+
+    this.onKeyDown = e => {
+      const {
+        selectSource,
+        selectedSource,
+        enabled,
+        query,
+        searchType
+      } = this.props;
+      const { results, selectedIndex } = this.state;
 
       if (!enabled || !results) {
         return;
       }
 
-      if (e.key === "ArrowUp") {
-        this.traverseResults(-1);
-      } else if (e.key === "ArrowDown") {
-        this.traverseResults(1);
+      const canTraverse = searchType !== "goto";
+      if (e.key === "ArrowUp" && canTraverse) {
+        return this.traverseResults(-1);
+      } else if (e.key === "ArrowDown" && canTraverse) {
+        return this.traverseResults(1);
       } else if (e.key === "Enter") {
-        this.selectResultItem(e, results[resultsIndex]);
-        this.closeModal();
+        if (searchType === "goto") {
+          if (!selectedSource) {
+            return;
+          }
+          const location = (0, _quickOpen.parseLineColumn)(query);
+          if (location != null) {
+            selectSource(selectedSource.get("id"), { location });
+          }
+        } else {
+          this.selectResultItem(e, results[selectedIndex]);
+        }
+        return this.closeModal();
       } else if (e.key === "Tab") {
-        this.closeModal();
+        return this.closeModal();
       }
     };
 
-    this.renderResults = () => {
-      const { resultsIndex, results } = this.state;
+    this.resultCount = () => this.state.results ? this.state.results.length : 0;
 
-      const { enabled } = this.props;
-      if (!enabled || !results) {
-        return null;
-      }
+    this.isSymbolSearch = () => ["functions", "variables"].includes(this.props.searchType);
 
-      return _react2.default.createElement(_ResultList2.default, {
-        key: "results",
-        items: results,
-        selected: resultsIndex,
-        selectItem: this.selectResultItem,
-        ref: "resultList"
-      });
+    this.state = {
+      results: null,
+      selectedIndex: 0
     };
-
-    this.buildSummaryMsg = () => {
-      const { resultsIndex } = this.state;
-      const count = this.resultsCount();
-
-      if (count > 1) {
-        return L10N.getFormatStr("editor.searchResults", resultsIndex + 1, count);
-      } else if (count === 1) {
-        return L10N.getFormatStr("editor.singleResult");
-      }
-    };
-
-    this.buildPlaceHolder = () => {
-      const { symbolType } = this.props;
-      return L10N.getFormatStr(`symbolSearch.search.${symbolType}Placeholder`);
-    };
-
-    this.state = { results: null, query: "", resultsIndex: 0 };
   }
 
   componentDidMount() {
-    this.updateResults(this.state.query);
+    this.updateResults(this.props.query);
   }
 
-  componentDidUpdate(prevProps, prevState) {
+  componentDidUpdate(prevProps) {
     if (this.refs.resultList && this.refs.resultList.refs) {
-      (0, _resultList.scrollList)(this.refs.resultList.refs, this.state.resultsIndex);
+      (0, _resultList.scrollList)(this.refs.resultList.refs, this.state.selectedIndex);
     }
 
-    if (!prevProps.enabled && this.props.enabled) {
-      this.updateResults(this.state.query);
+    const nowEnabled = !prevProps.enabled && this.props.enabled;
+    const queryChanged = prevProps.query !== this.props.query;
+    if (nowEnabled || queryChanged) {
+      this.updateResults(this.props.query);
     }
   }
 
-  onSelectResultItem(item) {
-    const {
-      selectSource,
-      selectedSource,
-      symbolType,
-      highlightLineRange
-    } = this.props;
+  renderResults() {
+    const { enabled, searchType } = this.props;
+    const { selectedIndex, results } = this.state;
 
-    if (selectedSource && symbolType !== "functions") {
-      selectSource(selectedSource.get("id"), {
-        line: item.location.start.line
-      });
+    if (!enabled || !results) {
+      return null;
     }
 
-    if (selectedSource && symbolType === "functions") {
-      highlightLineRange({
-        start: item.location.start.line,
-        end: item.location.end.line,
-        sourceId: selectedSource.get("id")
-      });
-    }
+    return _react2.default.createElement(_ResultList2.default, _extends({
+      key: "results",
+      items: results,
+      selected: selectedIndex,
+      selectItem: this.selectResultItem,
+      ref: "resultList"
+    }, searchType === "sources" || searchType === "gotoSource" ? { size: "big" } : {}));
   }
 
   renderInput() {
-    const { query } = this.state;
+    const { query, searchType } = this.props;
+    const summaryMsg = L10N.getFormatStr("sourceSearch.resultsSummary1", this.resultCount());
+
+    const showSummary = searchType === "sources" || searchType === "functions" || searchType === "variables";
 
     return _react2.default.createElement(
       "div",
       { key: "input", className: "input-wrapper" },
-      _react2.default.createElement(_SearchInput2.default, {
+      _react2.default.createElement(_SearchInput2.default, _extends({
         query: query,
-        count: this.resultsCount(),
-        placeholder: this.buildPlaceHolder(),
-        summaryMsg: this.buildSummaryMsg(),
+        count: this.resultCount(),
+        placeholder: L10N.getStr("sourceSearch.search")
+      }, showSummary === true ? { summaryMsg } : {}, {
         onChange: this.onChange,
-        onKeyUp: this.onKeyUp,
-        handleNext: () => this.traverseResults(1),
-        handlePrev: () => this.traverseResults(-1),
+        onKeyDown: this.onKeyDown,
         handleClose: this.closeModal
-      })
+      }))
     );
   }
-
-  resultsCount() {
-    return this.state.results ? this.state.results.length : 0;
-  }
-
   render() {
     const { enabled } = this.props;
 
@@ -45307,34 +45376,207 @@ class SymbolModal extends _react.Component {
   }
 }
 
-SymbolModal.contextTypes = {
-  shortcuts: _propTypes2.default.object
-};
-
-function _getFormattedSymbols(state, source) {
-  if (!source) {
-    return { variables: [], functions: [] };
+exports.QuickOpenModal = QuickOpenModal;
+function mapStateToProps(state) {
+  const selectedSource = (0, _selectors.getSelectedSource)(state);
+  let symbols = null;
+  if (selectedSource != null) {
+    symbols = (0, _selectors.getSymbols)(state, selectedSource.toJS());
   }
-
-  const { variables, functions } = (0, _selectors.getSymbols)(state, source.toJS());
-
   return {
-    variables: variables.map(formatSymbol),
-    functions: functions.map(formatSymbol)
+    enabled: (0, _selectors.getQuickOpenEnabled)(state),
+    sources: (0, _quickOpen.formatSources)((0, _selectors.getSources)(state)),
+    selectedSource,
+    symbols: (0, _quickOpen.formatSymbols)(symbols),
+    query: (0, _selectors.getQuickOpenQuery)(state),
+    searchType: (0, _selectors.getQuickOpenType)(state)
   };
 }
 
-exports.default = (0, _reactRedux.connect)(state => {
-  const source = (0, _selectors.getSelectedSource)(state);
-  return {
-    enabled: Boolean((0, _selectors.getActiveSearch)(state) === "symbol" && source),
-    symbolType: (0, _selectors.getSymbolSearchType)(state),
-    symbols: _getFormattedSymbols(state, source)
-  };
-}, dispatch => (0, _redux.bindActionCreators)(_actions2.default, dispatch))(SymbolModal);
+exports.default = (0, _reactRedux.connect)(mapStateToProps, dispatch => (0, _redux.bindActionCreators)(_actions2.default, dispatch))(QuickOpenModal);
 
 /***/ }),
-/* 1617 */
+/* 1653 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.promise = exports.PROMISE = undefined;
+
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+var _lodash = __webpack_require__(2);
+
+var _DevToolsUtils = __webpack_require__(1432);
+
+let seqIdVal = 1;
+
+function seqIdGen() {
+  return seqIdVal++;
+}
+
+function filterAction(action) {
+  return (0, _lodash.fromPairs)((0, _lodash.toPairs)(action).filter(pair => pair[0] !== PROMISE));
+}
+
+function promiseMiddleware({
+  dispatch,
+  getState
+}) {
+  return next => action => {
+    if (!(PROMISE in action)) {
+      return next(action);
+    }
+
+    const promiseInst = action[PROMISE];
+    const seqId = seqIdGen().toString();
+
+    // Create a new action that doesn't have the promise field and has
+    // the `seqId` field that represents the sequence id
+    action = _extends({}, filterAction(action), { seqId });
+
+    dispatch(_extends({}, action, { status: "start" }));
+
+    // Return the promise so action creators can still compose if they
+    // want to.
+    return new Promise((resolve, reject) => {
+      promiseInst.then(value => {
+        (0, _DevToolsUtils.executeSoon)(() => {
+          dispatch(_extends({}, action, { status: "done", value: value }));
+          resolve(value);
+        });
+      }, error => {
+        (0, _DevToolsUtils.executeSoon)(() => {
+          dispatch(_extends({}, action, {
+            status: "error",
+            error: error.message || error
+          }));
+          reject(error);
+        });
+      });
+    });
+  };
+}
+
+const PROMISE = exports.PROMISE = "@@dispatch/promise";
+exports.promise = promiseMiddleware;
+
+/***/ }),
+/* 1654 */,
+/* 1655 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.fetchScopes = fetchScopes;
+
+var _selectors = __webpack_require__(1352);
+
+var _pause = __webpack_require__(1400);
+
+var _devtoolsSourceMap = __webpack_require__(1360);
+
+function fetchScopes() {
+  return async function ({ dispatch, getState, client, sourceMaps }) {
+    const frame = (0, _selectors.getSelectedFrame)(getState());
+
+    if (!frame || (0, _selectors.getFrameScope)(getState(), frame.id)) {
+      return;
+    }
+
+    const scopes = await client.getFrameScopes(frame);
+    dispatch({
+      type: "ADD_SCOPES",
+      frame,
+      scopes
+    });
+
+    const sourceRecord = (0, _selectors.getSource)(getState(), frame.generatedLocation.sourceId);
+
+    if (sourceRecord.get("isWasm")) {
+      return;
+    }
+
+    if ((0, _devtoolsSourceMap.isGeneratedId)(frame.location.sourceId)) {
+      return;
+    }
+
+    const mappedScopes = await (0, _pause.updateScopeBindings)(scopes, frame.generatedLocation, sourceMaps);
+
+    dispatch({
+      type: "MAP_SCOPES",
+      frame,
+      scopes: mappedScopes
+    });
+  };
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+/***/ }),
+/* 1656 */,
+/* 1657 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.getAsyncTimes = getAsyncTimes;
+exports.steppingTimings = steppingTimings;
+
+var _lodash = __webpack_require__(2);
+
+function getAsyncTimes(name) {
+  return (0, _lodash.zip)(window.performance.getEntriesByName(`${name}_start`), window.performance.getEntriesByName(`${name}_end`)).map(([start, end]) => +(end.startTime - start.startTime).toPrecision(2));
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+function getTimes(name) {
+  return window.performance.getEntriesByName(name).map(time => +time.duration.toPrecision(2));
+}
+
+function getStats(times) {
+  if (times.length == 0) {
+    return { times: [], avg: null, median: null };
+  }
+  const avg = times.reduce((sum, time) => time + sum, 0) / times.length;
+  const sortedtimings = [...times].sort((a, b) => a - b);
+  const median = sortedtimings[times.length / 2];
+  return {
+    times,
+    avg: +avg.toPrecision(2),
+    median: +median.toPrecision(2)
+  };
+}
+
+function steppingTimings() {
+  const commandTimings = getAsyncTimes("COMMAND");
+  const pausedTimings = getTimes("PAUSED");
+
+  return {
+    commands: getStats(commandTimings),
+    paused: getStats(pausedTimings)
+  };
+}
+
+// console.log("..", asyncTimes("COMMAND"));
+
+/***/ }),
+/* 1658 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -45344,122 +45586,357 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
-var _react = __webpack_require__(0);
-
-var _react2 = _interopRequireDefault(_react);
-
-var _reactRedux = __webpack_require__(1189);
-
 var _redux = __webpack_require__(3);
 
-var _selectors = __webpack_require__(1352);
+var _waitService = __webpack_require__(1659);
 
-var _actions = __webpack_require__(1354);
+var _log = __webpack_require__(1660);
 
-var _actions2 = _interopRequireDefault(_actions);
+var _history = __webpack_require__(1661);
 
-var _Modal = __webpack_require__(1403);
+var _promise = __webpack_require__(1653);
 
-var _Modal2 = _interopRequireDefault(_Modal);
+var _thunk = __webpack_require__(1662);
 
-var _SearchInput = __webpack_require__(1379);
+var _timing = __webpack_require__(1663);
 
-var _SearchInput2 = _interopRequireDefault(_SearchInput);
+/**
+ * This creates a dispatcher with all the standard middleware in place
+ * that all code requires. It can also be optionally configured in
+ * various ways, such as logging and recording.
+ *
+ * @param {object} opts:
+ *        - log: log all dispatched actions to console
+ *        - history: an array to store every action in. Should only be
+ *                   used in tests.
+ *        - middleware: array of middleware to be included in the redux store
+ * @memberof utils/create-store
+ * @static
+ */
 
-__webpack_require__(1297);
 
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+/**
+ * @memberof utils/create-store
+ * @static
+ */
+const configureStore = (opts = {}) => {
+  const middleware = [(0, _thunk.thunk)(opts.makeThunkArgs), _promise.promise,
 
-class GotoLineModal extends _react.Component {
+  // Order is important: services must go last as they always
+  // operate on "already transformed" actions. Actions going through
+  // them shouldn't have any special fields like promises, they
+  // should just be normal JSON objects.
+  _waitService.waitUntilService];
 
-  constructor(props) {
-    super(props);
-
-    this.onClick = e => {
-      e.stopPropagation();
-    };
-
-    this.onChange = e => {
-      const { selectedSource } = this.props;
-      if (!selectedSource || !selectedSource.get("text")) {
-        return;
-      }
-
-      this.setState({ query: e.target.value });
-    };
-
-    this.closeModal = () => {
-      this.props.closeActiveSearch();
-      this.props.clearHighlightLineRange();
-    };
-
-    this.onKeyUp = e => {
-      e.preventDefault();
-      const { selectSource, selectedSource, enabled } = this.props;
-      const { query } = this.state;
-
-      if (!enabled || !selectedSource) {
-        return;
-      }
-
-      if (e.key === "Enter" && query != null) {
-        const linenumber = parseInt(query.replace(/[^\d+]/g, ""), 10);
-        if (!isNaN(linenumber)) {
-          selectSource(selectedSource.get("id"), { line: linenumber });
-        }
-        this.closeModal();
-        return;
-      }
-
-      if (e.key === "Tab") {
-        this.closeModal();
-        return;
-      }
-      return;
-    };
-
-    this.buildPlaceHolder = () => L10N.getFormatStr("gotoLineModal.placeholder");
-
-    this.state = { query: "" };
+  if (opts.history) {
+    middleware.push((0, _history.history)(opts.history));
   }
 
-  renderInput() {
-    const { query } = this.state;
-
-    return _react2.default.createElement(
-      "div",
-      { key: "input", className: "input-wrapper" },
-      _react2.default.createElement(_SearchInput2.default, {
-        query: query,
-        placeholder: this.buildPlaceHolder(),
-        onChange: this.onChange,
-        onKeyUp: this.onKeyUp,
-        handleClose: this.closeModal
-      })
-    );
+  if (opts.middleware) {
+    opts.middleware.forEach(fn => middleware.push(fn));
   }
 
-  render() {
-    const { enabled } = this.props;
+  if (opts.log) {
+    middleware.push(_log.log);
+  }
 
-    if (!enabled) {
-      return null;
+  if (opts.timing) {
+    middleware.push(_timing.timing);
+  }
+
+  // Hook in the redux devtools browser extension if it exists
+  const devtoolsExt = typeof window === "object" && window.devToolsExtension ? window.devToolsExtension() : f => f;
+
+  return (0, _redux.applyMiddleware)(...middleware)(devtoolsExt(_redux.createStore));
+}; /* This Source Code Form is subject to the terms of the Mozilla Public
+    * License, v. 2.0. If a copy of the MPL was not distributed with this
+    * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+/* global window */
+
+/**
+ * Redux store utils
+ * @module utils/create-store
+ */
+
+exports.default = configureStore;
+
+/***/ }),
+/* 1659 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.waitUntilService = waitUntilService;
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+/* global window */
+
+/**
+ * A middleware which acts like a service, because it is stateful
+ * and "long-running" in the background. It provides the ability
+ * for actions to install a function to be run once when a specific
+ * condition is met by an action coming through the system. Think of
+ * it as a thunk that blocks until the condition is met. Example:
+ *
+ * ```js
+ * const services = { WAIT_UNTIL: require('wait-service').NAME };
+ *
+ * { type: services.WAIT_UNTIL,
+ *   predicate: action => action.type === "ADD_ITEM",
+ *   run: (dispatch, getState, action) => {
+ *     // Do anything here. You only need to accept the arguments
+ *     // if you need them. `action` is the action that satisfied
+ *     // the predicate.
+ *   }
+ * }
+ * ```
+ */
+const NAME = exports.NAME = "@@service/waitUntil";
+
+function waitUntilService({ dispatch, getState }) {
+  let pending = [];
+
+  function checkPending(action) {
+    const readyRequests = [];
+    const stillPending = [];
+
+    // Find the pending requests whose predicates are satisfied with
+    // this action. Wait to run the requests until after we update the
+    // pending queue because the request handler may synchronously
+    // dispatch again and run this service (that use case is
+    // completely valid).
+    for (const request of pending) {
+      if (request.predicate(action)) {
+        readyRequests.push(request);
+      } else {
+        stillPending.push(request);
+      }
     }
 
-    return _react2.default.createElement(
-      _Modal2.default,
-      { "in": enabled, handleClose: this.closeModal },
-      this.renderInput()
-    );
+    pending = stillPending;
+    for (const request of readyRequests) {
+      request.run(dispatch, getState, action);
+    }
+  }
+
+  return next => action => {
+    if (action.type === NAME) {
+      pending.push(action);
+      return null;
+    }
+    const result = next(action);
+    checkPending(action);
+    return result;
+  };
+}
+
+/***/ }),
+/* 1660 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+
+var _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                                                                                                                                                                                                                                   * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                                                                                                                                                                                                                                   * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+/* global window */
+
+exports.log = log;
+
+var _devtoolsConfig = __webpack_require__(1355);
+
+const blacklist = ["LOAD_OBJECT_PROPERTIES", "SET_SYMBOLS", "OUT_OF_SCOPE_LOCATIONS"];
+
+function cloneAction(action) {
+  action = action || {};
+  action = _extends({}, action);
+
+  // ADD_TAB, ...
+  if (action.source && action.source.text) {
+    const source = _extends({}, action.source, { text: "" });
+    action.source = source;
+  }
+
+  // LOAD_SOURCE_TEXT
+  if (action.text) {
+    action.text = "";
+  }
+
+  if (action.value && action.value.text) {
+    const value = _extends({}, action.value, { text: "" });
+    action.value = value;
+  }
+
+  return action;
+}
+
+function formatFrame(frame) {
+  const { id, location, displayName } = frame;
+  return { id, location, displayName };
+}
+
+function formatPause(pause) {
+  return _extends({}, pause, {
+    pauseInfo: { why: pause.pauseInfo.why },
+    scopes: [],
+    frames: pause.frames.map(formatFrame),
+    loadedObjects: []
+  });
+}
+
+function serializeAction(action) {
+  try {
+    action = cloneAction(action);
+    if (blacklist.includes(action.type)) {
+      action = {};
+    }
+
+    if (action.type === "PAUSED") {
+      action = formatPause(action);
+    }
+
+    // dump(`> ${action.type}...\n ${JSON.stringify(action)}\n`);
+    return JSON.stringify(action);
+  } catch (e) {
+    console.error(e);
   }
 }
 
-exports.default = (0, _reactRedux.connect)(state => {
-  const source = (0, _selectors.getSelectedSource)(state);
-  return {
-    enabled: Boolean((0, _selectors.getActiveSearch)(state) === "line" && source)
+/**
+ * A middleware that logs all actions coming through the system
+ * to the console.
+ */
+function log({ dispatch, getState }) {
+  return next => action => {
+    const asyncMsg = !action.status ? "" : `[${action.status}]`;
+
+    if ((0, _devtoolsConfig.isTesting)()) {
+      dump(`[ACTION] ${action.type} ${asyncMsg} - ${serializeAction(action)}\n`);
+    } else {
+      console.log(action, asyncMsg);
+    }
+
+    next(action);
   };
-}, dispatch => (0, _redux.bindActionCreators)(_actions2.default, dispatch))(GotoLineModal);
+}
+
+/***/ }),
+/* 1661 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.history = undefined;
+
+var _devtoolsConfig = __webpack_require__(1355);
+
+/**
+ * A middleware that stores every action coming through the store in the passed
+ * in logging object. Should only be used for tests, as it collects all
+ * action information, which will cause memory bloat.
+ */
+const history = exports.history = (log = []) => ({
+  dispatch,
+  getState
+}) => {
+  return next => action => {
+    if ((0, _devtoolsConfig.isDevelopment)()) {
+      log.push(action);
+    }
+
+    return next(action);
+  };
+}; /* This Source Code Form is subject to the terms of the Mozilla Public
+    * License, v. 2.0. If a copy of the MPL was not distributed with this
+    * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+/* global window */
+
+/***/ }),
+/* 1662 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.thunk = thunk;
+
+
+/**
+ * A middleware that allows thunks (functions) to be dispatched. If
+ * it's a thunk, it is called with an argument that contains
+ * `dispatch`, `getState`, and any additional args passed in via the
+ * middleware constructure. This allows the action to create multiple
+ * actions (most likely asynchronously).
+ */
+function thunk(makeArgs) {
+  return ({ dispatch, getState }) => {
+    const args = { dispatch, getState };
+
+    return next => action => {
+      return typeof action === "function" ? action(makeArgs ? makeArgs(args, getState()) : args) : next(action);
+    };
+  };
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+/* global window */
+
+/***/ }),
+/* 1663 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.timing = timing;
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/* global window */
+
+/**
+ * Redux middleware that sets performance markers for all actions such that they
+ * will appear in performance tooling under the User Timing API
+ */
+
+const mark = window.performance && window.performance.mark ? window.performance.mark.bind(window.performance) : () => {};
+
+const measure = window.performance && window.performance.measure ? window.performance.measure.bind(window.performance) : () => {};
+
+function timing(store) {
+  return next => action => {
+    mark(`${action.type}_start`);
+    const result = next(action);
+    mark(`${action.type}_end`);
+    measure(`${action.type}`, `${action.type}_start`, `${action.type}_end`);
+    return result;
+  };
+}
 
 /***/ })
 /******/ ]);

@@ -16,7 +16,6 @@
 #include "nsGenericHTMLElement.h"
 #include "nsIEditor.h"
 #include "nsTextFragment.h"
-#include "nsIDOMHTMLTextAreaElement.h"
 #include "nsNameSpaceManager.h"
 #include "nsCheckboxRadioFrame.h" //for registering accesskeys
 
@@ -136,7 +135,7 @@ nsTextControlFrame::~nsTextControlFrame()
 }
 
 void
-nsTextControlFrame::DestroyFrom(nsIFrame* aDestructRoot)
+nsTextControlFrame::DestroyFrom(nsIFrame* aDestructRoot, PostDestroyData& aPostDestroyData)
 {
   mScrollEvent.Revoke();
 
@@ -156,11 +155,11 @@ nsTextControlFrame::DestroyFrom(nsIFrame* aDestructRoot)
   }
 
   // FIXME(emilio, bug 1400618): Do this after the child frames are destroyed.
-  DestroyAnonymousContent(mRootNode.forget());
-  DestroyAnonymousContent(mPlaceholderDiv.forget());
-  DestroyAnonymousContent(mPreviewDiv.forget());
+  aPostDestroyData.AddAnonymousContent(mRootNode.forget());
+  aPostDestroyData.AddAnonymousContent(mPlaceholderDiv.forget());
+  aPostDestroyData.AddAnonymousContent(mPreviewDiv.forget());
 
-  nsContainerFrame::DestroyFrom(aDestructRoot);
+  nsContainerFrame::DestroyFrom(aDestructRoot, aPostDestroyData);
 }
 
 LogicalSize
@@ -1162,22 +1161,20 @@ nsTextControlFrame::AttributeChanged(int32_t         aNameSpaceID,
 }
 
 
-nsresult
+void
 nsTextControlFrame::GetText(nsString& aText)
 {
-  nsresult rv = NS_OK;
   nsCOMPtr<nsITextControlElement> txtCtrl = do_QueryInterface(GetContent());
   NS_ASSERTION(txtCtrl, "Content not a text control element");
   if (IsSingleLineTextControl()) {
     // There will be no line breaks so we can ignore the wrap property.
     txtCtrl->GetTextEditorValue(aText, true);
   } else {
-    nsCOMPtr<nsIDOMHTMLTextAreaElement> textArea = do_QueryInterface(mContent);
+    HTMLTextAreaElement* textArea = HTMLTextAreaElement::FromContent(mContent);
     if (textArea) {
-      rv = textArea->GetValue(aText);
+      textArea->GetValue(aText);
     }
   }
-  return rv;
 }
 
 

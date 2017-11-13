@@ -158,7 +158,18 @@ class MediaDecoder::BackgroundVideoDecodingPermissionObserver final :
       if (observerService) {
         observerService->AddObserver(this, "unselected-tab-hover", false);
         mIsRegisteredForEvent = true;
-        EnableEvent();
+        if (nsContentUtils::IsInStableOrMetaStableState()) {
+          // Events shall not be fired synchronously to prevent anything visible
+          // from the scripts while we are in stable state.
+          if (nsCOMPtr<nsIDocument> doc = GetOwnerDoc()) {
+            doc->Dispatch(TaskCategory::Other,
+              NewRunnableMethod(
+                "MediaDecoder::BackgroundVideoDecodingPermissionObserver::EnableEvent",
+                this, &MediaDecoder::BackgroundVideoDecodingPermissionObserver::EnableEvent));
+          }
+        } else {
+          EnableEvent();
+        }
       }
     }
 
@@ -170,7 +181,18 @@ class MediaDecoder::BackgroundVideoDecodingPermissionObserver final :
         mIsRegisteredForEvent = false;
         mDecoder->mIsBackgroundVideoDecodingAllowed = false;
         mDecoder->UpdateVideoDecodeMode();
-        DisableEvent();
+        if (nsContentUtils::IsInStableOrMetaStableState()) {
+          // Events shall not be fired synchronously to prevent anything visible
+          // from the scripts while we are in stable state.
+          if (nsCOMPtr<nsIDocument> doc = GetOwnerDoc()) {
+            doc->Dispatch(TaskCategory::Other,
+              NewRunnableMethod(
+                "MediaDecoder::BackgroundVideoDecodingPermissionObserver::DisableEvent",
+                this, &MediaDecoder::BackgroundVideoDecodingPermissionObserver::DisableEvent));
+          }
+        } else {
+          DisableEvent();
+        }
       }
     }
   private:
@@ -1401,18 +1423,15 @@ MediaDecoder::CanPlayThrough()
   return val;
 }
 
-void
+RefPtr<SetCDMPromise>
 MediaDecoder::SetCDMProxy(CDMProxy* aProxy)
 {
   MOZ_ASSERT(NS_IsMainThread());
-  RefPtr<CDMProxy> proxy = aProxy;
-  RefPtr<MediaFormatReader> reader = mReader;
-  nsCOMPtr<nsIRunnable> r = NS_NewRunnableFunction(
-    "MediaFormatReader::SetCDMProxy",
-    [reader, proxy]() {
-    reader->SetCDMProxy(proxy);
-    });
-  mReader->OwnerThread()->Dispatch(r.forget());
+  return InvokeAsync<RefPtr<CDMProxy>>(mReader->OwnerThread(),
+                                       mReader.get(),
+                                       __func__,
+                                       &MediaFormatReader::SetCDMProxy,
+                                       aProxy);
 }
 
 bool
@@ -1531,7 +1550,7 @@ MediaDecoder::GetDebugInfo()
     PlayStateStr());
 }
 
-void
+RefPtr<GenericPromise>
 MediaDecoder::DumpDebugInfo()
 {
   MOZ_DIAGNOSTIC_ASSERT(!IsShutdown());
@@ -1546,17 +1565,20 @@ MediaDecoder::DumpDebugInfo()
 
   if (!GetStateMachine()) {
     DUMP("%s", str.get());
-    return;
+    return GenericPromise::CreateAndResolve(true, __func__);
   }
 
-  GetStateMachine()->RequestDebugInfo()->Then(
-    SystemGroup::AbstractMainThreadFor(TaskCategory::Other), __func__,
-    [str] (const nsACString& aString) {
+  return GetStateMachine()->RequestDebugInfo()->Then(
+    SystemGroup::AbstractMainThreadFor(TaskCategory::Other),
+    __func__,
+    [str](const nsACString& aString) {
       DUMP("%s", str.get());
       DUMP("%s", aString.Data());
+      return GenericPromise::CreateAndResolve(true, __func__);
     },
-    [str] () {
+    [str]() {
       DUMP("%s", str.get());
+      return GenericPromise::CreateAndResolve(true, __func__);
     });
 }
 

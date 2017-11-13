@@ -23,7 +23,6 @@
 #include "nsIControllers.h"
 #include "nsXULElement.h"
 #include "nsIURI.h"
-#include "nsIDOMHTMLTextAreaElement.h"
 #include "nsIDOMHTMLInputElement.h"
 #include "nsFocusManager.h"
 #include "nsIFormControl.h"
@@ -50,6 +49,7 @@
 #include "mozilla/TextEvents.h"
 #include "mozilla/dom/Element.h"
 #include "mozilla/dom/EventHandlerBinding.h"
+#include "mozilla/dom/HTMLTextAreaElement.h"
 #include "mozilla/dom/ScriptSettings.h"
 #include "mozilla/layers/KeyboardMap.h"
 #include "xpcpublic.h"
@@ -93,7 +93,7 @@ nsXBLPrototypeHandler::nsXBLPrototypeHandler(const char16_t* aEvent,
                                              uint32_t aLineNumber)
   : mHandlerText(nullptr),
     mLineNumber(aLineNumber),
-    mReserved(false),
+    mReserved(XBLReservedKey_False),
     mNextHandler(nullptr),
     mPrototypeBinding(aBinding)
 {
@@ -104,7 +104,7 @@ nsXBLPrototypeHandler::nsXBLPrototypeHandler(const char16_t* aEvent,
                      aGroup, aPreventDefault, aAllowUntrusted);
 }
 
-nsXBLPrototypeHandler::nsXBLPrototypeHandler(nsIContent* aHandlerElement, bool aReserved)
+nsXBLPrototypeHandler::nsXBLPrototypeHandler(nsIContent* aHandlerElement, XBLReservedKey aReserved)
   : mHandlerElement(nullptr),
     mLineNumber(0),
     mReserved(aReserved),
@@ -120,7 +120,7 @@ nsXBLPrototypeHandler::nsXBLPrototypeHandler(nsIContent* aHandlerElement, bool a
 nsXBLPrototypeHandler::nsXBLPrototypeHandler(nsXBLPrototypeBinding* aBinding)
   : mHandlerText(nullptr),
     mLineNumber(0),
-    mReserved(false),
+    mReserved(XBLReservedKey_False),
     mNextHandler(nullptr),
     mPrototypeBinding(aBinding)
 {
@@ -681,7 +681,7 @@ nsXBLPrototypeHandler::GetController(EventTarget* aTarget)
   }
 
   if (!controllers) {
-    nsCOMPtr<nsIDOMHTMLTextAreaElement> htmlTextArea(do_QueryInterface(aTarget));
+    HTMLTextAreaElement* htmlTextArea = HTMLTextAreaElement::FromContent(targetContent);
     if (htmlTextArea)
       htmlTextArea->GetControllers(getter_AddRefs(controllers));
   }

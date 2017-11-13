@@ -2542,9 +2542,11 @@ public:
   {
     AssertIsOnMainThread();
     NS_WARNING("Unexpected error while dispatching fetch event!");
-    DebugOnly<nsresult> rv = mChannel->ResetInterception();
-    NS_WARNING_ASSERTION(NS_SUCCEEDED(rv),
-                         "Failed to resume intercepted network request");
+    nsresult rv = mChannel->ResetInterception();
+    if (NS_FAILED(rv)) {
+      NS_WARNING("Failed to resume intercepted network request");
+      mChannel->CancelInterception(rv);
+    }
   }
 
   NS_IMETHOD
@@ -3091,7 +3093,7 @@ FireControllerChangeOnDocument(nsIDocument* aDocument)
     return;
   }
 
-  auto* window = nsGlobalWindow::Cast(w.get());
+  auto* window = nsGlobalWindowInner::Cast(w.get());
   dom::Navigator* navigator = window->Navigator();
   if (!navigator) {
     return;
@@ -3361,6 +3363,8 @@ void
 ServiceWorkerManager::FireControllerChange(ServiceWorkerRegistrationInfo* aRegistration)
 {
   AssertIsOnMainThread();
+
+  AutoTArray<nsCOMPtr<nsIDocument>, 16> documents;
   for (auto iter = mControlledDocuments.Iter(); !iter.Done(); iter.Next()) {
     if (iter.UserData() != aRegistration) {
       continue;
@@ -3371,6 +3375,12 @@ ServiceWorkerManager::FireControllerChange(ServiceWorkerRegistrationInfo* aRegis
       continue;
     }
 
+    documents.AppendElement(doc);
+  }
+
+  // Fire event after iterating mControlledDocuments is done to prevent
+  // modification by reentering from the event handlers during iteration.
+  for (auto& doc : documents) {
     FireControllerChangeOnDocument(doc);
   }
 }
@@ -3774,7 +3784,8 @@ ServiceWorkerManager::ShouldReportToWindow(mozIDOMWindowProxy* aWindow,
         continue;
       }
 
-      nsCOMPtr<nsPIDOMWindowInner> win = nsGlobalWindow::GetInnerWindowWithId(id)->AsInner();
+      nsCOMPtr<nsPIDOMWindowInner> win =
+        nsGlobalWindowInner::GetInnerWindowWithId(id)->AsInner();
       if (!win) {
         continue;
       }

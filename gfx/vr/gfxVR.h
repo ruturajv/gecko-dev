@@ -1,5 +1,6 @@
-/* -*- Mode: C++; tab-width: 20; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * This Source Code Form is subject to the terms of the Mozilla Public
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=8 sts=2 et sw=2 tw=80: */
+/* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
@@ -34,6 +35,7 @@ enum class VRDeviceType : uint16_t {
   Oculus,
   OpenVR,
   OSVR,
+  GVR,
   Puppet,
   NumVRDeviceTypes
 };
@@ -133,10 +135,6 @@ struct VRFieldOfView {
 };
 
 struct VRHMDSensorState {
-  VRHMDSensorState()
-  {
-    Clear();
-  }
   int64_t inputFrameID;
   double timestamp;
   VRDisplayCapabilityFlags flags;
@@ -144,6 +142,8 @@ struct VRHMDSensorState {
   // These members will only change with inputFrameID:
   float orientation[4];
   float position[3];
+  float leftViewMatrix[16];
+  float rightViewMatrix[16];
   float angularVelocity[3];
   float angularAcceleration[3];
   float linearVelocity[3];
@@ -161,6 +161,7 @@ struct VRHMDSensorState {
   bool operator!=(const VRHMDSensorState& other) const {
     return !(*this == other);
   }
+  void CalcViewMatrices(const gfx::Matrix4x4* aHeadToEyeTransforms);
 };
 
 // The maximum number of frames of latency that we would expect before we
@@ -221,6 +222,7 @@ struct VRDisplayInfo
   Size mStageSize;
   Matrix4x4 mSittingToStandingTransform;
   uint64_t mFrameId;
+  uint32_t mPresentingGeneration;
   VRHMDSensorState mLastSensorState[kVRMaxLatencyFrames];
 
   bool operator==(const VRDisplayInfo& other) const {
@@ -244,7 +246,8 @@ struct VRDisplayInfo
            mEyeTranslation[1] == other.mEyeTranslation[1] &&
            mStageSize == other.mStageSize &&
            mSittingToStandingTransform == other.mSittingToStandingTransform &&
-           mFrameId == other.mFrameId;
+           mFrameId == other.mFrameId &&
+           mPresentingGeneration == other.mPresentingGeneration;
   }
 
   bool operator!=(const VRDisplayInfo& other) const {

@@ -64,6 +64,8 @@ mod ellipse;
 mod frame;
 mod frame_builder;
 mod freelist;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+mod gamma_lut;
 mod geometry;
 mod glyph_cache;
 mod glyph_rasterizer;
@@ -146,13 +148,11 @@ extern crate time;
 extern crate ws;
 pub extern crate webrender_api;
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-extern crate gamma_lut;
-
 #[doc(hidden)]
 pub use device::build_shader_strings;
 pub use renderer::{CpuProfile, DebugFlags, GpuProfile, OutputImageHandler, RendererKind};
 pub use renderer::{ExternalImage, ExternalImageHandler, ExternalImageSource};
 pub use renderer::{GraphicsApi, GraphicsApiInfo, ReadPixelsFormat, Renderer, RendererOptions};
+pub use renderer::{ThreadListener};
 pub use renderer::MAX_VERTEX_TEXTURE_WIDTH;
 pub use webrender_api as api;

@@ -432,7 +432,7 @@ pub unsafe extern fn mp4parse_get_track_info(parser: *mut mp4parse_parser, track
                 mp4parse_codec::AAC,
             AudioCodecSpecific::ES_Descriptor(ref esds) if esds.audio_codec == CodecType::MP3 =>
                 mp4parse_codec::MP3,
-            AudioCodecSpecific::ES_Descriptor(_) =>
+            AudioCodecSpecific::ES_Descriptor(_) | AudioCodecSpecific::LPCM =>
                 mp4parse_codec::UNKNOWN,
             AudioCodecSpecific::MP3 =>
                 mp4parse_codec::MP3,
@@ -521,9 +521,9 @@ pub unsafe extern fn mp4parse_get_track_audio_info(parser: *mut mp4parse_parser,
         _ => return mp4parse_status::INVALID,
     };
 
-    (*info).channels = audio.channelcount;
+    (*info).channels = audio.channelcount as u16;
     (*info).bit_depth = audio.samplesize;
-    (*info).sample_rate = audio.samplerate >> 16; // 16.16 fixed point
+    (*info).sample_rate = audio.samplerate as u32;
 
     match audio.codec_specific {
         AudioCodecSpecific::ES_Descriptor(ref v) => {
@@ -572,7 +572,7 @@ pub unsafe extern fn mp4parse_get_track_audio_info(parser: *mut mp4parse_parser,
                 }
             }
         }
-        AudioCodecSpecific::MP3 => (),
+        AudioCodecSpecific::MP3 | AudioCodecSpecific::LPCM => (),
     }
 
     if let Some(p) = audio.protection_info.iter().find(|sinf| sinf.tenc.is_some()) {
@@ -841,7 +841,10 @@ impl<'a> Iterator for SampleToChunkIterator<'a> {
                         self.sample_count = next.samples_per_chunk;
                         // Total chunk number in 'stsc' could be different to 'stco',
                         // there could be more chunks at the last 'stsc' record.
-                        ((next.first_chunk - 1) .. next.first_chunk + self.remain_chunk_count -1)
+                        match next.first_chunk.checked_add(self.remain_chunk_count) {
+                            Some(r) => ((next.first_chunk - 1) .. r - 1),
+                            _ => (0 .. 0),
+                        }
                     },
                     _ => (0 .. 0),
                 };

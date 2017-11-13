@@ -2264,17 +2264,16 @@ nsHttpChannel::ProcessResponse()
     LOG(("nsHttpChannel::ProcessResponse [this=%p httpStatus=%u]\n",
         this, httpStatus));
 
-    // do some telemetry
-    if (gHttpHandler->IsTelemetryEnabled()) {
-        // Gather data on whether the transaction and page (if this is
-        // the initial page load) is being loaded with SSL.
-        Telemetry::Accumulate(Telemetry::HTTP_TRANSACTION_IS_SSL,
+    // Gather data on whether the transaction and page (if this is
+    // the initial page load) is being loaded with SSL.
+    Telemetry::Accumulate(Telemetry::HTTP_TRANSACTION_IS_SSL,
+                          mConnectionInfo->EndToEndSSL());
+    if (mLoadFlags & LOAD_INITIAL_DOCUMENT_URI) {
+        Telemetry::Accumulate(Telemetry::HTTP_PAGELOAD_IS_SSL,
                               mConnectionInfo->EndToEndSSL());
-        if (mLoadFlags & LOAD_INITIAL_DOCUMENT_URI) {
-            Telemetry::Accumulate(Telemetry::HTTP_PAGELOAD_IS_SSL,
-                                  mConnectionInfo->EndToEndSSL());
-        }
+    }
 
+    if (gHttpHandler->IsTelemetryEnabled()) {
         // how often do we see something like Alt-Svc: "443:quic,p=1"
         nsAutoCString alt_service;
         Unused << mResponseHead->GetHeader(nsHttp::Alternate_Service, alt_service);
@@ -5556,6 +5555,9 @@ nsHttpChannel::SetupReplacementChannel(nsIURI       *newURI,
     if (NS_FAILED(rv))
         return rv;
 
+    rv = CheckRedirectLimit(redirectFlags);
+    NS_ENSURE_SUCCESS(rv, rv);
+
     nsCOMPtr<nsIHttpChannel> httpChannel = do_QueryInterface(newChannel);
     if (!httpChannel)
         return NS_OK; // no other options to set
@@ -5595,11 +5597,6 @@ nsHttpChannel::AsyncProcessRedirection(uint32_t redirectType)
     nsAutoCString locationBuf;
     if (NS_EscapeURL(location.get(), -1, esc_OnlyNonASCII, locationBuf))
         location = locationBuf;
-
-    if (mRedirectCount >= mRedirectionLimit || mInternalRedirectCount >= mRedirectionLimit) {
-        LOG(("redirection limit reached!\n"));
-        return NS_ERROR_REDIRECT_LOOP;
-    }
 
     mRedirectType = redirectType;
 

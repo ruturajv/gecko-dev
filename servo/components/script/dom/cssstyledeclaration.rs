@@ -16,13 +16,12 @@ use dom::window::Window;
 use dom_struct::dom_struct;
 use servo_arc::Arc;
 use servo_url::ServoUrl;
-use std::ascii::AsciiExt;
 use style::attr::AttrValue;
 use style::properties::{DeclarationSource, Importance, PropertyDeclarationBlock, PropertyId, LonghandId, ShorthandId};
 use style::properties::{parse_one_declaration_into, parse_style_attribute, SourcePropertyDeclaration};
 use style::selector_parser::PseudoElement;
 use style::shared_lock::Locked;
-use style_traits::{PARSING_MODE_DEFAULT, ToCss};
+use style_traits::{ParsingMode, ToCss};
 
 // http://dev.w3.org/csswg/cssom/#the-cssstyledeclaration-interface
 #[dom_struct]
@@ -261,7 +260,7 @@ impl CSSStyleDeclaration {
             let mut declarations = SourcePropertyDeclaration::new();
             let result = parse_one_declaration_into(
                 &mut declarations, id, &value, &self.owner.base_url(),
-                window.css_error_reporter(), PARSING_MODE_DEFAULT, quirks_mode);
+                window.css_error_reporter(), ParsingMode::DEFAULT, quirks_mode);
 
             // Step 6
             match result {

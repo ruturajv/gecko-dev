@@ -143,13 +143,13 @@ const PROP_LOCALE_SINGLE = ["name", "description", "creator", "homepageURL"];
 const PROP_LOCALE_MULTI  = ["developers", "translators", "contributors"];
 const PROP_TARGETAPP     = ["id", "minVersion", "maxVersion"];
 
-// Map new string type identifiers to old style nsIUpdateItem types
-// Type 32 was previously used for multipackage xpi files so it should
-// not be re-used since old files with that type may be floating around.
+// Map new string type identifiers to old style nsIUpdateItem types.
+// Retired values:
+// 32 = multipackage xpi file
+// 8 = locale
 const TYPES = {
   extension: 2,
   theme: 4,
-  locale: 8,
   dictionary: 64,
   experiment: 128,
   apiextension: 256,
@@ -164,7 +164,6 @@ const RESTARTLESS_TYPES = new Set([
   "apiextension",
   "dictionary",
   "experiment",
-  "locale",
   "webextension",
   "webextension-theme",
 ]);
@@ -1799,11 +1798,14 @@ class AddonInstall {
 
         // Deactivate and remove the old add-on as necessary
         let reason = BOOTSTRAP_REASONS.ADDON_INSTALL;
+        let callUpdate = false;
         if (this.existingAddon) {
           if (Services.vc.compare(this.existingAddon.version, this.addon.version) < 0)
             reason = BOOTSTRAP_REASONS.ADDON_UPGRADE;
           else
             reason = BOOTSTRAP_REASONS.ADDON_DOWNGRADE;
+
+          callUpdate = isWebExtension(this.addon.type) && isWebExtension(this.existingAddon.type);
 
           if (this.existingAddon.bootstrap) {
             let file = this.existingAddon._sourceBundle;
@@ -1813,9 +1815,11 @@ class AddonInstall {
                                               { newVersion: this.addon.version });
             }
 
-            XPIProvider.callBootstrapMethod(this.existingAddon, file,
-                                            "uninstall", reason,
-                                            { newVersion: this.addon.version });
+            if (!callUpdate) {
+              XPIProvider.callBootstrapMethod(this.existingAddon, file,
+                                              "uninstall", reason,
+                                              { newVersion: this.addon.version });
+            }
             XPIProvider.unloadBootstrapScope(this.existingAddon.id);
             flushChromeCaches();
           }
@@ -1861,7 +1865,8 @@ class AddonInstall {
         }
 
         if (this.addon.bootstrap) {
-          XPIProvider.callBootstrapMethod(this.addon, file, "install",
+          let method = callUpdate ? "update" : "install";
+          XPIProvider.callBootstrapMethod(this.addon, file, method,
                                           reason, extraParams);
         }
 

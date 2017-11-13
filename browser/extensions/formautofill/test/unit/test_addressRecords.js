@@ -39,7 +39,7 @@ const TEST_ADDRESS_4 = {
   organization: "World Wide Web Consortium",
 };
 
-const TEST_ADDRESS_FOR_UPDATE = {
+const TEST_ADDRESS_WITH_EMPTY_FIELD = {
   "name": "Tim Berners",
   "street-address": "",
 };
@@ -71,7 +71,7 @@ const MERGE_TESTCASES = [
     },
   },
   {
-    description: "Merge a subset",
+    description: "Loose merge a subset",
     addressInStorage: {
       "given-name": "Timothy",
       "street-address": "331 E. Evelyn Avenue",
@@ -89,6 +89,29 @@ const MERGE_TESTCASES = [
       "tel": "+16509030800",
       country: "US",
     },
+    noNeedToUpdate: true,
+  },
+  {
+    description: "Strict merge a subset without empty string",
+    addressInStorage: {
+      "given-name": "Timothy",
+      "street-address": "331 E. Evelyn Avenue",
+      "tel": "+16509030800",
+      country: "US",
+    },
+    addressToMerge: {
+      "given-name": "Timothy",
+      "street-address": "331 E. Evelyn Avenue",
+      "tel": "+16509030800",
+    },
+    expectedAddress: {
+      "given-name": "Timothy",
+      "street-address": "331 E. Evelyn Avenue",
+      "tel": "+16509030800",
+      country: "US",
+    },
+    strict: true,
+    noNeedToUpdate: true,
   },
   {
     description: "Merge an address with partial overlaps",
@@ -299,6 +322,12 @@ add_task(async function test_add() {
   do_check_eq(addresses[0].timeLastUsed, 0);
   do_check_eq(addresses[0].timesUsed, 0);
 
+  // Empty string should be deleted before saving.
+  profileStorage.addresses.add(TEST_ADDRESS_WITH_EMPTY_FIELD);
+  let address = profileStorage.addresses.data[2];
+  do_check_eq(address.name, TEST_ADDRESS_WITH_EMPTY_FIELD.name);
+  do_check_eq(address["street-address"], undefined);
+
   Assert.throws(() => profileStorage.addresses.add(TEST_ADDRESS_WITH_INVALID_FIELD),
     /"invalidField" is not a valid field\./);
 });
@@ -311,8 +340,11 @@ add_task(async function test_update() {
   let guid = addresses[1].guid;
   let timeLastModified = addresses[1].timeLastModified;
 
-  let onChanged = TestUtils.topicObserved("formautofill-storage-changed",
-                                          (subject, data) => data == "update");
+  let onChanged = TestUtils.topicObserved(
+    "formautofill-storage-changed",
+    (subject, data) =>
+      data == "update" && subject.QueryInterface(Ci.nsISupportsString).data == guid
+  );
 
   do_check_neq(addresses[1].country, undefined);
 
@@ -330,7 +362,7 @@ add_task(async function test_update() {
   do_check_eq(getSyncChangeCounter(profileStorage.addresses, guid), 1);
 
   // Test preserveOldProperties parameter and field with empty string.
-  profileStorage.addresses.update(guid, TEST_ADDRESS_FOR_UPDATE, true);
+  profileStorage.addresses.update(guid, TEST_ADDRESS_WITH_EMPTY_FIELD, true);
   await onChanged;
   await profileStorage._saveImmediately();
 
@@ -344,6 +376,12 @@ add_task(async function test_update() {
   do_check_eq(address["postal-code"], "12345");
   do_check_neq(address.timeLastModified, timeLastModified);
   do_check_eq(getSyncChangeCounter(profileStorage.addresses, guid), 2);
+
+  // Empty string should be deleted while updating.
+  profileStorage.addresses.update(profileStorage.addresses.data[0].guid, TEST_ADDRESS_WITH_EMPTY_FIELD);
+  address = profileStorage.addresses.data[0];
+  do_check_eq(address.name, TEST_ADDRESS_WITH_EMPTY_FIELD.name);
+  do_check_eq(address["street-address"], undefined);
 
   Assert.throws(
     () => profileStorage.addresses.update("INVALID_GUID", TEST_ADDRESS_3),
@@ -415,31 +453,60 @@ MERGE_TESTCASES.forEach((testcase) => {
     let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME,
                                                   [testcase.addressInStorage]);
     let addresses = profileStorage.addresses.getAll();
+    let guid = addresses[0].guid;
+    let timeLastModified = addresses[0].timeLastModified;
+
     // Merge address and verify the guid in notifyObservers subject
     let onMerged = TestUtils.topicObserved(
       "formautofill-storage-changed",
       (subject, data) =>
-        data == "merge" && subject.QueryInterface(Ci.nsISupportsString).data == addresses[0].guid
+        data == "update" && subject.QueryInterface(Ci.nsISupportsString).data == guid
     );
-    let timeLastModified = addresses[0].timeLastModified;
-    Assert.equal(
-      profileStorage.addresses.mergeIfPossible(addresses[0].guid, testcase.addressToMerge),
-      true);
-    await onMerged;
+
+    // Force to create sync metadata.
+    profileStorage.addresses.pullSyncChanges();
+    do_check_eq(getSyncChangeCounter(profileStorage.addresses, guid), 1);
+
+    Assert.ok(profileStorage.addresses.mergeIfPossible(guid,
+                                                       testcase.addressToMerge,
+                                                       testcase.strict));
+    if (!testcase.noNeedToUpdate) {
+      await onMerged;
+    }
+
     addresses = profileStorage.addresses.getAll();
     Assert.equal(addresses.length, 1);
-    Assert.notEqual(addresses[0].timeLastModified, timeLastModified);
     do_check_record_matches(addresses[0], testcase.expectedAddress);
+    if (testcase.noNeedToUpdate) {
+      Assert.equal(addresses[0].timeLastModified, timeLastModified);
+
+      // No need to bump the change counter if the data is unchanged.
+      do_check_eq(getSyncChangeCounter(profileStorage.addresses, guid), 1);
+    } else {
+      Assert.notEqual(addresses[0].timeLastModified, timeLastModified);
+
+      // Record merging should bump the change counter.
+      do_check_eq(getSyncChangeCounter(profileStorage.addresses, guid), 2);
+    }
   });
 });
 
 add_task(async function test_merge_same_address() {
   let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME, [TEST_ADDRESS_1]);
   let addresses = profileStorage.addresses.getAll();
+  let guid = addresses[0].guid;
   let timeLastModified = addresses[0].timeLastModified;
+
+  // Force to create sync metadata.
+  profileStorage.addresses.pullSyncChanges();
+  do_check_eq(getSyncChangeCounter(profileStorage.addresses, guid), 1);
+
   // Merge same address will still return true but it won't update timeLastModified.
-  Assert.equal(profileStorage.addresses.mergeIfPossible(addresses[0].guid, TEST_ADDRESS_1), true);
+  Assert.ok(profileStorage.addresses.mergeIfPossible(guid, TEST_ADDRESS_1));
   Assert.equal(addresses[0].timeLastModified, timeLastModified);
+
+  // ... and won't bump the change counter, either.
+  do_check_eq(getSyncChangeCounter(profileStorage.addresses, guid), 1);
 });
 
 add_task(async function test_merge_unable_merge() {
@@ -447,11 +514,25 @@ add_task(async function test_merge_unable_merge() {
                                                 [TEST_ADDRESS_1, TEST_ADDRESS_2]);
 
   let addresses = profileStorage.addresses.getAll();
+  let guid = addresses[1].guid;
+
+  // Force to create sync metadata.
+  profileStorage.addresses.pullSyncChanges();
+  do_check_eq(getSyncChangeCounter(profileStorage.addresses, guid), 1);
+
   // Unable to merge because of conflict
-  do_check_eq(profileStorage.addresses.mergeIfPossible(addresses[1].guid, TEST_ADDRESS_3), false);
+  do_check_eq(profileStorage.addresses.mergeIfPossible(guid, TEST_ADDRESS_3), false);
 
   // Unable to merge because no overlap
-  do_check_eq(profileStorage.addresses.mergeIfPossible(addresses[1].guid, TEST_ADDRESS_4), false);
+  do_check_eq(profileStorage.addresses.mergeIfPossible(guid, TEST_ADDRESS_4), false);
+
+  // Unable to strict merge because subset with empty string
+  let subset = Object.assign({}, TEST_ADDRESS_1);
+  subset.organization = "";
+  do_check_eq(profileStorage.addresses.mergeIfPossible(guid, subset, true), false);
+
+  // Shouldn't bump the change counter
+  do_check_eq(getSyncChangeCounter(profileStorage.addresses, guid), 1);
 });
 
 add_task(async function test_mergeToStorage() {
@@ -464,4 +545,14 @@ add_task(async function test_mergeToStorage() {
   do_check_eq(profileStorage.addresses.mergeToStorage(anotherAddress).length, 2);
   do_check_eq(profileStorage.addresses.getAll()[1].email, anotherAddress.email);
   do_check_eq(profileStorage.addresses.getAll()[2].email, anotherAddress.email);
+});
+
+add_task(async function test_mergeToStorage_strict() {
+  let profileStorage = await initProfileStorage(TEST_STORE_FILE_NAME,
+                                                [TEST_ADDRESS_1, TEST_ADDRESS_2]);
+  // Try to merge a subset with empty string
+  let anotherAddress = profileStorage.addresses._clone(TEST_ADDRESS_1);
+  anotherAddress.email = "";
+  do_check_eq(profileStorage.addresses.mergeToStorage(anotherAddress, true).length, 0);
+  do_check_eq(profileStorage.addresses.getAll()[0].email, TEST_ADDRESS_1.email);
 });

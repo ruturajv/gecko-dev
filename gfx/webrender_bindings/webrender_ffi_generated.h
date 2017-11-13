@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* Generated with cbindgen:0.1.28 */
+/* Generated with cbindgen:0.1.29 */
 
 /* DO NOT MODIFY THIS MANUALLY! This file was generated using cbindgen.
  * To generate this file:
@@ -128,6 +128,31 @@ enum class LineStyle : uint8_t {
   Dotted = 1,
   Dashed = 2,
   Wavy = 3,
+
+  Sentinel /* this must be last for serialization purposes. */
+};
+
+// An enum representing the available verbosity level filters of the logging
+// framework.
+//
+// A `LogLevelFilter` may be compared directly to a [`LogLevel`](enum.LogLevel.html).
+// Use this type to [`get()`](struct.MaxLogLevelFilter.html#method.get) and
+// [`set()`](struct.MaxLogLevelFilter.html#method.set) the
+// [`MaxLogLevelFilter`](struct.MaxLogLevelFilter.html), or to match with the getter
+// [`max_log_level()`](fn.max_log_level.html).
+enum class LogLevelFilter : uintptr_t {
+  // A level lower than all log levels.
+  Off = 0,
+  // Corresponds to the `Error` log level.
+  Error = 1,
+  // Corresponds to the `Warn` log level.
+  Warn = 2,
+  // Corresponds to the `Info` log level.
+  Info = 3,
+  // Corresponds to the `Debug` log level.
+  Debug = 4,
+  // Corresponds to the `Trace` log level.
+  Trace = 5,
 
   Sentinel /* this must be last for serialization purposes. */
 };
@@ -504,15 +529,37 @@ struct WrImageMask {
   }
 };
 
-struct StickySideConstraint {
-  float margin;
-  float max_offset;
+// The minimum and maximum allowable offset for a sticky frame in a single dimension.
+struct StickyOffsetBounds {
+  // The minimum offset for this frame, typically a negative value, which specifies how
+  // far in the negative direction the sticky frame can offset its contents in this
+  // dimension.
+  float min;
+  // The maximum offset for this frame, typically a positive value, which specifies how
+  // far in the positive direction the sticky frame can offset its contents in this
+  // dimension.
+  float max;
 
-  bool operator==(const StickySideConstraint& aOther) const {
-    return margin == aOther.margin &&
-           max_offset == aOther.max_offset;
+  bool operator==(const StickyOffsetBounds& aOther) const {
+    return min == aOther.min &&
+           max == aOther.max;
   }
 };
+
+// A 2d Vector tagged with a unit.
+struct TypedVector2D_f32__LayerPixel {
+  float x;
+  float y;
+
+  bool operator==(const TypedVector2D_f32__LayerPixel& aOther) const {
+    return x == aOther.x &&
+           y == aOther.y;
+  }
+};
+
+typedef TypedVector2D_f32__LayerPixel LayerVector2D;
+
+typedef LayerVector2D LayoutVector2D;
 
 struct BorderWidths {
   float left;
@@ -594,21 +641,6 @@ struct NinePatchDescriptor {
   }
 };
 
-// A 2d Vector tagged with a unit.
-struct TypedVector2D_f32__LayerPixel {
-  float x;
-  float y;
-
-  bool operator==(const TypedVector2D_f32__LayerPixel& aOther) const {
-    return x == aOther.x &&
-           y == aOther.y;
-  }
-};
-
-typedef TypedVector2D_f32__LayerPixel LayerVector2D;
-
-typedef LayerVector2D LayoutVector2D;
-
 struct Shadow {
   LayoutVector2D offset;
   ColorF color;
@@ -664,6 +696,8 @@ struct GlyphOptions {
 };
 
 typedef YuvColorSpace WrYuvColorSpace;
+
+typedef LogLevelFilter WrLogLevelFilter;
 
 struct ByteSlice {
   const uint8_t *buffer;
@@ -784,15 +818,37 @@ struct WrImageDescriptor {
 
 typedef ExternalImageType WrExternalImageBufferType;
 
+// Represents RGBA screen colors with one byte per channel.
+//
+// If the alpha value `a` is 255 the color is opaque.
+struct ColorU {
+  uint8_t r;
+  uint8_t g;
+  uint8_t b;
+  uint8_t a;
+
+  bool operator==(const ColorU& aOther) const {
+    return r == aOther.r &&
+           g == aOther.g &&
+           b == aOther.b &&
+           a == aOther.a;
+  }
+};
+
 struct FontInstanceOptions {
   FontRenderMode render_mode;
   SubpixelDirection subpx_dir;
   bool synthetic_italics;
+  // When bg_color.a is != 0 and render_mode is FontRenderMode::Subpixel,
+  // the text will be rendered with bg_color.r/g/b as an opaque estimated
+  // background color.
+  ColorU bg_color;
 
   bool operator==(const FontInstanceOptions& aOther) const {
     return render_mode == aOther.render_mode &&
            subpx_dir == aOther.subpx_dir &&
-           synthetic_italics == aOther.synthetic_italics;
+           synthetic_italics == aOther.synthetic_italics &&
+           bg_color == aOther.bg_color;
   }
 };
 
@@ -879,7 +935,19 @@ extern void AddFontData(WrFontKey aKey,
                         uint32_t aIndex,
                         const ArcVecU8 *aVec);
 
+extern void AddNativeFontHandle(WrFontKey aKey,
+                                void *aHandle,
+                                uint32_t aIndex);
+
 extern void DeleteFontData(WrFontKey aKey);
+
+extern void gecko_printf_stderr_output(const char *aMsg);
+
+extern void gecko_profiler_register_thread(const char *aName);
+
+extern void gecko_profiler_unregister_thread();
+
+extern void gfx_critical_error(const char *aMsg);
 
 extern void gfx_critical_note(const char *aMsg);
 
@@ -1009,10 +1077,13 @@ WR_FUNC;
 WR_INLINE
 uint64_t wr_dp_define_sticky_frame(WrState *aState,
                                    LayoutRect aContentRect,
-                                   const StickySideConstraint *aTopRange,
-                                   const StickySideConstraint *aRightRange,
-                                   const StickySideConstraint *aBottomRange,
-                                   const StickySideConstraint *aLeftRange)
+                                   const float *aTopMargin,
+                                   const float *aRightMargin,
+                                   const float *aBottomMargin,
+                                   const float *aLeftMargin,
+                                   StickyOffsetBounds aVerticalBounds,
+                                   StickyOffsetBounds aHorizontalBounds,
+                                   LayoutVector2D aAppliedOffset)
 WR_FUNC;
 
 WR_INLINE
@@ -1101,6 +1172,11 @@ void wr_dp_push_box_shadow(WrState *aState,
                            float aSpreadRadius,
                            BorderRadius aBorderRadius,
                            BoxShadowClipMode aClipMode)
+WR_FUNC;
+
+WR_INLINE
+void wr_dp_push_clear_rect(WrState *aState,
+                           LayoutRect aRect)
 WR_FUNC;
 
 WR_INLINE
@@ -1262,6 +1338,10 @@ WR_INLINE
 void wr_dp_save(WrState *aState)
 WR_FUNC;
 
+WR_INLINE
+void wr_init_external_log_handler(WrLogLevelFilter aLogFilter)
+WR_FUNC;
+
 extern bool wr_moz2d_render_cb(ByteSlice aBlob,
                                uint32_t aWidth,
                                uint32_t aHeight,
@@ -1351,6 +1431,13 @@ void wr_resource_updates_add_external_image(ResourceUpdates *aResources,
 WR_FUNC;
 
 WR_INLINE
+void wr_resource_updates_add_font_descriptor(ResourceUpdates *aResources,
+                                             WrFontKey aKey,
+                                             WrVecU8 *aBytes,
+                                             uint32_t aIndex)
+WR_FUNC;
+
+WR_INLINE
 void wr_resource_updates_add_font_instance(ResourceUpdates *aResources,
                                            WrFontInstanceKey aKey,
                                            WrFontKey aFontKey,
@@ -1398,16 +1485,7 @@ void wr_resource_updates_delete_image(ResourceUpdates *aResources,
 WR_FUNC;
 
 WR_INLINE
-ResourceUpdates *wr_resource_updates_deserialize(ByteSlice aData)
-WR_FUNC;
-
-WR_INLINE
 ResourceUpdates *wr_resource_updates_new()
-WR_FUNC;
-
-WR_INLINE
-void wr_resource_updates_serialize(ResourceUpdates *aResources,
-                                   VecU8 *aInto)
 WR_FUNC;
 
 WR_INLINE
@@ -1439,6 +1517,10 @@ void wr_scroll_layer_with_id(DocumentHandle *aDh,
                              WrPipelineId aPipelineId,
                              uint64_t aScrollId,
                              LayoutPoint aNewScrollOrigin)
+WR_FUNC;
+
+WR_INLINE
+void wr_shutdown_external_log_handler()
 WR_FUNC;
 
 WR_INLINE

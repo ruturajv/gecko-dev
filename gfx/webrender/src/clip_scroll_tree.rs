@@ -2,18 +2,17 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use api::{ClipId, DeviceIntRect, LayerPoint, LayerRect};
-use api::{LayerToScrollTransform, LayerToWorldTransform, LayerVector2D, PipelineId};
-use api::{ScrollClamping, ScrollEventPhase, ScrollLayerState, ScrollLocation, StickyFrameInfo};
-use api::WorldPoint;
+use api::{ClipId, DeviceIntRect, LayerPoint, LayerRect, LayerToScrollTransform};
+use api::{LayerToWorldTransform, LayerVector2D, PipelineId, ScrollClamping, ScrollEventPhase};
+use api::{ScrollLayerState, ScrollLocation, WorldPoint};
 use clip::ClipStore;
-use clip_scroll_node::{ClipScrollNode, NodeType, ScrollingState};
+use clip_scroll_node::{ClipScrollNode, NodeType, ScrollingState, StickyFrameInfo};
 use gpu_cache::GpuCache;
+use gpu_types::ClipScrollNodeData;
 use internal_types::{FastHashMap, FastHashSet};
 use print_tree::{PrintTree, PrintTreePrinter};
 use render_task::ClipChain;
 use resource_cache::ResourceCache;
-use tiling::PackedLayer;
 
 pub type ScrollStates = FastHashMap<ClipId, ScrollingState>;
 
@@ -330,11 +329,11 @@ impl ClipScrollTree {
         &mut self,
         screen_rect: &DeviceIntRect,
         device_pixel_ratio: f32,
-        packed_layers: &mut Vec<PackedLayer>,
         clip_store: &mut ClipStore,
         resource_cache: &mut ResourceCache,
         gpu_cache: &mut GpuCache,
         pan: LayerPoint,
+        node_data: &mut Vec<ClipScrollNodeData>,
     ) {
         if self.nodes.is_empty() {
             return;
@@ -361,12 +360,11 @@ impl ClipScrollTree {
         self.update_node_transform(
             root_reference_frame_id,
             &mut state,
-            &screen_rect,
             device_pixel_ratio,
-            packed_layers,
             clip_store,
             resource_cache,
             gpu_cache,
+            node_data,
         );
     }
 
@@ -374,12 +372,11 @@ impl ClipScrollTree {
         &mut self,
         layer_id: ClipId,
         state: &mut TransformUpdateState,
-        screen_rect: &DeviceIntRect,
         device_pixel_ratio: f32,
-        packed_layers: &mut Vec<PackedLayer>,
         clip_store: &mut ClipStore,
         resource_cache: &mut ResourceCache,
         gpu_cache: &mut GpuCache,
+        node_data: &mut Vec<ClipScrollNodeData>,
     ) {
         // TODO(gw): This is an ugly borrow check workaround to clone these.
         //           Restructure this to avoid the clones!
@@ -390,12 +387,13 @@ impl ClipScrollTree {
                 None => return,
             };
 
-            node.update_transform(&mut state);
+            node.update_transform(
+                &mut state,
+                node_data
+            );
             node.update_clip_work_item(
                 &mut state,
-                screen_rect,
                 device_pixel_ratio,
-                packed_layers,
                 clip_store,
                 resource_cache,
                 gpu_cache,
@@ -408,12 +406,11 @@ impl ClipScrollTree {
             self.update_node_transform(
                 child_layer_id,
                 &mut state,
-                screen_rect,
                 device_pixel_ratio,
-                packed_layers,
                 clip_store,
                 resource_cache,
                 gpu_cache,
+                node_data,
             );
         }
     }
@@ -531,11 +528,10 @@ impl ClipScrollTree {
                 pt.add_item(format!("scrollable_size: {:?}", scrolling_info.scrollable_size));
                 pt.add_item(format!("scroll.offset: {:?}", scrolling_info.offset));
             }
-            NodeType::StickyFrame(sticky_frame_info, sticky_offset) => {
+            NodeType::StickyFrame(ref sticky_frame_info) => {
                 pt.new_level(format!("StickyFrame"));
                 pt.add_item(format!("id: {:?}", id));
                 pt.add_item(format!("sticky info: {:?}", sticky_frame_info));
-                pt.add_item(format!("sticky offset: {:?}", sticky_offset));
             }
         }
 

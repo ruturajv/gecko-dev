@@ -19,7 +19,8 @@ void brush_vs(
 struct BrushInstance {
     int picture_address;
     int prim_address;
-    int layer_address;
+    int clip_node_id;
+    int scroll_node_id;
     int clip_address;
     int z;
     int flags;
@@ -31,7 +32,8 @@ BrushInstance load_brush() {
 
     bi.picture_address = aData0.x;
     bi.prim_address = aData0.y;
-    bi.layer_address = aData0.z;
+    bi.clip_node_id = aData0.z / 65536;
+    bi.scroll_node_id = aData0.z % 65536;
     bi.clip_address = aData0.w;
     bi.z = aData1.x;
     bi.flags = aData1.y;
@@ -56,16 +58,17 @@ void main(void) {
         // Fetch the dynamic picture that we are drawing on.
         PictureTask pic_task = fetch_picture_task(brush.picture_address);
 
+        local_pos = local_rect.p0 + aPosition.xy * local_rect.size;
+
         // Right now - pictures only support local positions. In the future, this
         // will be expanded to support transform picture types (the common kind).
-        device_pos = pic_task.target_rect.p0 + aPosition.xy * pic_task.target_rect.size;
-        local_pos = aPosition.xy * pic_task.target_rect.size / uDevicePixelRatio;
+        device_pos = pic_task.target_rect.p0 + uDevicePixelRatio * (local_pos - pic_task.content_origin);
 
         // Write the final position transformed by the orthographic device-pixel projection.
         gl_Position = uTransform * vec4(device_pos, 0.0, 1.0);
     } else {
         AlphaBatchTask alpha_task = fetch_alpha_batch_task(brush.picture_address);
-        Layer layer = fetch_layer(brush.layer_address);
+        Layer layer = fetch_layer(brush.clip_node_id, brush.scroll_node_id);
         ClipArea clip_area = fetch_clip_area(brush.clip_address);
 
         // Write the normal vertex information out.

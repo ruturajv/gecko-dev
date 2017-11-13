@@ -1,5 +1,6 @@
-/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * This Source Code Form is subject to the terms of the Mozilla Public
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=8 sts=2 et sw=2 tw=80: */
+/* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
@@ -29,37 +30,6 @@ WebRenderLayerScrollData::WebRenderLayerScrollData()
 
 WebRenderLayerScrollData::~WebRenderLayerScrollData()
 {
-}
-
-void
-WebRenderLayerScrollData::Initialize(WebRenderScrollData& aOwner,
-                                     Layer* aLayer,
-                                     int32_t aDescendantCount)
-{
-  MOZ_ASSERT(aDescendantCount >= 0); // Ensure value is valid
-  MOZ_ASSERT(mDescendantCount == -1); // Don't allow re-setting an already set value
-  mDescendantCount = aDescendantCount;
-
-  MOZ_ASSERT(aLayer);
-  for (uint32_t i = 0; i < aLayer->GetScrollMetadataCount(); i++) {
-    mScrollIds.AppendElement(aOwner.AddMetadata(aLayer->GetScrollMetadata(i)));
-  }
-
-  mTransform = aLayer->GetTransform();
-  mTransformIsPerspective = aLayer->GetTransformIsPerspective();
-  mEventRegions = aLayer->GetEventRegions();
-  mVisibleRegion = aLayer->GetVisibleRegion();
-  mReferentId = aLayer->AsRefLayer()
-      ? Some(aLayer->AsRefLayer()->GetReferentId())
-      : Nothing();
-  mEventRegionsOverride = aLayer->AsContainerLayer()
-      ? aLayer->AsContainerLayer()->GetEventRegionsOverride()
-      : EventRegionsOverride::NoOverride;
-  mScrollThumbData = aLayer->GetScrollThumbData();
-  mScrollbarAnimationId = aLayer->GetCompositorAnimationsId();
-  mScrollbarTargetContainerId = aLayer->GetScrollbarTargetContainerId();
-  mIsScrollbarContainer = aLayer->IsScrollbarContainer();
-  mFixedPosScrollContainerId = aLayer->GetFixedPositionScrollContainerId();
 }
 
 void

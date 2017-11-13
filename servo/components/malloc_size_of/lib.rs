@@ -48,7 +48,7 @@ extern crate cssparser;
 extern crate euclid;
 extern crate hashglobe;
 #[cfg(feature = "servo")]
-extern crate js;
+extern crate mozjs as js;
 extern crate servo_arc;
 extern crate smallbitvec;
 extern crate smallvec;
@@ -728,7 +728,7 @@ malloc_size_of_is_0!(webrender_api::ScrollPolicy);
 #[cfg(feature = "servo")]
 malloc_size_of_is_0!(webrender_api::ScrollSensitivity);
 #[cfg(feature = "servo")]
-malloc_size_of_is_0!(webrender_api::StickySideConstraint);
+malloc_size_of_is_0!(webrender_api::StickyOffsetBounds);
 #[cfg(feature = "servo")]
 malloc_size_of_is_0!(webrender_api::TransformStyle);
 

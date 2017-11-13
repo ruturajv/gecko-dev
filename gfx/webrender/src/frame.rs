@@ -6,21 +6,24 @@
 use api::{BuiltDisplayListIter, ClipAndScrollInfo, ClipId, ColorF, ComplexClipRegion};
 use api::{DeviceUintRect, DeviceUintSize, DisplayItemRef, Epoch, FilterOp};
 use api::{ImageDisplayItem, ItemRange, LayerPoint, LayerPrimitiveInfo, LayerRect};
-use api::{LayerSize, LayerToScrollTransform, LayerVector2D, LayoutSize, LayoutTransform};
+use api::{LayerSize, LayerToScrollTransform, LayerVector2D};
+use api::{LayoutRect, LayoutSize, LayoutTransform};
 use api::{LocalClip, PipelineId, ScrollClamping, ScrollEventPhase, ScrollLayerState};
 use api::{ScrollLocation, ScrollPolicy, ScrollSensitivity, SpecificDisplayItem, StackingContext};
 use api::{ClipMode, TileOffset, TransformStyle, WorldPoint};
 use clip::ClipRegion;
+use clip_scroll_node::StickyFrameInfo;
 use clip_scroll_tree::{ClipScrollTree, ScrollStates};
 use euclid::rect;
 use frame_builder::{FrameBuilder, FrameBuilderConfig};
 use gpu_cache::GpuCache;
 use internal_types::{FastHashMap, FastHashSet, RendererFrame};
+use prim_store::RectangleContent;
 use profiler::{GpuCacheProfileCounters, TextureCacheProfileCounters};
 use resource_cache::{FontInstanceMap,ResourceCache, TiledImageMap};
 use scene::{Scene, StackingContextHelpers, ScenePipeline};
 use tiling::{CompositeOps, Frame, PrimitiveFlags};
-use util::{subtract_rect, ComplexClipRegionHelpers};
+use util::ComplexClipRegionHelpers;
 
 #[derive(Copy, Clone, PartialEq, PartialOrd, Debug, Eq, Ord)]
 pub struct FrameId(pub u32);
@@ -40,6 +43,11 @@ struct FlattenContext<'a> {
     tiled_image_map: TiledImageMap,
     pipeline_epochs: Vec<(PipelineId, Epoch)>,
     replacements: Vec<(ClipId, ClipId)>,
+    /// Opaque rectangle vector, stored here in order to
+    /// avoid re-allocation on each use.
+    opaque_parts: Vec<LayoutRect>,
+    /// Same for the transparent rectangles.
+    transparent_parts: Vec<LayoutRect>,
 }
 
 impl<'a> FlattenContext<'a> {
@@ -104,7 +112,7 @@ impl<'a> FlattenContext<'a> {
                     self.builder.add_solid_rectangle(
                         ClipAndScrollInfo::simple(clip_id),
                         &info,
-                        &bg_color,
+                        RectangleContent::Fill(bg_color),
                         PrimitiveFlags::None,
                     );
                 }
@@ -121,7 +129,7 @@ impl<'a> FlattenContext<'a> {
             self.builder.add_solid_rectangle(
                 ClipAndScrollInfo::simple(clip_id),
                 &info,
-                &DEFAULT_SCROLLBAR_COLOR,
+                RectangleContent::Fill(DEFAULT_SCROLLBAR_COLOR),
                 PrimitiveFlags::Scrollbar(self.clip_scroll_tree.topmost_scrolling_node_id(), 4.0),
             );
         }
@@ -320,8 +328,10 @@ impl<'a> FlattenContext<'a> {
             None => return,
         };
 
-        let mut clip_region = ClipRegion::create_for_clip_node_with_local_clip(local_clip);
-        clip_region.origin += reference_frame_relative_offset;
+        let clip_region = ClipRegion::create_for_clip_node_with_local_clip(
+            local_clip,
+            &reference_frame_relative_offset
+        );
         let parent_pipeline_id = parent_id.pipeline_id();
         let clip_id = self.clip_scroll_tree
             .generate_new_clip_id(parent_pipeline_id);
@@ -442,16 +452,24 @@ impl<'a> FlattenContext<'a> {
             SpecificDisplayItem::Rectangle(ref info) => {
                 if !self.try_to_add_rectangle_splitting_on_clip(
                     &prim_info,
-                    &info.color,
+                    RectangleContent::Fill(info.color),
                     &clip_and_scroll,
                 ) {
                     self.builder.add_solid_rectangle(
                         clip_and_scroll,
                         &prim_info,
-                        &info.color,
+                        RectangleContent::Fill(info.color),
                         PrimitiveFlags::None,
                     );
                 }
+            }
+            SpecificDisplayItem::ClearRectangle => {
+                self.builder.add_solid_rectangle(
+                    clip_and_scroll,
+                    &prim_info,
+                    RectangleContent::Clear,
+                    PrimitiveFlags::None,
+                );
             }
             SpecificDisplayItem::Line(ref info) => {
                 self.builder.add_line(
@@ -542,13 +560,12 @@ impl<'a> FlattenContext<'a> {
             }
             SpecificDisplayItem::Clip(ref info) => {
                 let complex_clips = self.get_complex_clips(pipeline_id, item.complex_clip().0);
-                let mut clip_region = ClipRegion::create_for_clip_node(
+                let clip_region = ClipRegion::create_for_clip_node(
                     *item.local_clip().clip_rect(),
                     complex_clips,
                     info.image_mask,
+                    &reference_frame_relative_offset,
                 );
-                clip_region.origin += reference_frame_relative_offset;
-
                 self.flatten_clip(
                     pipeline_id,
                     &clip_and_scroll.scroll_node_id,
@@ -558,13 +575,12 @@ impl<'a> FlattenContext<'a> {
             }
             SpecificDisplayItem::ScrollFrame(ref info) => {
                 let complex_clips = self.get_complex_clips(pipeline_id, item.complex_clip().0);
-                let mut clip_region = ClipRegion::create_for_clip_node(
+                let clip_region = ClipRegion::create_for_clip_node(
                     *item.local_clip().clip_rect(),
                     complex_clips,
                     info.image_mask,
+                    &reference_frame_relative_offset,
                 );
-                clip_region.origin += reference_frame_relative_offset;
-
                 // Just use clip rectangle as the frame rect for this scroll frame.
                 // This is useful when calculating scroll extents for the
                 // ClipScrollNode::scroll(..) API as well as for properly setting sticky
@@ -585,11 +601,17 @@ impl<'a> FlattenContext<'a> {
             }
             SpecificDisplayItem::StickyFrame(ref info) => {
                 let frame_rect = item.rect().translate(&reference_frame_relative_offset);
+                let sticky_frame_info = StickyFrameInfo::new(
+                    info.margins,
+                    info.vertical_offset_bounds,
+                    info.horizontal_offset_bounds,
+                    info.previously_applied_offset,
+                );
                 self.clip_scroll_tree.add_sticky_frame(
                     info.id,
                     clip_and_scroll.scroll_node_id, /* parent id */
                     frame_rect,
-                    info.sticky_frame_info,
+                    sticky_frame_info
                 );
             }
 
@@ -619,57 +641,75 @@ impl<'a> FlattenContext<'a> {
     fn try_to_add_rectangle_splitting_on_clip(
         &mut self,
         info: &LayerPrimitiveInfo,
-        color: &ColorF,
+        content: RectangleContent,
         clip_and_scroll: &ClipAndScrollInfo,
     ) -> bool {
+        if info.rect.size.area() < 200.0 { // arbitrary threshold
+            // too few pixels, don't bother adding instances
+            return false;
+        }
         // If this rectangle is not opaque, splitting the rectangle up
         // into an inner opaque region just ends up hurting batching and
         // doing more work than necessary.
-        if color.a != 1.0 {
-            return false;
+        if let RectangleContent::Fill(ColorF{a, ..}) = content {
+            if a != 1.0 {
+                return false;
+            }
         }
 
-        let inner_unclipped_rect = match &info.local_clip {
-            &LocalClip::Rect(_) => return false,
-            &LocalClip::RoundedRect(_, ref region) => {
+        self.opaque_parts.clear();
+        self.transparent_parts.clear();
+
+        match info.local_clip {
+            LocalClip::Rect(_) => return false,
+            LocalClip::RoundedRect(_, ref region) => {
                 if region.mode == ClipMode::ClipOut {
                     return false;
                 }
-                region.get_inner_rect_full()
+                region.split_rectangles(
+                    &mut self.opaque_parts,
+                    &mut self.transparent_parts,
+                );
             }
         };
-        let inner_unclipped_rect = match inner_unclipped_rect {
-            Some(rect) => rect,
-            None => return false,
-        };
 
-        // The inner rectangle is not clipped by its assigned clipping node, so we can
-        // let it be clipped by the parent of the clipping node, which may result in
-        // less masking some cases.
-        let mut clipped_rects = Vec::new();
-        subtract_rect(&info.rect, &inner_unclipped_rect, &mut clipped_rects);
+        let local_clip = LocalClip::from(*info.local_clip.clip_rect());
+        let mut has_opaque = false;
 
-        let prim_info = LayerPrimitiveInfo {
-            rect: inner_unclipped_rect,
-            local_clip: LocalClip::from(*info.local_clip.clip_rect()),
-            is_backface_visible: info.is_backface_visible,
-            tag: None,
-        };
-
-        self.builder.add_solid_rectangle(
-            *clip_and_scroll,
-            &prim_info,
-            color,
-            PrimitiveFlags::None,
-        );
-
-        for clipped_rect in &clipped_rects {
-            let mut info = info.clone();
-            info.rect = *clipped_rect;
+        for opaque in &self.opaque_parts {
+            let prim_info = LayerPrimitiveInfo {
+                rect: match opaque.intersection(&info.rect) {
+                    Some(rect) => rect,
+                    None => continue,
+                },
+                local_clip,
+                .. info.clone()
+            };
             self.builder.add_solid_rectangle(
                 *clip_and_scroll,
-                &info,
-                color,
+                &prim_info,
+                content,
+                PrimitiveFlags::None,
+            );
+            has_opaque = true;
+        }
+
+        if !has_opaque {
+            return false
+        }
+
+        for transparent in &self.transparent_parts {
+            let prim_info = LayerPrimitiveInfo {
+                rect: match transparent.intersection(&info.rect) {
+                    Some(rect) => rect,
+                    None => continue,
+                },
+                .. info.clone()
+            };
+            self.builder.add_solid_rectangle(
+                *clip_and_scroll,
+                &prim_info,
+                content,
                 PrimitiveFlags::None,
             );
         }
@@ -1084,6 +1124,8 @@ impl FrameContext {
                 tiled_image_map: resource_cache.get_tiled_image_map(),
                 pipeline_epochs: Vec::new(),
                 replacements: Vec::new(),
+                opaque_parts: Vec::new(),
+                transparent_parts: Vec::new(),
             };
 
             roller.builder.push_root(

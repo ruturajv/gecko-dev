@@ -102,14 +102,14 @@ void nsIDNService::prefsChanged(nsIPrefBranch *prefBranch, const char16_t *pref)
   mLock.AssertCurrentThreadOwns();
 
   if (!pref || NS_LITERAL_STRING(NS_NET_PREF_IDNBLACKLIST).Equals(pref)) {
-    nsCOMPtr<nsISupportsString> blacklist;
-    nsresult rv = prefBranch->GetComplexValue(NS_NET_PREF_IDNBLACKLIST,
-                                              NS_GET_IID(nsISupportsString),
-                                              getter_AddRefs(blacklist));
-    if (NS_SUCCEEDED(rv))
-      blacklist->ToString(getter_Copies(mIDNBlacklist));
-    else
+    nsAutoCString blacklist;
+    nsresult rv = prefBranch->GetStringPref(NS_NET_PREF_IDNBLACKLIST,
+                                            EmptyCString(), 0, blacklist);
+    if (NS_SUCCEEDED(rv)) {
+      CopyUTF8toUTF16(blacklist, mIDNBlacklist);
+    } else {
       mIDNBlacklist.Truncate();
+    }
   }
   if (!pref || NS_LITERAL_STRING(NS_NET_PREF_SHOWPUNYCODE).Equals(pref)) {
     bool val;
@@ -123,9 +123,9 @@ void nsIDNService::prefsChanged(nsIPrefBranch *prefBranch, const char16_t *pref)
       mIDNUseWhitelist = val;
   }
   if (!pref || NS_LITERAL_STRING(NS_NET_PREF_IDNRESTRICTION).Equals(pref)) {
-    nsCString profile;
+    nsAutoCString profile;
     if (NS_FAILED(prefBranch->GetCharPref(NS_NET_PREF_IDNRESTRICTION,
-                                          getter_Copies(profile)))) {
+                                          profile))) {
       profile.Truncate();
     }
     if (profile.EqualsLiteral("moderate")) {

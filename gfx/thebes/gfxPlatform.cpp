@@ -8,6 +8,8 @@
 #include "mozilla/layers/ImageBridgeChild.h"
 #include "mozilla/layers/ISurfaceAllocator.h"     // for GfxMemoryImageReporter
 #include "mozilla/webrender/RenderThread.h"
+#include "mozilla/webrender/WebRenderAPI.h"
+#include "mozilla/webrender/webrender_ffi.h"
 #include "mozilla/layers/PaintThread.h"
 #include "mozilla/gfx/gfxVars.h"
 #include "mozilla/gfx/GPUProcessManager.h"
@@ -1029,6 +1031,10 @@ gfxPlatform::InitLayersIPC()
   }
   sLayersIPCIsUp = true;
 
+  if (gfxVars::UseWebRender()) {
+    wr::WebRenderAPI::InitExternalLogHandler();
+  }
+
   if (XRE_IsContentProcess()) {
     if (gfxVars::UseOMTP()) {
       layers::PaintThread::Start();
@@ -1078,6 +1084,10 @@ gfxPlatform::ShutdownLayersIPC()
     } else {
       // TODO: There are other kind of processes and we should make sure gfx
       // stuff is either not created there or shut down properly.
+    }
+
+    if (gfxVars::UseWebRender()) {
+      wr::WebRenderAPI::ShutdownExternalLogHandler();
     }
 }
 

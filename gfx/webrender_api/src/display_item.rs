@@ -5,7 +5,7 @@
 use {ColorF, FontInstanceKey, ImageKey, LayerPixel, LayoutPixel, LayoutPoint, LayoutRect,
      LayoutSize, LayoutTransform};
 use {GlyphOptions, LayoutVector2D, PipelineId, PropertyBinding};
-use euclid::{SideOffsets2D, TypedRect, TypedSideOffsets2D};
+use euclid::{SideOffsets2D, TypedRect};
 use std::ops::Not;
 
 // NOTE: some of these structs have an "IMPLICIT" comment.
@@ -39,6 +39,22 @@ impl ClipAndScrollInfo {
     }
 }
 
+bitflags! {
+    /// Each bit of the edge AA mask is:
+    /// 0, when the edge of the primitive needs to be considered for AA
+    /// 1, when the edge of the segment needs to be considered for AA
+    ///
+    /// *Note*: the bit values have to match the shader logic in
+    /// `write_transform_vertex()` function.
+    #[derive(Deserialize, Serialize)]
+    pub struct EdgeAaSegmentMask: u8 {
+        const LEFT = 0x1;
+        const TOP = 0x2;
+        const RIGHT = 0x4;
+        const BOTTOM = 0x8;
+    }
+}
+
 /// A tag that can be used to identify items during hit testing. If the tag
 /// is missing then the item doesn't take part in hit testing at all. This
 /// is composed of two numbers. In Servo, the first is an identifier while the
@@ -57,6 +73,7 @@ pub struct DisplayItem {
 pub struct PrimitiveInfo<T> {
     pub rect: TypedRect<f32, T>,
     pub local_clip: LocalClip,
+    pub edge_aa_segment_mask: EdgeAaSegmentMask,
     pub is_backface_visible: bool,
     pub tag: Option<ItemTag>,
 }
@@ -66,9 +83,10 @@ impl LayerPrimitiveInfo {
         Self::with_clip_rect(rect, rect)
     }
 
-    pub fn with_clip_rect(rect: TypedRect<f32, LayerPixel>,
-                          clip_rect: TypedRect<f32, LayerPixel>)
-                          -> Self {
+    pub fn with_clip_rect(
+        rect: TypedRect<f32, LayerPixel>,
+        clip_rect: TypedRect<f32, LayerPixel>,
+    ) -> Self {
         Self::with_clip(rect, LocalClip::from(clip_rect))
     }
 
@@ -76,6 +94,7 @@ impl LayerPrimitiveInfo {
         PrimitiveInfo {
             rect: rect,
             local_clip: clip,
+            edge_aa_segment_mask: EdgeAaSegmentMask::empty(),
             is_backface_visible: true,
             tag: None,
         }
@@ -91,6 +110,7 @@ pub enum SpecificDisplayItem {
     ScrollFrame(ScrollFrameDisplayItem),
     StickyFrame(StickyFrameDisplayItem),
     Rectangle(RectangleDisplayItem),
+    ClearRectangle,
     Line(LineDisplayItem),
     Text(TextDisplayItem),
     Image(ImageDisplayItem),
@@ -113,19 +133,54 @@ pub struct ClipDisplayItem {
     pub image_mask: Option<ImageMask>,
 }
 
+/// The minimum and maximum allowable offset for a sticky frame in a single dimension.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+pub struct StickyOffsetBounds {
+    /// The minimum offset for this frame, typically a negative value, which specifies how
+    /// far in the negative direction the sticky frame can offset its contents in this
+    /// dimension.
+    pub min: f32,
+
+    /// The maximum offset for this frame, typically a positive value, which specifies how
+    /// far in the positive direction the sticky frame can offset its contents in this
+    /// dimension.
+    pub max: f32,
+}
+
+impl StickyOffsetBounds {
+    pub fn new(min: f32, max: f32) -> StickyOffsetBounds {
+        StickyOffsetBounds { min, max }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
 pub struct StickyFrameDisplayItem {
     pub id: ClipId,
-    pub sticky_frame_info: StickyFrameInfo,
-}
 
-pub type StickyFrameInfo = TypedSideOffsets2D<Option<StickySideConstraint>, LayoutPoint>;
+    /// The margins that should be maintained between the edge of the parent viewport and this
+    /// sticky frame. A margin of None indicates that the sticky frame should not stick at all
+    /// to that particular edge of the viewport.
+    pub margins: SideOffsets2D<Option<f32>>,
 
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
-pub struct StickySideConstraint {
-    pub margin: f32,
-    pub max_offset: f32,
+    /// The minimum and maximum vertical offsets for this sticky frame. Ignoring these constraints,
+    /// the sticky frame will continue to stick to the edge of the viewport as its original
+    /// position is scrolled out of view. Constraints specify a maximum and minimum offset from the
+    /// original position relative to non-sticky content within the same scrolling frame.
+    pub vertical_offset_bounds: StickyOffsetBounds,
+
+    /// The minimum and maximum horizontal offsets for this sticky frame. Ignoring these constraints,
+    /// the sticky frame will continue to stick to the edge of the viewport as its original
+    /// position is scrolled out of view. Constraints specify a maximum and minimum offset from the
+    /// original position relative to non-sticky content within the same scrolling frame.
+    pub horizontal_offset_bounds: StickyOffsetBounds,
+
+    /// The amount of offset that has already been applied to the sticky frame. A positive y
+    /// component this field means that a top-sticky item was in a scrollframe that has been
+    /// scrolled down, such that the sticky item's position needed to be offset downwards by
+    /// `previously_applied_offset.y`. A negative y component corresponds to the upward offset
+    /// applied due to bottom-stickiness. The x-axis works analogously.
+    pub previously_applied_offset: LayoutVector2D,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
@@ -239,6 +294,13 @@ pub enum BorderDetails {
 pub struct BorderDisplayItem {
     pub widths: BorderWidths,
     pub details: BorderDetails,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+pub enum BorderRadiusKind {
+    Uniform,
+    NonUniform,
 }
 
 #[repr(C)]
@@ -640,7 +702,7 @@ impl ComplexClipRegion {
         rect: LayoutRect,
         radii: BorderRadius,
         mode: ClipMode,
-    ) -> ComplexClipRegion {
+    ) -> Self {
         ComplexClipRegion { rect, radii, mode }
     }
 }

@@ -19,6 +19,20 @@ a11y:
     keyed: false
     cpp_guard: 'ACCESSIBILITY'
 
+  indicator_acted_on:
+    bug_numbers:
+      - 1412358
+    description: >
+      Recorded on click or SPACE/ENTER keypress event. Boolean stating if the
+      accessibility indicactor button was acted on.
+    expires: "62"
+    kind: boolean
+    notification_emails:
+      - yzenevich@mozilla.com
+    release_channel_collection: opt-out
+    record_in_processes:
+      - 'main'
+
 # The following section contains the aushelper system add-on scalars.
 aushelper:
   websense_reg_version:
@@ -619,6 +633,20 @@ preferences:
     release_channel_collection: opt-out
     record_in_processes:
       - main
+  prevent_accessibility_services:
+    bug_numbers:
+      - 1412358
+    description: >
+      Recorded on command event. Boolean stating if the preference checkbox for
+      preventing accessibility from accessing the browser (Privacy & Security)
+      was checked.
+    expires: "62"
+    kind: boolean
+    notification_emails:
+      - yzenevich@mozilla.com
+    release_channel_collection: opt-out
+    record_in_processes:
+      - 'main'
 
 # The following section contains WebRTC nICEr scalars
 # For more info on ICE, see https://tools.ietf.org/html/rfc5245
@@ -893,6 +921,41 @@ devtools:
     record_in_processes:
       - 'main'
 
+devtools.aboutdevtools:
+  opened:
+    bug_numbers:
+      - 1412029
+    description: >
+      Number of times about:devtools was opened.
+    expires: "60"
+    kind: uint
+    notification_emails:
+      - dev-developer-tools@lists.mozilla.org, jdescottes@mozilla.com
+    record_in_processes:
+      - 'main'
+  installed:
+    bug_numbers:
+      - 1412029
+    description: >
+      Number of times devtools were enabled/installed in about:devtools.
+    expires: "60"
+    kind: uint
+    notification_emails:
+      - dev-developer-tools@lists.mozilla.org, jdescottes@mozilla.com
+    record_in_processes:
+      - 'main'
+  noinstall_exits:
+    bug_numbers:
+      - 1412029
+    description: >
+      Number of times the user left about:devtools without enabling devtools.
+    expires: "60"
+    kind: uint
+    notification_emails:
+      - dev-developer-tools@lists.mozilla.org, jdescottes@mozilla.com
+    record_in_processes:
+      - 'main'
+
 navigator.storage:
   estimate_count:
     bug_numbers:
@@ -1135,6 +1198,58 @@ formautofill.creditCards:
       - autofill@lists.mozilla.org
       - jcheng@mozilla.com
       - chsiang@mozilla.com
+    release_channel_collection: opt-out
+    record_in_processes:
+      - 'main'
+
+# The following section contains scalars for Screenshots.
+screenshots:
+  download:
+    bug_numbers:
+      - 1412411
+    description: >
+      The count of new screenshots created, then downloaded per session
+      via the Firefox Screenshots feature. Excludes failed attempts due
+      to any error.
+    expires: never
+    kind: uint
+    notification_emails:
+      - jhirsch@mozilla.com
+      - ibicking@mozilla.com
+      - clouserw@mozilla.com
+    release_channel_collection: opt-out
+    record_in_processes:
+      - 'main'
+
+  upload:
+    bug_numbers:
+      - 1412411
+    description: >
+      The count of new screenshots created, then uploaded per session
+      via the Firefox Screenshots feature. Excludes attempts to create
+      and upload the screenshot that may have failed.
+    expires: never
+    kind: uint
+    notification_emails:
+      - jhirsch@mozilla.com
+      - ibicking@mozilla.com
+      - clouserw@mozilla.com
+    release_channel_collection: opt-out
+    record_in_processes:
+      - 'main'
+
+  copy:
+    bug_numbers:
+      - 1412411
+    description: >
+      The count of new screenshots created, then copied directly to the
+      clipboard per session via the Firefox Screenshots feature.
+    expires: never
+    kind: uint
+    notification_emails:
+      - jhirsch@mozilla.com
+      - ibicking@mozilla.com
+      - clouserw@mozilla.com
     release_channel_collection: opt-out
     record_in_processes:
       - 'main'

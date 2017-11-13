@@ -12,23 +12,19 @@
 #include "imgILoader.h"
 #include "imgIRequest.h"
 #include "imgIContainer.h"
-#include "imgINotificationObserver.h"
-#include "imgIOnloadBlocker.h"
 
 class imgRequestProxy;
 class nsImageBoxFrame;
 
 class nsDisplayXULImage;
 
-class nsImageBoxListener final : public imgINotificationObserver,
-                                 public imgIOnloadBlocker
+class nsImageBoxListener final : public imgINotificationObserver
 {
 public:
   nsImageBoxListener();
 
   NS_DECL_ISUPPORTS
   NS_DECL_IMGINOTIFICATIONOBSERVER
-  NS_DECL_IMGIONLOADBLOCKER
 
   void SetFrame(nsImageBoxFrame *frame) { mFrame = frame; }
 
@@ -67,7 +63,7 @@ public:
 
   virtual void DidSetStyleContext(nsStyleContext* aOldStyleContext) override;
 
-  virtual void DestroyFrom(nsIFrame* aDestructRoot) override;
+  virtual void DestroyFrom(nsIFrame* aDestructRoot, PostDestroyData& aPostDestroyData) override;
 
 #ifdef DEBUG_FRAME_DUMP
   virtual nsresult GetFrameName(nsAString& aResult) const override;

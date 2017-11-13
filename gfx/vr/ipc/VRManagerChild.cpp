@@ -1,6 +1,5 @@
-/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * vim: sw=2 ts=8 et :
- */
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=8 sts=2 et sw=2 tw=80: */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -16,13 +15,10 @@
 #include "mozilla/dom/VREventObserver.h"
 #include "mozilla/dom/WindowBinding.h" // for FrameRequestCallback
 #include "mozilla/dom/ContentChild.h"
-#include "mozilla/layers/TextureClient.h"
 #include "nsContentUtils.h"
 #include "mozilla/dom/GamepadManager.h"
 #include "mozilla/dom/VRServiceTest.h"
 #include "mozilla/layers/SyncObject.h"
-
-using layers::TextureClient;
 
 namespace {
 const nsTArray<RefPtr<dom::VREventObserver>>::index_type kNoIndex =
@@ -94,8 +90,7 @@ VRManagerChild::InitForContent(Endpoint<PVRManagerChild>&& aEndpoint)
 
   RefPtr<VRManagerChild> child(new VRManagerChild());
   if (!aEndpoint.Bind(child)) {
-    NS_RUNTIMEABORT("Couldn't Open() Compositor channel.");
-    return false;
+    MOZ_CRASH("Couldn't Open() Compositor channel.");
   }
   sVRManagerChildSingleton = child;
   return true;
@@ -132,8 +127,7 @@ VRManagerChild::InitWithGPUProcess(Endpoint<PVRManagerChild>&& aEndpoint)
 
   sVRManagerChildSingleton = new VRManagerChild();
   if (!aEndpoint.Bind(sVRManagerChildSingleton)) {
-    NS_RUNTIMEABORT("Couldn't Open() Compositor channel.");
-    return;
+    MOZ_CRASH("Couldn't Open() Compositor channel.");
   }
 }
 
@@ -156,8 +150,6 @@ VRManagerChild::DeferredDestroy(RefPtr<VRManagerChild> aVRManagerChild)
 void
 VRManagerChild::Destroy()
 {
-  mTexturesWaitingRecycled.Clear();
-
   // Keep ourselves alive until everything has been shut down
   RefPtr<VRManagerChild> selfRef = this;
 
@@ -252,7 +244,8 @@ VRManagerChild::RecvUpdateDisplayInfo(nsTArray<VRDisplayInfo>&& aDisplayUpdates)
      * can resolve.  This must happen even if no changes
      * to VRDisplays have been detected here.
      */
-    nsGlobalWindow* window = nsGlobalWindow::GetInnerWindowWithId(windowId);
+    nsGlobalWindowInner* window =
+      nsGlobalWindowInner::GetInnerWindowWithId(windowId);
     if (!window) {
       continue;
     }
@@ -297,36 +290,6 @@ VRManagerChild::CreateVRServiceTestController(const nsCString& aID, dom::Promise
   SendCreateVRServiceTestController(aID, mPromiseID);
   mPromiseList.Put(mPromiseID, aPromise);
   ++mPromiseID;
-}
-
-mozilla::ipc::IPCResult
-VRManagerChild::RecvParentAsyncMessages(InfallibleTArray<AsyncParentMessageData>&& aMessages)
-{
-  for (InfallibleTArray<AsyncParentMessageData>::index_type i = 0; i < aMessages.Length(); ++i) {
-    const AsyncParentMessageData& message = aMessages[i];
-
-    switch (message.type()) {
-      case AsyncParentMessageData::TOpNotifyNotUsed: {
-        const OpNotifyNotUsed& op = message.get_OpNotifyNotUsed();
-        NotifyNotUsed(op.TextureId(), op.fwdTransactionId());
-        break;
-      }
-      default:
-        NS_ERROR("unknown AsyncParentMessageData type");
-        return IPC_FAIL_NO_REASON(this);
-    }
-  }
-  return IPC_OK();
-}
-
-void
-VRManagerChild::NotifyNotUsed(uint64_t aTextureId, uint64_t aFwdTransactionId)
-{
-  RefPtr<TextureClient> client = mTexturesWaitingRecycled.Get(aTextureId);
-  if (!client) {
-    return;
-  }
-  mTexturesWaitingRecycled.Remove(aTextureId);
 }
 
 PVRLayerChild*

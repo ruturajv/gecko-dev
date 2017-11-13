@@ -150,7 +150,7 @@ static const size_t gMaxStackSize = 128 * sizeof(size_t) * 1024;
  * Limit the timeout to 30 minutes to prevent an overflow on platfoms
  * that represent the time internally in microseconds using 32-bit int.
  */
-static const TimeDuration MAX_TIMEOUT_INTERVAL = TimeDuration::FromSeconds(1800.0);
+static const double MAX_TIMEOUT_SECONDS = 1800.0;
 
 // SharedArrayBuffer and Atomics are enabled by default (tracking Firefox).
 #define SHARED_MEMORY_DEFAULT 1
@@ -181,6 +181,7 @@ void counters_reset(int) {
 static void
 InstallCoverageSignalHandlers()
 {
+#ifndef XP_WIN
     fprintf(stderr, "[CodeCoverage] Setting handlers for process %d.\n", getpid());
 
     struct sigaction dump_sa;
@@ -196,8 +197,48 @@ InstallCoverageSignalHandlers()
     sigemptyset(&reset_sa.sa_mask);
     mozilla::DebugOnly<int> r2 = sigaction(SIGUSR2, &reset_sa, nullptr);
     MOZ_ASSERT(r2 == 0, "Failed to install GCOV SIGUSR2 handler");
+#endif
 }
 #endif
+
+class OffThreadState {
+    enum State {
+        IDLE,           /* ready to work; no token, no source */
+        COMPILING,      /* working; no token, have source */
+        DONE            /* compilation done: have token and source */
+    };
+
+  public:
+    OffThreadState()
+      : monitor(mutexid::ShellOffThreadState),
+        state(IDLE),
+        runtime(nullptr),
+        token(),
+        source(nullptr)
+    { }
+
+    bool startIfIdle(JSContext* cx, ScriptKind kind, ScopedJSFreePtr<char16_t>& newSource);
+
+    bool startIfIdle(JSContext* cx, ScriptKind kind, JS::TranscodeBuffer&& newXdr);
+
+    void abandon(JSContext* cx);
+
+    void markDone(void* newToken);
+
+    void* waitUntilDone(JSContext* cx, ScriptKind kind);
+
+    JS::TranscodeBuffer& xdrBuffer() { return xdr; }
+
+  private:
+    js::Monitor monitor;
+    ScriptKind scriptKind;
+    State state;
+    JSRuntime* runtime;
+    void* token;
+    char16_t* source;
+    JS::TranscodeBuffer xdr;
+};
+static OffThreadState* gOffThreadState;
 
 bool
 OffThreadState::startIfIdle(JSContext* cx, ScriptKind kind, ScopedJSFreePtr<char16_t>& newSource)
@@ -211,6 +252,7 @@ OffThreadState::startIfIdle(JSContext* cx, ScriptKind kind, ScopedJSFreePtr<char
     source = newSource.forget();
 
     scriptKind = kind;
+    runtime = cx->runtime();
     state = COMPILING;
     return true;
 }
@@ -227,6 +269,7 @@ OffThreadState::startIfIdle(JSContext* cx, ScriptKind kind, JS::TranscodeBuffer&
     xdr = mozilla::Move(newXdr);
 
     scriptKind = kind;
+    runtime = cx->runtime();
     state = COMPILING;
     return true;
 }
@@ -265,7 +308,7 @@ void*
 OffThreadState::waitUntilDone(JSContext* cx, ScriptKind kind)
 {
     AutoLockMonitor alm(monitor);
-    if (state == IDLE || scriptKind != kind)
+    if (state == IDLE || cx->runtime() != runtime || scriptKind != kind)
         return nullptr;
 
     if (state == COMPILING) {
@@ -3383,7 +3426,7 @@ CooperativeEndWait(JSContext* cx)
 }
 
 static void
-CooperativeYield()
+CooperativeYield(bool terminating = false)
 {
     LockGuard<Mutex> lock(cooperationState->lock);
     MOZ_ASSERT(!cooperationState->idle);
@@ -3392,7 +3435,7 @@ CooperativeYield()
 
     // Wait until another thread takes over control before returning, if there
     // is another thread to do so.
-    if (cooperationState->numThreads) {
+    if (!terminating && cooperationState->numThreads) {
         uint64_t count = cooperationState->yieldCount;
         cooperationState->cvar.wait(lock, [&] { return cooperationState->yieldCount != count; });
     }
@@ -3552,7 +3595,7 @@ WorkerMain(void* arg)
         js_delete(sc);
         if (input->siblingContext) {
             cooperationState->numThreads--;
-            CooperativeYield();
+            CooperativeYield(/* terminating = */ true);
         }
         js_delete(input);
     });
@@ -3811,6 +3854,7 @@ Sleep_fn(JSContext* cx, unsigned argc, Value* vp)
         }
 
         duration = TimeDuration::FromSeconds(Max(0.0, t_secs));
+        const TimeDuration MAX_TIMEOUT_INTERVAL = TimeDuration::FromSeconds(MAX_TIMEOUT_SECONDS);
         if (duration > MAX_TIMEOUT_INTERVAL) {
             JS_ReportErrorASCII(cx, "Excessive sleep interval");
             return false;
@@ -3925,6 +3969,13 @@ KillWorkerThreads(JSContext* cx)
 {
     MOZ_ASSERT_IF(!CanUseExtraThreads(), workerThreads.empty());
 
+    // Yield until all other cooperative threads in the main runtime finish.
+    while (cooperationState->numThreads) {
+        CooperativeBeginWait(cx);
+        CooperativeYield();
+        CooperativeEndWait(cx);
+    }
+
     if (!workerThreadsLock) {
         MOZ_ASSERT(workerThreads.empty());
         return;
@@ -3944,15 +3995,10 @@ KillWorkerThreads(JSContext* cx)
         thread->join();
     }
 
+    workerThreads.clearAndFree();
+
     js_delete(workerThreadsLock);
     workerThreadsLock = nullptr;
-
-    // Yield until all other cooperative threads in the main runtime finish.
-    while (cooperationState->numThreads) {
-        CooperativeBeginWait(cx);
-        CooperativeYield();
-        CooperativeEndWait(cx);
-    }
 
     js_delete(cooperationState);
     cooperationState = nullptr;
@@ -3978,6 +4024,7 @@ SetTimeoutValue(JSContext* cx, double t)
         JS_ReportErrorASCII(cx, "timeout is not a number");
         return false;
     }
+    const TimeDuration MAX_TIMEOUT_INTERVAL = TimeDuration::FromSeconds(MAX_TIMEOUT_SECONDS);
     if (TimeDuration::FromSeconds(t) > MAX_TIMEOUT_INTERVAL) {
         JS_ReportErrorASCII(cx, "Excessive timeout value");
         return false;
@@ -4456,8 +4503,7 @@ SyntaxParse(JSContext* cx, unsigned argc, Value* vp)
 static void
 OffThreadCompileScriptCallback(void* token, void* callbackData)
 {
-    ShellContext* sc = static_cast<ShellContext*>(callbackData);
-    sc->offThreadState.markDone(token);
+    gOffThreadState->markDone(token);
 }
 
 static bool
@@ -4534,17 +4580,16 @@ OffThreadCompileScript(JSContext* cx, unsigned argc, Value* vp)
         return false;
     }
 
-    ShellContext* sc = GetShellContext(cx);
-    if (!sc->offThreadState.startIfIdle(cx, ScriptKind::Script, ownedChars)) {
+    if (!gOffThreadState->startIfIdle(cx, ScriptKind::Script, ownedChars)) {
         JS_ReportErrorASCII(cx, "called offThreadCompileScript without calling runOffThreadScript"
                             " to receive prior off-thread compilation");
         return false;
     }
 
     if (!JS::CompileOffThread(cx, options, chars, length,
-                              OffThreadCompileScriptCallback, sc))
+                              OffThreadCompileScriptCallback, nullptr))
     {
-        sc->offThreadState.abandon(cx);
+        gOffThreadState->abandon(cx);
         return false;
     }
 
@@ -4560,8 +4605,7 @@ runOffThreadScript(JSContext* cx, unsigned argc, Value* vp)
     if (OffThreadParsingMustWaitForGC(cx->runtime()))
         gc::FinishGC(cx);
 
-    ShellContext* sc = GetShellContext(cx);
-    void* token = sc->offThreadState.waitUntilDone(cx, ScriptKind::Script);
+    void* token = gOffThreadState->waitUntilDone(cx, ScriptKind::Script);
     if (!token) {
         JS_ReportErrorASCII(cx, "called runOffThreadScript when no compilation is pending");
         return false;
@@ -4621,17 +4665,16 @@ OffThreadCompileModule(JSContext* cx, unsigned argc, Value* vp)
         return false;
     }
 
-    ShellContext* sc = GetShellContext(cx);
-    if (!sc->offThreadState.startIfIdle(cx, ScriptKind::Module, ownedChars)) {
+    if (!gOffThreadState->startIfIdle(cx, ScriptKind::Module, ownedChars)) {
         JS_ReportErrorASCII(cx, "called offThreadCompileModule without receiving prior off-thread "
                             "compilation");
         return false;
     }
 
     if (!JS::CompileOffThreadModule(cx, options, chars, length,
-                                    OffThreadCompileScriptCallback, sc))
+                                    OffThreadCompileScriptCallback, nullptr))
     {
-        sc->offThreadState.abandon(cx);
+        gOffThreadState->abandon(cx);
         return false;
     }
 
@@ -4647,8 +4690,7 @@ FinishOffThreadModule(JSContext* cx, unsigned argc, Value* vp)
     if (OffThreadParsingMustWaitForGC(cx->runtime()))
         gc::FinishGC(cx);
 
-    ShellContext* sc = GetShellContext(cx);
-    void* token = sc->offThreadState.waitUntilDone(cx, ScriptKind::Module);
+    void* token = gOffThreadState->waitUntilDone(cx, ScriptKind::Module);
     if (!token) {
         JS_ReportErrorASCII(cx, "called finishOffThreadModule when no compilation is pending");
         return false;
@@ -4725,17 +4767,16 @@ OffThreadDecodeScript(JSContext* cx, unsigned argc, Value* vp)
         return false;
     }
 
-    ShellContext* sc = GetShellContext(cx);
-    if (!sc->offThreadState.startIfIdle(cx, ScriptKind::DecodeScript, mozilla::Move(loadBuffer))) {
+    if (!gOffThreadState->startIfIdle(cx, ScriptKind::DecodeScript, mozilla::Move(loadBuffer))) {
         JS_ReportErrorASCII(cx, "called offThreadDecodeScript without calling "
                             "runOffThreadDecodedScript to receive prior off-thread compilation");
         return false;
     }
 
-    if (!JS::DecodeOffThreadScript(cx, options, sc->offThreadState.xdrBuffer(), 0,
-                                   OffThreadCompileScriptCallback, sc))
+    if (!JS::DecodeOffThreadScript(cx, options, gOffThreadState->xdrBuffer(), 0,
+                                   OffThreadCompileScriptCallback, nullptr))
     {
-        sc->offThreadState.abandon(cx);
+        gOffThreadState->abandon(cx);
         return false;
     }
 
@@ -4751,8 +4792,7 @@ runOffThreadDecodedScript(JSContext* cx, unsigned argc, Value* vp)
     if (OffThreadParsingMustWaitForGC(cx->runtime()))
         gc::FinishGC(cx);
 
-    ShellContext* sc = GetShellContext(cx);
-    void* token = sc->offThreadState.waitUntilDone(cx, ScriptKind::DecodeScript);
+    void* token = gOffThreadState->waitUntilDone(cx, ScriptKind::DecodeScript);
     if (!token) {
         JS_ReportErrorASCII(cx, "called runOffThreadDecodedScript when no compilation is pending");
         return false;
@@ -4893,12 +4933,12 @@ NestedShell(JSContext* cx, unsigned argc, Value* vp)
         JS_ReportErrorNumberASCII(cx, my_GetErrorMessage, nullptr, JSSMSG_NESTED_FAIL);
         return false;
     }
-    if (!argv.append(strdup(sArgv[0])))
+    if (!argv.append(js_strdup(sArgv[0])))
         return false;
 
     // Propagate selected flags from the current shell
     for (unsigned i = 0; i < sPropagatedFlags.length(); i++) {
-        char* cstr = strdup(sPropagatedFlags[i]);
+        char* cstr = js_strdup(sPropagatedFlags[i]);
         if (!cstr || !argv.append(cstr))
             return false;
     }
@@ -5635,7 +5675,7 @@ struct BufferStreamState
     }
 };
 
-ExclusiveWaitableData<BufferStreamState> bufferStreamState(mutexid::BufferStreamState);
+static ExclusiveWaitableData<BufferStreamState>* bufferStreamState;
 
 static void
 BufferStreamMain(BufferStreamJob* job)
@@ -5653,7 +5693,7 @@ BufferStreamMain(BufferStreamJob* job)
         size_t delayMillis;
         size_t chunkSize;
         {
-            auto state = bufferStreamState.lock();
+            auto state = bufferStreamState->lock();
             shutdown = state->shutdown;
             delayMillis = state->delayMillis;
             chunkSize = state->chunkSize;
@@ -5674,7 +5714,7 @@ BufferStreamMain(BufferStreamJob* job)
         byteOffset += chunkSize;
     }
 
-    auto state = bufferStreamState.lock();
+    auto state = bufferStreamState->lock();
     size_t jobIndex = 0;
     while (state->jobs[jobIndex].get() != job)
         jobIndex++;
@@ -5703,22 +5743,13 @@ ConsumeBufferSource(JSContext* cx, JS::HandleObject obj, JS::MimeType, JS::Strea
     BufferStreamJob* jobPtr = job.get();
 
     {
-        auto state = bufferStreamState.lock();
+        auto state = bufferStreamState->lock();
         MOZ_ASSERT(!state->shutdown);
         if (!state->jobs.append(Move(job)))
             return false;
     }
 
     return jobPtr->thread.init(BufferStreamMain, jobPtr);
-}
-
-static void
-ShutdownBufferStreams()
-{
-    auto state = bufferStreamState.lock();
-    state->shutdown = true;
-    while (!state->jobs.empty())
-        state.wait(/* jobs empty */);
 }
 
 static bool
@@ -5737,13 +5768,23 @@ SetBufferStreamParams(JSContext* cx, unsigned argc, Value* vp)
         return false;
 
     {
-        auto state = bufferStreamState.lock();
+        auto state = bufferStreamState->lock();
         state->delayMillis = delayMillis;
         state->chunkSize = chunkSize;
     }
 
     args.rval().setUndefined();
     return true;
+}
+
+static void
+ShutdownBufferStreams()
+{
+    auto state = bufferStreamState->lock();
+    state->shutdown = true;
+    while (!state->jobs.empty())
+        state.wait(/* jobs empty */);
+    state->jobs.clearAndFree();
 }
 
 class SprintOptimizationTypeInfoOp : public JS::ForEachTrackedOptimizationTypeInfoOp
@@ -7853,7 +7894,7 @@ ShellOpenAsmJSCacheEntryForWrite(HandleObject global, const char16_t* begin,
     if (memory == MAP_FAILED)
         return JS::AsmJSCache_InternalError;
     MOZ_ASSERT(*(uint32_t*)memory == 0);
-    if (mprotect(memory, serializedSize, PROT_WRITE))
+    if (mprotect(memory, serializedSize, PROT_READ | PROT_WRITE))
         return JS::AsmJSCache_InternalError;
 #endif
 
@@ -8618,6 +8659,12 @@ main(int argc, char** argv, char** envp)
     SetOutputFile("JS_STDOUT", &rcStdout, &gOutFile);
     SetOutputFile("JS_STDERR", &rcStderr, &gErrFile);
 
+    // Start the engine.
+    if (!JS_Init())
+        return 1;
+
+    auto shutdownEngine = MakeScopeExit([]() { JS_ShutDown(); });
+
     OptionParser op("Usage: {progname} [options] [[script] scriptArgs*]");
 
     op.setDescription("The SpiderMonkey shell provides a command line interface to the "
@@ -8841,10 +8888,6 @@ main(int argc, char** argv, char** envp)
     if (op.getBoolOption("no-threads"))
         js::DisableExtraThreads();
 
-    // Start the engine.
-    if (!JS_Init())
-        return 1;
-
     if (!InitSharedArrayBufferMailbox())
         return 1;
 
@@ -8889,7 +8932,23 @@ main(int argc, char** argv, char** envp)
     JS_AddInterruptCallback(cx, ShellInterruptCallback);
     JS::SetBuildIdOp(cx, ShellBuildId);
     JS::SetAsmJSCacheOps(cx, &asmJSCacheOps);
+
+    bufferStreamState =
+        js_new<ExclusiveWaitableData<BufferStreamState>>(mutexid::BufferStreamState);
+    if (!bufferStreamState)
+        return 1;
+    auto shutdownBufferStreams = MakeScopeExit([] {
+        ShutdownBufferStreams();
+        js_delete(bufferStreamState);
+    });
     JS::InitConsumeStreamCallback(cx, ConsumeBufferSource);
+
+    gOffThreadState = js_new<OffThreadState>();
+    if (!gOffThreadState)
+        return 1;
+    auto deleteOffThreadState = MakeScopeExit([] {
+        js_delete(gOffThreadState);
+    });
 
     JS_SetNativeStackQuota(cx, gMaxStackSize);
 
@@ -8941,10 +9000,8 @@ main(int argc, char** argv, char** envp)
 
     KillWorkerThreads(cx);
 
-    ShutdownBufferStreams();
     DestructSharedArrayBufferMailbox();
 
     JS_DestroyContext(cx);
-    JS_ShutDown();
     return result;
 }

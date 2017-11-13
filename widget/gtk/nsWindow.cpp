@@ -17,6 +17,7 @@
 #include "mozilla/TimeStamp.h"
 #include "mozilla/TouchEvents.h"
 #include "mozilla/UniquePtrExtensions.h"
+#include "mozilla/WidgetUtils.h"
 #include <algorithm>
 
 #include "GeckoProfiler.h"
@@ -76,7 +77,6 @@
 #include "nsIPrefService.h"
 #include "nsIGConfService.h"
 #include "nsIServiceManager.h"
-#include "nsIStringBundle.h"
 #include "nsGfxCIID.h"
 #include "nsGtkUtils.h"
 #include "nsIObserverService.h"
@@ -175,8 +175,6 @@ static GdkWindow *get_inner_gdk_window (GdkWindow *aWindow,
 
 static int    is_parent_ungrab_enter(GdkEventCrossing *aEvent);
 static int    is_parent_grab_leave(GdkEventCrossing *aEvent);
-
-static void GetBrandName(nsAString& brandName);
 
 /* callbacks from widgets */
 #if (MOZ_WIDGET_GTK == 2)
@@ -1777,7 +1775,10 @@ nsWindow::SetIcon(const nsAString& aIconSpec)
 
     if (aIconSpec.EqualsLiteral("default")) {
         nsAutoString brandName;
-        GetBrandName(brandName);
+        WidgetUtils::GetBrandShortName(brandName);
+        if (brandName.IsEmpty()) {
+            brandName.AssignLiteral(u"Mozilla");
+        }
         AppendUTF16toUTF8(brandName, iconName);
         ToLowerCase(iconName);
     } else {
@@ -2994,11 +2995,26 @@ nsWindow::GetEventTimeStamp(guint32 aEventTime)
         // In this case too, just return the current timestamp.
         return TimeStamp::Now();
     }
-    CurrentX11TimeGetter* getCurrentTime = GetCurrentTimeGetter();
-    MOZ_ASSERT(getCurrentTime,
-               "Null current time getter despite having a window");
-    return TimeConverter().GetTimeStampFromSystemTime(aEventTime,
-                                                      *getCurrentTime);
+
+    TimeStamp eventTimeStamp;
+
+    if (!mIsX11Display) {
+        // Wayland compositors use monotonic time to set timestamps.
+        int64_t timestampTime = g_get_monotonic_time() / 1000;
+        guint32 refTimeTruncated = guint32(timestampTime);
+
+        timestampTime -= refTimeTruncated - aEventTime;
+        int64_t tick =
+            BaseTimeDurationPlatformUtils::TicksFromMilliseconds(timestampTime);
+        eventTimeStamp = TimeStamp::FromSystemTime(tick);
+    } else {
+        CurrentX11TimeGetter* getCurrentTime = GetCurrentTimeGetter();
+        MOZ_ASSERT(getCurrentTime,
+                   "Null current time getter despite having a window");
+        eventTimeStamp = TimeConverter().GetTimeStampFromSystemTime(aEventTime,
+                                                              *getCurrentTime);
+    }
+    return eventTimeStamp;
 }
 
 mozilla::CurrentX11TimeGetter*
@@ -3506,25 +3522,6 @@ nsWindow::OnTouchEvent(GdkEventTouch* aEvent)
 }
 #endif
 
-static void
-GetBrandName(nsAString& aBrandName)
-{
-    nsCOMPtr<nsIStringBundleService> bundleService =
-        do_GetService(NS_STRINGBUNDLE_CONTRACTID);
-
-    nsCOMPtr<nsIStringBundle> bundle;
-    if (bundleService)
-        bundleService->CreateBundle(
-            "chrome://branding/locale/brand.properties",
-            getter_AddRefs(bundle));
-
-    if (bundle)
-        bundle->GetStringFromName("brandShortName", aBrandName);
-
-    if (aBrandName.IsEmpty())
-        aBrandName.AssignLiteral(u"Mozilla");
-}
-
 static GdkWindow *
 CreateGdkWindow(GdkWindow *parent, GtkWidget *widget)
 {
@@ -3601,7 +3598,7 @@ nsWindow::Create(nsIWidget* aParent,
     GtkWindow      *topLevelParent = nullptr;
     nsWindow       *parentnsWindow = nullptr;
     GtkWidget      *eventWidget = nullptr;
-    bool            shellHasCSD = false;
+    bool            drawToContainer = false;
 
     if (aParent) {
         parentnsWindow = static_cast<nsWindow*>(aParent);
@@ -3777,20 +3774,28 @@ nsWindow::Create(nsIWidget* aParent,
         // it explicitly now.
         gtk_widget_realize(mShell);
 
-        // We can't draw directly to top-level window when client side
-        // decorations are enabled. We use container with GdkWindow instead.
+        /* There are two cases here:
+         *
+         * 1) We're running on Gtk+ without client side decorations.
+         *    Content is rendered to mShell window and we listen
+         *    to the Gtk+ events on mShell
+         * 2) We're running on Gtk+ > 3.20 and client side decorations
+         *    are drawn by Gtk+ to mShell. Content is rendered to mContainer
+         *    and we listen to the Gtk+ events on mContainer.
+         */
         GtkStyleContext* style = gtk_widget_get_style_context(mShell);
-        shellHasCSD = gtk_style_context_has_class(style, "csd");
+        drawToContainer = gtk_style_context_has_class(style, "csd");
 #endif
-        if (!shellHasCSD) {
-            // Use mShell's window for drawing and events.
-            gtk_widget_set_has_window(container, FALSE);
-            // Prevent GtkWindow from painting a background to flicker.
-            gtk_widget_set_app_paintable(mShell, TRUE);
-        }
-        // Set up event widget
-        eventWidget = shellHasCSD ? container : mShell;
+        eventWidget = (drawToContainer) ? container : mShell;
+
         gtk_widget_add_events(eventWidget, kEvents);
+
+        // Prevent GtkWindow from painting a background to avoid flickering.
+        gtk_widget_set_app_paintable(eventWidget, TRUE);
+
+        // If we draw to mContainer window then configure it now because
+        // gtk_container_add() realizes the child widget.
+        gtk_widget_set_has_window(container, drawToContainer);
 
         gtk_container_add(GTK_CONTAINER(mShell), container);
         gtk_widget_realize(container);
@@ -3837,10 +3842,11 @@ nsWindow::Create(nsIWidget* aParent,
         }
     }
         break;
+
     case eWindowType_plugin:
     case eWindowType_plugin_ipc_chrome:
     case eWindowType_plugin_ipc_content:
-        MOZ_ASSERT_UNREACHABLE();
+        MOZ_ASSERT_UNREACHABLE("Unexpected eWindowType_plugin*");
         return NS_ERROR_FAILURE;
 
     case eWindowType_child: {
@@ -3960,7 +3966,7 @@ nsWindow::Create(nsIWidget* aParent,
                          G_CALLBACK(drag_data_received_event_cb), nullptr);
 
         GtkWidget *widgets[] = { GTK_WIDGET(mContainer),
-                                 !shellHasCSD ? mShell : nullptr };
+                                 !drawToContainer ? mShell : nullptr };
         for (size_t i = 0; i < ArrayLength(widgets) && widgets[i]; ++i) {
             // Visibility events are sent to the owning widget of the relevant
             // window but do not propagate to parent widgets so connect on
@@ -6613,6 +6619,13 @@ nsWindow::ClearCachedResources()
             window->ClearCachedResources();
         }
     }
+}
+
+nsresult
+nsWindow::SetNonClientMargins(LayoutDeviceIntMargin &aMargins)
+{
+  SetDrawsInTitlebar(aMargins.top == 0);
+  return NS_OK;
 }
 
 void

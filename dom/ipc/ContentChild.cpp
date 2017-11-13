@@ -22,6 +22,8 @@
 #include "mozilla/TelemetryIPC.h"
 #include "mozilla/devtools/HeapSnapshotTempFileHelperChild.h"
 #include "mozilla/docshell/OfflineCacheUpdateChild.h"
+#include "mozilla/dom/ClientManager.h"
+#include "mozilla/dom/ClientOpenWindowOpActors.h"
 #include "mozilla/dom/ContentBridgeChild.h"
 #include "mozilla/dom/ContentBridgeParent.h"
 #include "mozilla/dom/VideoDecoderManagerChild.h"
@@ -570,13 +572,21 @@ ContentChild::Init(MessageLoop* aIOLoop,
                    bool aIsForBrowser)
 {
 #ifdef MOZ_WIDGET_GTK
-  // We need to pass a display down to gtk_init because it's not going to
-  // use the one from the environment on its own when deciding which backend
-  // to use, and when starting under XWayland, it may choose to start with
-  // the wayland backend instead of the x11 backend.
+  // When running X11 only build we need to pass a display down
+  // to gtk_init because it's not going to use the one from the environment
+  // on its own when deciding which backend to use, and when starting under
+  // XWayland, it may choose to start with the wayland backend
+  // instead of the x11 backend.
   // The DISPLAY environment variable is normally set by the parent process.
+  // The MOZ_GDK_DISPLAY environment variable is set from nsAppRunner.cpp
+  // when --display is set by the command line.
   if (!gfxPlatform::IsHeadless()) {
-    const char* display_name = DetectDisplay();
+    const char* display_name = PR_GetEnv("MOZ_GDK_DISPLAY");
+#ifndef MOZ_WAYLAND
+    if (!display_name) {
+      display_name = PR_GetEnv("DISPLAY");
+    }
+#endif
     if (display_name) {
       int argc = 3;
       char option_name[] = "--display";
@@ -1144,6 +1154,8 @@ ContentChild::InitXPCOM(const XPCOMInitData& aXPCOMInit,
     MOZ_ASSERT_UNREACHABLE("PBackground init can't fail at this point");
     return;
   }
+
+  ClientManager::Startup();
 
   nsCOMPtr<nsIConsoleService> svc(do_GetService(NS_CONSOLESERVICE_CONTRACTID));
   if (!svc) {
@@ -3121,8 +3133,7 @@ ContentChild::RecvSetAudioSessionData(const nsID& aId,
     mozilla::widget::StartAudioSession();
     return IPC_OK();
 #else
-    NS_RUNTIMEABORT("Not Reached!");
-    return IPC_FAIL_NO_REASON(this);
+    MOZ_CRASH("Not Reached!");
 #endif
 }
 
@@ -3573,6 +3584,26 @@ ContentChild::RecvSetPluginList(const uint32_t& aPluginEpoch,
   return IPC_OK();
 }
 
+PClientOpenWindowOpChild*
+ContentChild::AllocPClientOpenWindowOpChild(const ClientOpenWindowArgs& aArgs)
+{
+  return AllocClientOpenWindowOpChild();
+}
+
+IPCResult
+ContentChild::RecvPClientOpenWindowOpConstructor(PClientOpenWindowOpChild* aActor,
+                                                 const ClientOpenWindowArgs& aArgs)
+{
+  InitClientOpenWindowOpChild(aActor, aArgs);
+  return IPC_OK();
+}
+
+bool
+ContentChild::DeallocPClientOpenWindowOpChild(PClientOpenWindowOpChild* aActor)
+{
+  return DeallocClientOpenWindowOpChild(aActor);
+}
+
 mozilla::ipc::IPCResult
 ContentChild::RecvShareCodeCoverageMutex(const CrossProcessMutexHandle& aHandle)
 {
@@ -3580,8 +3611,7 @@ ContentChild::RecvShareCodeCoverageMutex(const CrossProcessMutexHandle& aHandle)
   CodeCoverageHandler::Init(aHandle);
   return IPC_OK();
 #else
-  NS_RUNTIMEABORT("Shouldn't receive this message in non-code coverage builds!");
-  return IPC_FAIL_NO_REASON(this);
+  MOZ_CRASH("Shouldn't receive this message in non-code coverage builds!");
 #endif
 }
 
@@ -3592,8 +3622,7 @@ ContentChild::RecvDumpCodeCoverageCounters()
   CodeCoverageHandler::DumpCounters(0);
   return IPC_OK();
 #else
-  NS_RUNTIMEABORT("Shouldn't receive this message in non-code coverage builds!");
-  return IPC_FAIL_NO_REASON(this);
+  MOZ_CRASH("Shouldn't receive this message in non-code coverage builds!");
 #endif
 }
 
@@ -3604,8 +3633,7 @@ ContentChild::RecvResetCodeCoverageCounters()
   CodeCoverageHandler::ResetCounters(0);
   return IPC_OK();
 #else
-  NS_RUNTIMEABORT("Shouldn't receive this message in non-code coverage builds!");
-  return IPC_FAIL_NO_REASON(this);
+  MOZ_CRASH("Shouldn't receive this message in non-code coverage builds!");
 #endif
 }
 

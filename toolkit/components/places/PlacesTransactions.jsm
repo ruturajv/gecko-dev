@@ -1489,28 +1489,32 @@ PT.SortByName.prototype = {
 PT.Remove = DefineTransaction(["guids"]);
 PT.Remove.prototype = {
   async execute({ guids }) {
-    let promiseBookmarksTree = async function(guid) {
-      let tree;
+    let removedItems = [];
+
+    for (let guid of guids) {
       try {
-        tree = await PlacesUtils.promiseBookmarksTree(guid);
+        // Although we don't strictly need to get this information for the remove,
+        // we do need it for the possibility of undo().
+        removedItems.push(await PlacesUtils.promiseBookmarksTree(guid));
       } catch (ex) {
         throw new Error("Failed to get info for the specified item (guid: " +
                           guid + "): " + ex);
       }
-      return tree;
-    };
-    let removedItems = [];
-    for (let guid of guids) {
-      removedItems.push(await promiseBookmarksTree(guid));
     }
+
     let removeThem = async function() {
+      let bmsToRemove = [];
       for (let info of removedItems) {
         if (info.annos &&
             info.annos.some(anno => anno.name == PlacesUtils.LMANNO_FEEDURI)) {
           await PlacesUtils.livemarks.removeLivemark({ guid: info.guid });
         } else {
-          await PlacesUtils.bookmarks.remove({ guid: info.guid });
+          bmsToRemove.push({guid: info.guid});
         }
+      }
+
+      if (bmsToRemove.length) {
+        await PlacesUtils.bookmarks.remove(bmsToRemove);
       }
     };
     await removeThem();
@@ -1548,13 +1552,15 @@ PT.Tag.prototype = {
         let uri = Services.io.newURI(url.href);
         let currentTags = PlacesUtils.tagging.getTagsForURI(uri);
         let newTags = tags.filter(t => !currentTags.includes(t));
-        PlacesUtils.tagging.tagURI(uri, newTags);
-        onUndo.unshift(() => {
-          PlacesUtils.tagging.untagURI(uri, newTags);
-        });
-        onRedo.push(() => {
+        if (newTags.length) {
           PlacesUtils.tagging.tagURI(uri, newTags);
-        });
+          onUndo.unshift(() => {
+            PlacesUtils.tagging.untagURI(uri, newTags);
+          });
+          onRedo.push(() => {
+            PlacesUtils.tagging.tagURI(uri, newTags);
+          });
+        }
       }
     }
     this.undo = async function() {

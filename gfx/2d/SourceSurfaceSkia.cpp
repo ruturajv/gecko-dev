@@ -1,5 +1,6 @@
-/* -*- Mode: C++; tab-width: 20; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * This Source Code Form is subject to the terms of the Mozilla Public
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=8 sts=2 et sw=2 tw=80: */
+/* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
@@ -12,6 +13,8 @@
 #include "skia/include/core/SkData.h"
 #include "mozilla/CheckedInt.h"
 
+using namespace std;
+
 namespace mozilla {
 namespace gfx {
 
@@ -23,9 +26,12 @@ SourceSurfaceSkia::SourceSurfaceSkia()
 
 SourceSurfaceSkia::~SourceSurfaceSkia()
 {
-  if (mDrawTarget) {
-    mDrawTarget->SnapshotDestroyed();
-    mDrawTarget = nullptr;
+  if (mSnapshotLock) {
+    MutexAutoLock lock{*mSnapshotLock};
+    if (mDrawTarget) {
+      mDrawTarget->SnapshotDestroyed();
+      mDrawTarget = nullptr;
+    }
   }
 }
 
@@ -103,7 +109,8 @@ SourceSurfaceSkia::InitFromData(unsigned char* aData,
 bool
 SourceSurfaceSkia::InitFromImage(const sk_sp<SkImage>& aImage,
                                  SurfaceFormat aFormat,
-                                 DrawTargetSkia* aOwner)
+                                 DrawTargetSkia* aOwner,
+                                 shared_ptr<Mutex> aSnapshotLock)
 {
   if (!aImage) {
     return false;
@@ -136,6 +143,8 @@ SourceSurfaceSkia::InitFromImage(const sk_sp<SkImage>& aImage,
   mImage = aImage;
 
   if (aOwner) {
+    MOZ_ASSERT(aSnapshotLock);
+    mSnapshotLock = move(aSnapshotLock);
     mDrawTarget = aOwner;
   }
 
@@ -185,6 +194,10 @@ SourceSurfaceSkia::Unmap()
 void
 SourceSurfaceSkia::DrawTargetWillChange()
 {
+  // In this case synchronisation on destroy should be guaranteed!
+  MOZ_ASSERT(mSnapshotLock);
+  mSnapshotLock->AssertCurrentThreadOwns();
+
   MutexAutoLock lock(mChangeMutex);
   if (mDrawTarget) {
     // Raster snapshots do not use Skia's internal copy-on-write mechanism,

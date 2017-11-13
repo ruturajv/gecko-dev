@@ -345,8 +345,12 @@ static void AddTransformFunctions(const nsCSSValueList* aList,
         matrix._32 = 0;
         matrix._33 = 1;
         matrix._34 = 0;
-        matrix._41 = array->Item(5).GetFloatValue();
-        matrix._42 = array->Item(6).GetFloatValue();
+        matrix._41 = ProcessTranslatePart(array->Item(5), contextIfGecko,
+                                          aPresContext, conditions,
+                                          &aRefBox, &TransformReferenceBox::Width);
+        matrix._42 = ProcessTranslatePart(array->Item(6), contextIfGecko,
+                                          aPresContext, conditions,
+                                          &aRefBox, &TransformReferenceBox::Height);
         matrix._43 = 0;
         matrix._44 = 1;
         aFunctions.AppendElement(TransformMatrix(matrix));
@@ -367,9 +371,15 @@ static void AddTransformFunctions(const nsCSSValueList* aList,
         matrix._32 = array->Item(10).GetFloatValue();
         matrix._33 = array->Item(11).GetFloatValue();
         matrix._34 = array->Item(12).GetFloatValue();
-        matrix._41 = array->Item(13).GetFloatValue();
-        matrix._42 = array->Item(14).GetFloatValue();
-        matrix._43 = array->Item(15).GetFloatValue();
+        matrix._41 = ProcessTranslatePart(array->Item(13), contextIfGecko,
+                                          aPresContext, conditions,
+                                          &aRefBox, &TransformReferenceBox::Width);
+        matrix._42 = ProcessTranslatePart(array->Item(14), contextIfGecko,
+                                          aPresContext, conditions,
+                                          &aRefBox, &TransformReferenceBox::Height);
+        matrix._43 = ProcessTranslatePart(array->Item(15), contextIfGecko,
+                                          aPresContext, conditions,
+                                          &aRefBox, nullptr);
         matrix._44 = array->Item(16).GetFloatValue();
         aFunctions.AppendElement(TransformMatrix(matrix));
         break;
@@ -684,10 +694,6 @@ AddAnimationsForProperty(nsIFrame* aFrame, nsDisplayListBuilder* aBuilder,
                                       CSS_PROPERTY_CAN_ANIMATE_ON_COMPOSITOR),
              "inconsistent property flags");
 
-  EffectSet* effects = EffectSet::GetEffectSet(aFrame);
-  MOZ_ASSERT(effects);
-
-  bool sentAnimations = false;
   // Add from first to last (since last overrides)
   for (size_t animIdx = 0; animIdx < compositorAnimations.Length(); animIdx++) {
     dom::Animation* anim = compositorAnimations[animIdx];
@@ -711,7 +717,7 @@ AddAnimationsForProperty(nsIFrame* aFrame, nsDisplayListBuilder* aBuilder,
     // !important rules, we don't want to send them to the compositor.
     MOZ_ASSERT(anim->CascadeLevel() !=
                  EffectCompositor::CascadeLevel::Animations ||
-               !effects->PropertiesWithImportantRules()
+               !EffectSet::GetEffectSet(aFrame)->PropertiesWithImportantRules()
                   .HasProperty(aProperty),
                "GetEffectiveAnimationOfProperty already tested the property "
                "is not overridden by !important rules");
@@ -734,12 +740,6 @@ AddAnimationsForProperty(nsIFrame* aFrame, nsDisplayListBuilder* aBuilder,
 
     AddAnimationForProperty(aFrame, *property, anim, aAnimationInfo, data, aPending);
     keyframeEffect->SetIsRunningOnCompositor(aProperty, true);
-    sentAnimations = true;
-  }
-
-  if (sentAnimations && aProperty == eCSSProperty_transform) {
-    TimeStamp now = aFrame->PresContext()->RefreshDriver()->MostRecentRefresh();
-    effects->UpdateLastTransformSyncTime(now);
   }
 }
 
@@ -771,7 +771,7 @@ GenerateAndPushTextMask(nsIFrame* aFrame, gfxContext* aContext,
   {
     // Paint text selection background into sourceCtx.
     gfxContextMatrixAutoSaveRestore save(sourceCtx);
-    sourceCtx->SetMatrix(sourceCtx->CurrentMatrix().PreTranslate(bounds.TopLeft()));
+    sourceCtx->SetMatrixDouble(sourceCtx->CurrentMatrixDouble().PreTranslate(bounds.TopLeft()));
 
     nsLayoutUtils::PaintFrame(aContext, aFrame,
                               nsRect(nsPoint(0, 0), aFrame->GetSize()),
@@ -793,10 +793,10 @@ GenerateAndPushTextMask(nsIFrame* aFrame, gfxContext* aContext,
   }
   RefPtr<gfxContext> maskCtx = gfxContext::CreatePreservingTransformOrNull(maskDT);
   MOZ_ASSERT(maskCtx);
-  gfxMatrix currentMatrix = sourceCtx->CurrentMatrix();
-  maskCtx->SetMatrix(gfxMatrix::Translation(bounds.TopLeft()) *
-                     currentMatrix *
-                     gfxMatrix::Translation(-drawRect.TopLeft()));
+  gfxMatrix currentMatrix = sourceCtx->CurrentMatrixDouble();
+  maskCtx->SetMatrixDouble(gfxMatrix::Translation(bounds.TopLeft()) *
+                           currentMatrix *
+                           gfxMatrix::Translation(-drawRect.TopLeft()));
 
   // Shade text shape into mask A8 surface.
   nsLayoutUtils::PaintFrame(maskCtx, aFrame,
@@ -1002,9 +1002,11 @@ nsDisplayListBuilder::EndFrame()
 }
 
 void
-nsDisplayListBuilder::MarkFrameForDisplay(nsIFrame* aFrame, nsIFrame* aStopAtFrame)
+nsDisplayListBuilder::MarkFrameForDisplay(nsIFrame* aFrame, nsIFrame* aStopAtFrame, bool aAlreadyAddedFrame)
 {
-  mFramesMarkedForDisplay.AppendElement(aFrame);
+  if (!aAlreadyAddedFrame) {
+    mFramesMarkedForDisplay.AppendElement(aFrame);
+  }
   for (nsIFrame* f = aFrame; f;
        f = nsLayoutUtils::GetParentOrPlaceholderForCrossDoc(f)) {
     if (f->GetStateBits() & NS_FRAME_FORCE_DISPLAY_LIST_DESCEND_INTO)
@@ -1020,7 +1022,7 @@ nsDisplayListBuilder::MarkFrameForDisplay(nsIFrame* aFrame, nsIFrame* aStopAtFra
 void
 nsDisplayListBuilder::MarkFrameForDisplayIfVisible(nsIFrame* aFrame, nsIFrame* aStopAtFrame)
 {
-  mFramesMarkedForDisplay.AppendElement(aFrame);
+  mFramesMarkedForDisplayIfVisible.AppendElement(aFrame);
   for (nsIFrame* f = aFrame; f;
        f = nsLayoutUtils::GetParentOrPlaceholderForCrossDoc(f)) {
     if (f->ForceDescendIntoIfVisible())
@@ -1125,7 +1127,7 @@ void nsDisplayListBuilder::MarkOutOfFlowFrameForDisplay(nsIFrame* aDirtyFrame,
     // position: fixed items are reflowed into and only drawn inside the
     // viewport, or the scroll position clamping scrollport size, if one is
     // set.
-    nsIPresShell* ps = aFrame->PresContext()->PresShell();
+    nsIPresShell* ps = aFrame->PresShell();
     if (ps->IsScrollPositionClampingScrollPortSizeSet()) {
       dirtyRectRelativeToDirtyFrame =
         nsRect(nsPoint(0, 0), ps->GetScrollPositionClampingScrollPortSize());
@@ -1158,11 +1160,13 @@ void nsDisplayListBuilder::MarkOutOfFlowFrameForDisplay(nsIFrame* aDirtyFrame,
   dirty.IntersectRect(dirty, overflowRect);
 
   if (!(aFrame->GetStateBits() & NS_FRAME_FORCE_DISPLAY_LIST_DESCEND_INTO) &&
-      dirty.IsEmpty() &&
-      (!aFrame->ForceDescendIntoIfVisible() ||
-       visible.IsEmpty())) {
+      visible.IsEmpty()) {
     return;
   }
+
+  // Always store OutOfFlowDisplayData for visible frames (even when they aren't dirty)
+  // since a nested out-of-flow frame might force building and we'll need to have this
+  // data available.
 
   // mClipState.GetClipChainForContainingBlockDescendants can return pointers
   // to objects on the stack, so we need to clone the chain.
@@ -1172,8 +1176,14 @@ void nsDisplayListBuilder::MarkOutOfFlowFrameForDisplay(nsIFrame* aDirtyFrame,
   const ActiveScrolledRoot* asr = mCurrentActiveScrolledRoot;
   OutOfFlowDisplayData* data = new OutOfFlowDisplayData(clipChain, combinedClipChain, asr, visible, dirty);
   aFrame->SetProperty(nsDisplayListBuilder::OutOfFlowDisplayDataProperty(), data);
+  mFramesMarkedForDisplay.AppendElement(aFrame);
 
-  MarkFrameForDisplay(aFrame, aDirtyFrame);
+  // Only MarkFrameForDisplay if we're dirty. If this is a nested out-of-flow frame, then it will
+  // also mark any outer frames to ensure that building reaches the dirty feame.
+  if (!dirty.IsEmpty() ||
+      aFrame->ForceDescendIntoIfVisible()) {
+    MarkFrameForDisplay(aFrame, aDirtyFrame, true);
+  }
 }
 
 static void UnmarkFrameForDisplay(nsIFrame* aFrame, nsIFrame* aStopAtFrame) {
@@ -1181,17 +1191,23 @@ static void UnmarkFrameForDisplay(nsIFrame* aFrame, nsIFrame* aStopAtFrame) {
 
   for (nsIFrame* f = aFrame; f;
        f = nsLayoutUtils::GetParentOrPlaceholderForCrossDoc(f)) {
-    if (!(f->GetStateBits() & NS_FRAME_FORCE_DISPLAY_LIST_DESCEND_INTO) &&
-        !f->ForceDescendIntoIfVisible())
+    if (!(f->GetStateBits() & NS_FRAME_FORCE_DISPLAY_LIST_DESCEND_INTO))
       return;
     f->RemoveStateBits(NS_FRAME_FORCE_DISPLAY_LIST_DESCEND_INTO);
-    f->SetForceDescendIntoIfVisible(false);
     if (f == aStopAtFrame) {
       // we've reached a frame that we know will be painted, so we can stop.
       break;
     }
   }
+}
 
+static void UnmarkFrameForDisplayIfVisible(nsIFrame* aFrame) {
+  for (nsIFrame* f = aFrame; f;
+       f = nsLayoutUtils::GetParentOrPlaceholderForCrossDoc(f)) {
+    if (!f->ForceDescendIntoIfVisible())
+      return;
+    f->SetForceDescendIntoIfVisible(false);
+  }
 }
 
 nsDisplayListBuilder::~nsDisplayListBuilder() {
@@ -1262,7 +1278,7 @@ nsDisplayListBuilder::EnterPresShell(nsIFrame* aReferenceFrame,
                                      bool aPointerEventsNoneDoc)
 {
   PresShellState* state = mPresShellStates.AppendElement();
-  state->mPresShell = aReferenceFrame->PresContext()->PresShell();
+  state->mPresShell = aReferenceFrame->PresShell();
   state->mCaretFrame = nullptr;
   state->mFirstFrameMarkedForDisplay = mFramesMarkedForDisplay.Length();
 
@@ -1345,7 +1361,7 @@ void
 nsDisplayListBuilder::LeavePresShell(nsIFrame* aReferenceFrame, nsDisplayList* aPaintedContents)
 {
   NS_ASSERTION(CurrentPresShellState()->mPresShell ==
-      aReferenceFrame->PresContext()->PresShell(),
+      aReferenceFrame->PresShell(),
       "Presshell mismatch");
 
   if (mIsPaintingToWindow) {
@@ -1370,6 +1386,12 @@ nsDisplayListBuilder::LeavePresShell(nsIFrame* aReferenceFrame, nsDisplayList* a
     mIsInChromePresContext = pc->IsChrome();
   } else {
     mCurrentAGR = mRootAGR;
+
+    for (uint32_t i = 0;
+       i < mFramesMarkedForDisplayIfVisible.Length(); ++i) {
+      UnmarkFrameForDisplayIfVisible(mFramesMarkedForDisplayIfVisible[i]);
+    }
+    mFramesMarkedForDisplayIfVisible.SetLength(0);
   }
 }
 
@@ -1434,7 +1456,7 @@ nsDisplayListBuilder::MarkFramesForDisplayList(nsIFrame* aDirtyFrame,
     // Store the current display data so that it can be used for fixed
     // background images.
     NS_ASSERTION(CurrentPresShellState()->mPresShell ==
-        aDirtyFrame->PresContext()->PresShell(),
+        aDirtyFrame->PresShell(),
         "Presshell mismatch");
     MOZ_ASSERT(!CurrentPresShellState()->mFixedBackgroundDisplayData,
                "already traversed this presshell's root frame?");
@@ -2157,15 +2179,8 @@ nsDisplayList::GetClippedBoundsWithRespectToASR(nsDisplayListBuilder* aBuilder,
   for (nsDisplayItem* i = GetBottom(); i != nullptr; i = i->GetAbove()) {
     nsRect r = i->GetClippedBounds(aBuilder);
     if (aASR != i->GetActiveScrolledRoot() && !r.IsEmpty()) {
-      const DisplayItemClip* clip = DisplayItemClipChain::ClipForASR(i->GetClipChain(), aASR);
-#ifdef DEBUG
-      if (!gfxPrefs::LayoutUseContainersForRootFrames()) {
-        MOZ_ASSERT(clip,
-                   "Need to be clipped wrt aASR. Do not call this function with an ASR that our child items don't have finite bounds wrt.");
-      }
-#endif
-      if (clip) {
-        r = clip->GetClipRect();
+      if (Maybe<nsRect> clip = i->GetClipWithRespectToASR(aBuilder, aASR)) {
+        r = clip.ref();
       }
     }
     if (aVisibleRect) {
@@ -2478,12 +2493,6 @@ already_AddRefed<LayerManager> nsDisplayList::PaintRoot(nsDisplayListBuilder* aB
                        1.0f/containerParameters.mYScale);
     root->SetScaleToResolution(presShell->ScaleToResolution(),
         containerParameters.mXScale);
-    if (aBuilder->IsBuildingLayerEventRegions() &&
-        nsLayoutUtils::HasDocumentLevelListenersForApzAwareEvents(presShell)) {
-      root->SetEventRegionsOverride(EventRegionsOverride::ForceDispatchToContent);
-    } else {
-      root->SetEventRegionsOverride(EventRegionsOverride::NoOverride);
-    }
 
     auto callback = [root](FrameMetrics::ViewID aScrollId) -> bool {
       return nsLayoutUtils::ContainsMetricsWithId(root, aScrollId);
@@ -2602,6 +2611,7 @@ nsDisplayItem* nsDisplayList::RemoveBottom() {
   nsDisplayItem* item = mSentinel.mAbove;
   if (!item)
     return nullptr;
+  MOZ_DIAGNOSTIC_ASSERT(item->mSentinel == 0xDEADBEEFDEADBEEF);
   mSentinel.mAbove = item->mAbove;
   if (item == mTop) {
     // must have been the only item
@@ -2935,7 +2945,8 @@ nsDisplayItem::ComputeVisibility(nsDisplayListBuilder* aBuilder,
 
 bool
 nsDisplayItem::RecomputeVisibility(nsDisplayListBuilder* aBuilder,
-                                   nsRegion* aVisibleRegion) {
+                                   nsRegion* aVisibleRegion,
+                                   bool aUseClipBounds) {
   if (mForceNotVisible && !GetSameCoordinateSystemChildren()) {
     // mForceNotVisible wants to ensure that this display item doesn't render
     // anything itself. If this item has contents, then we obviously want to
@@ -2943,7 +2954,13 @@ nsDisplayItem::RecomputeVisibility(nsDisplayListBuilder* aBuilder,
     NS_ASSERTION(mVisibleRect.IsEmpty(),
       "invisible items without children should have empty vis rect");
   } else {
-    nsRect bounds = GetClippedBounds(aBuilder);
+    nsRect bounds;
+    if (aUseClipBounds) {
+      bounds = GetClippedBounds(aBuilder);
+    } else {
+      bool snap;
+      bounds = GetBounds(aBuilder, &snap);
+    }
 
     nsRegion itemVisible;
     itemVisible.And(*aVisibleRegion, bounds);
@@ -2974,6 +2991,21 @@ nsDisplayItem::SetClipChain(const DisplayItemClipChain* aClipChain,
     mState.mClipChain = mClipChain;
     mState.mClip = mClip;
   }
+}
+
+Maybe<nsRect>
+nsDisplayItem::GetClipWithRespectToASR(nsDisplayListBuilder* aBuilder,
+                                       const ActiveScrolledRoot* aASR) const
+{
+  if (const DisplayItemClip* clip = DisplayItemClipChain::ClipForASR(GetClipChain(), aASR)) {
+    return Some(clip->GetClipRect());
+  }
+#ifdef DEBUG
+  if (!gfxPrefs::LayoutUseContainersForRootFrames()) {
+    MOZ_ASSERT(false, "item should have finite clip with respect to aASR");
+  }
+#endif
+  return Nothing();
 }
 
 void
@@ -3248,7 +3280,7 @@ static Maybe<nsRect>
 GetViewportRectRelativeToReferenceFrame(nsDisplayListBuilder* aBuilder,
                                         nsIFrame* aFrame)
 {
-  nsIFrame* rootFrame = aFrame->PresContext()->PresShell()->GetRootFrame();
+  nsIFrame* rootFrame = aFrame->PresShell()->GetRootFrame();
   nsRect rootRect = rootFrame->GetRectRelativeToSelf();
   if (nsLayoutUtils::TransformRect(rootFrame, aFrame, rootRect) == nsLayoutUtils::TRANSFORM_SUCCEEDED) {
     return Some(rootRect + aBuilder->ToReferenceFrame(aFrame));
@@ -3647,7 +3679,6 @@ nsDisplayBackgroundImage::AppendBackgroundItemsToTop(nsDisplayListBuilder* aBuil
 
     if (bg->mImage.mLayers[i].mBlendMode != NS_STYLE_BLEND_NORMAL) {
       DisplayListClipState::AutoSaveRestore blendClip(aBuilder);
-      blendClip.ClearUpToASR(asr);
       // asr is scrolled. Even if we wrap a fixed background layer, that's
       // fine, because the item will have a scrolled clip that limits the
       // item with respect to asr.
@@ -3661,7 +3692,6 @@ nsDisplayBackgroundImage::AppendBackgroundItemsToTop(nsDisplayListBuilder* aBuil
 
   if (needBlendContainer) {
     DisplayListClipState::AutoSaveRestore blendContainerClip(aBuilder);
-    blendContainerClip.ClearUpToASR(asr);
     bgItemList.AppendNewToTop(
       nsDisplayBlendContainer::CreateForBackgroundBlendMode(aBuilder, aFrame, &bgItemList, asr));
   }
@@ -4661,6 +4691,22 @@ nsDisplayClearBackground::BuildLayer(nsDisplayListBuilder* aBuilder,
   return layer.forget();
 }
 
+bool
+nsDisplayClearBackground::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
+                                                  mozilla::wr::IpcResourceUpdateQueue& aResources,
+                                                  const StackingContextHelper& aSc,
+                                                  mozilla::layers::WebRenderLayerManager* aManager,
+                                                  nsDisplayListBuilder* aDisplayListBuilder)
+{
+  LayoutDeviceRect bounds = LayoutDeviceRect::FromAppUnits(
+    nsRect(ToReferenceFrame(), mFrame->GetSize()),
+    mFrame->PresContext()->AppUnitsPerDevPixel());
+
+  aBuilder.PushClearRect(aSc.ToRelativeLayoutRect(bounds));
+
+  return true;
+}
+
 nsRect
 nsDisplayOutline::GetBounds(nsDisplayListBuilder* aBuilder,
                             bool* aSnap) const
@@ -4803,11 +4849,6 @@ nsDisplayLayerEventRegions::AddFrame(nsDisplayListBuilder* aBuilder,
     }
   }
 
-  if (aFrame != mFrame &&
-      aBuilder->IsRetainingDisplayList()) {
-    aFrame->AddDisplayItem(this);
-  }
-
 
   // XXX handle other pointerEvents values for SVG
 
@@ -4826,6 +4867,15 @@ nsDisplayLayerEventRegions::AddFrame(nsDisplayListBuilder* aBuilder,
   } else {
     borderBox = nsRect(nsPoint(0, 0), aFrame->GetSize());
   }
+  if (borderBox.IsEmpty()) {
+    return;
+  }
+
+  if (aFrame != mFrame &&
+      aBuilder->IsRetainingDisplayList()) {
+    aFrame->AddDisplayItem(this);
+  }
+
   borderBox += aBuilder->ToReferenceFrame(aFrame);
 
   bool borderBoxHasRoundedCorners = false;
@@ -5090,6 +5140,7 @@ nsDisplayCaret::BuildLayer(nsDisplayListBuilder* aBuilder,
 
 nsDisplayBorder::nsDisplayBorder(nsDisplayListBuilder* aBuilder, nsIFrame* aFrame)
   : nsDisplayItem(aBuilder, aFrame)
+  , mBorderIsEmpty(false)
 {
   MOZ_COUNT_CTOR(nsDisplayBorder);
 
@@ -5154,6 +5205,7 @@ nsDisplayBorder::GetLayerState(nsDisplayListBuilder* aBuilder,
     return LAYER_NONE;
   }
 
+  mBorderIsEmpty = false;
   nsPoint offset = ToReferenceFrame();
   Maybe<nsCSSBorderRenderer> br =
     nsCSSRendering::CreateBorderRenderer(mFrame->PresContext(),
@@ -5162,19 +5214,15 @@ nsDisplayBorder::GetLayerState(nsDisplayListBuilder* aBuilder,
                                          nsRect(),
                                          nsRect(offset, mFrame->GetSize()),
                                          mFrame->StyleContext(),
+                                         &mBorderIsEmpty,
                                          mFrame->GetSkipSides());
 
-  const nsStyleBorder *styleBorder = mFrame->StyleContext()->StyleBorder();
-  const nsStyleImage* image = &styleBorder->mBorderImageSource;
   mBorderRenderer = Nothing();
   mBorderImageRenderer = Nothing();
-  if ((!image ||
-       image->GetType() != eStyleImageType_Image ||
-       image->GetType() != eStyleImageType_Gradient) && !br) {
-    return LAYER_NONE;
-  }
-
   if (!br) {
+    if (mBorderIsEmpty) {
+      return LAYER_ACTIVE;
+    }
     return LAYER_NONE;
   }
 
@@ -5218,6 +5266,10 @@ nsDisplayBorder::BuildLayer(nsDisplayListBuilder* aBuilder,
                             LayerManager* aManager,
                             const ContainerLayerParameters& aContainerParameters)
 {
+  if (mBorderIsEmpty) {
+    return nullptr;
+  }
+
   if (ShouldUseAdvancedLayer(aManager, gfxPrefs::LayersAllowBorderLayers)) {
     return BuildDisplayItemLayer(aBuilder, aManager, aContainerParameters);
   } else {
@@ -5537,19 +5589,6 @@ nsDisplayBoxShadowOuter::ComputeVisibility(nsDisplayListBuilder* aBuilder,
   return true;
 }
 
-
-LayerState
-nsDisplayBoxShadowOuter::GetLayerState(nsDisplayListBuilder* aBuilder,
-                                       LayerManager* aManager,
-                                       const ContainerLayerParameters& aParameters)
-{
-  if (ShouldUseAdvancedLayer(aManager, gfxPrefs::LayersAllowOuterBoxShadow)) {
-    return LAYER_ACTIVE;
-  }
-
-  return LAYER_NONE;
-}
-
 already_AddRefed<Layer>
 nsDisplayBoxShadowOuter::BuildLayer(nsDisplayListBuilder* aBuilder,
                                     LayerManager* aManager,
@@ -5574,28 +5613,6 @@ nsDisplayBoxShadowOuter::CanBuildWebRenderDisplayItems()
   // input buttons.
   if (nativeTheme) {
     return false;
-  }
-
-  nsPoint offset = ToReferenceFrame();
-  nsRect borderRect = mFrame->VisualBorderRectRelativeToSelf() + offset;
-  nsRect frameRect =
-      nsCSSRendering::GetShadowRect(borderRect, nativeTheme, mFrame);
-
-  if (hasBorderRadius) {
-    nscoord twipsRadii[8];
-    nsSize sz = frameRect.Size();
-    hasBorderRadius = mFrame->GetBorderRadii(sz, sz, Sides(), twipsRadii);
-  }
-
-  if (hasBorderRadius) {
-    RectCornerRadii borderRadii;
-    nsCSSRendering::GetBorderRadii(frameRect,
-                                   borderRect,
-                                   mFrame,
-                                   borderRadii);
-    if (!borderRadii.AreRadiiSame()) {
-      return false;
-    }
   }
 
   return true;
@@ -5770,31 +5787,7 @@ nsDisplayBoxShadowInner::CanCreateWebRenderCommands(nsDisplayListBuilder* aBuild
     return false;
   }
 
-  nsRect borderRect = nsRect(aReferenceOffset, aFrame->GetSize());
-  RectCornerRadii innerRadii;
-
-  if (hasBorderRadius) {
-    hasBorderRadius =
-      nsCSSRendering::GetShadowInnerRadii(aFrame, borderRect, innerRadii);
-  }
-
-  if (hasBorderRadius && !innerRadii.AreRadiiSame()) {
-    return false;
-  }
-
   return true;
-}
-
-LayerState
-nsDisplayBoxShadowInner::GetLayerState(nsDisplayListBuilder* aBuilder,
-                                       LayerManager* aManager,
-                                       const ContainerLayerParameters& aParameters)
-{
-  if (ShouldUseAdvancedLayer(aManager, gfxPrefs::LayersAllowInsetBoxShadow)) {
-    return LAYER_ACTIVE;
-  }
-
-  return LAYER_NONE;
 }
 
 already_AddRefed<Layer>
@@ -5913,11 +5906,14 @@ nsDisplayWrapList::nsDisplayWrapList(nsDisplayListBuilder* aBuilder,
 
 nsDisplayWrapList::nsDisplayWrapList(nsDisplayListBuilder* aBuilder,
                                      nsIFrame* aFrame, nsDisplayList* aList,
-                                     const ActiveScrolledRoot* aActiveScrolledRoot)
+                                     const ActiveScrolledRoot* aActiveScrolledRoot,
+                                     bool aClearClipChain)
   : nsDisplayItem(aBuilder, aFrame, aActiveScrolledRoot)
   , mList(aBuilder)
+  , mFrameActiveScrolledRoot(aBuilder->CurrentActiveScrolledRoot())
   , mOverrideZIndex(0)
   , mHasZIndexOverride(false)
+  , mClearingClipChain(aClearClipChain)
 {
   MOZ_COUNT_CTOR(nsDisplayWrapList);
 
@@ -6235,7 +6231,7 @@ nsDisplayOpacity::nsDisplayOpacity(nsDisplayListBuilder* aBuilder,
                                    nsIFrame* aFrame, nsDisplayList* aList,
                                    const ActiveScrolledRoot* aActiveScrolledRoot,
                                    bool aForEventsAndPluginsOnly)
-    : nsDisplayWrapList(aBuilder, aFrame, aList, aActiveScrolledRoot)
+    : nsDisplayWrapList(aBuilder, aFrame, aList, aActiveScrolledRoot, true)
     , mOpacity(aFrame->StyleEffects()->mOpacity)
     , mForEventsAndPluginsOnly(aForEventsAndPluginsOnly)
 {
@@ -6538,7 +6534,7 @@ nsDisplayBlendMode::nsDisplayBlendMode(nsDisplayListBuilder* aBuilder,
                                              uint8_t aBlendMode,
                                              const ActiveScrolledRoot* aActiveScrolledRoot,
                                              uint32_t aIndex)
-  : nsDisplayWrapList(aBuilder, aFrame, aList, aActiveScrolledRoot)
+  : nsDisplayWrapList(aBuilder, aFrame, aList, aActiveScrolledRoot, true)
   , mBlendMode(aBlendMode)
   , mIndex(aIndex)
 {
@@ -6656,7 +6652,7 @@ nsDisplayBlendContainer::nsDisplayBlendContainer(nsDisplayListBuilder* aBuilder,
                                                  nsIFrame* aFrame, nsDisplayList* aList,
                                                  const ActiveScrolledRoot* aActiveScrolledRoot,
                                                  bool aIsForBackground)
-    : nsDisplayWrapList(aBuilder, aFrame, aList, aActiveScrolledRoot)
+    : nsDisplayWrapList(aBuilder, aFrame, aList, aActiveScrolledRoot, true)
     , mIsForBackground(aIsForBackground)
 {
   MOZ_COUNT_CTOR(nsDisplayBlendContainer);
@@ -6715,8 +6711,9 @@ nsDisplayOwnLayer::nsDisplayOwnLayer(nsDisplayListBuilder* aBuilder,
                                      const ActiveScrolledRoot* aActiveScrolledRoot,
                                      uint32_t aFlags, ViewID aScrollTarget,
                                      const ScrollThumbData& aThumbData,
-                                     bool aForceActive)
-    : nsDisplayWrapList(aBuilder, aFrame, aList, aActiveScrolledRoot)
+                                     bool aForceActive,
+                                     bool aClearClipChain)
+    : nsDisplayWrapList(aBuilder, aFrame, aList, aActiveScrolledRoot, aClearClipChain)
     , mFlags(aFlags)
     , mScrollTarget(aScrollTarget)
     , mThumbData(aThumbData)
@@ -6851,9 +6848,6 @@ nsDisplaySubDocument::nsDisplaySubDocument(nsDisplayListBuilder* aBuilder,
     , mSubDocFrame(aSubDocFrame)
 {
   MOZ_COUNT_CTOR(nsDisplaySubDocument);
-  mForceDispatchToContentRegion =
-    aBuilder->IsBuildingLayerEventRegions() &&
-    nsLayoutUtils::HasDocumentLevelListenersForApzAwareEvents(aFrame->PresContext()->PresShell());
 
   // The SubDocument display item is conceptually outside the viewport frame,
   // so in cases where the viewport frame is an AGR, the SubDocument's AGR
@@ -6868,17 +6862,6 @@ nsDisplaySubDocument::~nsDisplaySubDocument() {
   MOZ_COUNT_DTOR(nsDisplaySubDocument);
 }
 #endif
-
-already_AddRefed<Layer>
-nsDisplaySubDocument::BuildLayer(nsDisplayListBuilder* aBuilder,
-                                 LayerManager* aManager,
-                                 const ContainerLayerParameters& aContainerParameters) {
-  RefPtr<Layer> layer = nsDisplayOwnLayer::BuildLayer(aBuilder, aManager, aContainerParameters);
-  layer->AsContainerLayer()->SetEventRegionsOverride(mForceDispatchToContentRegion
-    ? EventRegionsOverride::ForceDispatchToContent
-    : EventRegionsOverride::NoOverride);
-  return layer.forget();
-}
 
 UniquePtr<ScrollMetadata>
 nsDisplaySubDocument::ComputeScrollMetadata(LayerManager* aLayerManager,
@@ -6940,7 +6923,7 @@ nsDisplaySubDocument::ComputeVisibility(nsDisplayListBuilder* aBuilder,
   }
 
   nsRect displayport;
-  nsIFrame* rootScrollFrame = mFrame->PresContext()->PresShell()->GetRootScrollFrame();
+  nsIFrame* rootScrollFrame = mFrame->PresShell()->GetRootScrollFrame();
   MOZ_ASSERT(rootScrollFrame);
   Unused << nsLayoutUtils::GetDisplayPort(rootScrollFrame->GetContent(), &displayport,
     RelativeTo::ScrollFrame);
@@ -7017,7 +7000,7 @@ nsDisplayResolution::HitTest(nsDisplayListBuilder* aBuilder,
                              HitTestState* aState,
                              nsTArray<nsIFrame*> *aOutFrames)
 {
-  nsIPresShell* presShell = mFrame->PresContext()->PresShell();
+  nsIPresShell* presShell = mFrame->PresShell();
   nsRect rect = aRect.RemoveResolution(presShell->ScaleToResolution() ? presShell->GetResolution () : 1.0f);
   mList.HitTest(aBuilder, rect, aState, aOutFrames);
 }
@@ -7026,7 +7009,7 @@ already_AddRefed<Layer>
 nsDisplayResolution::BuildLayer(nsDisplayListBuilder* aBuilder,
                                 LayerManager* aManager,
                                 const ContainerLayerParameters& aContainerParameters) {
-  nsIPresShell* presShell = mFrame->PresContext()->PresShell();
+  nsIPresShell* presShell = mFrame->PresShell();
   ContainerLayerParameters containerParameters(
     presShell->GetResolution(), presShell->GetResolution(), nsIntPoint(),
     aContainerParameters);
@@ -7308,22 +7291,42 @@ nsDisplayStickyPosition::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder
 {
   StickyScrollContainer* stickyScrollContainer = StickyScrollContainer::GetStickyScrollContainerForFrame(mFrame);
   if (stickyScrollContainer) {
+    // If there's no ASR for the scrollframe that this sticky item is attached
+    // to, then don't create a WR sticky item for it either. Trying to do so
+    // will end in sadness because WR will interpret some coordinates as
+    // relative to the nearest enclosing scrollframe, which will correspond
+    // to the nearest ancestor ASR on the gecko side. That ASR will not be the
+    // same as the scrollframe this sticky item is actually supposed to be
+    // attached to, thus the sadness.
+    // Not sending WR the sticky item is ok, because the enclosing scrollframe
+    // will never be asynchronously scrolled. Instead we will always position
+    // the sticky items correctly on the gecko side and WR will never need to
+    // adjust their position itself.
+    if (!stickyScrollContainer->ScrollFrame()->MayBeAsynchronouslyScrolled()) {
+      stickyScrollContainer = nullptr;
+    }
+  }
+
+  if (stickyScrollContainer) {
     float auPerDevPixel = mFrame->PresContext()->AppUnitsPerDevPixel();
 
     bool snap;
     nsRect itemBounds = GetBounds(aDisplayListBuilder, &snap);
 
-    Maybe<wr::StickySideConstraint> top;
-    Maybe<wr::StickySideConstraint> right;
-    Maybe<wr::StickySideConstraint> bottom;
-    Maybe<wr::StickySideConstraint> left;
+    Maybe<float> topMargin;
+    Maybe<float> rightMargin;
+    Maybe<float> bottomMargin;
+    Maybe<float> leftMargin;
+    wr::StickyOffsetBounds vBounds = { 0.0, 0.0 };
+    wr::StickyOffsetBounds hBounds = { 0.0, 0.0 };
+    nsPoint appliedOffset;
 
     nsRect outer;
     nsRect inner;
     stickyScrollContainer->GetScrollRanges(mFrame, &outer, &inner);
 
     nsIFrame* scrollFrame = do_QueryFrame(stickyScrollContainer->ScrollFrame());
-    nsPoint offset = scrollFrame->GetOffsetTo(ReferenceFrame());
+    nsPoint offset = scrollFrame->GetOffsetToCrossDoc(ReferenceFrame());
 
     // Adjust the scrollPort coordinates to be relative to the reference frame,
     // so that it is in the same space as everything else.
@@ -7351,47 +7354,71 @@ nsDisplayStickyPosition::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder
       // then no adjustment is needed and distance is 0 so again using
       // -distance works.
       nscoord distance = DistanceToRange(inner.YMost(), outer.YMost());
-      float margin = NSAppUnitsToFloatPixels(itemBounds.y - scrollPort.y - distance, auPerDevPixel);
-      // Question: Given the current state, what is the range during which
-      // WR will have to apply an adjustment to the item (in order to prevent
-      // the item from visually moving) as a result of async scrolling?
-      // Answer: [inner.YMost(), outer.YMost()]. But right now the WR API
-      // doesn't allow us to provide the whole range; it just takes one side
-      // of the range and assumes it has a particular sign. Bug 1411627 will
-      // fix this more completely but for now we do the best we can. Note that
-      // this value also needs to be converted from being relative to the
-      // scrollframe to being relative to the reference frame, so we have to
-      // adjust it by |offset|.
-      float maxOffset = NSAppUnitsToFloatPixels(std::max(0, outer.YMost() + offset.y), auPerDevPixel);
-      top = Some(wr::StickySideConstraint { margin, maxOffset });
+      topMargin = Some(NSAppUnitsToFloatPixels(itemBounds.y - scrollPort.y - distance, auPerDevPixel));
+      // Question: What is the maximum positive ("downward") offset that WR
+      // will have to apply to this item in order to prevent the item from
+      // visually moving?
+      // Answer: Since the item is "sticky" in the range [inner.YMost(), outer.YMost()],
+      // the maximum offset will be the size of the range, which is
+      // outer.YMost() - inner.YMost().
+      vBounds.max = NSAppUnitsToFloatPixels(outer.YMost() - inner.YMost(), auPerDevPixel);
+      // Question: how much of an offset has layout already applied to the item?
+      // Answer: if we are
+      // (a) inside the sticky range (inner.YMost() < 0 <= outer.YMost()), or
+      // (b) past the sticky range (inner.YMost() < outer.YMost() < 0)
+      // then layout has already applied some offset to the position of the
+      // item. The amount of the adjustment is |0 - inner.YMost()| in case (a)
+      // and |outer.YMost() - inner.YMost()| in case (b).
+      if (inner.YMost() < 0) {
+        appliedOffset.y = std::min(0, outer.YMost()) - inner.YMost();
+        MOZ_ASSERT(appliedOffset.y > 0);
+      }
     }
     if (outer.y != inner.y) {
       // Similar logic as in the previous section, but this time we care about
       // the distance from itemBounds.YMost() to scrollPort.YMost().
       nscoord distance = DistanceToRange(outer.y, inner.y);
-      float margin = NSAppUnitsToFloatPixels(scrollPort.YMost() - itemBounds.YMost() + distance, auPerDevPixel);
+      bottomMargin = Some(NSAppUnitsToFloatPixels(scrollPort.YMost() - itemBounds.YMost() + distance, auPerDevPixel));
       // And here WR will be moving the item upwards rather than downwards so
       // again things are inverted from the previous block.
-      float maxOffset = NSAppUnitsToFloatPixels(std::min(0, outer.y + offset.y), auPerDevPixel);
-      bottom = Some(wr::StickySideConstraint { margin, maxOffset });
+      vBounds.min = NSAppUnitsToFloatPixels(outer.y - inner.y, auPerDevPixel);
+      // We can't have appliedOffset be both positive and negative, and the top
+      // adjustment takes priority. So here we only update appliedOffset.y if
+      // it wasn't set by the top-sticky case above.
+      if (appliedOffset.y == 0 && inner.y > 0) {
+        appliedOffset.y = std::max(0, outer.y) - inner.y;
+        MOZ_ASSERT(appliedOffset.y < 0);
+      }
     }
     // Same as above, but for the x-axis
     if (outer.XMost() != inner.XMost()) {
       nscoord distance = DistanceToRange(inner.XMost(), outer.XMost());
-      float margin = NSAppUnitsToFloatPixels(itemBounds.x - scrollPort.x - distance, auPerDevPixel);
-      float maxOffset = NSAppUnitsToFloatPixels(std::max(0, outer.XMost() + offset.x), auPerDevPixel);
-      left = Some(wr::StickySideConstraint { margin, maxOffset });
+      leftMargin = Some(NSAppUnitsToFloatPixels(itemBounds.x - scrollPort.x - distance, auPerDevPixel));
+      hBounds.max = NSAppUnitsToFloatPixels(outer.XMost() - inner.XMost(), auPerDevPixel);
+      if (inner.XMost() < 0) {
+        appliedOffset.x = std::min(0, outer.XMost()) - inner.XMost();
+        MOZ_ASSERT(appliedOffset.x > 0);
+      }
     }
     if (outer.x != inner.x) {
       nscoord distance = DistanceToRange(outer.x, inner.x);
-      float margin = NSAppUnitsToFloatPixels(scrollPort.XMost() - itemBounds.XMost() + distance, auPerDevPixel);
-      float maxOffset = NSAppUnitsToFloatPixels(std::min(0, outer.x + offset.x), auPerDevPixel);
-      right = Some(wr::StickySideConstraint { margin, maxOffset });
+      rightMargin = Some(NSAppUnitsToFloatPixels(scrollPort.XMost() - itemBounds.XMost() + distance, auPerDevPixel));
+      hBounds.min = NSAppUnitsToFloatPixels(outer.x - inner.x, auPerDevPixel);
+      if (appliedOffset.x == 0 && inner.x > 0) {
+        appliedOffset.x = std::max(0, outer.x) - inner.x;
+        MOZ_ASSERT(appliedOffset.x < 0);
+      }
     }
 
     LayoutDeviceRect bounds = LayoutDeviceRect::FromAppUnits(itemBounds, auPerDevPixel);
+    wr::LayoutVector2D applied = {
+      NSAppUnitsToFloatPixels(appliedOffset.x, auPerDevPixel),
+      NSAppUnitsToFloatPixels(appliedOffset.y, auPerDevPixel)
+    };
     wr::WrStickyId id = aBuilder.DefineStickyFrame(aSc.ToRelativeLayoutRect(bounds),
-        top.ptrOr(nullptr), right.ptrOr(nullptr), bottom.ptrOr(nullptr), left.ptrOr(nullptr));
+        topMargin.ptrOr(nullptr), rightMargin.ptrOr(nullptr),
+        bottomMargin.ptrOr(nullptr), leftMargin.ptrOr(nullptr),
+        vBounds, hBounds, applied);
 
     aBuilder.PushStickyFrame(id, GetClipChain());
   }
@@ -8441,6 +8468,14 @@ nsDisplayTransform::GetLayerState(nsDisplayListBuilder* aBuilder,
 bool nsDisplayTransform::ComputeVisibility(nsDisplayListBuilder *aBuilder,
                                              nsRegion *aVisibleRegion)
 {
+  // nsDisplayTransform::GetBounds() returns an empty rect in nested 3d context.
+  // Calling mStoredList.RecomputeVisibility below for such transform causes the
+  // child display items to end up with empty visible rect.
+  // We avoid this by bailing out always if we are dealing with a 3d context.
+  if (mFrame->Extend3DContext() || mFrame->Combines3DTransformWithAncestors()) {
+    return true;
+  }
+
   /* As we do this, we need to be sure to
    * untransform the visible rect, since we want everything that's painting to
    * think that it's painting in its original rectangular coordinate space.
@@ -8972,8 +9007,9 @@ nsCharClipDisplayItem::ComputeInvalidationRegion(nsDisplayListBuilder* aBuilder,
 nsDisplaySVGEffects::nsDisplaySVGEffects(nsDisplayListBuilder* aBuilder,
                                          nsIFrame* aFrame, nsDisplayList* aList,
                                          bool aHandleOpacity,
-                                         const ActiveScrolledRoot* aActiveScrolledRoot)
-  : nsDisplayWrapList(aBuilder, aFrame, aList, aActiveScrolledRoot)
+                                         const ActiveScrolledRoot* aActiveScrolledRoot,
+                                         bool aClearClipChain)
+  : nsDisplayWrapList(aBuilder, aFrame, aList, aActiveScrolledRoot, aClearClipChain)
   , mHandleOpacity(aHandleOpacity)
 {
   MOZ_COUNT_CTOR(nsDisplaySVGEffects);
@@ -9081,39 +9117,6 @@ ComputeClipExtsInDeviceSpace(gfxContext& aCtx)
 
 typedef nsSVGIntegrationUtils::PaintFramesParams PaintFramesParams;
 
-static nsPoint
-ComputeOffsetToUserSpace(const PaintFramesParams& aParams)
-{
-  nsIFrame* frame = aParams.frame;
-  nsPoint offsetToBoundingBox = aParams.builder->ToReferenceFrame(frame) -
-                         nsSVGIntegrationUtils::GetOffsetToBoundingBox(frame);
-  if (!frame->IsFrameOfType(nsIFrame::eSVG)) {
-    // Snap the offset if the reference frame is not a SVG frame, since other
-    // frames will be snapped to pixel when rendering.
-    offsetToBoundingBox = nsPoint(
-      frame->PresContext()->RoundAppUnitsToNearestDevPixels(offsetToBoundingBox.x),
-      frame->PresContext()->RoundAppUnitsToNearestDevPixels(offsetToBoundingBox.y));
-  }
-
-  // After applying only "offsetToBoundingBox", aParams.ctx would have its
-  // origin at the top left corner of frame's bounding box (over all
-  // continuations).
-  // However, SVG painting needs the origin to be located at the origin of the
-  // SVG frame's "user space", i.e. the space in which, for example, the
-  // frame's BBox lives.
-  // SVG geometry frames and foreignObject frames apply their own offsets, so
-  // their position is relative to their user space. So for these frame types,
-  // if we want aCtx to be in user space, we first need to subtract the
-  // frame's position so that SVG painting can later add it again and the
-  // frame is painted in the right place.
-  gfxPoint toUserSpaceGfx = nsSVGUtils::FrameSpaceInCSSPxToUserSpaceOffset(frame);
-  nsPoint toUserSpace =
-    nsPoint(nsPresContext::CSSPixelsToAppUnits(float(toUserSpaceGfx.x)),
-            nsPresContext::CSSPixelsToAppUnits(float(toUserSpaceGfx.y)));
-
-  return (offsetToBoundingBox - toUserSpace);
-}
-
 static void
 ComputeMaskGeometry(PaintFramesParams& aParams)
 {
@@ -9135,13 +9138,15 @@ ComputeMaskGeometry(PaintFramesParams& aParams)
   gfxContext& ctx = aParams.ctx;
   nsIFrame* frame = aParams.frame;
 
-  nsPoint offsetToUserSpace = ComputeOffsetToUserSpace(aParams);
+  nsPoint offsetToUserSpace =
+      nsLayoutUtils::ComputeOffsetToUserSpace(aParams.builder, aParams.frame);
+
   gfxPoint devPixelOffsetToUserSpace =
     nsLayoutUtils::PointToGfxPoint(offsetToUserSpace,
                                    frame->PresContext()->AppUnitsPerDevPixel());
 
   gfxContextMatrixAutoSaveRestore matSR(&ctx);
-  ctx.SetMatrix(ctx.CurrentMatrix().PreTranslate(devPixelOffsetToUserSpace));
+  ctx.SetMatrixDouble(ctx.CurrentMatrixDouble().PreTranslate(devPixelOffsetToUserSpace));
 
   // Convert boaderArea and dirtyRect to user space.
   int32_t appUnitsPerDevPixel = frame->PresContext()->AppUnitsPerDevPixel();
@@ -9187,7 +9192,7 @@ nsDisplayMask::nsDisplayMask(nsDisplayListBuilder* aBuilder,
                              nsIFrame* aFrame, nsDisplayList* aList,
                              bool aHandleOpacity,
                              const ActiveScrolledRoot* aActiveScrolledRoot)
-  : nsDisplaySVGEffects(aBuilder, aFrame, aList, aHandleOpacity, aActiveScrolledRoot)
+  : nsDisplaySVGEffects(aBuilder, aFrame, aList, aHandleOpacity, aActiveScrolledRoot, true)
 {
   MOZ_COUNT_CTOR(nsDisplayMask);
 
@@ -9307,20 +9312,22 @@ nsDisplayMask::GetLayerState(nsDisplayListBuilder* aBuilder,
                              LayerManager* aManager,
                              const ContainerLayerParameters& aParameters)
 {
-  if (ShouldPaintOnMaskLayer(aManager)) {
-    return RequiredLayerStateForChildren(aBuilder, aManager, aParameters,
-                                         mList, GetAnimatedGeometryRoot());
+  if (CanPaintOnMaskLayer(aManager)) {
+    LayerState result = RequiredLayerStateForChildren(aBuilder, aManager,
+        aParameters, mList, GetAnimatedGeometryRoot());
+    // When we're not active, FrameLayerBuilder will call PaintAsLayer()
+    // on us during painting. In that case we don't want a mask layer to
+    // be created, because PaintAsLayer() takes care of applying the mask.
+    // So we return LAYER_SVG_EFFECTS instead of LAYER_INACTIVE so that
+    // FrameLayerBuilder doesn't set a mask layer on our layer.
+    return result == LAYER_INACTIVE ? LAYER_SVG_EFFECTS : result;
   }
 
   return LAYER_SVG_EFFECTS;
 }
 
-bool nsDisplayMask::ShouldPaintOnMaskLayer(LayerManager* aManager)
+bool nsDisplayMask::CanPaintOnMaskLayer(LayerManager* aManager)
 {
-  if (!aManager->IsCompositingCheap()) {
-    return false;
-  }
-
   if (!nsSVGIntegrationUtils::IsMaskResourceReady(mFrame)) {
     return false;
   }
@@ -9338,8 +9345,7 @@ bool nsDisplayMask::ComputeVisibility(nsDisplayListBuilder* aBuilder,
   // Our children may be made translucent or arbitrarily deformed so we should
   // not allow them to subtract area from aVisibleRegion.
   nsRegion childrenVisible(mVisibleRect);
-  nsRect r = mVisibleRect.Intersect(
-    mList.GetClippedBoundsWithRespectToASR(aBuilder, mActiveScrolledRoot));
+  nsRect r = mVisibleRect.Intersect(mList.GetBounds(aBuilder));
   mList.ComputeVisibilityForSublist(aBuilder, &childrenVisible, r);
   return true;
 }
@@ -9386,8 +9392,6 @@ nsDisplayMask::PaintAsLayer(nsDisplayListBuilder* aBuilder,
                             gfxContext* aCtx,
                             LayerManager* aManager)
 {
-  MOZ_ASSERT(!ShouldPaintOnMaskLayer(aManager));
-
   // Clip the drawing target by mVisibleRect, which contains the visible
   // region of the target frame and its out-of-flow and inflow descendants.
   gfxContext* context = aCtx;
@@ -9448,6 +9452,30 @@ nsDisplayMask::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder
 
   return true;
 }
+
+Maybe<nsRect>
+nsDisplayMask::GetClipWithRespectToASR(nsDisplayListBuilder* aBuilder,
+                                       const ActiveScrolledRoot* aASR) const
+{
+  if (const DisplayItemClip* clip = DisplayItemClipChain::ClipForASR(GetClipChain(), aASR)) {
+    return Some(clip->GetClipRect());
+  }
+  // This item does not have a clip with respect to |aASR|. However, we
+  // might still have finite bounds with respect to |aASR|. Check our
+  // children.
+  nsDisplayList* childList = GetSameCoordinateSystemChildren();
+  if (childList) {
+    return Some(childList->GetClippedBoundsWithRespectToASR(aBuilder, aASR));
+  }
+#ifdef DEBUG
+  if (!gfxPrefs::LayoutUseContainersForRootFrames()) {
+    MOZ_ASSERT(false, "item should have finite clip with respect to aASR");
+  }
+#endif
+  return Nothing();
+}
+
+
 
 #ifdef MOZ_DUMP_PAINTING
 void
@@ -9689,6 +9717,66 @@ nsDisplayFilter::PrintEffects(nsACString& aTo)
   aTo += ")";
 }
 #endif
+
+nsDisplaySVGWrapper::nsDisplaySVGWrapper(nsDisplayListBuilder* aBuilder,
+                                         nsIFrame* aFrame, nsDisplayList* aList)
+    : nsDisplayWrapList(aBuilder, aFrame, aList)
+{
+  MOZ_COUNT_CTOR(nsDisplaySVGWrapper);
+}
+
+#ifdef NS_BUILD_REFCNT_LOGGING
+nsDisplaySVGWrapper::~nsDisplaySVGWrapper() {
+  MOZ_COUNT_DTOR(nsDisplaySVGWrapper);
+}
+#endif
+
+LayerState
+nsDisplaySVGWrapper::GetLayerState(nsDisplayListBuilder* aBuilder,
+                                   LayerManager* aManager,
+                                   const ContainerLayerParameters& aParameters)
+{
+  RefPtr<LayerManager> layerManager = aBuilder->GetWidgetLayerManager();
+  if (layerManager && layerManager->GetBackendType() == layers::LayersBackend::LAYERS_WR) {
+    return LAYER_ACTIVE_FORCE;
+  }
+  return LAYER_NONE;
+}
+
+bool
+nsDisplaySVGWrapper::ShouldFlattenAway(nsDisplayListBuilder* aBuilder)
+{
+  RefPtr<LayerManager> layerManager = aBuilder->GetWidgetLayerManager();
+  if (layerManager && layerManager->GetBackendType() == layers::LayersBackend::LAYERS_WR) {
+    return false;
+  }
+  return true;
+}
+
+already_AddRefed<Layer>
+nsDisplaySVGWrapper::BuildLayer(nsDisplayListBuilder* aBuilder,
+                                LayerManager* aManager,
+                                const ContainerLayerParameters& aContainerParameters)
+{
+  ContainerLayerParameters newContainerParameters = aContainerParameters;
+  newContainerParameters.mDisableSubpixelAntialiasingInDescendants = true;
+
+  RefPtr<ContainerLayer> container = aManager->GetLayerBuilder()->
+    BuildContainerLayerFor(aBuilder, aManager, mFrame, this, &mList,
+                           newContainerParameters, nullptr);
+
+  return container.forget();
+}
+
+bool
+nsDisplaySVGWrapper::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
+                                             mozilla::wr::IpcResourceUpdateQueue& aResources,
+                                             const StackingContextHelper& aSc,
+                                             mozilla::layers::WebRenderLayerManager* aManager,
+                                             nsDisplayListBuilder* aDisplayListBuilder)
+{
+  return false;
+}
 
 namespace mozilla {
 

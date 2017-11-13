@@ -63,7 +63,7 @@
 #include "nsIDialogParamBlock.h"
 #include "nsIDOMWindow.h"
 #include "mozilla/ModuleUtils.h"
-#include "nsIIOService2.h"
+#include "nsIIOService.h"
 #include "nsIObserverService.h"
 #include "nsINativeAppSupport.h"
 #include "nsIPlatformInfo.h"
@@ -177,6 +177,9 @@
 #include "nsProfileLock.h"
 #include "SpecialSystemDirectory.h"
 #include <sched.h>
+#ifdef MOZ_ENABLE_DBUS
+#include "DBusRemoteClient.h"
+#endif
 // Time to wait for the remoting service to start
 #define MOZ_XREMOTE_START_TIMEOUT_SEC 5
 #endif
@@ -257,6 +260,9 @@ nsString gAbsoluteArgv0Path;
 #include <pango/pangofc-fontmap.h>
 #endif
 #include <gtk/gtk.h>
+#ifdef MOZ_WAYLAND
+#include <gdk/gdkwayland.h>
+#endif
 #ifdef MOZ_X11
 #include <gdk/gdkx.h>
 #endif /* MOZ_X11 */
@@ -1107,17 +1113,6 @@ nsXULAppInfo::GetReplacedLockTime(PRTime *aReplacedLockTime)
 }
 
 NS_IMETHODIMP
-nsXULAppInfo::GetLastRunCrashID(nsAString &aLastRunCrashID)
-{
-#ifdef MOZ_CRASHREPORTER
-  CrashReporter::GetLastRunCrashID(aLastRunCrashID);
-  return NS_OK;
-#else
-  return NS_ERROR_NOT_IMPLEMENTED;
-#endif
-}
-
-NS_IMETHODIMP
 nsXULAppInfo::GetIsReleaseOrBeta(bool* aResult)
 {
 #ifdef RELEASE_OR_BETA
@@ -1826,18 +1821,31 @@ static RemoteResult
 StartRemoteClient(const char* aDesktopStartupID,
                   nsCString& program,
                   const char* profile,
-                  const char* username)
+                  const char* username,
+                  bool aIsX11Display)
 {
-  XRemoteClient client;
-  nsresult rv = client.Init();
+  nsAutoPtr<nsRemoteClient> client;
+
+  if (aIsX11Display) {
+    client = new XRemoteClient();
+  } else {
+#if defined(MOZ_ENABLE_DBUS) && defined(MOZ_WAYLAND)
+    client = new DBusRemoteClient();
+#else
+    MOZ_ASSERT(false, "Missing remote implementation!");
+    return REMOTE_NOT_FOUND;
+#endif
+  }
+
+  nsresult rv = client->Init();
   if (NS_FAILED(rv))
     return REMOTE_NOT_FOUND;
 
   nsCString response;
   bool success = false;
-  rv = client.SendCommandLine(program.get(), username, profile,
-                              gArgc, gArgv, aDesktopStartupID,
-                              getter_Copies(response), &success);
+  rv = client->SendCommandLine(program.get(), username, profile,
+                               gArgc, gArgv, aDesktopStartupID,
+                               getter_Copies(response), &success);
   // did the command fail?
   if (!success)
     return REMOTE_NOT_FOUND;
@@ -3007,44 +3015,7 @@ static void MOZ_gdk_display_close(GdkDisplay *display)
   (void) display;
 #endif
 }
-
-const char* DetectDisplay(void)
-{
-  bool tryX11 = false;
-  bool tryWayland = false;
-  bool tryBroadway = false;
-
-  // Honor user backend selection
-  const char *backend = PR_GetEnv("GDK_BACKEND");
-  if (!backend || strstr(backend, "*")) {
-    // Try all backends
-    tryX11 = true;
-    tryWayland = true;
-    tryBroadway = true;
-  } else if (backend) {
-    if (strstr(backend, "x11"))
-      tryX11 = true;
-    if (strstr(backend, "wayland"))
-      tryWayland = true;
-    if (strstr(backend, "broadway"))
-      tryBroadway = true;
-  }
-
-  const char *display_name;
-  if (tryX11 && (display_name = PR_GetEnv("DISPLAY"))) {
-    return display_name;
-  }
-  if (tryWayland && (display_name = PR_GetEnv("WAYLAND_DISPLAY"))) {
-    return display_name;
-  }
-  if (tryBroadway && (display_name = PR_GetEnv("BROADWAY_DISPLAY"))) {
-    return display_name;
-  }
-
-  PR_fprintf(PR_STDERR, "Error: GDK_BACKEND does not match available displays\n");
-  return nullptr;
-}
-#endif // MOZ_WIDGET_GTK
+#endif
 
 /**
  * NSPR will search for the "nspr_use_zone_allocator" symbol throughout
@@ -3920,22 +3891,6 @@ XREMain::XRE_mainStartup(bool* aExitFlag)
     return result;
   }
 
-#if defined(MOZ_WIDGET_GTK)
-  // display_name is owned by gdk.
-  const char *display_name = nullptr;
-  bool saveDisplayArg = false;
-  if (!gfxPlatform::IsHeadless()) {
-    display_name = gdk_get_display_arg_name();
-    if (display_name) {
-      saveDisplayArg = true;
-    } else {
-      display_name = DetectDisplay();
-      if (!display_name) {
-        return 1;
-      }
-    }
-  }
-#endif /* MOZ_WIDGET_GTK */
 #ifdef MOZ_X11
   // Init X11 in thread-safe mode. Must be called prior to the first call to XOpenDisplay
   // (called inside gdk_display_open). This is a requirement for off main tread compositing.
@@ -3945,19 +3900,58 @@ XREMain::XRE_mainStartup(bool* aExitFlag)
 #endif
 #if defined(MOZ_WIDGET_GTK)
   if (!gfxPlatform::IsHeadless()) {
-    mGdkDisplay = gdk_display_open(display_name);
-    if (!mGdkDisplay) {
-      PR_fprintf(PR_STDERR, "Error: cannot open display: %s\n", display_name);
-      return 1;
+    const char *display_name = nullptr;
+    bool saveDisplayArg = false;
+
+    // display_name is owned by gdk.
+    display_name = gdk_get_display_arg_name();
+    // if --display argument is given make sure it's
+    // also passed to ContentChild::Init() by MOZ_GDK_DISPLAY.
+    if (display_name) {
+      SaveWordToEnv("MOZ_GDK_DISPLAY", nsDependentCString(display_name));
+      saveDisplayArg = true;
     }
-    gdk_display_manager_set_default_display (gdk_display_manager_get(),
-                                             mGdkDisplay);
+
+    // On Wayland disabled builds read X11 DISPLAY env exclusively
+    // and don't care about different displays.
+#if !defined(MOZ_WAYLAND)
+    if (!display_name) {
+      display_name = PR_GetEnv("DISPLAY");
+      if (!display_name) {
+        PR_fprintf(PR_STDERR,
+                   "Error: no DISPLAY environment variable specified\n");
+        return 1;
+      }
+    }
+#endif
+
+    if (display_name) {
+      mGdkDisplay = gdk_display_open(display_name);
+      if (!mGdkDisplay) {
+        PR_fprintf(PR_STDERR, "Error: cannot open display: %s\n", display_name);
+        return 1;
+      }
+      gdk_display_manager_set_default_display(gdk_display_manager_get(),
+                                              mGdkDisplay);
+      if (saveDisplayArg) {
+        if (GDK_IS_X11_DISPLAY(mGdkDisplay)) {
+            SaveWordToEnv("DISPLAY", nsDependentCString(display_name));
+        }
+#ifdef MOZ_WAYLAND
+        else if (GDK_IS_WAYLAND_DISPLAY(mGdkDisplay)) {
+            SaveWordToEnv("WAYLAND_DISPLAY", nsDependentCString(display_name));
+        }
+#endif
+      }
+    }
+#if (MOZ_WIDGET_GTK == 3)
+    else {
+      mGdkDisplay = gdk_display_manager_open_display(gdk_display_manager_get(),
+                                                     nullptr);
+    }
+#endif
   }
-  if (!gfxPlatform::IsHeadless() && GDK_IS_X11_DISPLAY(mGdkDisplay)) {
-    if (saveDisplayArg) {
-      SaveWordToEnv("DISPLAY", nsDependentCString(display_name));
-    }
-  } else {
+  else {
     mDisableRemote = true;
   }
 #endif
@@ -4037,7 +4031,8 @@ XREMain::XRE_mainStartup(bool* aExitFlag)
     const char* desktopStartupIDPtr =
       mDesktopStartupID.IsEmpty() ? nullptr : mDesktopStartupID.get();
 
-    rr = StartRemoteClient(desktopStartupIDPtr, program, profile, username);
+    rr = StartRemoteClient(desktopStartupIDPtr, program, profile, username,
+                           GDK_IS_X11_DISPLAY(mGdkDisplay));
     if (rr == REMOTE_FOUND) {
       *aExitFlag = true;
       return 0;
@@ -4359,8 +4354,8 @@ XREMain::XRE_mainRun()
     rv = prefs->GetDefaultBranch(nullptr, getter_AddRefs(defaultPrefBranch));
 
     if (NS_SUCCEEDED(rv)) {
-      nsCString sval;
-      rv = defaultPrefBranch->GetCharPref("app.update.channel", getter_Copies(sval));
+      nsAutoCString sval;
+      rv = defaultPrefBranch->GetCharPref("app.update.channel", sval);
       if (NS_SUCCEEDED(rv)) {
         CrashReporter::AnnotateCrashReport(NS_LITERAL_CSTRING("ReleaseChannel"),
                                             sval);
@@ -4390,7 +4385,7 @@ XREMain::XRE_mainRun()
 #endif
 
   if (mStartOffline) {
-    nsCOMPtr<nsIIOService2> io (do_GetService("@mozilla.org/network/io-service;1"));
+    nsCOMPtr<nsIIOService> io(do_GetService("@mozilla.org/network/io-service;1"));
     NS_ENSURE_TRUE(io, NS_ERROR_FAILURE);
     io->SetManageOfflineStatus(false);
     io->SetOffline(true);

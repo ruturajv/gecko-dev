@@ -134,10 +134,6 @@ function WorkerDispatcher() {
    * License, v. 2.0. If a copy of the MPL was not distributed with this
    * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-const mark = typeof window == "object" && window.performance && window.performance.mark ? window.performance.mark.bind(window.performance) : () => {};
-
-const measure = typeof window == "object" && window.performance && window.performance.measure ? window.performance.measure.bind(window.performance) : () => {};
-
 WorkerDispatcher.prototype = {
   start(url) {
     this.worker = new Worker(url);
@@ -159,9 +155,6 @@ WorkerDispatcher.prototype = {
     return (...args) => {
       return new Promise((resolve, reject) => {
         const id = this.msgId++;
-
-        mark(`${method}_start`);
-
         this.worker.postMessage({ id, method, args });
 
         const listener = ({ data: result }) => {
@@ -170,14 +163,10 @@ WorkerDispatcher.prototype = {
           }
 
           if (!this.worker) {
-            reject("Oops, The worker has shutdown!");
             return;
           }
+
           this.worker.removeEventListener("message", listener);
-
-          mark(`${method}_end`);
-          measure(`${method}`, `${method}_start`, `${method}_end`);
-
           if (result.error) {
             reject(result.error);
           } else {
@@ -285,6 +274,10 @@ var _prettyFast2 = _interopRequireDefault(_prettyFast);
 var _devtoolsUtils = __webpack_require__(1363);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 const { workerHandler } = _devtoolsUtils.workerUtils;
 

@@ -77,7 +77,8 @@ typedef uint32_t ScreenOrientationInternal;
 
 class nsDocShell;
 class nsDOMNavigationTiming;
-class nsGlobalWindow;
+class nsGlobalWindowOuter;
+class nsGlobalWindowInner;
 class nsIController;
 class nsIScrollableFrame;
 class OnLinkClickEvent;
@@ -173,6 +174,7 @@ public:
   virtual nsresult Init() override;
 
   NS_DECL_ISUPPORTS_INHERITED
+  NS_DECL_CYCLE_COLLECTION_CLASS_INHERITED(nsDocShell, nsDocLoader)
 
   NS_DECL_NSIDOCSHELL
   NS_DECL_NSIDOCSHELLTREEITEM
@@ -451,6 +453,7 @@ protected:
                      mozilla::Maybe<nsCOMPtr<nsIURI>> const& aResultPrincipalURI,
                      bool aLoadReplace,
                      bool aLoadFromExternal,
+                     bool aForceAllowDataURI,
                      nsIURI* aReferrer,
                      bool aSendReferrer,
                      uint32_t aReferrerPolicy,
@@ -916,7 +919,7 @@ protected:
   nsCOMPtr<nsIURI> mCurrentURI;
   nsCOMPtr<nsIURI> mReferrerURI;
   uint32_t mReferrerPolicy;
-  RefPtr<nsGlobalWindow> mScriptGlobal;
+  RefPtr<nsGlobalWindowOuter> mScriptGlobal;
   nsCOMPtr<nsISHistory> mSessionHistory;
   nsCOMPtr<nsIGlobalHistory2> mGlobalHistory;
   nsCOMPtr<nsIWebBrowserFind> mFind;

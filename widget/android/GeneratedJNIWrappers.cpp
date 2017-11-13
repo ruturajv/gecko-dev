@@ -35,17 +35,52 @@ constexpr char AndroidGamepadManager::OnGamepadChange_t::signature[];
 constexpr char AndroidGamepadManager::Start_t::name[];
 constexpr char AndroidGamepadManager::Start_t::signature[];
 
-auto AndroidGamepadManager::Start() -> void
+auto AndroidGamepadManager::Start(mozilla::jni::Object::Param a0) -> void
 {
-    return mozilla::jni::Method<Start_t>::Call(AndroidGamepadManager::Context(), nullptr);
+    return mozilla::jni::Method<Start_t>::Call(AndroidGamepadManager::Context(), nullptr, a0);
 }
 
 constexpr char AndroidGamepadManager::Stop_t::name[];
 constexpr char AndroidGamepadManager::Stop_t::signature[];
 
-auto AndroidGamepadManager::Stop() -> void
+auto AndroidGamepadManager::Stop(mozilla::jni::Object::Param a0) -> void
 {
-    return mozilla::jni::Method<Stop_t>::Call(AndroidGamepadManager::Context(), nullptr);
+    return mozilla::jni::Method<Stop_t>::Call(AndroidGamepadManager::Context(), nullptr, a0);
+}
+
+const char Clipboard::name[] =
+        "org/mozilla/gecko/Clipboard";
+
+constexpr char Clipboard::ClearText_t::name[];
+constexpr char Clipboard::ClearText_t::signature[];
+
+auto Clipboard::ClearText(mozilla::jni::Object::Param a0) -> void
+{
+    return mozilla::jni::Method<ClearText_t>::Call(Clipboard::Context(), nullptr, a0);
+}
+
+constexpr char Clipboard::GetText_t::name[];
+constexpr char Clipboard::GetText_t::signature[];
+
+auto Clipboard::GetText(mozilla::jni::Object::Param a0) -> mozilla::jni::String::LocalRef
+{
+    return mozilla::jni::Method<GetText_t>::Call(Clipboard::Context(), nullptr, a0);
+}
+
+constexpr char Clipboard::HasText_t::name[];
+constexpr char Clipboard::HasText_t::signature[];
+
+auto Clipboard::HasText(mozilla::jni::Object::Param a0) -> bool
+{
+    return mozilla::jni::Method<HasText_t>::Call(Clipboard::Context(), nullptr, a0);
+}
+
+constexpr char Clipboard::SetText_t::name[];
+constexpr char Clipboard::SetText_t::signature[];
+
+auto Clipboard::SetText(mozilla::jni::Object::Param a0, mozilla::jni::String::Param a1) -> void
+{
+    return mozilla::jni::Method<SetText_t>::Call(Clipboard::Context(), nullptr, a0, a1);
 }
 
 const char EventDispatcher::name[] =
@@ -281,6 +316,14 @@ constexpr char GeckoAppShell::GetCurrentNetworkInformation_t::signature[];
 auto GeckoAppShell::GetCurrentNetworkInformation() -> mozilla::jni::DoubleArray::LocalRef
 {
     return mozilla::jni::Method<GetCurrentNetworkInformation_t>::Call(GeckoAppShell::Context(), nullptr);
+}
+
+constexpr char GeckoAppShell::GetDefaultLocale_t::name[];
+constexpr char GeckoAppShell::GetDefaultLocale_t::signature[];
+
+auto GeckoAppShell::GetDefaultLocale() -> mozilla::jni::String::LocalRef
+{
+    return mozilla::jni::Method<GetDefaultLocale_t>::Call(GeckoAppShell::Context(), nullptr);
 }
 
 constexpr char GeckoAppShell::GetDensity_t::name[];
@@ -615,9 +658,9 @@ const char GeckoEditable::name[] =
 constexpr char GeckoEditable::New_t::name[];
 constexpr char GeckoEditable::New_t::signature[];
 
-auto GeckoEditable::New(mozilla::jni::Object::Param a0) -> GeckoEditable::LocalRef
+auto GeckoEditable::New() -> GeckoEditable::LocalRef
 {
-    return mozilla::jni::Constructor<New_t>::Call(GeckoEditable::Context(), nullptr, a0);
+    return mozilla::jni::Constructor<New_t>::Call(GeckoEditable::Context(), nullptr);
 }
 
 constexpr char GeckoEditable::OnViewChange_t::name[];
@@ -733,6 +776,43 @@ const char GeckoScreenOrientation::name[] =
 
 constexpr char GeckoScreenOrientation::OnOrientationChange_t::name[];
 constexpr char GeckoScreenOrientation::OnOrientationChange_t::signature[];
+
+const char GeckoSession::name[] =
+        "org/mozilla/gecko/GeckoSession";
+
+const char GeckoSession::Window::name[] =
+        "org/mozilla/gecko/GeckoSession$Window";
+
+constexpr char GeckoSession::Window::Attach_t::name[];
+constexpr char GeckoSession::Window::Attach_t::signature[];
+
+constexpr char GeckoSession::Window::Close_t::name[];
+constexpr char GeckoSession::Window::Close_t::signature[];
+
+constexpr char GeckoSession::Window::DisposeNative_t::name[];
+constexpr char GeckoSession::Window::DisposeNative_t::signature[];
+
+constexpr char GeckoSession::Window::OnReady_t::name[];
+constexpr char GeckoSession::Window::OnReady_t::signature[];
+
+auto GeckoSession::Window::OnReady() const -> void
+{
+    return mozilla::jni::Method<OnReady_t>::Call(Window::mCtx, nullptr);
+}
+
+constexpr char GeckoSession::Window::OnTransfer_t::name[];
+constexpr char GeckoSession::Window::OnTransfer_t::signature[];
+
+auto GeckoSession::Window::OnTransfer(mozilla::jni::Object::Param a0) const -> void
+{
+    return mozilla::jni::Method<OnTransfer_t>::Call(Window::mCtx, nullptr, a0);
+}
+
+constexpr char GeckoSession::Window::Open_t::name[];
+constexpr char GeckoSession::Window::Open_t::signature[];
+
+constexpr char GeckoSession::Window::Transfer_t::name[];
+constexpr char GeckoSession::Window::Transfer_t::signature[];
 
 const char GeckoThread::name[] =
         "org/mozilla/gecko/GeckoThread";
@@ -915,61 +995,57 @@ auto GeckoThread::State::RUNNING() -> State::LocalRef
     return mozilla::jni::Field<RUNNING_t>::Get(State::Context(), nullptr);
 }
 
-const char GeckoView::name[] =
-        "org/mozilla/gecko/GeckoView";
+const char GeckoVRManager::name[] =
+        "org/mozilla/gecko/GeckoVRManager";
 
-const char GeckoView::State::name[] =
-        "org/mozilla/gecko/GeckoView$State";
+constexpr char GeckoVRManager::CleanupGVRNonPresentingContext_t::name[];
+constexpr char GeckoVRManager::CleanupGVRNonPresentingContext_t::signature[];
 
-constexpr char GeckoView::State::INITIAL_t::name[];
-constexpr char GeckoView::State::INITIAL_t::signature[];
+constexpr char GeckoVRManager::CreateGVRNonPresentingContext_t::name[];
+constexpr char GeckoVRManager::CreateGVRNonPresentingContext_t::signature[];
 
-auto GeckoView::State::INITIAL() -> State::LocalRef
+auto GeckoVRManager::CreateGVRNonPresentingContext() -> int64_t
 {
-    return mozilla::jni::Field<INITIAL_t>::Get(State::Context(), nullptr);
+    return mozilla::jni::Method<CreateGVRNonPresentingContext_t>::Call(GeckoVRManager::Context(), nullptr);
 }
 
-constexpr char GeckoView::State::READY_t::name[];
-constexpr char GeckoView::State::READY_t::signature[];
+constexpr char GeckoVRManager::DestroyGVRNonPresentingContext_t::name[];
+constexpr char GeckoVRManager::DestroyGVRNonPresentingContext_t::signature[];
 
-auto GeckoView::State::READY() -> State::LocalRef
+auto GeckoVRManager::DestroyGVRNonPresentingContext() -> void
 {
-    return mozilla::jni::Field<READY_t>::Get(State::Context(), nullptr);
+    return mozilla::jni::Method<DestroyGVRNonPresentingContext_t>::Call(GeckoVRManager::Context(), nullptr);
 }
 
-const char GeckoView::Window::name[] =
-        "org/mozilla/gecko/GeckoView$Window";
+constexpr char GeckoVRManager::DisableVRMode_t::name[];
+constexpr char GeckoVRManager::DisableVRMode_t::signature[];
 
-constexpr char GeckoView::Window::Close_t::name[];
-constexpr char GeckoView::Window::Close_t::signature[];
-
-constexpr char GeckoView::Window::DisposeNative_t::name[];
-constexpr char GeckoView::Window::DisposeNative_t::signature[];
-
-constexpr char GeckoView::Window::LoadUri_t::name[];
-constexpr char GeckoView::Window::LoadUri_t::signature[];
-
-constexpr char GeckoView::Window::OnReattach_t::name[];
-constexpr char GeckoView::Window::OnReattach_t::signature[];
-
-auto GeckoView::Window::OnReattach(GeckoView::Param a0) const -> void
+auto GeckoVRManager::DisableVRMode() -> void
 {
-    return mozilla::jni::Method<OnReattach_t>::Call(Window::mCtx, nullptr, a0);
+    return mozilla::jni::Method<DisableVRMode_t>::Call(GeckoVRManager::Context(), nullptr);
 }
 
-constexpr char GeckoView::Window::Open_t::name[];
-constexpr char GeckoView::Window::Open_t::signature[];
+constexpr char GeckoVRManager::EnableVRMode_t::name[];
+constexpr char GeckoVRManager::EnableVRMode_t::signature[];
 
-constexpr char GeckoView::Window::Reattach_t::name[];
-constexpr char GeckoView::Window::Reattach_t::signature[];
-
-constexpr char GeckoView::Window::SetState_t::name[];
-constexpr char GeckoView::Window::SetState_t::signature[];
-
-auto GeckoView::Window::SetState(mozilla::jni::Object::Param a0) const -> void
+auto GeckoVRManager::EnableVRMode() -> void
 {
-    return mozilla::jni::Method<SetState_t>::Call(Window::mCtx, nullptr, a0);
+    return mozilla::jni::Method<EnableVRMode_t>::Call(GeckoVRManager::Context(), nullptr);
 }
+
+constexpr char GeckoVRManager::IsGVRPresent_t::name[];
+constexpr char GeckoVRManager::IsGVRPresent_t::signature[];
+
+auto GeckoVRManager::IsGVRPresent() -> bool
+{
+    return mozilla::jni::Method<IsGVRPresent_t>::Call(GeckoVRManager::Context(), nullptr);
+}
+
+constexpr char GeckoVRManager::SetGVRPaused_t::name[];
+constexpr char GeckoVRManager::SetGVRPaused_t::signature[];
+
+constexpr char GeckoVRManager::SetGVRPresentingContext_t::name[];
+constexpr char GeckoVRManager::SetGVRPresentingContext_t::signature[];
 
 const char PrefsHelper::name[] =
         "org/mozilla/gecko/PrefsHelper";
@@ -1120,12 +1196,32 @@ auto GeckoSurface::SetAvailable(bool a0) const -> void
 const char GeckoSurfaceTexture::name[] =
         "org/mozilla/gecko/gfx/GeckoSurfaceTexture";
 
+constexpr char GeckoSurfaceTexture::AttachToGLContext_t::name[];
+constexpr char GeckoSurfaceTexture::AttachToGLContext_t::signature[];
+
+auto GeckoSurfaceTexture::AttachToGLContext(int64_t a0, int32_t a1) const -> nsresult
+{
+    nsresult rv = NS_OK;
+    mozilla::jni::Method<AttachToGLContext_t>::Call(GeckoSurfaceTexture::mCtx, &rv, a0, a1);
+    return rv;
+}
+
 constexpr char GeckoSurfaceTexture::DecrementUse_t::name[];
 constexpr char GeckoSurfaceTexture::DecrementUse_t::signature[];
 
 auto GeckoSurfaceTexture::DecrementUse() const -> void
 {
     return mozilla::jni::Method<DecrementUse_t>::Call(GeckoSurfaceTexture::mCtx, nullptr);
+}
+
+constexpr char GeckoSurfaceTexture::DetachFromGLContext_t::name[];
+constexpr char GeckoSurfaceTexture::DetachFromGLContext_t::signature[];
+
+auto GeckoSurfaceTexture::DetachFromGLContext() const -> nsresult
+{
+    nsresult rv = NS_OK;
+    mozilla::jni::Method<DetachFromGLContext_t>::Call(GeckoSurfaceTexture::mCtx, &rv);
+    return rv;
 }
 
 constexpr char GeckoSurfaceTexture::GetHandle_t::name[];
@@ -1152,6 +1248,14 @@ auto GeckoSurfaceTexture::IncrementUse() const -> void
     return mozilla::jni::Method<IncrementUse_t>::Call(GeckoSurfaceTexture::mCtx, nullptr);
 }
 
+constexpr char GeckoSurfaceTexture::IsAttachedToGLContext_t::name[];
+constexpr char GeckoSurfaceTexture::IsAttachedToGLContext_t::signature[];
+
+auto GeckoSurfaceTexture::IsAttachedToGLContext(int64_t a0) const -> bool
+{
+    return mozilla::jni::Method<IsAttachedToGLContext_t>::Call(GeckoSurfaceTexture::mCtx, nullptr, a0);
+}
+
 constexpr char GeckoSurfaceTexture::IsSingleBuffer_t::name[];
 constexpr char GeckoSurfaceTexture::IsSingleBuffer_t::signature[];
 
@@ -1175,9 +1279,6 @@ auto GeckoSurfaceTexture::Lookup(int32_t a0) -> GeckoSurfaceTexture::LocalRef
 {
     return mozilla::jni::Method<Lookup_t>::Call(GeckoSurfaceTexture::Context(), nullptr, a0);
 }
-
-constexpr char GeckoSurfaceTexture::NativeAcquireTexture_t::name[];
-constexpr char GeckoSurfaceTexture::NativeAcquireTexture_t::signature[];
 
 constexpr char GeckoSurfaceTexture::ReleaseTexImage_t::name[];
 constexpr char GeckoSurfaceTexture::ReleaseTexImage_t::signature[];
@@ -2496,41 +2597,6 @@ constexpr char GeckoServiceChildProcess::GetEditableParent_t::signature[];
 auto GeckoServiceChildProcess::GetEditableParent(int64_t a0, int64_t a1) -> mozilla::jni::Object::LocalRef
 {
     return mozilla::jni::Method<GetEditableParent_t>::Call(GeckoServiceChildProcess::Context(), nullptr, a0, a1);
-}
-
-const char Clipboard::name[] =
-        "org/mozilla/gecko/util/Clipboard";
-
-constexpr char Clipboard::ClearText_t::name[];
-constexpr char Clipboard::ClearText_t::signature[];
-
-auto Clipboard::ClearText() -> void
-{
-    return mozilla::jni::Method<ClearText_t>::Call(Clipboard::Context(), nullptr);
-}
-
-constexpr char Clipboard::GetText_t::name[];
-constexpr char Clipboard::GetText_t::signature[];
-
-auto Clipboard::GetText() -> mozilla::jni::String::LocalRef
-{
-    return mozilla::jni::Method<GetText_t>::Call(Clipboard::Context(), nullptr);
-}
-
-constexpr char Clipboard::HasText_t::name[];
-constexpr char Clipboard::HasText_t::signature[];
-
-auto Clipboard::HasText() -> bool
-{
-    return mozilla::jni::Method<HasText_t>::Call(Clipboard::Context(), nullptr);
-}
-
-constexpr char Clipboard::SetText_t::name[];
-constexpr char Clipboard::SetText_t::signature[];
-
-auto Clipboard::SetText(mozilla::jni::String::Param a0) -> void
-{
-    return mozilla::jni::Method<SetText_t>::Call(Clipboard::Context(), nullptr, a0);
 }
 
 const char EventCallback::name[] =

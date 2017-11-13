@@ -766,7 +766,9 @@
               error = "errorDecode";
               break;
             case v.error.MEDIA_ERR_SRC_NOT_SUPPORTED:
-              error = "errorSrcNotSupported";
+              error = v.networkState == v.NETWORK_NO_SOURCE ?
+                "errorNoSource" :
+                "errorSrcNotSupported";
               break;
             default:
               error = "errorGeneric";
@@ -1738,7 +1740,8 @@
            (clickToPlayScaledSize + this.controlBarMinHeight / 2 >= videoHeight / 2 )) {
           this.clickToPlay.hideByAdjustment = true;
         } else {
-          if (this.clickToPlay.hidden && !this.video.played.length && this.video.paused) {
+          if (this.clickToPlay.hidden && !this.video.played.length &&
+              this.video.paused && this.clickToPlay.hideByAdjustment) {
             this.clickToPlay.hideByAdjustment = false;
           }
           this.clickToPlay.style.width = `${clickToPlayScaledSize}px`;

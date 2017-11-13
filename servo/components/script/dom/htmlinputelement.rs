@@ -46,11 +46,12 @@ use script_traits::ScriptToConstellationChan;
 use servo_atoms::Atom;
 use std::borrow::ToOwned;
 use std::cell::Cell;
+use std::mem;
 use std::ops::Range;
 use style::attr::AttrValue;
-use style::element_state::*;
+use style::element_state::ElementState;
 use style::str::split_commas;
-use textinput::{SelectionDirection, TextInput};
+use textinput::{Direction, Selection, SelectionDirection, TextInput};
 use textinput::KeyReaction::{DispatchInput, Nothing, RedrawSelection, TriggerDefaultAction};
 use textinput::Lines::Single;
 
@@ -137,7 +138,8 @@ impl HTMLInputElement {
         let chan = document.window().upcast::<GlobalScope>().script_to_constellation_chan().clone();
         HTMLInputElement {
             htmlelement:
-                HTMLElement::new_inherited_with_state(IN_ENABLED_STATE | IN_READ_WRITE_STATE,
+                HTMLElement::new_inherited_with_state(ElementState::IN_ENABLED_STATE |
+                                                      ElementState::IN_READ_WRITE_STATE,
                                                       local_name, prefix, document),
             input_type: Cell::new(InputType::InputText),
             placeholder: DomRefCell::new(DOMString::new()),
@@ -174,7 +176,7 @@ impl HTMLInputElement {
             .map_or_else(|| atom!(""), |a| a.value().as_atom().to_owned())
     }
 
-    // https://html.spec.whatwg.org/multipage/#input-type-attr-summary
+    // https://html.spec.whatwg.org/multipage/#dom-input-value
     fn value_mode(&self) -> ValueMode {
         match self.input_type.get() {
             InputType::InputSubmit |
@@ -280,13 +282,13 @@ impl LayoutHTMLInputElementHelpers for LayoutDom<HTMLInputElement> {
     #[allow(unrooted_must_root)]
     #[allow(unsafe_code)]
     unsafe fn checked_state_for_layout(self) -> bool {
-        self.upcast::<Element>().get_state_for_layout().contains(IN_CHECKED_STATE)
+        self.upcast::<Element>().get_state_for_layout().contains(ElementState::IN_CHECKED_STATE)
     }
 
     #[allow(unrooted_must_root)]
     #[allow(unsafe_code)]
     unsafe fn indeterminate_state_for_layout(self) -> bool {
-        self.upcast::<Element>().get_state_for_layout().contains(IN_INDETERMINATE_STATE)
+        self.upcast::<Element>().get_state_for_layout().contains(ElementState::IN_INDETERMINATE_STATE)
     }
 }
 
@@ -336,7 +338,7 @@ impl HTMLInputElementMethods for HTMLInputElement {
 
     // https://html.spec.whatwg.org/multipage/#dom-input-checked
     fn Checked(&self) -> bool {
-        self.upcast::<Element>().state().contains(IN_CHECKED_STATE)
+        self.upcast::<Element>().state().contains(ElementState::IN_CHECKED_STATE)
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-input-checked
@@ -408,8 +410,17 @@ impl HTMLInputElementMethods for HTMLInputElement {
     fn SetValue(&self, value: DOMString) -> ErrorResult {
         match self.value_mode() {
             ValueMode::Value => {
-                self.textinput.borrow_mut().set_content(value);
+                // Steps 1-2.
+                let old_value = mem::replace(self.textinput.borrow_mut().single_line_content_mut(), value);
+                // Step 3.
                 self.value_dirty.set(true);
+                // Step 4.
+                self.sanitize_value();
+                // Step 5.
+                if *self.textinput.borrow().single_line_content() != old_value {
+                    self.textinput.borrow_mut()
+                        .adjust_horizontal_to_limit(Direction::Forward, Selection::NotSelected);
+                }
             }
             ValueMode::Default |
             ValueMode::DefaultOn => {
@@ -538,12 +549,12 @@ impl HTMLInputElementMethods for HTMLInputElement {
 
     // https://html.spec.whatwg.org/multipage/#dom-input-indeterminate
     fn Indeterminate(&self) -> bool {
-        self.upcast::<Element>().state().contains(IN_INDETERMINATE_STATE)
+        self.upcast::<Element>().state().contains(ElementState::IN_INDETERMINATE_STATE)
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-input-indeterminate
     fn SetIndeterminate(&self, val: bool) {
-        self.upcast::<Element>().set_state(IN_INDETERMINATE_STATE, val)
+        self.upcast::<Element>().set_state(ElementState::IN_INDETERMINATE_STATE, val)
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-lfe-labels
@@ -745,7 +756,7 @@ impl HTMLInputElement {
     }
 
     fn update_checked_state(&self, checked: bool, dirty: bool) {
-        self.upcast::<Element>().set_state(IN_CHECKED_STATE, checked);
+        self.upcast::<Element>().set_state(ElementState::IN_CHECKED_STATE, checked);
 
         if dirty {
             self.checked_changed.set(true);
@@ -856,6 +867,23 @@ impl HTMLInputElement {
 
             target.fire_bubbling_event(atom!("input"));
             target.fire_bubbling_event(atom!("change"));
+        }
+    }
+
+    // https://html.spec.whatwg.org/multipage/#value-sanitization-algorithm
+    fn sanitize_value(&self) {
+        match self.type_() {
+            atom!("text") | atom!("search") | atom!("tel") | atom!("password") => {
+                self.textinput.borrow_mut().single_line_content_mut().strip_newlines();
+            }
+            atom!("url") => {
+                let mut textinput = self.textinput.borrow_mut();
+                let content = textinput.single_line_content_mut();
+                content.strip_newlines();
+                content.strip_leading_and_trailing_ascii_whitespace();
+            }
+            // TODO: Implement more value sanitization algorithms for different types of inputs
+            _ => ()
         }
     }
 }
@@ -971,7 +999,8 @@ impl VirtualMethods for HTMLInputElement {
                                 self.radio_group_name().as_ref());
                         }
 
-                        // TODO: Step 6 - value sanitization
+                        // Step 6
+                        self.sanitize_value();
                     },
                     AttributeMutation::Removed => {
                         if self.input_type.get() == InputType::InputRadio {

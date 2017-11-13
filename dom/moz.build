@@ -29,7 +29,6 @@ interfaces = [
     'xul',
     'security',
     'storage',
-    'json',
     'offline',
     'geolocation',
     'notification',
@@ -50,6 +49,7 @@ DIRS += [
     'browser-element',
     'cache',
     'canvas',
+    'clients',
     'commandhandler',
     'credentialmanagement',
     'crypto',
@@ -64,7 +64,6 @@ DIRS += [
     'geolocation',
     'grid',
     'html',
-    'json',
     'jsurl',
     'asmjscache',
     'mathml',
@@ -109,6 +108,7 @@ DIRS += [
     'worklet',
     'script',
     'payments',
+    'websocket',
 ]
 
 if CONFIG['OS_ARCH'] == 'WINNT':

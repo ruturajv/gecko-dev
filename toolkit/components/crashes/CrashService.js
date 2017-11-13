@@ -25,11 +25,13 @@ var gRunningProcesses = new Set();
  * stack traces will be stored in the .extra file under the StackTraces= entry.
  *
  * @param minidumpPath {string} The path to the minidump file
+ * @param allThreads {bool} Gather stack traces for all threads, not just the
+ *                   crashing thread.
  *
  * @returns {Promise} A promise that gets resolved once minidump analysis has
  *          finished.
  */
-function runMinidumpAnalyzer(minidumpPath) {
+function runMinidumpAnalyzer(minidumpPath, allThreads) {
   return new Promise((resolve, reject) => {
     try {
       const binSuffix = AppConstants.platform === "win" ? ".exe" : "";
@@ -52,11 +54,19 @@ function runMinidumpAnalyzer(minidumpPath) {
       process.startHidden = true;
       process.noShell = true;
 
+      if (allThreads) {
+        args.unshift("--full");
+      }
+
       process.runAsync(args, args.length, (subject, topic, data) => {
         switch (topic) {
           case "process-finished":
             gRunningProcesses.delete(process);
             resolve();
+            break;
+          case "process-failed":
+            gRunningProcesses.delete(process);
+            reject();
             break;
           default:
             reject(new Error("Unexpected topic received " + topic));
@@ -125,7 +135,9 @@ function processExtraFile(extraPath) {
       // to re-escape them into '\\n' again so that the fields holding JSON
       // strings are valid.
       [ "TelemetryEnvironment", "StackTraces" ].forEach(field => {
-        keyValuePairs[field] = keyValuePairs[field].replace(/\n/g, "n");
+        if (field in keyValuePairs) {
+          keyValuePairs[field] = keyValuePairs[field].replace(/\n/g, "n");
+        }
       });
 
       return keyValuePairs;
@@ -173,12 +185,15 @@ CrashService.prototype = Object.freeze({
       throw new Error("Unrecognized PROCESS_TYPE: " + processType);
     }
 
+    let allThreads = false;
+
     switch (crashType) {
     case Ci.nsICrashService.CRASH_TYPE_CRASH:
       crashType = Services.crashmanager.CRASH_TYPE_CRASH;
       break;
     case Ci.nsICrashService.CRASH_TYPE_HANG:
       crashType = Services.crashmanager.CRASH_TYPE_HANG;
+      allThreads = true;
       break;
     default:
       throw new Error("Unrecognized CRASH_TYPE: " + crashType);
@@ -194,7 +209,7 @@ CrashService.prototype = Object.freeze({
     if (!gQuitting) {
       // Minidump analysis can take a long time, don't start it if the browser
       // is already quitting.
-      await runMinidumpAnalyzer(minidumpPath);
+      await runMinidumpAnalyzer(minidumpPath, allThreads);
     }
 
     metadata = await processExtraFile(extraPath);
@@ -225,7 +240,12 @@ CrashService.prototype = Object.freeze({
       case "quit-application":
         gQuitting = true;
         gRunningProcesses.forEach((process) => {
-          process.kill();
+          try {
+            process.kill();
+          } catch (e) {
+            // If the process has already quit then kill() fails, but since
+            // this failure is benign it is safe to silently ignore it.
+          }
           Services.obs.notifyObservers(null, "test-minidump-analyzer-killed");
         });
         break;

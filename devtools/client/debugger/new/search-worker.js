@@ -482,7 +482,9 @@ var _url = __webpack_require__(334);
  * @memberof utils/source
  * @static
  */
-
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /**
  * Utils for working with Source URLs
@@ -593,7 +595,12 @@ function getFilename(source) {
     return getFormattedSourceId(id);
   }
 
-  return getFilenameFromURL(url);
+  let filename = getFilenameFromURL(url);
+  const qMarkIdx = filename.indexOf("?");
+  if (qMarkIdx > 0) {
+    filename = filename.slice(0, qMarkIdx);
+  }
+  return filename;
 }
 
 /**
@@ -658,11 +665,15 @@ function getSourceLineCount(source) {
  * @static
  */
 
-function getMode(source) {
+function getMode(source, sourceMetaData) {
   const { contentType, text, isWasm, url } = source;
 
   if (!text || isWasm) {
     return { name: "text" };
+  }
+
+  if (url && url.match(/\.jsx$/i) || sourceMetaData && sourceMetaData.isReactComponent) {
+    return "jsx";
   }
 
   // if the url ends with .marko we set the name to Javascript so
@@ -793,7 +804,9 @@ module.exports = {
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /**
  * Utils for utils, by utils
@@ -903,10 +916,6 @@ function WorkerDispatcher() {
    * License, v. 2.0. If a copy of the MPL was not distributed with this
    * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-const mark = typeof window == "object" && window.performance && window.performance.mark ? window.performance.mark.bind(window.performance) : () => {};
-
-const measure = typeof window == "object" && window.performance && window.performance.measure ? window.performance.measure.bind(window.performance) : () => {};
-
 WorkerDispatcher.prototype = {
   start(url) {
     this.worker = new Worker(url);
@@ -928,9 +937,6 @@ WorkerDispatcher.prototype = {
     return (...args) => {
       return new Promise((resolve, reject) => {
         const id = this.msgId++;
-
-        mark(`${method}_start`);
-
         this.worker.postMessage({ id, method, args });
 
         const listener = ({ data: result }) => {
@@ -939,14 +945,10 @@ WorkerDispatcher.prototype = {
           }
 
           if (!this.worker) {
-            reject("Oops, The worker has shutdown!");
             return;
           }
+
           this.worker.removeEventListener("message", listener);
-
-          mark(`${method}_end`);
-          measure(`${method}`, `${method}_start`, `${method}_end`);
-
           if (result.error) {
             reject(result.error);
           } else {
@@ -1201,6 +1203,10 @@ WorkerDispatcher.prototype = {
             return;
           }
 
+          if (!this.worker) {
+            reject("Oops, The worker has shutdown!");
+            return;
+          }
           this.worker.removeEventListener("message", listener);
           if (result.error) {
             reject(result.error);
@@ -1305,6 +1311,10 @@ module.exports = {
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
 function basename(path) {
   return path.split("/").pop();
 }
@@ -1396,8 +1406,9 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 function ignoreWhiteSpace(str) {
   return (/^\s{0,2}$/.test(str) ? "(?!\\s*.*)" : str
   );
-}
-
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 function wholeMatch(query, wholeWord) {
   if (query === "" || !wholeWord) {
@@ -1467,7 +1478,9 @@ var _devtoolsUtils = __webpack_require__(1363);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-const { workerHandler } = _devtoolsUtils.workerUtils;
+const { workerHandler } = _devtoolsUtils.workerUtils; /* This Source Code Form is subject to the terms of the Mozilla Public
+                                                       * License, v. 2.0. If a copy of the MPL was not distributed with this
+                                                       * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 self.onmessage = workerHandler({ getMatches: _getMatches2.default, findSourceMatches: _projectSearch.findSourceMatches });
 
@@ -1507,7 +1520,9 @@ function getMatches(query, text, modifiers) {
     }
   }
   return matchedLocations;
-}
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
 
 /***/ }),
 
@@ -1552,7 +1567,11 @@ function findSourceMatches(source, queryText) {
 
   matches = [].concat(...matches);
   return matches;
-} // Maybe reuse file search's functions?
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at <http://mozilla.org/MPL/2.0/>. */
+
+// Maybe reuse file search's functions?
 
 /***/ }),
 
@@ -1872,7 +1891,7 @@ module.exports = charenc;
 /*!
  * Determine if an object is a Buffer
  *
- * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
+ * @author   Feross Aboukhadijeh <https://feross.org>
  * @license  MIT
  */
 

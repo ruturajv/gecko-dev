@@ -1,7 +1,8 @@
-/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*-
-* This Source Code Form is subject to the terms of the Mozilla Public
-* License, v. 2.0. If a copy of the MPL was not distributed with this
-* file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=8 sts=2 et sw=2 tw=80: */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "VRDisplayHost.h"
 #include "gfxPrefs.h"
@@ -61,7 +62,9 @@ VRDisplayHost::AutoRestoreRenderState::IsSuccess()
 }
 
 VRDisplayHost::VRDisplayHost(VRDeviceType aType)
- : mFrameStarted(false)
+ : mDisplayInfo{}
+ , mLastUpdateDisplayInfo{}
+ , mFrameStarted(false)
 {
   MOZ_COUNT_CTOR(VRDisplayHost);
   mDisplayInfo.mType = aType;
@@ -69,6 +72,7 @@ VRDisplayHost::VRDisplayHost(VRDeviceType aType)
   mDisplayInfo.mPresentingGroups = 0;
   mDisplayInfo.mGroupMask = kVRGroupContent;
   mDisplayInfo.mFrameId = 0;
+  mDisplayInfo.mPresentingGeneration = 0;
 }
 
 VRDisplayHost::~VRDisplayHost()
@@ -330,6 +334,14 @@ VRDisplayHost::SubmitFrame(VRLayerParent* aLayer,
       }
       break;
     }
+#elif defined(MOZ_ANDROID_GOOGLE_VR)
+    case SurfaceDescriptor::TEGLImageDescriptor: {
+       const EGLImageDescriptor& desc = aTexture.get_EGLImageDescriptor();
+       if (!SubmitFrame(&desc, aLeftEyeRect, aRightEyeRect)) {
+         return;
+       }
+       break;
+    }
 #endif
     default: {
       NS_WARNING("Unsupported SurfaceDescriptor type for VR layer texture");
@@ -337,7 +349,8 @@ VRDisplayHost::SubmitFrame(VRLayerParent* aLayer,
     }
   }
 
-#if defined(XP_WIN) || defined(XP_MACOSX)
+#if defined(XP_WIN) || defined(XP_MACOSX) || defined(MOZ_ANDROID_GOOGLE_VR)
+
   /**
    * Trigger the next VSync immediately after we are successfully
    * submitting frames.  As SubmitFrame is responsible for throttling

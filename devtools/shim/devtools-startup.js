@@ -171,6 +171,7 @@ XPCOMUtils.defineLazyGetter(this, "KeyShortcuts", function () {
 
 function DevToolsStartup() {
   this.onEnabledPrefChanged = this.onEnabledPrefChanged.bind(this);
+  this.onWindowReady = this.onWindowReady.bind(this);
 }
 
 DevToolsStartup.prototype = {
@@ -197,8 +198,21 @@ DevToolsStartup.prototype = {
     let debuggerFlag = cmdLine.handleFlag("jsdebugger", false);
     let devtoolsFlag = cmdLine.handleFlag("devtools", false);
 
-    let hasDevToolsFlag = consoleFlag || devtoolsFlag || debuggerFlag;
-    this.setupEnabledPref(hasDevToolsFlag);
+    // handle() can be called after browser startup (e.g. opening links from other apps).
+    let isInitialLaunch = cmdLine.state == Ci.nsICommandLine.STATE_INITIAL_LAUNCH;
+    if (isInitialLaunch) {
+      // Execute only on first launch of this browser instance.
+      let hasDevToolsFlag = consoleFlag || devtoolsFlag || debuggerFlag;
+      this.setupEnabledPref(hasDevToolsFlag);
+
+      // Store devtoolsFlag to check it later in onWindowReady.
+      this.devtoolsFlag = devtoolsFlag;
+      // Only top level Firefox Windows fire a browser-delayed-startup-finished event
+      Services.obs.addObserver(this.onWindowReady, "browser-delayed-startup-finished");
+
+      // Update menu items when devtools.enabled changes.
+      Services.prefs.addObserver(DEVTOOLS_ENABLED_PREF, this.onEnabledPrefChanged);
+    }
 
     if (consoleFlag) {
       this.handleConsoleFlag(cmdLine);
@@ -206,6 +220,7 @@ DevToolsStartup.prototype = {
     if (debuggerFlag) {
       this.handleDebuggerFlag(cmdLine);
     }
+
     let debuggerServerFlag;
     try {
       debuggerServerFlag =
@@ -218,28 +233,29 @@ DevToolsStartup.prototype = {
     if (debuggerServerFlag) {
       this.handleDebuggerServerFlag(cmdLine, debuggerServerFlag);
     }
+  },
 
-    // Only top level Firefox Windows fire a browser-delayed-startup-finished event
-    let onWindowReady = window => {
-      this.hookWindow(window);
+  /**
+   * Called when receiving the "browser-delayed-startup-finished" event for a new
+   * top-level window.
+   */
+  onWindowReady(window) {
+    this.hookWindow(window);
 
-      if (Services.prefs.getBoolPref(TOOLBAR_VISIBLE_PREF, false)) {
-        // Loading devtools-browser will open the developer toolbar by also checking this
-        // pref.
-        this.initDevTools();
-      }
+    if (Services.prefs.getBoolPref(TOOLBAR_VISIBLE_PREF, false)) {
+      // Loading devtools-browser will open the developer toolbar by also checking this
+      // pref.
+      this.initDevTools();
+    }
 
-      if (devtoolsFlag) {
-        this.handleDevToolsFlag(window);
-        // This listener is called for all Firefox windows, but we want to execute
-        // that command only once
-        devtoolsFlag = false;
-      }
-      JsonView.initialize();
-    };
-    Services.obs.addObserver(onWindowReady, "browser-delayed-startup-finished");
+    if (this.devtoolsFlag) {
+      this.handleDevToolsFlag(window);
+      // This listener is called for all Firefox windows, but we want to execute
+      // that command only once.
+      this.devtoolsFlag = false;
+    }
 
-    Services.prefs.addObserver(DEVTOOLS_ENABLED_PREF, this.onEnabledPrefChanged);
+    JsonView.initialize();
   },
 
   /**
@@ -413,6 +429,17 @@ DevToolsStartup.prototype = {
   },
 
   /**
+   * Check if the user is a DevTools user by looking at our selfxss pref.
+   * This preference is incremented everytime the console is used (up to 5).
+   *
+   * @return {Boolean} true if the user can be considered as a devtools user.
+   */
+  isDevToolsUser() {
+    let selfXssCount = Services.prefs.getIntPref("devtools.selfxss.count", 0);
+    return selfXssCount > 0;
+  },
+
+  /**
    * Depending on some runtime parameters (command line arguments as well as existing
    * preferences), the DEVTOOLS_ENABLED_PREF might be forced to true.
    *
@@ -426,7 +453,8 @@ DevToolsStartup.prototype = {
     }
 
     let hasToolbarPref = Services.prefs.getBoolPref(TOOLBAR_VISIBLE_PREF, false);
-    if (hasDevToolsFlag || hasToolbarPref) {
+
+    if (hasDevToolsFlag || hasToolbarPref || this.isDevToolsUser()) {
       Services.prefs.setBoolPref(DEVTOOLS_ENABLED_PREF, true);
     }
   },
@@ -449,13 +477,15 @@ DevToolsStartup.prototype = {
   },
 
   onKey(window, key) {
-    // Record the timing at which this event started in order to compute later in
-    // gDevTools.showToolbox, the complete time it takes to open the toolbox.
-    // i.e. especially take `initDevTools` into account.
-    let startTime = window.performance.now();
-    let require = this.initDevTools("KeyShortcut");
-    if (require) {
-      // require might be null if initDevTools was called while DevTools are disabled.
+    if (!Services.prefs.getBoolPref(DEVTOOLS_ENABLED_PREF)) {
+      let id = key.toolId || key.id;
+      this.openInstallPage("KeyShortcut", id);
+    } else {
+      // Record the timing at which this event started in order to compute later in
+      // gDevTools.showToolbox, the complete time it takes to open the toolbox.
+      // i.e. especially take `initDevTools` into account.
+      let startTime = window.performance.now();
+      let require = this.initDevTools("KeyShortcut");
       let { gDevToolsBrowser } = require("devtools/client/framework/devtools-browser");
       gDevToolsBrowser.onKeyShortcut(window, key, startTime);
     }
@@ -511,13 +541,54 @@ DevToolsStartup.prototype = {
     return require;
   },
 
-  openInstallPage: function (reason) {
+  /**
+   * Open about:devtools to start the onboarding flow.
+   *
+   * @param {String} reason
+   *        One of "KeyShortcut", "SystemMenu", "HamburgerMenu", "ContextMenu",
+   *        "CommandLine".
+   * @param {String} keyId
+   *        Optional. If the onboarding flow was triggered by a keyboard shortcut, pass
+   *        the shortcut key id (or toolId) to about:devtools.
+   */
+  openInstallPage: function (reason, keyId) {
     let { gBrowser } = Services.wm.getMostRecentWindow("navigator:browser");
-    let url = "about:devtools";
-    if (reason) {
-      url += "?reason=" + encodeURIComponent(reason);
+
+    // Focus about:devtools tab if there is already one opened in the current window.
+    for (let tab of gBrowser.tabs) {
+      let browser = tab.linkedBrowser;
+      // browser.documentURI might be undefined if the browser tab is still loading.
+      let location = browser.documentURI ? browser.documentURI.spec : "";
+      if (location.startsWith("about:devtools") &&
+          !location.startsWith("about:devtools-toolbox")) {
+        // Focus the existing about:devtools tab and bail out.
+        gBrowser.selectedTab = tab;
+        return;
+      }
     }
-    gBrowser.selectedTab = gBrowser.addTab(url);
+
+    let url = "about:devtools";
+
+    let params = [];
+    if (reason) {
+      params.push("reason=" + encodeURIComponent(reason));
+    }
+
+    let selectedBrowser = gBrowser.selectedBrowser;
+    if (selectedBrowser) {
+      params.push("tabid=" + selectedBrowser.outerWindowID);
+    }
+
+    if (keyId) {
+      params.push("keyid=" + keyId);
+    }
+
+    if (params.length > 0) {
+      url += "?" + params.join("&");
+    }
+
+    // Set relatedToCurrent: true to open the tab next to the current one.
+    gBrowser.selectedTab = gBrowser.addTab(url, {relatedToCurrent: true});
   },
 
   handleConsoleFlag: function (cmdLine) {

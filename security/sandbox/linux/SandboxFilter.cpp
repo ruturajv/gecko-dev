@@ -15,6 +15,7 @@
 #include "SandboxOpenedFiles.h"
 #endif
 #include "mozilla/PodOperations.h"
+#include "mozilla/TemplateLib.h"
 #include "mozilla/UniquePtr.h"
 
 #include <errno.h>
@@ -105,6 +106,8 @@ protected:
 
   template<typename... Args>
   static intptr_t DoSyscall(long nr, Args... args) {
+    static_assert(tl::And<(sizeof(Args) <= sizeof(void*))...>::value,
+                  "each syscall arg is at most one word");
     return ConvertError(syscall(nr, args...));
   }
 
@@ -112,10 +115,11 @@ private:
   // Bug 1093893: Translate tkill to tgkill for pthread_kill; fixed in
   // bionic commit 10c8ce59a (in JB and up; API level 16 = Android 4.1).
   // Bug 1376653: musl also needs this, and security-wise it's harmless.
-  static intptr_t TKillCompatTrap(const sandbox::arch_seccomp_data& aArgs,
-                                  void *aux)
+  static intptr_t TKillCompatTrap(ArgsRef aArgs, void *aux)
   {
-    return DoSyscall(__NR_tgkill, getpid(), aArgs.args[0], aArgs.args[1]);
+    auto tid = static_cast<pid_t>(aArgs.args[0]);
+    auto sig = static_cast<int>(aArgs.args[1]);
+    return DoSyscall(__NR_tgkill, getpid(), tid, sig);
   }
 
   static intptr_t SetNoNewPrivsTrap(ArgsRef& aArgs, void* aux) {
@@ -539,6 +543,40 @@ private:
     return ConvertError(socketpair(AF_UNIX, SOCK_SEQPACKET, 0, fds));
   }
 
+  static intptr_t StatFsTrap(ArgsRef aArgs, void* aux) {
+    // Warning: the kernel interface is not the C interface.  The
+    // structs are different (<asm/statfs.h> vs. <sys/statfs.h>), and
+    // the statfs64 version takes an additional size parameter.
+    auto path = reinterpret_cast<const char*>(aArgs.args[0]);
+    int fd = open(path, O_RDONLY | O_LARGEFILE);
+    if (fd < 0) {
+      return -errno;
+    }
+
+    intptr_t rv;
+    switch (aArgs.nr) {
+    case __NR_statfs: {
+      auto buf = reinterpret_cast<void*>(aArgs.args[1]);
+      rv = DoSyscall(__NR_fstatfs, fd, buf);
+      break;
+    }
+#ifdef __NR_statfs64
+    case __NR_statfs64: {
+      auto sz = static_cast<size_t>(aArgs.args[1]);
+      auto buf = reinterpret_cast<void*>(aArgs.args[2]);
+      rv = DoSyscall(__NR_fstatfs64, fd, sz, buf);
+      break;
+    }
+#endif
+    default:
+      MOZ_ASSERT(false);
+      rv = -ENOSYS;
+    }
+
+    close(fd);
+    return rv;
+  }
+
 public:
   explicit ContentSandboxPolicy(SandboxBrokerClient* aBroker,
                                 const std::vector<int>& aSyscallWhitelist)
@@ -691,12 +729,13 @@ public:
     case __NR_getppid:
       return Trap(GetPPidTrap, nullptr);
 
+    CASES_FOR_statfs:
+      return Trap(StatFsTrap, nullptr);
+
       // Filesystem syscalls that need more work to determine who's
       // using them, if they need to be, and what we intend to about it.
     case __NR_getcwd:
-    CASES_FOR_statfs:
     CASES_FOR_fstatfs:
-    case __NR_quotactl:
     CASES_FOR_fchown:
     case __NR_fchmod:
     case __NR_flock:
@@ -784,7 +823,12 @@ public:
               If((flags & ~allowed_flags) == 0, Allow())
               .Else(InvalidSyscall()))
         .Case(F_DUPFD_CLOEXEC, Allow())
-        // Pulseaudio uses F_SETLKW.
+        // Nvidia GL and fontconfig (newer versions) use fcntl file locking.
+        .Case(F_SETLK, Allow())
+#ifdef F_SETLK64
+        .Case(F_SETLK64, Allow())
+#endif
+        // Pulseaudio uses F_SETLKW, as does fontconfig.
         .Case(F_SETLKW, Allow())
 #ifdef F_SETLKW64
         .Case(F_SETLKW64, Allow())
@@ -882,13 +926,6 @@ public:
       // NSPR will start a thread to wait for child processes even if
       // fork() fails; see bug 227246 and bug 1299581.
       return Error(ECHILD);
-
-      // inotify_{add,rm}_watch take filesystem paths.  Pretend the
-      // kernel doesn't support inotify; note that this could make
-      // libgio attempt network connections for FAM.
-    case __NR_inotify_init:
-    case __NR_inotify_init1:
-      return Error(ENOSYS);
 
     case __NR_eventfd2:
       return Allow();
@@ -1015,18 +1052,17 @@ class GMPSandboxPolicy : public SandboxPolicyCommon {
     return fd;
   }
 
-  static intptr_t SchedTrap(const sandbox::arch_seccomp_data& aArgs,
-                            void* aux)
+  static intptr_t SchedTrap(ArgsRef aArgs, void* aux)
   {
     const pid_t tid = syscall(__NR_gettid);
     if (aArgs.args[0] == static_cast<uint64_t>(tid)) {
       return DoSyscall(aArgs.nr,
                        0,
-                       aArgs.args[1],
-                       aArgs.args[2],
-                       aArgs.args[3],
-                       aArgs.args[4],
-                       aArgs.args[5]);
+                       static_cast<uintptr_t>(aArgs.args[1]),
+                       static_cast<uintptr_t>(aArgs.args[2]),
+                       static_cast<uintptr_t>(aArgs.args[3]),
+                       static_cast<uintptr_t>(aArgs.args[4]),
+                       static_cast<uintptr_t>(aArgs.args[5]));
     }
     SANDBOX_LOG_ERROR("unsupported tid in SchedTrap");
     return BlockedSyscallTrap(aArgs, nullptr);
@@ -1094,10 +1130,11 @@ public:
     case __NR_brk:
     CASES_FOR_geteuid:
       return Allow();
-    case __NR_sched_getparam:
-    case __NR_sched_getscheduler:
     case __NR_sched_get_priority_min:
     case __NR_sched_get_priority_max:
+      return Allow();
+    case __NR_sched_getparam:
+    case __NR_sched_getscheduler:
     case __NR_sched_setscheduler: {
       Arg<pid_t> pid(0);
       return If(pid == 0, Allow())

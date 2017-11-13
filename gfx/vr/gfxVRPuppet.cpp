@@ -1,5 +1,6 @@
-/* -*- Mode: C++; tab-width: 20; indent-tabs-mode: nil; c-basic-offset: 2 -*-
- * This Source Code Form is subject to the terms of the Mozilla Public
+/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+/* vim: set ts=8 sts=2 et sw=2 tw=80: */
+/* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
@@ -51,6 +52,7 @@ static const uint32_t kNumPuppetHaptcs = 1;
 VRDisplayPuppet::VRDisplayPuppet()
  : VRDisplayHost(VRDeviceType::Puppet)
  , mIsPresenting(false)
+ , mSensorState{}
 {
   MOZ_COUNT_CTOR_INHERITED(VRDisplayPuppet, VRDisplayHost);
 
@@ -149,6 +151,13 @@ VRHMDSensorState
 VRDisplayPuppet::GetSensorState()
 {
   mSensorState.inputFrameID = mDisplayInfo.mFrameId;
+
+  Matrix4x4 matHeadToEye[2];
+  for (uint32_t eye = 0; eye < 2; ++eye) {
+    matHeadToEye[eye].PreTranslate(mDisplayInfo.mEyeTranslation[eye]);
+  }
+  mSensorState.CalcViewMatrices(matHeadToEye);
+
   return mSensorState;
 }
 
@@ -361,21 +370,24 @@ VRDisplayPuppet::SubmitFrame(ID3D11Texture2D* aSource,
       // access the image library. So, we have to convert the RAW image data
       // to a base64 string and forward it to let the content process to
       // do the image conversion.
-      char* srcData = static_cast<char*>(mapInfo.pData);
+      const char* srcData = static_cast<const char*>(mapInfo.pData);
       VRSubmitFrameResultInfo result;
       result.mFormat = SurfaceFormat::B8G8R8A8;
-      // If the original texture size is not pow of 2, CopyResource() will add padding,
-      // so the size is adjusted. We have to get the correct size by (mapInfo.RowPitch /
-      // the format size).
-      result.mWidth = mapInfo.RowPitch / 4;
+      result.mWidth = desc.Width;
       result.mHeight = desc.Height;
       result.mFrameNum = mDisplayInfo.mFrameId;
-      nsCString rawString(Substring(srcData, mapInfo.RowPitch * desc.Height));
+      // If the original texture size is not pow of 2, the data will not be tightly strided.
+      // We have to copy the pixels by rows.
+      nsCString rawString;
+      for (uint32_t i = 0; i < desc.Height; i++) {
+        rawString += Substring(srcData + i * mapInfo.RowPitch,
+                               desc.Width * 4);
+      }
+      mContext->Unmap(mappedTexture, 0);
 
       if (Base64Encode(rawString, result.mBase64Image) != NS_OK) {
         MOZ_ASSERT(false, "Failed to encode base64 images.");
       }
-      mContext->Unmap(mappedTexture, 0);
       // Dispatch the base64 encoded string to the DOM side. Then, it will be decoded
       // and convert to a PNG image there.
       MessageLoop* loop = VRListenerThreadHolder::Loop();
@@ -537,6 +549,16 @@ VRDisplayPuppet::SubmitFrame(MacIOSurface* aMacIOSurface,
       break;
     }
   }
+
+  return false;
+}
+
+#elif defined(MOZ_ANDROID_GOOGLE_VR)
+
+bool
+VRDisplayPuppet::SubmitFrame(const mozilla::layers::EGLImageDescriptor* aDescriptor,
+                           const gfx::Rect& aLeftEyeRect,
+                           const gfx::Rect& aRightEyeRect) {
 
   return false;
 }

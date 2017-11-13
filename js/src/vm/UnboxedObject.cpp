@@ -394,10 +394,14 @@ MakeReplacementTemplateObject(JSContext* cx, HandleObjectGroup group, const Unbo
     if (!obj)
         return nullptr;
 
+    RootedId id(cx);
     for (size_t i = 0; i < layout.properties().length(); i++) {
         const UnboxedLayout::Property& property = layout.properties()[i];
-        if (!NativeObject::addDataProperty(cx, obj, NameToId(property.name), i, JSPROP_ENUMERATE))
+        id = NameToId(property.name);
+        Shape* shape = NativeObject::addDataProperty(cx, obj, id, SHAPE_INVALID_SLOT, JSPROP_ENUMERATE);
+        if (!shape)
             return nullptr;
+        MOZ_ASSERT(shape->slot() == i);
         MOZ_ASSERT(obj->slotSpan() == i + 1);
         MOZ_ASSERT(!obj->inDictionaryMode());
     }
@@ -483,7 +487,7 @@ UnboxedLayout::makeNativeGroup(JSContext* cx, ObjectGroup* group)
         const UnboxedLayout::Property& property = layout.properties()[i];
 
         Rooted<StackShape> child(cx, StackShape(shape->base()->unowned(), NameToId(property.name),
-                                                i, JSPROP_ENUMERATE, 0));
+                                                i, JSPROP_ENUMERATE));
         shape = cx->zone()->propertyTree().getChild(cx, shape, child);
         if (!shape)
             return false;

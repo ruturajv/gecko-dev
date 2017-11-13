@@ -1,5 +1,5 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* vim: set sw=4 ts=8 et tw=80 : */
+/* vim: set ts=8 sts=2 et sw=2 tw=80: */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -24,6 +24,7 @@
 #include "mozilla/layers/ImageBridgeParent.h"
 #include "mozilla/layers/ImageDataSerializer.h"
 #include "mozilla/layers/IpcResourceUpdateQueue.h"
+#include "mozilla/layers/SharedSurfacesParent.h"
 #include "mozilla/layers/TextureHost.h"
 #include "mozilla/layers/AsyncImagePipelineManager.h"
 #include "mozilla/layers/WebRenderImageHost.h"
@@ -78,6 +79,16 @@ void gfx_critical_note(const char* msg)
   gfxCriticalNote << msg;
 }
 
+void gfx_critical_error(const char* msg)
+{
+  gfxCriticalError() << msg;
+}
+
+void gecko_printf_stderr_output(const char* msg)
+{
+  printf_stderr("%s\n", msg);
+}
+
 void* get_proc_address_from_glcontext(void* glcontext_ptr, const char* procname)
 {
   MOZ_ASSERT(glcontext_ptr);
@@ -88,6 +99,18 @@ void* get_proc_address_from_glcontext(void* glcontext_ptr, const char* procname)
   }
   PRFuncPtr p = glcontext->LookupSymbol(procname);
   return reinterpret_cast<void*>(p);
+}
+
+void
+gecko_profiler_register_thread(const char* name)
+{
+  PROFILER_REGISTER_THREAD(name);
+}
+
+void
+gecko_profiler_unregister_thread()
+{
+  PROFILER_UNREGISTER_THREAD();
 }
 
 namespace mozilla {
@@ -304,6 +327,15 @@ WebRenderBridgeParent::UpdateResources(const nsTArray<OpUpdateResource>& aResour
         aUpdates.AddRawFont(op.key(), bytes, op.fontIndex());
         break;
       }
+      case OpUpdateResource::TOpAddFontDescriptor: {
+        const auto& op = cmd.get_OpAddFontDescriptor();
+        wr::Vec_u8 bytes;
+        if (!reader.Read(op.bytes(), bytes)) {
+          return false;
+        }
+        aUpdates.AddFontDescriptor(op.key(), bytes, op.fontIndex());
+        break;
+      }
       case OpUpdateResource::TOpAddFontInstance: {
         const auto& op = cmd.get_OpAddFontInstance();
         wr::Vec_u8 variations;
@@ -348,27 +380,41 @@ WebRenderBridgeParent::AddExternalImage(wr::ExternalImageId aExtId, wr::ImageKey
   if (keys[0].mNamespace != mIdNamespace) {
     return true;
   }
-  MOZ_ASSERT(mExternalImageIds.Get(wr::AsUint64(aExtId)).get());
 
-  RefPtr<WebRenderImageHost> host = mExternalImageIds.Get(wr::AsUint64(aExtId));
-  if (!host) {
-    NS_ERROR("CompositableHost does not exist");
-    return false;
-  }
-  if (!gfxEnv::EnableWebRenderRecording()) {
-    TextureHost* texture = host->GetAsTextureHostForComposite();
-    if (!texture) {
-      NS_ERROR("TextureHost does not exist");
-      return false;
-    }
-    WebRenderTextureHost* wrTexture = texture->AsWebRenderTextureHost();
-    if (wrTexture) {
-      wrTexture->PushResourceUpdates(aResources, TextureHost::ADD_IMAGE, keys,
-                                     wrTexture->GetExternalImageKey());
+  RefPtr<DataSourceSurface> dSurf = SharedSurfacesParent::Acquire(aExtId);
+  if (dSurf) {
+    if (!gfxEnv::EnableWebRenderRecording()) {
+      wr::ImageDescriptor descriptor(dSurf->GetSize(), dSurf->Stride(),
+                                     dSurf->GetFormat());
+      aResources.AddExternalImage(aKey, descriptor, aExtId,
+                                  wr::WrExternalImageBufferType::ExternalBuffer,
+                                  0);
       return true;
     }
+  } else {
+    MOZ_ASSERT(mExternalImageIds.Get(wr::AsUint64(aExtId)).get());
+
+    RefPtr<WebRenderImageHost> host = mExternalImageIds.Get(wr::AsUint64(aExtId));
+    if (!host) {
+      NS_ERROR("CompositableHost does not exist");
+      return false;
+    }
+    if (!gfxEnv::EnableWebRenderRecording()) {
+      TextureHost* texture = host->GetAsTextureHostForComposite();
+      if (!texture) {
+        NS_ERROR("TextureHost does not exist");
+        return false;
+      }
+      WebRenderTextureHost* wrTexture = texture->AsWebRenderTextureHost();
+      if (wrTexture) {
+        wrTexture->PushResourceUpdates(aResources, TextureHost::ADD_IMAGE, keys,
+                                       wrTexture->GetExternalImageKey());
+        return true;
+      }
+    }
+    dSurf = host->GetAsSurface();
   }
-  RefPtr<DataSourceSurface> dSurf = host->GetAsSurface();
+
   if (!dSurf) {
     NS_ERROR("TextureHost does not return DataSourceSurface");
     return false;
@@ -775,8 +821,13 @@ WebRenderBridgeParent::RecvAddPipelineIdForCompositable(const wr::PipelineId& aP
   if (!host) {
     return IPC_FAIL_NO_REASON(this);
   }
-  MOZ_ASSERT(host->AsWebRenderImageHost());
+
   WebRenderImageHost* wrHost = host->AsWebRenderImageHost();
+  MOZ_ASSERT(wrHost);
+  if (!wrHost) {
+    gfxCriticalNote << "Incompatible CompositableHost at WebRenderBridgeParent.";
+  }
+
   if (!wrHost) {
     return IPC_OK();
   }
@@ -818,6 +869,12 @@ WebRenderBridgeParent::RecvAddExternalImageIdForCompositable(const ExternalImage
 
   RefPtr<CompositableHost> host = FindCompositable(aHandle);
   WebRenderImageHost* wrHost = host->AsWebRenderImageHost();
+
+  MOZ_ASSERT(wrHost);
+  if (!wrHost) {
+    gfxCriticalNote << "Incompatible CompositableHost for external image at WebRenderBridgeParent.";
+  }
+
   if (!wrHost) {
     return IPC_OK();
   }
@@ -834,6 +891,11 @@ WebRenderBridgeParent::RecvRemoveExternalImageId(const ExternalImageId& aImageId
   if (mDestroyed) {
     return IPC_OK();
   }
+
+  if (SharedSurfacesParent::Release(aImageId)) {
+    return IPC_OK();
+  }
+
   WebRenderImageHost* wrHost = mExternalImageIds.Get(wr::AsUint64(aImageId)).get();
   if (!wrHost) {
     return IPC_OK();
@@ -1111,10 +1173,8 @@ WebRenderBridgeParent::CompositeToTarget(gfx::DrawTarget* aTarget, const gfx::In
     return;
   }
 
-  const uint32_t maxPendingFrameCount = 1;
-
   if (!mForceRendering &&
-      wr::RenderThread::Get()->GetPendingFrameCount(mApi->GetId()) >= maxPendingFrameCount) {
+      wr::RenderThread::Get()->TooManyPendingFrames(mApi->GetId())) {
     // Render thread is busy, try next time.
     ScheduleComposition();
     return;
