@@ -9,6 +9,7 @@
 #include "MediaPrefs.h"
 #include "MediaSourceDemuxer.h"
 #include "MediaSourceUtils.h"
+#include "mozilla/ErrorResult.h"
 #include "mozilla/Preferences.h"
 #include "SourceBuffer.h"
 #include "SourceBufferResource.h"
@@ -165,11 +166,13 @@ TrackBuffersManager::QueueTask(SourceBufferTask* aTask)
   }
 
   if (!taskQueue->IsCurrentThreadIn()) {
-    taskQueue->Dispatch(NewRunnableMethod<RefPtr<SourceBufferTask>>(
-      "TrackBuffersManager::QueueTask",
-      this,
-      &TrackBuffersManager::QueueTask,
-      aTask));
+    nsresult rv =
+        taskQueue->Dispatch(NewRunnableMethod<RefPtr<SourceBufferTask>>(
+        "TrackBuffersManager::QueueTask",
+        this,
+        &TrackBuffersManager::QueueTask,
+        aTask));
+    MOZ_DIAGNOSTIC_ASSERT(NS_SUCCEEDED(rv));
     return;
   }
   mQueue.Push(aTask);

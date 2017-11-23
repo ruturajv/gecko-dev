@@ -227,7 +227,6 @@ struct RangePaintInfo {
   RangePaintInfo(nsRange* aRange, nsIFrame* aFrame)
     : mRange(aRange)
     , mBuilder(aFrame, nsDisplayListBuilderMode::PAINTING, false)
-    , mList(&mBuilder)
   {
     MOZ_COUNT_CTOR(RangePaintInfo);
     mBuilder.BeginFrame();
@@ -2950,6 +2949,34 @@ PresShell::DestroyFramesForAndRestyle(Element* aElement)
   bool didReconstruct = fc->DestroyFramesFor(aElement);
   fc->EndUpdate();
 
+  if (aElement->IsStyledByServo()) {
+    if (aElement->GetFlattenedTreeParentNode()) {
+      // The element is still in the flat tree, but their children may not be
+      // anymore in a second.
+      //
+      // This is the case of a new shadow root or XBL binding about to be
+      // attached.
+      //
+      // Clear the style data from all the flattened tree descendants, but _not_
+      // from us, since otherwise we wouldn't see the reframe.
+      //
+      // FIXME(emilio): It'd be more ergonomic to just map the no data -> data
+      // case to a reframe from the style system.
+      StyleChildrenIterator iter(aElement);
+      for (nsIContent* child = iter.GetNextChild();
+           child;
+           child = iter.GetNextChild()) {
+        if (child->IsElement()) {
+          ServoRestyleManager::ClearServoDataFromSubtree(child->AsElement());
+        }
+      }
+    } else {
+      // This is the case of an element that was redistributed but is no longer
+      // bound to any insertion point. Just forget about all the data.
+      ServoRestyleManager::ClearServoDataFromSubtree(aElement);
+    }
+  }
+
   auto changeHint = didReconstruct
     ? nsChangeHint(0)
     : nsChangeHint_ReconstructFrame;
@@ -4190,6 +4217,12 @@ PresShell::DoFlushPendingNotifications(mozilla::ChangesToFlush aFlush)
       // The FlushResampleRequests() above flushed style changes.
       if (!mIsDestroying) {
         nsAutoScriptBlocker scriptBlocker;
+#ifdef MOZ_GECKO_PROFILER
+        AutoProfilerTracing tracingStyleFlush("Paint", "Styles",
+                                              Move(mStyleCause));
+        mStyleCause = nullptr;
+#endif
+
         mPresContext->RestyleManager()->ProcessPendingRestyles();
       }
     }
@@ -4210,6 +4243,12 @@ PresShell::DoFlushPendingNotifications(mozilla::ChangesToFlush aFlush)
     // type.
     if (!mIsDestroying) {
       nsAutoScriptBlocker scriptBlocker;
+#ifdef MOZ_GECKO_PROFILER
+      AutoProfilerTracing tracingStyleFlush("Paint", "Styles",
+                                            Move(mStyleCause));
+      mStyleCause = nullptr;
+#endif
+
       mPresContext->RestyleManager()->ProcessPendingRestyles();
     }
 
@@ -4224,6 +4263,11 @@ PresShell::DoFlushPendingNotifications(mozilla::ChangesToFlush aFlush)
                         ? FlushType::Layout
                         : FlushType::InterruptibleLayout) &&
         !mIsDestroying) {
+#ifdef MOZ_GECKO_PROFILER
+      AutoProfilerTracing tracingLayoutFlush("Paint", "Reflow",
+                                              Move(mReflowCause));
+      mReflowCause = nullptr;
+#endif
       didLayoutFlush = true;
       mFrameConstructor->RecalcQuotesAndCounters();
       viewManager->FlushDelayedResize(true);
@@ -4766,7 +4810,7 @@ PresShell::ClipListToRange(nsDisplayListBuilder *aBuilder,
   // part of the selection. Then, append the wrapper to the top of the list.
   // Otherwise, just delete the item and don't append it.
   nsRect surfaceRect;
-  nsDisplayList tmpList(aBuilder);
+  nsDisplayList tmpList;
 
   nsDisplayItem* i;
   while ((i = aList->RemoveBottom())) {

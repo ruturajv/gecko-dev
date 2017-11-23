@@ -14,6 +14,7 @@
 #include "mozilla/PostTraversalTask.h"
 #include "mozilla/ServoBindingTypes.h"
 #include "mozilla/ServoElementSnapshot.h"
+#include "mozilla/ServoBindings.h"
 #include "mozilla/ServoUtils.h"
 #include "mozilla/StyleSheetInlines.h"
 #include "mozilla/SheetType.h"
@@ -149,6 +150,15 @@ public:
   }
 
   nsRestyleHint MediumFeaturesChanged(bool aViewportChanged);
+
+  // Evaluates a given SourceSizeList, returning the optimal viewport width in
+  // app units.
+  //
+  // The SourceSizeList parameter can be null, in which case it will return
+  // 100vw.
+  nscoord EvaluateSourceSizeList(const RawServoSourceSizeList* aSourceSizeList) const {
+    return Servo_SourceSizeList_Evaluate(mRawSet.get(), aSourceSizeList);
+  }
 
   // aViewportChanged outputs whether any viewport units is used.
   bool MediumFeaturesChangedRules(bool* aViewportUnitsUsed);
@@ -300,22 +310,6 @@ public:
    * cannot wait for a future batch restyle.
    */
   void StyleNewSubtree(dom::Element* aRoot);
-
-  /**
-   * Like the above, but skips the root node, and only styles unstyled children.
-   * When potentially appending multiple children, it's preferable to call
-   * StyleNewChildren on the node rather than making multiple calls to
-   * StyleNewSubtree on each child, since it allows for more parallelism.
-   */
-  void StyleNewChildren(dom::Element* aParent);
-
-  /**
-   * Eagerly styles the children of an element that has just had an XBL
-   * binding applied to it.  Some XBL consumers attach bindings to elements
-   * that have not been styled yet, and in such cases, this will do the
-   * equivalent of StyleNewSubtree instead.
-   */
-  void StyleNewlyBoundElement(dom::Element* aElement);
 
   /**
    * Helper for correctly calling UpdateStylist without paying the cost of an

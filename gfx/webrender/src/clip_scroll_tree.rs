@@ -2,9 +2,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use api::{ClipId, DeviceIntRect, LayerPoint, LayerRect, LayerToScrollTransform};
+use api::{ClipId, DeviceIntRect, LayerPoint, LayerRect};
 use api::{LayerToWorldTransform, LayerVector2D, PipelineId, ScrollClamping, ScrollEventPhase};
-use api::{ScrollLayerState, ScrollLocation, WorldPoint};
+use api::{PropertyBinding, LayoutTransform, ScrollLayerState, ScrollLocation, WorldPoint};
 use clip::ClipStore;
 use clip_scroll_node::{ClipScrollNode, NodeType, ScrollingState, StickyFrameInfo};
 use gpu_cache::GpuCache;
@@ -13,6 +13,7 @@ use internal_types::{FastHashMap, FastHashSet};
 use print_tree::{PrintTree, PrintTreePrinter};
 use render_task::ClipChain;
 use resource_cache::ResourceCache;
+use scene::SceneProperties;
 
 pub type ScrollStates = FastHashMap<ClipId, ScrollingState>;
 
@@ -180,8 +181,8 @@ impl ClipScrollTree {
         };
 
         let point_in_layer = transformed_point - node.local_viewport_rect.origin.to_vector();
-        let clip_info = match node.node_type {
-            NodeType::Clip(ref info) => info,
+        let clip_sources_handle = match node.node_type {
+            NodeType::Clip(ref clip_sources_handle) => clip_sources_handle,
             _ => {
                 cache.insert(*node_id, Some(point_in_layer));
                 return true;
@@ -193,9 +194,8 @@ impl ClipScrollTree {
             return false;
         }
 
-        let point_in_clips = transformed_point - node.local_clip_rect.origin.to_vector();
-        for &(ref clip, _) in clip_store.get(&clip_info.clip_sources).clips() {
-            if !clip.contains(&point_in_clips) {
+        for &(ref clip, _) in clip_store.get(&clip_sources_handle).clips() {
+            if !clip.contains(&transformed_point) {
                 cache.insert(*node_id, None);
                 return false;
             }
@@ -325,7 +325,7 @@ impl ClipScrollTree {
             .scroll(scroll_location, phase)
     }
 
-    pub fn update_all_node_transforms(
+    pub fn update_tree(
         &mut self,
         screen_rect: &DeviceIntRect,
         device_pixel_ratio: f32,
@@ -334,6 +334,7 @@ impl ClipScrollTree {
         gpu_cache: &mut GpuCache,
         pan: LayerPoint,
         node_data: &mut Vec<ClipScrollNodeData>,
+        scene_properties: &SceneProperties,
     ) {
         if self.nodes.is_empty() {
             return;
@@ -357,7 +358,7 @@ impl ClipScrollTree {
             current_coordinate_system_id: CoordinateSystemId(0),
             next_coordinate_system_id: CoordinateSystemId(0).next(),
         };
-        self.update_node_transform(
+        self.update_node(
             root_reference_frame_id,
             &mut state,
             device_pixel_ratio,
@@ -365,10 +366,11 @@ impl ClipScrollTree {
             resource_cache,
             gpu_cache,
             node_data,
+            scene_properties,
         );
     }
 
-    fn update_node_transform(
+    fn update_node(
         &mut self,
         layer_id: ClipId,
         state: &mut TransformUpdateState,
@@ -377,6 +379,7 @@ impl ClipScrollTree {
         resource_cache: &mut ResourceCache,
         gpu_cache: &mut GpuCache,
         node_data: &mut Vec<ClipScrollNodeData>,
+        scene_properties: &SceneProperties,
     ) {
         // TODO(gw): This is an ugly borrow check workaround to clone these.
         //           Restructure this to avoid the clones!
@@ -387,23 +390,21 @@ impl ClipScrollTree {
                 None => return,
             };
 
-            node.update_transform(
+            node.update(
                 &mut state,
-                node_data
-            );
-            node.update_clip_work_item(
-                &mut state,
+                node_data,
                 device_pixel_ratio,
                 clip_store,
                 resource_cache,
                 gpu_cache,
+                scene_properties,
             );
 
             node.children.clone()
         };
 
         for child_layer_id in node_children {
-            self.update_node_transform(
+            self.update_node(
                 child_layer_id,
                 &mut state,
                 device_pixel_ratio,
@@ -411,6 +412,7 @@ impl ClipScrollTree {
                 resource_cache,
                 gpu_cache,
                 node_data,
+                scene_properties,
             );
         }
     }
@@ -444,7 +446,8 @@ impl ClipScrollTree {
     pub fn add_reference_frame(
         &mut self,
         rect: &LayerRect,
-        transform: &LayerToScrollTransform,
+        source_transform: Option<PropertyBinding<LayoutTransform>>,
+        source_perspective: Option<LayoutTransform>,
         origin_in_parent_reference_frame: LayerVector2D,
         pipeline_id: PipelineId,
         parent_id: Option<ClipId>,
@@ -459,7 +462,8 @@ impl ClipScrollTree {
         let node = ClipScrollNode::new_reference_frame(
             parent_id,
             rect,
-            transform,
+            source_transform,
+            source_perspective,
             origin_in_parent_reference_frame,
             pipeline_id,
         );
@@ -507,11 +511,11 @@ impl ClipScrollTree {
         let node = self.nodes.get(id).unwrap();
 
         match node.node_type {
-            NodeType::Clip(ref info) => {
+            NodeType::Clip(ref clip_sources_handle) => {
                 pt.new_level("Clip".to_owned());
 
                 pt.add_item(format!("id: {:?}", id));
-                let clips = clip_store.get(&info.clip_sources).clips();
+                let clips = clip_store.get(&clip_sources_handle).clips();
                 pt.new_level(format!("Clip Sources [{}]", clips.len()));
                 for source in clips {
                     pt.add_item(format!("{:?}", source));
@@ -519,7 +523,7 @@ impl ClipScrollTree {
                 pt.end_level();
             }
             NodeType::ReferenceFrame(ref info) => {
-                pt.new_level(format!("ReferenceFrame {:?}", info.transform));
+                pt.new_level(format!("ReferenceFrame {:?}", info.resolved_transform));
                 pt.add_item(format!("id: {:?}", id));
             }
             NodeType::ScrollFrame(scrolling_info) => {

@@ -2,7 +2,6 @@
 
 module.exports = {
   rules: {
-    "mozilla/balanced-listeners": "error",
     "mozilla/var-only-at-top-level": "error",
 
     "array-bracket-spacing": ["error", "never"],
@@ -13,7 +12,7 @@ module.exports = {
     }],
     curly: ["error", "all"],
     "dot-location": ["error", "property"],
-    indent: ["error", 2, {
+    "indent-legacy": ["error", 2, {
       SwitchCase: 1,
       CallExpression: {
         arguments: "first",

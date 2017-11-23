@@ -44,6 +44,7 @@ use style::gecko_bindings::bindings::{RawServoMediaRule, RawServoMediaRuleBorrow
 use style::gecko_bindings::bindings::{RawServoNamespaceRule, RawServoNamespaceRuleBorrowed};
 use style::gecko_bindings::bindings::{RawServoPageRule, RawServoPageRuleBorrowed};
 use style::gecko_bindings::bindings::{RawServoSelectorListBorrowed, RawServoSelectorListOwned};
+use style::gecko_bindings::bindings::{RawServoSourceSizeListBorrowedOrNull, RawServoSourceSizeListOwned};
 use style::gecko_bindings::bindings::{RawServoStyleSetBorrowed, RawServoStyleSetBorrowedOrNull, RawServoStyleSetOwned};
 use style::gecko_bindings::bindings::{RawServoStyleSheetContentsBorrowed, ServoComputedDataBorrowed};
 use style::gecko_bindings::bindings::{RawServoStyleSheetContentsStrong, ServoStyleContextBorrowed};
@@ -95,6 +96,7 @@ use style::gecko_bindings::structs::OriginFlags_UserAgent;
 use style::gecko_bindings::structs::RawGeckoGfxMatrix4x4;
 use style::gecko_bindings::structs::RawGeckoPresContextOwned;
 use style::gecko_bindings::structs::RawServoSelectorList;
+use style::gecko_bindings::structs::RawServoSourceSizeList;
 use style::gecko_bindings::structs::SeenPtrs;
 use style::gecko_bindings::structs::ServoElementSnapshotTable;
 use style::gecko_bindings::structs::ServoStyleSetSizes;
@@ -111,7 +113,7 @@ use style::gecko_bindings::structs::nsresult;
 use style::gecko_bindings::sugar::ownership::{FFIArcHelpers, HasFFI, HasArcFFI};
 use style::gecko_bindings::sugar::ownership::{HasSimpleFFI, Strong};
 use style::gecko_bindings::sugar::refptr::RefPtr;
-use style::gecko_properties::style_structs;
+use style::gecko_properties;
 use style::invalidation::element::restyle_hints;
 use style::media_queries::{Device, MediaList, parse_media_query_list};
 use style::parser::{Parse, ParserContext, self};
@@ -147,6 +149,7 @@ use style::values::computed::{Context, ToComputedValue};
 use style::values::distance::ComputeSquaredDistance;
 use style::values::specified;
 use style::values::specified::gecko::IntersectionObserverRootMargin;
+use style::values::specified::source_size_list::SourceSizeList;
 use style_traits::{ParsingMode, ToCss};
 use super::error_reporter::ErrorReporter;
 use super::stylesheet_loader::StylesheetLoader;
@@ -183,6 +186,8 @@ pub extern "C" fn Servo_Initialize(dummy_url_data: *mut URLExtraData) {
     origin_flags::assert_flags_match();
     parser::assert_parsing_mode_match();
     traversal_flags::assert_traversal_flags_match();
+    specified::font::assert_variant_east_asian_matches();
+    specified::font::assert_variant_ligatures_matches();
 
     // Initialize the dummy url data
     unsafe { DUMMY_URL_DATA = dummy_url_data; }
@@ -289,21 +294,18 @@ pub extern "C" fn Servo_TraverseSubtree(
 
     debug!("Servo_TraverseSubtree (flags={:?})", traversal_flags);
     debug!("{:?}", ShowSubtreeData(element.as_node()));
-    // It makes no sense to do an animation restyle when we're styling
-    // newly-inserted content.
-    if !traversal_flags.contains(TraversalFlags::UnstyledOnly) {
-        let needs_animation_only_restyle =
-            element.has_animation_only_dirty_descendants() ||
-            element.has_animation_restyle_hints();
 
-        if needs_animation_only_restyle {
-            debug!("Servo_TraverseSubtree doing animation-only restyle (aodd={})",
-                   element.has_animation_only_dirty_descendants());
-            traverse_subtree(element,
-                             raw_data,
-                             traversal_flags | TraversalFlags::AnimationOnly,
-                             unsafe { &*snapshots });
-        }
+    let needs_animation_only_restyle =
+        element.has_animation_only_dirty_descendants() ||
+        element.has_animation_restyle_hints();
+
+    if needs_animation_only_restyle {
+        debug!("Servo_TraverseSubtree doing animation-only restyle (aodd={})",
+               element.has_animation_only_dirty_descendants());
+        traverse_subtree(element,
+                         raw_data,
+                         traversal_flags | TraversalFlags::AnimationOnly,
+                         unsafe { &*snapshots });
     }
 
     traverse_subtree(element,
@@ -721,7 +723,7 @@ pub extern "C" fn Servo_AnimationValue_GetTransform(
                 list.set_move(RefPtr::from_addrefed(Gecko_NewNoneTransform()));
             }
         } else {
-            style_structs::Box::convert_transform(&servo_list.0, list);
+            gecko_properties::convert_transform(&servo_list.0, list);
         }
     } else {
         panic!("The AnimationValue should be transform");
@@ -733,7 +735,7 @@ pub extern "C" fn Servo_AnimationValue_Transform(
     list: *const nsCSSValueSharedList
 ) -> RawServoAnimationValueStrong {
     let list = unsafe { (&*list).mHead.as_ref() };
-    let transform = style_structs::Box::clone_transform_from_list(list);
+    let transform = gecko_properties::clone_transform_from_list(list);
     Arc::new(AnimationValue::Transform(transform)).into_strong()
 }
 
@@ -3160,7 +3162,7 @@ pub extern "C" fn Servo_DeclarationBlock_SetLengthValue(
     use style::properties::longhands::_moz_script_min_size::SpecifiedValue as MozScriptMinSize;
     use style::properties::longhands::width::SpecifiedValue as Width;
     use style::values::specified::MozLength;
-    use style::values::specified::length::{AbsoluteLength, FontRelativeLength, PhysicalLength};
+    use style::values::specified::length::{AbsoluteLength, FontRelativeLength};
     use style::values::specified::length::{LengthOrPercentage, NoCalcLength};
 
     let long = get_longhand_from_id!(property);
@@ -3171,7 +3173,6 @@ pub extern "C" fn Servo_DeclarationBlock_SetLengthValue(
         structs::nsCSSUnit::eCSSUnit_Inch => NoCalcLength::Absolute(AbsoluteLength::In(value)),
         structs::nsCSSUnit::eCSSUnit_Centimeter => NoCalcLength::Absolute(AbsoluteLength::Cm(value)),
         structs::nsCSSUnit::eCSSUnit_Millimeter => NoCalcLength::Absolute(AbsoluteLength::Mm(value)),
-        structs::nsCSSUnit::eCSSUnit_PhysicalMillimeter => NoCalcLength::Physical(PhysicalLength(value)),
         structs::nsCSSUnit::eCSSUnit_Point => NoCalcLength::Absolute(AbsoluteLength::Pt(value)),
         structs::nsCSSUnit::eCSSUnit_Pica => NoCalcLength::Absolute(AbsoluteLength::Pc(value)),
         structs::nsCSSUnit::eCSSUnit_Quarter => NoCalcLength::Absolute(AbsoluteLength::Q(value)),
@@ -3202,7 +3203,7 @@ pub extern "C" fn Servo_DeclarationBlock_SetNumberValue(
     let prop = match_wrap_declared! { long,
         MozScriptSizeMultiplier => value,
         // Gecko uses Number values to signal that it is absolute
-        MozScriptLevel => MozScriptLevel::Absolute(value as i32),
+        MozScriptLevel => MozScriptLevel::MozAbsolute(value as i32),
     };
     write_locked_arc(declarations, |decls: &mut PropertyDeclarationBlock| {
         decls.push(prop, Importance::Normal, DeclarationSource::CssOm);
@@ -3371,10 +3372,10 @@ pub extern "C" fn Servo_DeclarationBlock_SetTextDecorationColorOverride(
     declarations: RawServoDeclarationBlockBorrowed,
 ) {
     use style::properties::PropertyDeclaration;
-    use style::properties::longhands::text_decoration_line;
+    use style::values::specified::text::TextDecorationLine;
 
-    let mut decoration = text_decoration_line::computed_value::none;
-    decoration |= text_decoration_line::SpecifiedValue::COLOR_OVERRIDE;
+    let mut decoration = TextDecorationLine::none();
+    decoration |= TextDecorationLine::COLOR_OVERRIDE;
     let decl = PropertyDeclaration::TextDecorationLine(decoration);
     write_locked_arc(declarations, |decls: &mut PropertyDeclarationBlock| {
         decls.push(decl, Importance::Normal, DeclarationSource::CssOm);
@@ -4515,7 +4516,7 @@ pub unsafe extern "C" fn Servo_SelectorList_Parse(
 
     debug_assert!(!selector_list.is_null());
 
-    let input = ::std::str::from_utf8_unchecked(&**selector_list);
+    let input = (*selector_list).as_str_unchecked();
     let selector_list = match SelectorParser::parse_author_origin_no_namespace(&input) {
         Ok(selector_list) => selector_list,
         Err(..) => return ptr::null_mut(),
@@ -4626,4 +4627,51 @@ pub extern "C" fn Servo_ParseIntersectionObserverRootMargin(
         }
         Err(..) => false,
     }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn Servo_SourceSizeList_Parse(
+    value: *const nsACString,
+) -> *mut RawServoSourceSizeList {
+    let value = (*value).as_str_unchecked();
+    let mut input = ParserInput::new(value);
+    let mut parser = Parser::new(&mut input);
+
+    let context = ParserContext::new(
+        Origin::Author,
+        dummy_url_data(),
+        Some(CssRuleType::Style),
+        ParsingMode::DEFAULT,
+        QuirksMode::NoQuirks,
+    );
+
+    // NB: Intentionally not calling parse_entirely.
+    let list = SourceSizeList::parse(&context, &mut parser);
+    Box::into_raw(Box::new(list)) as *mut _
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn Servo_SourceSizeList_Evaluate(
+    raw_data: RawServoStyleSetBorrowed,
+    list: RawServoSourceSizeListBorrowedOrNull,
+) -> i32 {
+    let doc_data = PerDocumentStyleData::from_ffi(raw_data).borrow();
+    let device = doc_data.stylist.device();
+    let quirks_mode = doc_data.stylist.quirks_mode();
+
+    let result = match list {
+        Some(list) => {
+            SourceSizeList::from_ffi(list).evaluate(device, quirks_mode)
+        }
+        None => {
+            SourceSizeList::empty().evaluate(device, quirks_mode)
+        }
+    };
+
+    result.0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn Servo_SourceSizeList_Drop(list: RawServoSourceSizeListOwned) {
+    let _ = list.into_box::<SourceSizeList>();
 }

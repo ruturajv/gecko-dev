@@ -6,8 +6,8 @@
 use api::{BuiltDisplayListIter, ClipAndScrollInfo, ClipId, ColorF, ComplexClipRegion};
 use api::{DeviceUintRect, DeviceUintSize, DisplayItemRef, Epoch, FilterOp};
 use api::{ImageDisplayItem, ItemRange, LayerPoint, LayerPrimitiveInfo, LayerRect};
-use api::{LayerSize, LayerToScrollTransform, LayerVector2D};
-use api::{LayoutRect, LayoutSize, LayoutTransform};
+use api::{LayerSize, LayerVector2D};
+use api::{LayoutRect, LayoutSize};
 use api::{LocalClip, PipelineId, ScrollClamping, ScrollEventPhase, ScrollLayerState};
 use api::{ScrollLocation, ScrollPolicy, ScrollSensitivity, SpecificDisplayItem, StackingContext};
 use api::{ClipMode, TileOffset, TransformStyle, WorldPoint};
@@ -15,14 +15,14 @@ use clip::ClipRegion;
 use clip_scroll_node::StickyFrameInfo;
 use clip_scroll_tree::{ClipScrollTree, ScrollStates};
 use euclid::rect;
-use frame_builder::{FrameBuilder, FrameBuilderConfig};
+use frame_builder::{FrameBuilder, FrameBuilderConfig, ScrollbarInfo};
 use gpu_cache::GpuCache;
 use internal_types::{FastHashMap, FastHashSet, RendererFrame};
 use prim_store::RectangleContent;
 use profiler::{GpuCacheProfileCounters, TextureCacheProfileCounters};
 use resource_cache::{FontInstanceMap,ResourceCache, TiledImageMap};
-use scene::{Scene, StackingContextHelpers, ScenePipeline};
-use tiling::{CompositeOps, Frame, PrimitiveFlags};
+use scene::{Scene, StackingContextHelpers, ScenePipeline, SceneProperties};
+use tiling::{CompositeOps, Frame};
 use util::ComplexClipRegionHelpers;
 
 #[derive(Copy, Clone, PartialEq, PartialOrd, Debug, Eq, Ord)]
@@ -48,6 +48,7 @@ struct FlattenContext<'a> {
     opaque_parts: Vec<LayoutRect>,
     /// Same for the transparent rectangles.
     transparent_parts: Vec<LayoutRect>,
+    output_pipelines: &'a FastHashSet<PipelineId>,
 }
 
 impl<'a> FlattenContext<'a> {
@@ -84,53 +85,54 @@ impl<'a> FlattenContext<'a> {
         &mut self,
         traversal: &mut BuiltDisplayListIter<'a>,
         pipeline_id: PipelineId,
-        content_size: &LayoutSize,
+        frame_size: &LayoutSize,
+        root_reference_frame_id: ClipId,
+        root_scroll_frame_id: ClipId,
     ) {
+        let clip_id = ClipId::root_scroll_node(pipeline_id);
+
         self.builder.push_stacking_context(
-            &LayerVector2D::zero(),
             pipeline_id,
             CompositeOps::default(),
             TransformStyle::Flat,
             true,
             true,
+            ClipAndScrollInfo::simple(clip_id),
+            self.output_pipelines,
         );
-
-        // We do this here, rather than above because we want any of the top-level
-        // stacking contexts in the display list to be treated like root stacking contexts.
-        // FIXME(mrobinson): Currently only the first one will, which for the moment is
-        // sufficient for all our use cases.
-        self.builder.notify_waiting_for_root_stacking_context();
 
         // For the root pipeline, there's no need to add a full screen rectangle
         // here, as it's handled by the framebuffer clear.
-        let clip_id = ClipId::root_scroll_node(pipeline_id);
         if self.scene.root_pipeline_id != Some(pipeline_id) {
             if let Some(pipeline) = self.scene.pipelines.get(&pipeline_id) {
                 if let Some(bg_color) = pipeline.background_color {
-                    let root_bounds = LayerRect::new(LayerPoint::zero(), *content_size);
+                    let root_bounds = LayerRect::new(LayerPoint::zero(), *frame_size);
                     let info = LayerPrimitiveInfo::new(root_bounds);
                     self.builder.add_solid_rectangle(
-                        ClipAndScrollInfo::simple(clip_id),
+                        ClipAndScrollInfo::simple(root_reference_frame_id),
                         &info,
                         RectangleContent::Fill(bg_color),
-                        PrimitiveFlags::None,
+                        None,
                     );
                 }
             }
         }
 
 
-        self.flatten_items(traversal, pipeline_id, LayerVector2D::zero());
+        self.flatten_items(
+            traversal,
+            pipeline_id,
+            LayerVector2D::zero(),
+        );
 
         if self.builder.config.enable_scrollbars {
             let scrollbar_rect = LayerRect::new(LayerPoint::zero(), LayerSize::new(10.0, 70.0));
-            let info = LayerPrimitiveInfo::new(scrollbar_rect);
-
+            let container_rect = LayerRect::new(LayerPoint::zero(), *frame_size);
             self.builder.add_solid_rectangle(
-                ClipAndScrollInfo::simple(clip_id),
-                &info,
+                ClipAndScrollInfo::simple(root_reference_frame_id),
+                &LayerPrimitiveInfo::new(scrollbar_rect),
                 RectangleContent::Fill(DEFAULT_SCROLLBAR_COLOR),
-                PrimitiveFlags::Scrollbar(self.clip_scroll_tree.topmost_scrolling_node_id(), 4.0),
+                Some(ScrollbarInfo(root_scroll_frame_id, container_rect)),
             );
         }
 
@@ -154,7 +156,11 @@ impl<'a> FlattenContext<'a> {
                     return;
                 }
 
-                self.flatten_item(item, pipeline_id, reference_frame_relative_offset)
+                self.flatten_item(
+                    item,
+                    pipeline_id,
+                    reference_frame_relative_offset,
+                )
             };
 
             // If flatten_item created a sub-traversal, we need `traversal` to have the
@@ -240,7 +246,6 @@ impl<'a> FlattenContext<'a> {
                 stacking_context.filter_ops_for_compositing(
                     display_list,
                     filters,
-                    &self.scene.properties,
                 ),
                 stacking_context.mix_blend_mode_for_compositing(),
             )
@@ -258,23 +263,15 @@ impl<'a> FlattenContext<'a> {
         let is_reference_frame =
             stacking_context.transform.is_some() || stacking_context.perspective.is_some();
         if is_reference_frame {
-            let transform = stacking_context.transform.as_ref();
-            let transform = self.scene.properties.resolve_layout_transform(transform);
-            let perspective = stacking_context
-                .perspective
-                .unwrap_or_else(LayoutTransform::identity);
             let origin = reference_frame_relative_offset + bounds.origin.to_vector();
-            let transform = LayerToScrollTransform::create_translation(origin.x, origin.y, 0.0)
-                .pre_mul(&transform)
-                .pre_mul(&perspective);
-
             let reference_frame_bounds = LayerRect::new(LayerPoint::zero(), bounds.size);
             let mut clip_id = self.apply_scroll_frame_id_replacement(context_scroll_node_id);
             clip_id = self.builder.push_reference_frame(
                 Some(clip_id),
                 pipeline_id,
                 &reference_frame_bounds,
-                &transform,
+                stacking_context.transform,
+                stacking_context.perspective,
                 origin,
                 false,
                 self.clip_scroll_tree,
@@ -286,15 +283,18 @@ impl<'a> FlattenContext<'a> {
                 reference_frame_relative_offset.x + bounds.origin.x,
                 reference_frame_relative_offset.y + bounds.origin.y,
             );
-        }
+        };
+
+        let sc_scroll_node_id = self.apply_scroll_frame_id_replacement(context_scroll_node_id);
 
         self.builder.push_stacking_context(
-            &reference_frame_relative_offset,
             pipeline_id,
             composition_operations,
             stacking_context.transform_style,
             is_backface_visible,
             false,
+            ClipAndScrollInfo::simple(sc_scroll_node_id),
+            self.output_pipelines,
         );
 
         self.flatten_items(
@@ -347,12 +347,12 @@ impl<'a> FlattenContext<'a> {
 
         let iframe_rect = LayerRect::new(LayerPoint::zero(), bounds.size);
         let origin = reference_frame_relative_offset + bounds.origin.to_vector();
-        let transform = LayerToScrollTransform::create_translation(origin.x, origin.y, 0.0);
         let iframe_reference_frame_id = self.builder.push_reference_frame(
             Some(clip_id),
             pipeline_id,
             &iframe_rect,
-            &transform,
+            None,
+            None,
             origin,
             true,
             self.clip_scroll_tree,
@@ -371,7 +371,9 @@ impl<'a> FlattenContext<'a> {
         self.flatten_root(
             &mut pipeline.display_list.iter(),
             pipeline_id,
-            &pipeline.content_size,
+            &iframe_rect.size,
+            iframe_reference_frame_id,
+            ClipId::root_scroll_node(pipeline_id),
         );
 
         self.builder.pop_reference_frame();
@@ -459,7 +461,7 @@ impl<'a> FlattenContext<'a> {
                         clip_and_scroll,
                         &prim_info,
                         RectangleContent::Fill(info.color),
-                        PrimitiveFlags::None,
+                        None,
                     );
                 }
             }
@@ -468,7 +470,7 @@ impl<'a> FlattenContext<'a> {
                     clip_and_scroll,
                     &prim_info,
                     RectangleContent::Clear,
-                    PrimitiveFlags::None,
+                    None,
                 );
             }
             SpecificDisplayItem::Line(ref info) => {
@@ -516,6 +518,7 @@ impl<'a> FlattenContext<'a> {
                 let mut prim_info = prim_info.clone();
                 prim_info.rect = bounds;
                 self.builder.add_box_shadow(
+                    pipeline_id,
                     clip_and_scroll,
                     &prim_info,
                     &box_shadow_info.offset,
@@ -689,7 +692,7 @@ impl<'a> FlattenContext<'a> {
                 *clip_and_scroll,
                 &prim_info,
                 content,
-                PrimitiveFlags::None,
+                None,
             );
             has_opaque = true;
         }
@@ -710,7 +713,7 @@ impl<'a> FlattenContext<'a> {
                 *clip_and_scroll,
                 &prim_info,
                 content,
-                PrimitiveFlags::None,
+                None,
             );
         }
         true
@@ -1086,6 +1089,7 @@ impl FrameContext {
         window_size: DeviceUintSize,
         inner_rect: DeviceUintRect,
         device_pixel_ratio: f32,
+        output_pipelines: &FastHashSet<PipelineId>,
     ) -> Option<FrameBuilder> {
         let root_pipeline_id = match scene.root_pipeline_id {
             Some(root_pipeline_id) => root_pipeline_id,
@@ -1126,6 +1130,7 @@ impl FrameContext {
                 replacements: Vec::new(),
                 opaque_parts: Vec::new(),
                 transparent_parts: Vec::new(),
+                output_pipelines,
             };
 
             roller.builder.push_root(
@@ -1142,11 +1147,17 @@ impl FrameContext {
                 roller.clip_scroll_tree,
             );
 
+            let reference_frame_id = roller.clip_scroll_tree.root_reference_frame_id;
+            let scroll_frame_id = roller.clip_scroll_tree.topmost_scrolling_node_id;
             roller.flatten_root(
                 &mut root_pipeline.display_list.iter(),
                 root_pipeline_id,
-                &root_pipeline.content_size,
+                &root_pipeline.viewport_size,
+                reference_frame_id,
+                scroll_frame_id,
             );
+
+            debug_assert!(roller.builder.picture_stack.is_empty());
 
             self.pipeline_epoch_map.extend(roller.pipeline_epochs.drain(..));
             roller.builder
@@ -1174,9 +1185,9 @@ impl FrameContext {
         pipelines: &FastHashMap<PipelineId, ScenePipeline>,
         device_pixel_ratio: f32,
         pan: LayerPoint,
-        output_pipelines: &FastHashSet<PipelineId>,
         texture_cache_profile: &mut TextureCacheProfileCounters,
         gpu_cache_profile: &mut GpuCacheProfileCounters,
+        scene_properties: &SceneProperties,
     ) -> RendererFrame {
         let frame = frame_builder.build(
             resource_cache,
@@ -1186,9 +1197,9 @@ impl FrameContext {
             pipelines,
             device_pixel_ratio,
             pan,
-            output_pipelines,
             texture_cache_profile,
             gpu_cache_profile,
+            scene_properties,
         );
 
         self.get_renderer_frame_impl(Some(frame))

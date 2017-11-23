@@ -171,6 +171,7 @@
 #include "nsDocShell.h"
 #include "nsOpenURIInFrameParams.h"
 #include "mozilla/net/NeckoMessageUtils.h"
+#include "gfxPlatform.h"
 #include "gfxPrefs.h"
 #include "prio.h"
 #include "private/pprio.h"
@@ -1295,7 +1296,11 @@ ContentParent::Init()
       obs->AddObserver(this, sObserverTopics[i], false);
     }
   }
+
+  // Register ContentParent as an observer for changes to any pref whose prefix
+  // matches the empty string, i.e. all of them.
   Preferences::AddStrongObserver(this, "");
+
   if (obs) {
     nsAutoString cpId;
     cpId.AppendInt(static_cast<uint64_t>(this->ChildID()));
@@ -2224,9 +2229,10 @@ ContentParent::InitInternal(ProcessPriority aInitialPriority,
       }
     }
   }
-  // This is only implemented (returns a non-empty list) by MacOSX at present.
-  nsTArray<FontFamilyListEntry> fontFamilies;
-  gfxPlatform::GetPlatform()->GetSystemFontFamilyList(&fontFamilies);
+  // This is only implemented (returns a non-empty list) by MacOSX and Linux
+  // at present.
+  nsTArray<SystemFontListEntry> fontList;
+  gfxPlatform::GetPlatform()->ReadSystemFontList(&fontList);
   nsTArray<LookAndFeelInt> lnfCache = LookAndFeel::GetIntCache();
 
   // Content processes have no permission to access profile directory, so we
@@ -2269,7 +2275,7 @@ ContentParent::InitInternal(ProcessPriority aInitialPriority,
   screenManager.CopyScreensToRemote(this);
 
   Unused << SendSetXPCOMProcessAttributes(xpcomInit, initialData, lnfCache,
-                                          fontFamilies);
+                                          fontList);
 
   if (aSendRegisteredChrome) {
     nsCOMPtr<nsIChromeRegistry> registrySvc = nsChromeRegistry::GetService();
@@ -2771,14 +2777,14 @@ ContentParent::Observe(nsISupports* aSubject,
                       NS_LITERAL_STRING("-no-forward"))) {
       Unused << SendFlushMemory(nsDependentString(aData));
   }
-  // listening for remotePrefs...
   else if (!strcmp(aTopic, "nsPref:changed")) {
-    // Some prefs are not useful in the content process.
+    // A pref changed. If it's not on the blacklist, inform child processes.
 #define BLACKLIST_ENTRY(s) { s, (sizeof(s)/sizeof(char16_t)) - 1 }
     struct BlacklistEntry {
       const char16_t* mPrefBranch;
       size_t mLen;
     };
+    // These prefs are not useful in child processes.
     static const BlacklistEntry sContentPrefBranchBlacklist[] = {
       BLACKLIST_ENTRY(u"app.update.lastUpdateTime."),
       BLACKLIST_ENTRY(u"datareporting.policy."),
@@ -4259,6 +4265,17 @@ ContentParent::NotifyUpdatedDictionaries()
 
   for (auto* cp : AllProcesses(eLive)) {
     Unused << cp->SendUpdateDictionaryList(dictionaries);
+  }
+}
+
+void
+ContentParent::NotifyUpdatedFonts()
+{
+  InfallibleTArray<SystemFontListEntry> fontList;
+  gfxPlatform::GetPlatform()->ReadSystemFontList(&fontList);
+
+  for (auto* cp : AllProcesses(eLive)) {
+    Unused << cp->SendUpdateFontList(fontList);
   }
 }
 

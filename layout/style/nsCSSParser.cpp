@@ -7361,7 +7361,6 @@ const UnitInfo UnitData[] = {
   { STR_WITH_LEN("ch"), eCSSUnit_Char, VARIANT_LENGTH },
   { STR_WITH_LEN("rem"), eCSSUnit_RootEM, VARIANT_LENGTH },
   { STR_WITH_LEN("mm"), eCSSUnit_Millimeter, VARIANT_LENGTH },
-  { STR_WITH_LEN("mozmm"), eCSSUnit_PhysicalMillimeter, VARIANT_LENGTH },
   { STR_WITH_LEN("vw"), eCSSUnit_ViewportWidth, VARIANT_LENGTH },
   { STR_WITH_LEN("vh"), eCSSUnit_ViewportHeight, VARIANT_LENGTH },
   { STR_WITH_LEN("vmin"), eCSSUnit_ViewportMin, VARIANT_LENGTH },
@@ -18201,13 +18200,4 @@ nsCSSParser::IsValueValidForProperty(const nsCSSPropertyID aPropID,
 {
   return static_cast<CSSParserImpl*>(mImpl)->
     IsValueValidForProperty(aPropID, aPropValue);
-}
-
-/* static */
-uint8_t
-nsCSSParser::ControlCharVisibilityDefault()
-{
-  return StylePrefs::sControlCharVisibility
-    ? NS_STYLE_CONTROL_CHARACTER_VISIBILITY_VISIBLE
-    : NS_STYLE_CONTROL_CHARACTER_VISIBILITY_HIDDEN;
 }

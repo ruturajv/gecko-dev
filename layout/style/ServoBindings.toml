@@ -1,6 +1,6 @@
 [build]
 args = [
-    "-x", "c++", "-std=c++14",
+    "-x", "c++", "-std=c++14", "-fno-sized-deallocation",
     "-DTRACING=1", "-DIMPL_LIBXUL", "-DMOZ_STYLO_BINDINGS=1",
     "-DMOZILLA_INTERNAL_API", "-DRUST_BINDGEN", "-DMOZ_STYLO"
 ]
@@ -495,6 +495,7 @@ structs-types = [
     "RawGeckoURLExtraData",
     "RawGeckoXBLBinding",
     "RawServoSelectorList",
+    "RawServoSourceSizeList",
     "RefPtr",
     "RustString",
     "CSSPseudoClassType",
@@ -608,6 +609,7 @@ array-types = [
 servo-owned-types = [
     { name = "RawServoStyleSet", opaque = true },
     { name = "RawServoSelectorList", opaque = false },
+    { name = "RawServoSourceSizeList", opaque = false },
     { name = "ServoElementSnapshot", opaque = false },
     { name = "RawServoAnimationValueMap", opaque = true },
 ]

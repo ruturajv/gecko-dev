@@ -33,6 +33,8 @@ from mozbuild.frontend.data import (
     JARManifest,
     LinkageMultipleRustLibrariesError,
     LocalInclude,
+    LocalizedFiles,
+    LocalizedPreprocessedFiles,
     Program,
     RustLibrary,
     RustProgram,
@@ -208,6 +210,15 @@ class TestEmitterBasic(unittest.TestCase):
         self.assertEqual(flags.flags['WARNINGS_AS_ERRORS'], ['-Werror'])
         self.assertEqual(flags.flags['MOZBUILD_CFLAGS'], ['-Wall', '-funroll-loops'])
         self.assertEqual(flags.flags['MOZBUILD_CXXFLAGS'], ['-funroll-loops', '-Wall'])
+
+    def test_asflags(self):
+        reader = self.reader('asflags', extra_substs={
+            'ASFLAGS': ['-safeseh'],
+        })
+        as_sources, sources, ldflags, asflags, lib, flags = self.read_topsrcdir(reader)
+        self.assertIsInstance(asflags, ComputedFlags)
+        self.assertEqual(asflags.flags['OS'], reader.config.substs['ASFLAGS'])
+        self.assertEqual(asflags.flags['MOZBUILD'], ['-no-integrated-as'])
 
     def test_debug_flags(self):
         reader = self.reader('compile-flags', extra_substs={
@@ -425,15 +436,20 @@ class TestEmitterBasic(unittest.TestCase):
                                  YASM='yasm',
                                  YASM_ASFLAGS='-foo',
                              ))
-        objs = self.read_topsrcdir(reader)
 
-        self.assertEqual(len(objs), 1)
-        self.assertIsInstance(objs[0], VariablePassthru)
+        sources, passthru, ldflags, asflags, lib, flags = self.read_topsrcdir(reader)
+
+        self.assertIsInstance(passthru, VariablePassthru)
+        self.assertIsInstance(ldflags, ComputedFlags)
+        self.assertIsInstance(asflags, ComputedFlags)
+        self.assertIsInstance(flags, ComputedFlags)
+
+        self.assertEqual(asflags.flags['OS'], reader.config.substs['YASM_ASFLAGS'])
+
         maxDiff = self.maxDiff
         self.maxDiff = None
-        self.assertEqual(objs[0].variables,
+        self.assertEqual(passthru.variables,
                          {'AS': 'yasm',
-                          'ASFLAGS': '-foo',
                           'AS_DASH_C_FLAG': ''})
         self.maxDiff = maxDiff
 
@@ -1016,6 +1032,8 @@ class TestEmitterBasic(unittest.TestCase):
         # The second to last object is a Linkable.
         linkable = objs.pop()
         self.assertTrue(linkable.cxx_link)
+        as_flags = objs.pop()
+        self.assertIsInstance(as_flags, ComputedFlags)
         ld_flags = objs.pop()
         self.assertIsInstance(ld_flags, ComputedFlags)
         self.assertEqual(len(objs), 6)
@@ -1074,6 +1092,8 @@ class TestEmitterBasic(unittest.TestCase):
         # The second to last object is a Linkable.
         linkable = objs.pop()
         self.assertTrue(linkable.cxx_link)
+        flags = objs.pop()
+        self.assertIsInstance(flags, ComputedFlags)
         self.assertEqual(len(objs), 7)
 
         generated_sources = [o for o in objs if isinstance(o, GeneratedSources)]
@@ -1216,6 +1236,46 @@ class TestEmitterBasic(unittest.TestCase):
         with self.assertRaisesRegexp(SandboxValidationError,
              'Only source directory paths allowed in FINAL_TARGET_PP_FILES:'):
             self.read_topsrcdir(reader)
+
+    def test_localized_files(self):
+        """Test that LOCALIZED_FILES works properly."""
+        reader = self.reader('localized-files')
+        objs = self.read_topsrcdir(reader)
+
+        self.assertEqual(len(objs), 1)
+        self.assertIsInstance(objs[0], LocalizedFiles)
+
+        for path, files in objs[0].files.walk():
+            self.assertEqual(path, 'foo')
+            self.assertEqual(len(files), 3)
+
+            expected = {'en-US/bar.ini', 'en-US/code/*.js', 'en-US/foo.js'}
+            for f in files:
+                self.assertTrue(unicode(f) in expected)
+
+    def test_localized_files_no_en_us(self):
+        """Test that LOCALIZED_FILES errors if a path does not start with
+        `en-US/`."""
+        reader = self.reader('localized-files-no-en-us')
+        with self.assertRaisesRegexp(SandboxValidationError,
+             'LOCALIZED_FILES paths must start with `en-US/`:'):
+            objs = self.read_topsrcdir(reader)
+
+    def test_localized_pp_files(self):
+        """Test that LOCALIZED_PP_FILES works properly."""
+        reader = self.reader('localized-pp-files')
+        objs = self.read_topsrcdir(reader)
+
+        self.assertEqual(len(objs), 1)
+        self.assertIsInstance(objs[0], LocalizedPreprocessedFiles)
+
+        for path, files in objs[0].files.walk():
+            self.assertEqual(path, 'foo')
+            self.assertEqual(len(files), 2)
+
+            expected = {'en-US/bar.ini', 'en-US/foo.js'}
+            for f in files:
+                self.assertTrue(unicode(f) in expected)
 
     def test_rust_library_no_cargo_toml(self):
         '''Test that defining a RustLibrary without a Cargo.toml fails.'''

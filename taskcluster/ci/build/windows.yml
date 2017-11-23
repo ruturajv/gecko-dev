@@ -16,6 +16,7 @@ win32/debug:
         using: mozharness
         script: mozharness/scripts/fx_desktop_build.py
         config:
+            - builds/releng_base_firefox.py
             - builds/taskcluster_firefox_windows_32_debug.py
     toolchains:
         - win32-clang-cl
@@ -40,6 +41,7 @@ win32/opt:
         using: mozharness
         script: mozharness/scripts/fx_desktop_build.py
         config:
+            - builds/releng_base_firefox.py
             - builds/taskcluster_firefox_windows_32_opt.py
     toolchains:
         - win32-clang-cl
@@ -64,9 +66,10 @@ win32-dmd/opt:
         using: mozharness
         script: mozharness/scripts/fx_desktop_build.py
         config:
+            - builds/releng_base_firefox.py
             - builds/taskcluster_firefox_windows_32_opt.py
         custom-build-variant-cfg: dmd
-    run-on-projects: [ ]
+    run-on-projects: []
     toolchains:
         - win32-clang-cl
         - win32-rust
@@ -91,6 +94,7 @@ win32/pgo:
         options: [enable-pgo]
         script: mozharness/scripts/fx_desktop_build.py
         config:
+            - builds/releng_base_firefox.py
             - builds/taskcluster_firefox_windows_32_opt.py
     toolchains:
         - win32-clang-cl
@@ -115,6 +119,7 @@ win64/debug:
         using: mozharness
         script: mozharness/scripts/fx_desktop_build.py
         config:
+            - builds/releng_base_firefox.py
             - builds/taskcluster_firefox_windows_64_debug.py
     toolchains:
         - win64-clang-cl
@@ -139,6 +144,7 @@ win64/opt:
         using: mozharness
         script: mozharness/scripts/fx_desktop_build.py
         config:
+            - builds/releng_base_firefox.py
             - builds/taskcluster_firefox_windows_64_opt.py
     toolchains:
         - win64-clang-cl
@@ -163,9 +169,10 @@ win64-dmd/opt:
         using: mozharness
         script: mozharness/scripts/fx_desktop_build.py
         config:
+            - builds/releng_base_firefox.py
             - builds/taskcluster_firefox_windows_64_opt.py
         custom-build-variant-cfg: dmd
-    run-on-projects: [ ]
+    run-on-projects: []
     toolchains:
         - win64-clang-cl
         - win64-rust
@@ -193,6 +200,7 @@ win32-nightly/opt:
         actions: [clone-tools, build, check-test, update]
         script: mozharness/scripts/fx_desktop_build.py
         config:
+            - builds/releng_base_firefox.py
             - builds/taskcluster_firefox_windows_32_opt.py
             - disable_signing.py
             - taskcluster_nightly.py
@@ -223,6 +231,7 @@ win64-nightly/opt:
         actions: [clone-tools, build, check-test, update]
         script: mozharness/scripts/fx_desktop_build.py
         config:
+            - builds/releng_base_firefox.py
             - builds/taskcluster_firefox_windows_64_opt.py
             - disable_signing.py
             - taskcluster_nightly.py
@@ -250,6 +259,7 @@ win64/pgo:
         options: [enable-pgo]
         script: mozharness/scripts/fx_desktop_build.py
         config:
+            - builds/releng_base_firefox.py
             - builds/taskcluster_firefox_windows_64_opt.py
     toolchains:
         - win64-clang-cl
@@ -274,9 +284,10 @@ win32-add-on-devel/opt:
         using: mozharness
         script: "mozharness/scripts/fx_desktop_build.py"
         config:
+            - builds/releng_base_firefox.py
             - builds/taskcluster_firefox_windows_32_addondevel.py
             - balrog/production.py
-    run-on-projects: [ 'mozilla-beta', 'mozilla-release', 'mozilla-esr45' ]
+    run-on-projects: ['mozilla-beta', 'mozilla-release', 'mozilla-esr45']
     toolchains:
         - win32-clang-cl
         - win32-rust
@@ -300,9 +311,10 @@ win64-add-on-devel/opt:
         using: mozharness
         script: "mozharness/scripts/fx_desktop_build.py"
         config:
+            - builds/releng_base_firefox.py
             - builds/taskcluster_firefox_windows_64_addondevel.py
             - balrog/production.py
-    run-on-projects: [ 'mozilla-beta', 'mozilla-release', 'mozilla-esr45' ]
+    run-on-projects: ['mozilla-beta', 'mozilla-release', 'mozilla-esr45']
     toolchains:
         - win64-clang-cl
         - win64-rust
@@ -326,8 +338,9 @@ win64-noopt/debug:
         using: mozharness
         script: mozharness/scripts/fx_desktop_build.py
         config:
+            - builds/releng_base_firefox.py
             - builds/taskcluster_firefox_win64_noopt_debug.py
-    run-on-projects: [ 'trunk', 'try' ]
+    run-on-projects: ['trunk', 'try']
     toolchains:
         - win64-clang-cl
         - win64-rust
@@ -351,8 +364,9 @@ win32-noopt/debug:
         using: mozharness
         script: mozharness/scripts/fx_desktop_build.py
         config:
+            - builds/releng_base_firefox.py
             - builds/taskcluster_firefox_win32_noopt_debug.py
-    run-on-projects: [ 'trunk', 'try' ]
+    run-on-projects: ['trunk', 'try']
     toolchains:
         - win32-clang-cl
         - win32-rust
@@ -376,8 +390,9 @@ win32-rusttests/opt:
         using: mozharness
         script: mozharness/scripts/fx_desktop_build.py
         config:
+            - builds/releng_base_firefox.py
             - builds/taskcluster_firefox_win32_rusttests_opt.py
-    run-on-projects: [ 'trunk', 'try' ]
+    run-on-projects: ['trunk', 'try']
     toolchains:
         - win32-clang-cl
         - win32-rust
@@ -401,8 +416,35 @@ win64-rusttests/opt:
         using: mozharness
         script: mozharness/scripts/fx_desktop_build.py
         config:
+            - builds/releng_base_firefox.py
             - builds/taskcluster_firefox_win64_rusttests_opt.py
-    run-on-projects: [ 'trunk', 'try' ]
+    run-on-projects: ['trunk', 'try']
+    toolchains:
+        - win64-clang-cl
+        - win64-rust
+        - win64-sccache
+
+win64-ccov/debug:
+    description: "Win64 Debug Code Coverage"
+    index:
+        product: firefox
+        job-name: win64-ccov-debug
+    treeherder:
+        platform: windows2012-64/ccov
+        symbol: tc(B)
+        tier: 3
+    worker-type: aws-provisioner-v1/gecko-{level}-b-win2012
+    worker:
+        max-run-time: 14400
+        env:
+            TOOLTOOL_MANIFEST: "browser/config/tooltool-manifests/win64/releng.manifest"
+    run:
+        using: mozharness
+        script: mozharness/scripts/fx_desktop_build.py
+        config:
+            - builds/releng_base_firefox.py
+            - builds/taskcluster_firefox_win64_ccov_debug.py
+    run-on-projects: []
     toolchains:
         - win64-clang-cl
         - win64-rust
@@ -422,10 +464,12 @@ win64-asan/debug:
         max-run-time: 7200
         env:
             TOOLTOOL_MANIFEST: "browser/config/tooltool-manifests/win64/releng.manifest"
+            PERFHERDER_EXTRA_OPTIONS: "debug asan"
     run:
         using: mozharness
         script: mozharness/scripts/fx_desktop_build.py
         config:
+            - builds/releng_base_firefox.py
             - builds/taskcluster_firefox_win64_asan_debug.py
     run-on-projects: []
     toolchains:
@@ -447,10 +491,12 @@ win64-asan/opt:
         max-run-time: 7200
         env:
             TOOLTOOL_MANIFEST: "browser/config/tooltool-manifests/win64/releng.manifest"
+            PERFHERDER_EXTRA_OPTIONS: "opt asan"
     run:
         using: mozharness
         script: mozharness/scripts/fx_desktop_build.py
         config:
+            - builds/releng_base_firefox.py
             - builds/taskcluster_firefox_win64_asan_opt.py
     run-on-projects: []
     toolchains:
@@ -479,11 +525,12 @@ win32-devedition-nightly/opt:
         using: mozharness
         script: mozharness/scripts/fx_desktop_build.py
         config:
+            - builds/releng_base_firefox.py
             - builds/taskcluster_firefox_windows_32_opt.py
             - disable_signing.py
             - taskcluster_nightly.py
         custom-build-variant-cfg: devedition
-    run-on-projects: [ 'mozilla-beta', ]
+    run-on-projects: ['mozilla-beta']
     toolchains:
         - win32-clang-cl
         - win32-rust
@@ -510,11 +557,12 @@ win64-devedition-nightly/opt:
         using: mozharness
         script: mozharness/scripts/fx_desktop_build.py
         config:
+            - builds/releng_base_firefox.py
             - builds/taskcluster_firefox_windows_64_opt.py
             - disable_signing.py
             - taskcluster_nightly.py
         custom-build-variant-cfg: devedition
-    run-on-projects: [ 'mozilla-beta', ]
+    run-on-projects: ['mozilla-beta']
     toolchains:
         - win64-clang-cl
         - win64-rust
@@ -536,6 +584,7 @@ win32-mingw32/debug:
         using: mozharness
         script: mozharness/scripts/fx_desktop_build.py
         config:
+            - builds/releng_base_firefox.py
             - builds/releng_base_windows_32_mingw_builds.py
         need-xvfb: false
     toolchains:

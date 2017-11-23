@@ -210,7 +210,7 @@ public:
   // as the aOriginal stream.
   // Exactly one of InitAsClone or Init must be called before any other method
   // on this class.
-  void InitAsClone(MediaCacheStream* aOriginal);
+  nsresult InitAsClone(MediaCacheStream* aOriginal);
 
   nsIEventTarget* OwnerThread() const;
 
@@ -223,11 +223,7 @@ public:
   bool IsClosed() const { return mClosed; }
   // Returns true when this stream is can be shared by a new resource load.
   // Called on the main thread only.
-  bool IsAvailableForSharing() const
-  {
-    return !mClosed && !mIsPrivateBrowsing &&
-      (!mDidNotifyDataEnded || NS_SUCCEEDED(mNotifyDataEndedStatus));
-  }
+  bool IsAvailableForSharing() const { return !mClosed && !mIsPrivateBrowsing; }
   // Get the principal for this stream. Anything accessing the contents of
   // this stream must have a principal that subsumes this principal.
   nsIPrincipal* GetCurrentPrincipal() { return mPrincipal; }
@@ -271,12 +267,16 @@ public:
   // Notifies the cache that the current bytes should be written to disk.
   // Called on the main thread.
   void FlushPartialBlock();
-  // Notifies the cache that the channel has closed with the given status.
-  void NotifyDataEnded(nsresult aStatus);
 
-  // Notifies the stream that the channel is reopened. The stream should
-  // reset variables such as |mDidNotifyDataEnded|.
-  void NotifyChannelRecreated();
+  // Set the load ID so the following NotifyDataEnded() call can work properly.
+  // Used in some rare cases where NotifyDataEnded() is called without the
+  // preceding NotifyDataStarted().
+  void NotifyLoadID(uint32_t aLoadID);
+
+  // Notifies the cache that the channel has closed with the given status.
+  void NotifyDataEnded(uint32_t aLoadID,
+                       nsresult aStatus,
+                       bool aReopenOnError = false);
 
   // Notifies the stream that the suspend status of the client has changed.
   // Main thread only.
@@ -337,7 +337,6 @@ public:
   // These methods must be called on a different thread from the main
   // thread. They should always be called on the same thread for a given
   // stream.
-  int64_t Tell();
   // *aBytes gets the number of bytes that were actually read. This can
   // be less than aCount. If the first byte of data is not in the cache,
   // this will block until the data is available or the stream is
@@ -428,7 +427,8 @@ private:
   // Read data from the cache block specified by aOffset. Return the number of
   // bytes read successfully or an error code if any failure.
   Result<uint32_t, nsresult> ReadBlockFromCache(int64_t aOffset,
-                                                Span<char> aBuffer);
+                                                Span<char> aBuffer,
+                                                bool aNoteBlockUsage = false);
 
   // Non-main thread only.
   nsresult Seek(int64_t aOffset);
@@ -449,6 +449,10 @@ private:
   // waiting on the media cache monitor. Called on the main thread only.
   void FlushPartialBlockInternal(bool aNotify, ReentrantMonitorAutoEnter& aReentrantMonitor);
 
+  void NotifyDataEndedInternal(uint32_t aLoadID,
+                               nsresult aStatus,
+                               bool aReopenOnError);
+
   // Instance of MediaCache to use with this MediaCacheStream.
   RefPtr<MediaCache> mMediaCache;
 
@@ -456,8 +460,6 @@ private:
 
   // These fields are main-thread-only.
   nsCOMPtr<nsIPrincipal> mPrincipal;
-  // True if CacheClientNotifyDataEnded has been called for this stream.
-  bool                   mDidNotifyDataEnded;
 
   // The following fields must be written holding the cache's monitor and
   // only on the main thread, thus can be read either on the main thread
@@ -506,6 +508,8 @@ private:
   // The number of times this stream has been Pinned without a
   // corresponding Unpin
   uint32_t          mPinCount;
+  // True if CacheClientNotifyDataEnded has been called for this stream.
+  bool              mDidNotifyDataEnded = false;
   // The status used when we did CacheClientNotifyDataEnded. Only valid
   // when mDidNotifyDataEnded is true.
   nsresult          mNotifyDataEndedStatus;

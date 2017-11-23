@@ -545,9 +545,6 @@ static nscoord CalcLengthWith(const nsCSSValue& aValue,
                "Must have style context or specify aUseProvidedRootEmSize");
   NS_ASSERTION(aPresContext, "Must have prescontext");
 
-  if (aValue.IsFixedLengthUnit()) {
-    return aValue.GetFixedLength(aPresContext);
-  }
   if (aValue.IsPixelLengthUnit()) {
     return aValue.GetPixelLength();
   }
@@ -5110,7 +5107,7 @@ nsRuleNode::ComputeTextData(void* aStartStruct,
            conditions,
            SETVAL_ENUMERATED | SETVAL_UNSET_INHERIT,
            parentText->mControlCharacterVisibility,
-           nsCSSParser::ControlCharVisibilityDefault());
+           nsLayoutUtils::ControlCharVisibilityDefault());
 
   COMPUTE_END_INHERITED(Text, text)
 }

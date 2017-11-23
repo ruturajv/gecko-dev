@@ -130,6 +130,7 @@
 #include "TextDrawTarget.h"
 #include "nsDeckFrame.h"
 #include "nsIEffectiveTLDService.h" // for IsInStyloBlocklist
+#include "mozilla/StylePrefs.h"
 
 #ifdef MOZ_XUL
 #include "nsXULPopupManager.h"
@@ -475,6 +476,20 @@ MayHaveAnimationOfProperty(EffectSet* effects, nsCSSPropertyID aProperty)
   return true;
 }
 
+static bool
+MayHaveAnimationOfProperty(const nsIFrame* aFrame, nsCSSPropertyID aProperty)
+{
+  switch (aProperty) {
+    case eCSSProperty_transform:
+      return aFrame->MayHaveTransformAnimation();
+    case eCSSProperty_opacity:
+      return aFrame->MayHaveOpacityAnimation();
+    default:
+      MOZ_ASSERT_UNREACHABLE("unexpected property");
+      return false;
+  }
+}
+
 bool
 nsLayoutUtils::HasAnimationOfProperty(EffectSet* aEffectSet,
                                       nsCSSPropertyID aProperty)
@@ -496,7 +511,18 @@ bool
 nsLayoutUtils::HasAnimationOfProperty(const nsIFrame* aFrame,
                                       nsCSSPropertyID aProperty)
 {
-  return HasAnimationOfProperty(EffectSet::GetEffectSet(aFrame), aProperty);
+  if (!MayHaveAnimationOfProperty(aFrame, aProperty)) {
+    return false;
+  }
+
+  return HasMatchingAnimations(aFrame,
+    [&aProperty](KeyframeEffectReadOnly& aEffect)
+    {
+      return (aEffect.IsInEffect() || aEffect.IsCurrent()) &&
+             aEffect.HasAnimationOfProperty(aProperty);
+    }
+  );
+
 }
 
 bool
@@ -543,10 +569,10 @@ GetSuitableScale(float aMaxScale, float aMinScale,
 static inline void
 UpdateMinMaxScale(const nsIFrame* aFrame,
                   const AnimationValue& aValue,
-                  gfxSize& aMinScale,
-                  gfxSize& aMaxScale)
+                  Size& aMinScale,
+                  Size& aMaxScale)
 {
-  gfxSize size = aValue.GetScaleValue(aFrame);
+  Size size = aValue.GetScaleValue(aFrame);
   aMaxScale.width = std::max<float>(aMaxScale.width, size.width);
   aMaxScale.height = std::max<float>(aMaxScale.height, size.height);
   aMinScale.width = std::min<float>(aMinScale.width, size.width);
@@ -555,10 +581,9 @@ UpdateMinMaxScale(const nsIFrame* aFrame,
 
 static void
 GetMinAndMaxScaleForAnimationProperty(const nsIFrame* aFrame,
-                                      nsTArray<RefPtr<dom::Animation>>&
-                                        aAnimations,
-                                      gfxSize& aMaxScale,
-                                      gfxSize& aMinScale)
+                                      nsTArray<RefPtr<dom::Animation>>& aAnimations,
+                                      Size& aMaxScale,
+                                      Size& aMinScale)
 {
   for (dom::Animation* anim : aAnimations) {
     // This method is only expected to be passed animations that are running on
@@ -597,15 +622,15 @@ GetMinAndMaxScaleForAnimationProperty(const nsIFrame* aFrame,
   }
 }
 
-gfxSize
+Size
 nsLayoutUtils::ComputeSuitableScaleForAnimation(const nsIFrame* aFrame,
                                                 const nsSize& aVisibleSize,
                                                 const nsSize& aDisplaySize)
 {
-  gfxSize maxScale(std::numeric_limits<gfxFloat>::min(),
-                   std::numeric_limits<gfxFloat>::min());
-  gfxSize minScale(std::numeric_limits<gfxFloat>::max(),
-                   std::numeric_limits<gfxFloat>::max());
+  Size maxScale(std::numeric_limits<float>::min(),
+                std::numeric_limits<float>::min());
+  Size minScale(std::numeric_limits<float>::max(),
+                std::numeric_limits<float>::max());
 
   nsTArray<RefPtr<dom::Animation>> compositorAnimations =
     EffectCompositor::GetAnimationsForCompositor(aFrame,
@@ -613,15 +638,15 @@ nsLayoutUtils::ComputeSuitableScaleForAnimation(const nsIFrame* aFrame,
   GetMinAndMaxScaleForAnimationProperty(aFrame, compositorAnimations,
                                         maxScale, minScale);
 
-  if (maxScale.width == std::numeric_limits<gfxFloat>::min()) {
+  if (maxScale.width == std::numeric_limits<float>::min()) {
     // We didn't encounter a transform
-    return gfxSize(1.0, 1.0);
+    return Size(1.0, 1.0);
   }
 
-  return gfxSize(GetSuitableScale(maxScale.width, minScale.width,
-                                  aVisibleSize.width, aDisplaySize.width),
-                 GetSuitableScale(maxScale.height, minScale.height,
-                                  aVisibleSize.height, aDisplaySize.height));
+  return Size(GetSuitableScale(maxScale.width, minScale.width,
+                               aVisibleSize.width, aDisplaySize.width),
+              GetSuitableScale(maxScale.height, minScale.height,
+                               aVisibleSize.height, aDisplaySize.height));
 }
 
 bool
@@ -2996,7 +3021,7 @@ nsLayoutUtils::GetLayerTransformForFrame(nsIFrame* aFrame,
                                nsDisplayListBuilderMode::TRANSFORM_COMPUTATION,
                                false/*don't build caret*/);
   builder.BeginFrame();
-  nsDisplayList list(&builder);
+  nsDisplayList list;
   nsDisplayTransform* item =
     new (&builder) nsDisplayTransform(&builder, aFrame, &list, nsRect());
 
@@ -3279,7 +3304,7 @@ nsLayoutUtils::GetFramesForArea(nsIFrame* aFrame, const nsRect& aRect,
                                nsDisplayListBuilderMode::EVENT_DELIVERY,
                                false);
   builder.BeginFrame();
-  nsDisplayList list(&builder);
+  nsDisplayList list;
 
   if (aFlags & IGNORE_PAINT_SUPPRESSION) {
     builder.IgnorePaintSuppression();
@@ -3660,7 +3685,7 @@ nsLayoutUtils::PaintFrame(gfxContext* aRenderingContext, nsIFrame* aFrame,
   } else {
     nonRetainedBuilder.emplace(aFrame, aBuilderMode, buildCaret);
     builderPtr = nonRetainedBuilder.ptr();
-    nonRetainedList.emplace(builderPtr);
+    nonRetainedList.emplace();
     listPtr = nonRetainedList.ptr();
   }
   nsDisplayListBuilder& builder = *builderPtr;
@@ -3839,6 +3864,8 @@ nsLayoutUtils::PaintFrame(gfxContext* aRenderingContext, nsIFrame* aFrame,
     }
   }
 
+  builder.Check();
+
   Telemetry::AccumulateTimeDelta(Telemetry::PAINT_BUILD_DISPLAYLIST_TIME,
                                  startBuildDisplayList);
 
@@ -3917,6 +3944,8 @@ nsLayoutUtils::PaintFrame(gfxContext* aRenderingContext, nsIFrame* aFrame,
     = list.PaintRoot(&builder, aRenderingContext, flags);
   Telemetry::AccumulateTimeDelta(Telemetry::PAINT_RASTERIZE_TIME,
                                  paintStart);
+
+  builder.Check();
 
   if (gfxPrefs::GfxLoggingPaintedPixelCountEnabled()) {
     TimeStamp now = TimeStamp::Now();
@@ -4022,6 +4051,8 @@ nsLayoutUtils::PaintFrame(gfxContext* aRenderingContext, nsIFrame* aFrame,
       layerManager->ScheduleComposite();
     }
   }
+
+  builder.Check();
 
   {
     AUTO_PROFILER_TRACING("Paint", "DisplayListResources");
@@ -6149,7 +6180,7 @@ nsLayoutUtils::DrawString(const nsIFrame*     aFrame,
 void
 nsLayoutUtils::DrawUniDirString(const char16_t* aString,
                                 uint32_t aLength,
-                                nsPoint aPoint,
+                                const nsPoint& aPoint,
                                 nsFontMetrics& aFontMetrics,
                                 gfxContext& aContext)
 {
@@ -10024,4 +10055,12 @@ nsLayoutUtils::ComputeOffsetToUserSpace(nsDisplayListBuilder* aBuilder,
             nsPresContext::CSSPixelsToAppUnits(float(toUserSpaceGfx.y)));
 
   return (offsetToBoundingBox - toUserSpace);
+}
+
+/* static */ uint8_t
+nsLayoutUtils::ControlCharVisibilityDefault()
+{
+  return StylePrefs::sControlCharVisibility
+    ? NS_STYLE_CONTROL_CHARACTER_VISIBILITY_VISIBLE
+    : NS_STYLE_CONTROL_CHARACTER_VISIBILITY_HIDDEN;
 }

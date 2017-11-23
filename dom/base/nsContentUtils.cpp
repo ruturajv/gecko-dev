@@ -240,6 +240,7 @@ extern "C" int MOZ_XMLCheckQName(const char* ptr, const char* end,
                                  int ns_aware, const char** colon);
 
 class imgLoader;
+class nsAtom;
 
 using namespace mozilla::dom;
 using namespace mozilla::ipc;
@@ -1539,28 +1540,6 @@ nsContentUtils::IsJavaScriptLanguage(const nsString& aName)
          aName.LowerCaseEqualsLiteral("javascript1.3") ||
          aName.LowerCaseEqualsLiteral("javascript1.4") ||
          aName.LowerCaseEqualsLiteral("javascript1.5");
-}
-
-JSVersion
-nsContentUtils::ParseJavascriptVersion(const nsAString& aVersionStr)
-{
-  if (aVersionStr.Length() != 3 || aVersionStr[0] != '1' ||
-      aVersionStr[1] != '.') {
-    return JSVERSION_UNKNOWN;
-  }
-
-  switch (aVersionStr[2]) {
-  case '0': /* fall through */
-  case '1': /* fall through */
-  case '2': /* fall through */
-  case '3': /* fall through */
-  case '4': /* fall through */
-  case '5': return JSVERSION_DEFAULT;
-  case '6': return JSVERSION_1_6;
-  case '7': return JSVERSION_1_7;
-  case '8': return JSVERSION_1_8;
-  default:  return JSVERSION_UNKNOWN;
-  }
 }
 
 void
@@ -10119,11 +10098,32 @@ nsContentUtils::HttpsStateIsModern(nsIDocument* aDocument)
   return false;
 }
 
+/* static */ void
+nsContentUtils::TryToUpgradeElement(Element* aElement)
+{
+  NodeInfo* nodeInfo = aElement->NodeInfo();
+  RefPtr<nsAtom> typeAtom =
+    aElement->GetCustomElementData()->GetCustomElementType();
+  CustomElementDefinition* definition =
+    nsContentUtils::LookupCustomElementDefinition(nodeInfo->GetDocument(),
+                                                  nodeInfo->LocalName(),
+                                                  nodeInfo->NamespaceID(),
+                                                  typeAtom);
+  if (definition) {
+    nsContentUtils::EnqueueUpgradeReaction(aElement, definition);
+  } else {
+    // Add an unresolved custom element that is a candidate for
+    // upgrade when a custom element is connected to the document.
+    // We will make sure it's shadow-including tree order in bug 1326028.
+    nsContentUtils::RegisterUnresolvedElement(aElement, typeAtom);
+  }
+}
+
 /* static */ CustomElementDefinition*
 nsContentUtils::LookupCustomElementDefinition(nsIDocument* aDoc,
                                               const nsAString& aLocalName,
                                               uint32_t aNameSpaceID,
-                                              const nsAString* aIs)
+                                              nsAtom* aTypeAtom)
 {
   MOZ_ASSERT(aDoc);
 
@@ -10142,27 +10142,16 @@ nsContentUtils::LookupCustomElementDefinition(nsIDocument* aDoc,
     return nullptr;
   }
 
-  return registry->LookupCustomElementDefinition(aLocalName, aIs);
+  return registry->LookupCustomElementDefinition(aLocalName, aTypeAtom);
 }
 
 /* static */ void
-nsContentUtils::SetupCustomElement(Element* aElement,
-                                   const nsAString* aTypeExtension)
+nsContentUtils::RegisterUnresolvedElement(Element* aElement, nsAtom* aTypeName)
 {
   MOZ_ASSERT(aElement);
 
-  nsCOMPtr<nsIDocument> doc = aElement->OwnerDoc();
-
-  if (!doc) {
-    return;
-  }
-
-  if (aElement->GetNameSpaceID() != kNameSpaceID_XHTML ||
-      !doc->GetDocShell()) {
-    return;
-  }
-
-  nsCOMPtr<nsPIDOMWindowInner> window(doc->GetInnerWindow());
+  nsIDocument* doc = aElement->OwnerDoc();
+  nsPIDOMWindowInner* window(doc->GetInnerWindow());
   if (!window) {
     return;
   }
@@ -10172,7 +10161,28 @@ nsContentUtils::SetupCustomElement(Element* aElement,
     return;
   }
 
-  return registry->SetupCustomElement(aElement, aTypeExtension);
+  registry->RegisterUnresolvedElement(aElement, aTypeName);
+}
+
+/* static */ void
+nsContentUtils::UnregisterUnresolvedElement(Element* aElement)
+{
+  MOZ_ASSERT(aElement);
+
+  RefPtr<nsAtom> typeAtom =
+    aElement->GetCustomElementData()->GetCustomElementType();
+  nsIDocument* doc = aElement->OwnerDoc();
+  nsPIDOMWindowInner* window(doc->GetInnerWindow());
+  if (!window) {
+    return;
+  }
+
+  RefPtr<CustomElementRegistry> registry(window->CustomElements());
+  if (!registry) {
+    return;
+  }
+
+  registry->UnregisterUnresolvedElement(aElement, typeAtom);
 }
 
 /* static */ CustomElementDefinition*
@@ -10190,27 +10200,6 @@ nsContentUtils::GetElementDefinitionIfObservingAttr(Element* aCustomElement,
   }
 
   return definition;
-}
-
-/* static */ void
-nsContentUtils::SyncInvokeReactions(nsIDocument::ElementCallbackType aType,
-                                    Element* aElement,
-                                    CustomElementDefinition* aDefinition)
-{
-  MOZ_ASSERT(aElement);
-
-  nsIDocument* doc = aElement->OwnerDoc();
-  nsPIDOMWindowInner* window(doc->GetInnerWindow());
-  if (!window) {
-    return;
-  }
-
-  RefPtr<CustomElementRegistry> registry(window->CustomElements());
-  if (!registry) {
-    return;
-  }
-
-  registry->SyncInvokeReactions(aType, aElement, aDefinition);
 }
 
 /* static */ void

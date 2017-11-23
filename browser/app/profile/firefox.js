@@ -470,11 +470,7 @@ pref("browser.tabs.loadBookmarksInBackground", false);
 pref("browser.tabs.loadBookmarksInTabs", false);
 pref("browser.tabs.tabClipWidth", 140);
 pref("browser.tabs.tabMinWidth", 76);
-#ifdef UNIX_BUT_NOT_MAC
-pref("browser.tabs.drawInTitlebar", false);
-#else
 pref("browser.tabs.drawInTitlebar", true);
-#endif
 
 // Offer additional drag space to the user. The drag space
 // will only be shown if browser.tabs.drawInTitlebar is true.
@@ -1046,7 +1042,11 @@ pref("dom.ipc.plugins.sandbox-level.flash", 0);
 // On windows these levels are:
 // See - security/sandbox/win/src/sandboxbroker/sandboxBroker.cpp
 // SetSecurityLevelForContentProcess() for what the different settings mean.
+#if defined(NIGHTLY_BUILD)
+pref("security.sandbox.content.level", 5);
+#else
 pref("security.sandbox.content.level", 4);
+#endif
 
 // This controls the depth of stack trace that is logged when Windows sandbox
 // logging is turned on.  This is only currently available for the content
@@ -1464,6 +1464,8 @@ pref("media.eme.vp9-in-mp4.enabled", true);
 pref("media.eme.vp9-in-mp4.enabled", false);
 #endif
 
+pref("media.eme.hdcp-policy-check.enabled", false);
+
 // Whether we should run a test-pattern through EME GMPs before assuming they'll
 // decode H.264.
 pref("media.gmp.trial-create.enabled", true);
@@ -1687,17 +1689,15 @@ pref("browser.crashReports.unsubmittedCheck.autoSubmit", false);
 // "detect" means it's enabled if conditions defined in the extension are met.
 #ifdef NIGHTLY_BUILD
 pref("extensions.formautofill.available", "on");
+pref("extensions.formautofill.creditCards.available", true);
 #elif MOZ_UPDATE_CHANNEL == release
 pref("extensions.formautofill.available", "staged-rollout");
+pref("extensions.formautofill.creditCards.available", false);
 #else
 pref("extensions.formautofill.available", "detect");
+pref("extensions.formautofill.creditCards.available", true);
 #endif
 pref("extensions.formautofill.addresses.enabled", true);
-#ifdef NIGHTLY_BUILD
-pref("extensions.formautofill.creditCards.available", true);
-#else
-pref("extensions.formautofill.creditCards.available", false);
-#endif
 pref("extensions.formautofill.creditCards.enabled", true);
 // Pref for shield/heartbeat to recognize users who have used Credit Card
 // Autofill. The valid values can be:
@@ -1709,6 +1709,7 @@ pref("extensions.formautofill.creditCards.enabled", true);
 pref("extensions.formautofill.creditCards.used", 0);
 pref("extensions.formautofill.firstTimeUse", true);
 pref("extensions.formautofill.heuristics.enabled", true);
+pref("extensions.formautofill.section.enabled", true);
 pref("extensions.formautofill.loglevel", "Warn");
 
 // Whether or not to restore a session with lazy-browser tabs.

@@ -71,7 +71,7 @@ def create_parser_wpt():
     parser = wptcommandline.create_parser()
     parser.add_argument('--release', default=False, action="store_true",
                         help="Run with a release build of servo")
-    parser.add_argument('--chaos', default=False, action="store_true",
+    parser.add_argument('--rr-chaos', default=False, action="store_true",
                         help="Run under chaos mode in rr until a failure is captured")
     parser.add_argument('--pref', default=[], action="append", dest="prefs",
                         help="Pass preferences to servo")
@@ -173,14 +173,18 @@ class MachCommands(CommandBase):
     @Command('test-perf',
              description='Run the page load performance test',
              category='testing')
-    @CommandArgument('--submit', default=False, action="store_true",
+    @CommandArgument('--base', default=None,
+                     help="the base URL for testcases")
+    @CommandArgument('-submit', '-a', default=False, action="store_true",
                      help="submit the data to perfherder")
-    def test_perf(self, submit=False):
+    def test_perf(self, base=None, submit=False):
         self.set_software_rendering_env(True)
 
         self.ensure_bootstrapped()
         env = self.build_env()
         cmd = ["bash", "test_perf.sh"]
+        if base:
+            cmd += ["--base", base]
         if submit:
             if not ("TREEHERDER_CLIENT_ID" in os.environ and
                     "TREEHERDER_CLIENT_SECRET" in os.environ):
@@ -467,7 +471,7 @@ class MachCommands(CommandBase):
 
         os.environ["RUST_BACKTRACE"] = "1"
         kwargs["debug"] = not kwargs["release"]
-        if kwargs.pop("chaos"):
+        if kwargs.pop("rr_chaos"):
             kwargs["debugger"] = "rr"
             kwargs["debugger_args"] = "record --chaos"
             kwargs["repeat_until_unexpected"] = True

@@ -61,6 +61,7 @@ SurfaceFormatToImageFormat(gfx::SurfaceFormat aFormat) {
   switch (aFormat) {
     case gfx::SurfaceFormat::R8G8B8X8:
       // TODO: use RGBA + opaque flag
+    case gfx::SurfaceFormat::R8G8B8A8:
       return Some(wr::ImageFormat::BGRA8);
     case gfx::SurfaceFormat::B8G8R8X8:
       // TODO: WebRender will have a BGRA + opaque flag for this but does not
@@ -280,6 +281,14 @@ static inline wr::LayoutPoint ToLayoutPoint(const mozilla::LayoutDevicePoint& po
 static inline wr::LayoutPoint ToLayoutPoint(const mozilla::LayoutDeviceIntPoint& point)
 {
   return ToLayoutPoint(LayoutDevicePoint(point));
+}
+
+static inline wr::WorldPoint ToWorldPoint(const mozilla::ScreenPoint& point)
+{
+  wr::WorldPoint p;
+  p.x = point.x;
+  p.y = point.y;
+  return p;
 }
 
 static inline wr::LayoutVector2D ToLayoutVector2D(const mozilla::LayoutDevicePoint& point)

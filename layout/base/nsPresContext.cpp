@@ -43,7 +43,7 @@
 #include "mozilla/RestyleManager.h"
 #include "mozilla/RestyleManagerInlines.h"
 #include "SurfaceCacheUtils.h"
-#include "nsCSSRuleProcessor.h"
+#include "nsMediaFeatures.h"
 #include "nsRuleNode.h"
 #include "gfxPlatform.h"
 #include "nsCSSRules.h"
@@ -1894,7 +1894,7 @@ nsPresContext::RefreshSystemMetrics()
 {
   // This will force the system metrics to be generated the next time they're
   // used.
-  nsCSSRuleProcessor::FreeSystemMetrics();
+  nsMediaFeatures::FreeSystemMetrics();
 
   // Changes to system metrics can change media queries on them.
   //
@@ -3093,6 +3093,14 @@ gfxFloat
 nsPresContext::AppUnitsToGfxUnits(nscoord aAppUnits) const
 {
   return mDeviceContext->AppUnitsToGfxUnits(aAppUnits);
+}
+
+nscoord
+nsPresContext::PhysicalMillimetersToAppUnits(float aMM) const
+{
+  float inches = aMM / MM_PER_INCH_FLOAT;
+  return NSToCoordFloorClamped(
+      inches * float(DeviceContext()->AppUnitsPerPhysicalInch()));
 }
 
 bool

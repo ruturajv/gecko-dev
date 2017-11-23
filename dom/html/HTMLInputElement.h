@@ -578,6 +578,12 @@ public:
   {
     return mIndeterminate;
   }
+
+  bool IsDraggingRange() const
+  {
+    return mIsDraggingRange;
+  }
+
   // XPCOM SetIndeterminate() is OK
 
   void GetInputMode(nsAString& aValue);
@@ -756,7 +762,7 @@ public:
 
   void SetValueAsNumber(double aValue, ErrorResult& aRv);
 
-  uint32_t Width();
+  MOZ_CAN_RUN_SCRIPT uint32_t Width();
 
   void SetWidth(uint32_t aValue, ErrorResult& aRv)
   {
@@ -861,12 +867,6 @@ public:
   void MozSetFileNameArray(const Sequence< nsString >& aFileNames, ErrorResult& aRv);
   void MozSetFileArray(const Sequence<OwningNonNull<File>>& aFiles);
   void MozSetDirectory(const nsAString& aDirectoryPath, ErrorResult& aRv);
-
-  bool MozInputRangeIgnorePreventDefault() const
-  {
-    return (IsInChromeDocument() || IsInNativeAnonymousSubtree()) &&
-      GetBoolAttr(nsGkAtoms::mozinputrangeignorepreventdefault);
-  }
 
   /*
    * The following functions are called from datetime picker to let input box

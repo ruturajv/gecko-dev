@@ -54,11 +54,17 @@ WebRenderLayerScrollData::Initialize(WebRenderScrollData& aOwner,
        asr && asr != aStopAtAsr;
        asr = asr->mParent) {
     MOZ_ASSERT(aOwner.GetManager());
-    Maybe<ScrollMetadata> metadata = asr->mScrollableFrame->ComputeScrollMetadata(
-        nullptr, aOwner.GetManager(), aItem->ReferenceFrame(),
-        ContainerLayerParameters(), nullptr);
-    MOZ_ASSERT(metadata);
-    mScrollIds.AppendElement(aOwner.AddMetadata(metadata.ref()));
+    FrameMetrics::ViewID scrollId = nsLayoutUtils::ViewIDForASR(asr);
+    if (Maybe<size_t> index = aOwner.HasMetadataFor(scrollId)) {
+      mScrollIds.AppendElement(index.ref());
+    } else {
+      Maybe<ScrollMetadata> metadata = asr->mScrollableFrame->ComputeScrollMetadata(
+          nullptr, aOwner.GetManager(), aItem->ReferenceFrame(),
+          ContainerLayerParameters(), nullptr);
+      MOZ_ASSERT(metadata);
+      MOZ_ASSERT(metadata->GetMetrics().GetScrollId() == scrollId);
+      mScrollIds.AppendElement(aOwner.AddMetadata(metadata.ref()));
+    }
   }
 }
 
@@ -108,7 +114,7 @@ WebRenderLayerScrollData::Dump(const WebRenderScrollData& aOwner) const
     Stringify(mVisibleRegion).c_str());
   printf_stderr("  event regions: %s override: 0x%x\n",
     Stringify(mEventRegions).c_str(), mEventRegionsOverride);
-  printf_stderr("  ref layers id: %" PRIu64 "\n", mReferentId.valueOr(0));
+  printf_stderr("  ref layers id: 0x%" PRIx64 "\n", mReferentId.valueOr(0));
   //printf_stderr("  scroll thumb: %s animation: %" PRIu64 "\n",
   //  Stringify(mScrollThumbData).c_str(), mScrollbarAnimationId);
   printf_stderr("  scroll container: %d target: %" PRIu64 "\n",
@@ -200,10 +206,11 @@ WebRenderScrollData::GetScrollMetadata(size_t aIndex) const
   return mScrollMetadatas[aIndex];
 }
 
-bool
+Maybe<size_t>
 WebRenderScrollData::HasMetadataFor(const FrameMetrics::ViewID& aScrollId) const
 {
-  return mScrollIdMap.find(aScrollId) != mScrollIdMap.end();
+  auto it = mScrollIdMap.find(aScrollId);
+  return (it == mScrollIdMap.end() ? Nothing() : Some(it->second));
 }
 
 void

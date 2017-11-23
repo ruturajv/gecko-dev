@@ -1371,7 +1371,8 @@ class MOZ_STACK_CLASS ScriptLoaderHolder final : public WorkerHolder
 
 public:
   explicit ScriptLoaderHolder(ScriptLoaderRunnable* aRunnable)
-    : mRunnable(aRunnable)
+    : WorkerHolder("ScriptLoaderHolder")
+    , mRunnable(aRunnable)
   {
     MOZ_ASSERT(aRunnable);
   }
@@ -1971,10 +1972,6 @@ ScriptExecutorRunnable::WorkerRun(JSContext* aCx, WorkerPrivate* aWorkerPrivate)
     JS::CompileOptions options(aCx);
     options.setFileAndLine(filename.get(), 1)
            .setNoScriptRval(true);
-
-    if (mScriptLoader.mWorkerScriptType == DebuggerScript) {
-      options.setVersion(JSVERSION_DEFAULT);
-    }
 
     MOZ_ASSERT(loadInfo.mMutedErrorFlag.isSome());
     options.setMutedErrors(loadInfo.mMutedErrorFlag.valueOr(true));

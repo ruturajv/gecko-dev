@@ -69,12 +69,6 @@ public:
   // each read.
   virtual bool ShouldCacheReads() = 0;
 
-  // Report the current offset in bytes from the start of the stream.
-  // This is used to approximate where we currently are in the playback of a
-  // media.
-  // A call to ReadAt will update this position.
-  virtual int64_t Tell() = 0;
-
   // These can be called on any thread.
   // Cached blocks associated with this stream will not be evicted
   // while the stream is pinned.
@@ -264,9 +258,6 @@ private:
                          char* aBuffer,
                          uint32_t aCount,
                          uint32_t* aBytes);
-
-  // Select the next power of 2 (in range 32B-128KB, or 0 -> no cache)
-  static uint32_t SelectCacheSize(uint32_t aHint);
 
   // Maps a file offset to a mCachedBlock index.
   uint32_t IndexInCache(int64_t aOffsetInFile) const;

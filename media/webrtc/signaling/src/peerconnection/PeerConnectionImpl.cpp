@@ -744,7 +744,7 @@ PeerConnectionImpl::Initialize(PeerConnectionObserver& aObserver,
     return;
   }
 
-  res = Initialize(aObserver, aWindow.AssertInner(), converted, aThread);
+  res = Initialize(aObserver, &aWindow, converted, aThread);
   if (NS_FAILED(res)) {
     rv.Throw(res);
     return;
@@ -3673,6 +3673,7 @@ PeerConnectionImpl::BuildStatsQuery_m(
           NS_ConvertASCIItoUTF16(localDescription.c_str()));
       query->report->mRemoteSdp.Construct(
           NS_ConvertASCIItoUTF16(remoteDescription.c_str()));
+      query->report->mOfferer.Construct(mJsepSession->IsOfferer());
     }
   }
 

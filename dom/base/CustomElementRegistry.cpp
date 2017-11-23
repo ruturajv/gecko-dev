@@ -23,40 +23,6 @@ CustomElementCallback::Call()
 {
   IgnoredErrorResult rv;
   switch (mType) {
-    case nsIDocument::eCreated:
-    {
-      // For the duration of this callback invocation, the element is being created
-      // flag must be set to true.
-      mOwnerData->mElementIsBeingCreated = true;
-
-      // The callback hasn't actually been invoked yet, but we need to flip
-      // this now in order to enqueue the connected callback. This is a spec
-      // bug (w3c bug 27437).
-      mOwnerData->mCreatedCallbackInvoked = true;
-
-      // If ELEMENT is connected, enqueue connected callback for ELEMENT.
-      nsIDocument* document = mThisObject->GetComposedDoc();
-      if (document) {
-        NodeInfo* ni = mThisObject->NodeInfo();
-        nsDependentAtomString extType(mOwnerData->mType);
-
-        // We need to do this because at this point, CustomElementDefinition is
-        // not set to CustomElementData yet, so EnqueueLifecycleCallback will
-        // fail to find the CE definition for this custom element.
-        // This will go away eventually since there is no created callback in v1.
-        CustomElementDefinition* definition =
-          nsContentUtils::LookupCustomElementDefinition(document,
-            ni->LocalName(), ni->NamespaceID(),
-            extType.IsEmpty() ? nullptr : &extType);
-
-        nsContentUtils::EnqueueLifecycleCallback(
-          nsIDocument::eConnected, mThisObject, nullptr, nullptr, definition);
-      }
-
-      static_cast<LifecycleCreatedCallback *>(mCallback.get())->Call(mThisObject, rv);
-      mOwnerData->mElementIsBeingCreated = false;
-      break;
-    }
     case nsIDocument::eConnected:
       static_cast<LifecycleConnectedCallback *>(mCallback.get())->Call(mThisObject, rv);
       break;
@@ -86,12 +52,10 @@ CustomElementCallback::Traverse(nsCycleCollectionTraversalCallback& aCb) const
 
 CustomElementCallback::CustomElementCallback(Element* aThisObject,
                                              nsIDocument::ElementCallbackType aCallbackType,
-                                             mozilla::dom::CallbackFunction* aCallback,
-                                             CustomElementData* aOwnerData)
+                                             mozilla::dom::CallbackFunction* aCallback)
   : mThisObject(aThisObject),
     mCallback(aCallback),
-    mType(aCallbackType),
-    mOwnerData(aOwnerData)
+    mType(aCallbackType)
 {
 }
 //-----------------------------------------------------
@@ -132,10 +96,8 @@ CustomElementData::CustomElementData(nsAtom* aType)
 }
 
 CustomElementData::CustomElementData(nsAtom* aType, State aState)
-  : mType(aType)
-  , mElementIsBeingCreated(false)
-  , mCreatedCallbackInvoked(true)
-  , mState(aState)
+  : mState(aState)
+  , mType(aType)
 {
 }
 
@@ -156,6 +118,12 @@ CustomElementData::GetCustomElementDefinition()
                                       : mState != State::eCustom);
 
   return mCustomElementDefinition;
+}
+
+nsAtom*
+CustomElementData::GetCustomElementType()
+{
+  return mType;
 }
 
 void
@@ -269,12 +237,10 @@ CustomElementRegistry::~CustomElementRegistry()
 
 CustomElementDefinition*
 CustomElementRegistry::LookupCustomElementDefinition(const nsAString& aLocalName,
-                                                     const nsAString* aIs) const
+                                                     nsAtom* aTypeAtom) const
 {
   RefPtr<nsAtom> localNameAtom = NS_Atomize(aLocalName);
-  RefPtr<nsAtom> typeAtom = aIs ? NS_Atomize(*aIs) : localNameAtom;
-
-  CustomElementDefinition* data = mCustomDefinitions.GetWeak(typeAtom);
+  CustomElementDefinition* data = mCustomDefinitions.GetWeak(aTypeAtom);
   if (data && data->mLocalName == localNameAtom) {
     return data;
   }
@@ -323,47 +289,21 @@ CustomElementRegistry::RegisterUnresolvedElement(Element* aElement, nsAtom* aTyp
 }
 
 void
-CustomElementRegistry::SetupCustomElement(Element* aElement,
-                                          const nsAString* aTypeExtension)
+CustomElementRegistry::UnregisterUnresolvedElement(Element* aElement,
+                                                   nsAtom* aTypeName)
 {
-  RefPtr<nsAtom> tagAtom = aElement->NodeInfo()->NameAtom();
-  RefPtr<nsAtom> typeAtom = aTypeExtension ?
-    NS_Atomize(*aTypeExtension) : tagAtom;
-
-  if (aTypeExtension && !aElement->HasAttr(kNameSpaceID_None, nsGkAtoms::is)) {
-    // Custom element setup in the parser happens after the "is"
-    // attribute is added.
-    aElement->SetAttr(kNameSpaceID_None, nsGkAtoms::is, *aTypeExtension, true);
+  nsTArray<nsWeakPtr>* candidates;
+  if (mCandidatesMap.Get(aTypeName, &candidates)) {
+    MOZ_ASSERT(candidates);
+    // We don't need to iterate the candidates array and remove the element from
+    // the array for performance reason. It'll be handled by bug 1396620.
+    for (size_t i = 0; i < candidates->Length(); ++i) {
+      nsCOMPtr<Element> elem = do_QueryReferent(candidates->ElementAt(i));
+      if (elem && elem.get() == aElement) {
+        candidates->RemoveElementAt(i);
+      }
+    }
   }
-
-  // SetupCustomElement() should be called with an element that don't have
-  // CustomElementData setup, if not we will hit the assertion in
-  // SetCustomElementData().
-  aElement->SetCustomElementData(new CustomElementData(typeAtom));
-
-  CustomElementDefinition* definition = LookupCustomElementDefinition(
-    aElement->NodeInfo()->LocalName(), aTypeExtension);
-
-  if (!definition) {
-    // The type extension doesn't exist in the registry,
-    // thus we don't need to enqueue callback or adjust
-    // the "is" attribute, but it is possibly an upgrade candidate.
-    RegisterUnresolvedElement(aElement, typeAtom);
-    return;
-  }
-
-  if (definition->mLocalName != tagAtom) {
-    // The element doesn't match the local name for the
-    // definition, thus the element isn't a custom element
-    // and we don't need to do anything more.
-    return;
-  }
-
-  // Enqueuing the created callback will set the CustomElementData on the
-  // element, causing prototype swizzling to occur in Element::WrapObject.
-  // We make it synchronously for createElement/createElementNS in order to
-  // pass tests. It'll be removed when we deprecate custom elements v0.
-  SyncInvokeReactions(nsIDocument::eCreated, aElement, definition);
 }
 
 /* static */ UniquePtr<CustomElementCallback>
@@ -374,19 +314,12 @@ CustomElementRegistry::CreateCustomElementCallback(
   CustomElementDefinition* aDefinition)
 {
   MOZ_ASSERT(aDefinition, "CustomElementDefinition should not be null");
-
-  RefPtr<CustomElementData> elementData = aCustomElement->GetCustomElementData();
-  MOZ_ASSERT(elementData, "CustomElementData should exist");
+  MOZ_ASSERT(aCustomElement->GetCustomElementData(),
+             "CustomElementData should exist");
 
   // Let CALLBACK be the callback associated with the key NAME in CALLBACKS.
   CallbackFunction* func = nullptr;
   switch (aType) {
-    case nsIDocument::eCreated:
-      if (aDefinition->mCallbacks->mCreatedCallback.WasPassed()) {
-        func = aDefinition->mCallbacks->mCreatedCallback.Value();
-      }
-      break;
-
     case nsIDocument::eConnected:
       if (aDefinition->mCallbacks->mConnectedCallback.WasPassed()) {
         func = aDefinition->mCallbacks->mConnectedCallback.Value();
@@ -417,17 +350,9 @@ CustomElementRegistry::CreateCustomElementCallback(
     return nullptr;
   }
 
-  if (aType == nsIDocument::eCreated) {
-    elementData->mCreatedCallbackInvoked = false;
-  } else if (!elementData->mCreatedCallbackInvoked) {
-    // Callbacks other than created callback must not be enqueued
-    // until after the created callback has been invoked.
-    return nullptr;
-  }
-
   // Add CALLBACK to ELEMENT's callback queue.
   auto callback =
-    MakeUnique<CustomElementCallback>(aCustomElement, aType, func, elementData);
+    MakeUnique<CustomElementCallback>(aCustomElement, aType, func);
 
   if (aArgs) {
     callback->SetArgs(*aArgs);
@@ -437,26 +362,6 @@ CustomElementRegistry::CreateCustomElementCallback(
     callback->SetAdoptedCallbackArgs(*aAdoptedCallbackArgs);
   }
   return Move(callback);
-}
-
-void
-CustomElementRegistry::SyncInvokeReactions(nsIDocument::ElementCallbackType aType,
-                                           Element* aCustomElement,
-                                           CustomElementDefinition* aDefinition)
-{
-  auto callback = CreateCustomElementCallback(aType, aCustomElement, nullptr,
-                                              nullptr, aDefinition);
-  if (!callback) {
-    return;
-  }
-
-  UniquePtr<CustomElementReaction> reaction(Move(
-    MakeUnique<CustomElementCallbackReaction>(Move(callback))));
-
-  RefPtr<SyncInvokeReactionRunnable> runnable =
-    new SyncInvokeReactionRunnable(Move(reaction), aCustomElement);
-
-  nsContentUtils::AddScriptRunner(runnable);
 }
 
 /* static */ void
@@ -556,9 +461,7 @@ static const char* kLifeCycleCallbackNames[] = {
   "connectedCallback",
   "disconnectedCallback",
   "adoptedCallback",
-  "attributeChangedCallback",
-  // The life cycle callbacks from v0 spec.
-  "createdCallback"
+  "attributeChangedCallback"
 };
 
 static void
@@ -1031,11 +934,6 @@ CustomElementRegistry::Upgrade(Element* aElement,
 
   // Step 9.
   aElement->SetCustomElementDefinition(aDefinition);
-
-  // This is for old spec.
-  nsContentUtils::EnqueueLifecycleCallback(nsIDocument::eCreated,
-                                           aElement, nullptr,
-                                           nullptr, aDefinition);
 }
 
 //-----------------------------------------------------
@@ -1205,11 +1103,6 @@ NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN(CustomElementDefinition)
     NS_CYCLE_COLLECTION_NOTE_EDGE_NAME(cb,
       "mCallbacks->mAttributeChangedCallback");
     cb.NoteXPCOMChild(callbacks->mAttributeChangedCallback.Value());
-  }
-
-  if (callbacks->mCreatedCallback.WasPassed()) {
-    NS_CYCLE_COLLECTION_NOTE_EDGE_NAME(cb, "mCallbacks->mCreatedCallback");
-    cb.NoteXPCOMChild(callbacks->mCreatedCallback.Value());
   }
 
   if (callbacks->mConnectedCallback.WasPassed()) {

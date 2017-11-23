@@ -1114,9 +1114,8 @@ option('--enable-geckodriver', help='Enable WebDriver implementation')
          'MOZ_AUTOMATION',
          compile_environment,
          cross_compiling,
-         hazard_analysis,
-         target)
-def geckodriver(enable, automation, compile_env, cross_compile, hazard, target):
+         hazard_analysis)
+def geckodriver(enable, automation, compile_env, cross_compile, hazard):
     """
     geckodriver is implied on supported platforms when MOZ_AUTOMATION
     is set, but we also provide the --enable-geckodriver option for
@@ -1134,8 +1133,7 @@ def geckodriver(enable, automation, compile_env, cross_compile, hazard, target):
         return True
 
     if enable.origin == 'default':
-        linux32 = target.kernel == 'Linux' and target.cpu == 'x86'
-        broken_platforms = cross_compile or linux32 or hazard
+        broken_platforms = cross_compile or hazard
 
         if automation and compile_env and not broken_platforms:
             return True
@@ -1196,3 +1194,16 @@ def enable_asan_reporter(value):
 
 set_config('MOZ_ASAN_REPORTER', enable_asan_reporter)
 set_define('MOZ_ASAN_REPORTER', enable_asan_reporter)
+
+# Elfhack
+# ==============================================================
+@depends(host, target)
+def has_elfhack(host, target):
+    return target.kernel == 'Linux' and host.kernel == 'Linux' and \
+           target.cpu in ('arm', 'x86', 'x86_64')
+
+with only_when(has_elfhack):
+    option('--disable-elf-hack', help='Disable elf hacks')
+
+    set_config('USE_ELF_HACK',
+               depends_if('--enable-elf-hack')(lambda _: True))

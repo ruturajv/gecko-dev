@@ -9,9 +9,12 @@
 #include "mozilla/dom/ClientOpPromise.h"
 #include "mozilla/dom/ClientThing.h"
 
+class nsIPrincipal;
+
 namespace mozilla {
 namespace ipc {
 class PBackgroundChild;
+class PrincipalInfo;
 } // namespace ipc
 namespace dom {
 
@@ -46,6 +49,7 @@ class ClientManager final : public ClientThing<ClientManagerChild>
 
   UniquePtr<ClientSource>
   CreateSourceInternal(ClientType aType,
+                       nsISerialEventTarget* aEventTarget,
                        const mozilla::ipc::PrincipalInfo& aPrincipal);
 
   already_AddRefed<ClientHandle>
@@ -77,10 +81,12 @@ public:
   Startup();
 
   static UniquePtr<ClientSource>
-  CreateSource(ClientType aType, nsIPrincipal* aPrincipal);
+  CreateSource(ClientType aType, nsISerialEventTarget* aEventTarget,
+               nsIPrincipal* aPrincipal);
 
   static UniquePtr<ClientSource>
-  CreateSource(ClientType aType, const mozilla::ipc::PrincipalInfo& aPrincipal);
+  CreateSource(ClientType aType, nsISerialEventTarget* aEventTarget,
+               const mozilla::ipc::PrincipalInfo& aPrincipal);
 
   static already_AddRefed<ClientHandle>
   CreateHandle(const ClientInfo& aClientInfo,

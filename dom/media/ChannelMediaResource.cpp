@@ -185,7 +185,7 @@ ChannelMediaResource::OnStartRequest(nsIRequest* aRequest,
     // If the request was cancelled by nsCORSListenerProxy due to failing
     // the CORS security check, send an error through to the media element.
     if (status == NS_ERROR_DOM_BAD_URI) {
-      mCallback->NotifyNetworkError();
+      mCallback->NotifyNetworkError(MediaResult(status, "CORS not allowed"));
       return NS_ERROR_DOM_BAD_URI;
     }
   }
@@ -212,10 +212,13 @@ ChannelMediaResource::OnStartRequest(nsIRequest* aRequest,
       // "Requested Range Not Satisfiable".
       if (responseStatus == HTTP_REQUESTED_RANGE_NOT_SATISFIABLE_CODE) {
         // OnStopRequest will not be fired, so we need to do some of its
-        // work here.
-        mCacheStream.NotifyDataEnded(status);
+        // work here. Note we need to pass the load ID first so the following
+        // NotifyDataEnded() can pass the ID check.
+        mCacheStream.NotifyLoadID(mLoadID);
+        mCacheStream.NotifyDataEnded(mLoadID, status);
       } else {
-        mCallback->NotifyNetworkError();
+        mCallback->NotifyNetworkError(
+          MediaResult(NS_ERROR_FAILURE, "HTTP error"));
       }
 
       // This disconnects our listener so we don't get any more data. We
@@ -379,31 +382,6 @@ ChannelMediaResource::OnStopRequest(nsIRequest* aRequest,
 
   mChannelStatistics.Stop();
 
-  // Note that aStatus might have succeeded --- this might be a normal close
-  // --- even in situations where the server cut us off because we were
-  // suspended. So we need to "reopen on error" in that case too. The only
-  // cases where we don't need to reopen are when *we* closed the stream.
-  // But don't reopen if we need to seek and we don't think we can... that would
-  // cause us to just re-read the stream, which would be really bad.
-  if (aReopenOnError && aStatus != NS_ERROR_PARSED_DATA_CACHED &&
-      aStatus != NS_BINDING_ABORTED &&
-      (GetOffset() == 0 || (GetLength() > 0 && GetOffset() != GetLength() &&
-                            mIsTransportSeekable))) {
-    // If the stream did close normally, restart the channel if we're either
-    // at the start of the resource, or if the server is seekable and we're
-    // not at the end of stream. We don't restart the stream if we're at the
-    // end because not all web servers handle this case consistently; see:
-    // https://bugzilla.mozilla.org/show_bug.cgi?id=1373618#c36
-    nsresult rv = Seek(GetOffset(), false);
-    if (NS_SUCCEEDED(rv)) {
-      return rv;
-    }
-    // If the reopen/reseek fails, just fall through and treat this
-    // error as fatal.
-  }
-
-  mCacheStream.NotifyDataEnded(aStatus);
-
   // Move this request back into the foreground.  This is necessary for
   // requests owned by video documents to ensure the load group fires
   // OnStopRequest when restoring from session history.
@@ -415,6 +393,7 @@ ChannelMediaResource::OnStopRequest(nsIRequest* aRequest,
     ModifyLoadFlags(loadFlags & ~nsIRequest::LOAD_BACKGROUND);
   }
 
+  mCacheStream.NotifyDataEnded(mLoadID, aStatus, aReopenOnError);
   return NS_OK;
 }
 
@@ -610,7 +589,11 @@ ChannelMediaResource::CloneData(MediaResourceCallback* aCallback)
   // which will recreate the channel. This way, if all of the media data
   // is already in the cache we don't create an unnecessary HTTP channel
   // and perform a useless HTTP transaction.
-  resource->mCacheStream.InitAsClone(&mCacheStream);
+  nsresult rv = resource->mCacheStream.InitAsClone(&mCacheStream);
+  if (NS_FAILED(rv)) {
+    resource->Close();
+    return nullptr;
+  }
   // mSuspendAgent.Suspend() accesses mCacheStream which is not ready
   // until InitAsClone() is done.
   resource->mSuspendAgent.Suspend();
@@ -669,11 +652,6 @@ void
 ChannelMediaResource::ThrottleReadahead(bool bThrottle)
 {
   mCacheStream.ThrottleReadahead(bThrottle);
-}
-
-int64_t ChannelMediaResource::Tell()
-{
-  return mCacheStream.Tell();
 }
 
 nsresult ChannelMediaResource::GetCachedRanges(MediaByteRangeSet& aRanges)
@@ -818,9 +796,6 @@ ChannelMediaResource::RecreateChannel()
     cos->AddClassFlags(nsIClassOfService::DontThrottle);
   }
 
-  // Tell the cache to reset the download status when the channel is reopened.
-  mCacheStream.NotifyChannelRecreated();
-
   return rv;
 }
 
@@ -837,8 +812,11 @@ ChannelMediaResource::CacheClientNotifyDataReceived()
 void
 ChannelMediaResource::CacheClientNotifyDataEnded(nsresult aStatus)
 {
-  MOZ_ASSERT(NS_IsMainThread());
-  mCallback->NotifyDataEnded(aStatus);
+  mCallback->AbstractMainThread()->Dispatch(
+    NewRunnableMethod<nsresult>("MediaResourceCallback::NotifyDataEnded",
+                                mCallback.get(),
+                                &MediaResourceCallback::NotifyDataEnded,
+                                aStatus));
 }
 
 void

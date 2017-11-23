@@ -13,7 +13,7 @@ use prim_store::{ClipData, ImageMaskData};
 use resource_cache::ResourceCache;
 use util::{extract_inner_rect_safe, TransformedRect};
 
-const MAX_CLIP: f32 = 1000000.0;
+pub const MAX_CLIP: f32 = 1000000.0;
 
 pub type ClipStore = FreeList<ClipSources>;
 pub type ClipSourcesHandle = FreeListHandle<ClipSources>;
@@ -245,7 +245,8 @@ impl ClipSources {
         }
     }
 
-    pub fn is_masking(&self) -> bool {
+    /// Whether or not this ClipSources has any clips (does any clipping).
+    pub fn has_clips(&self) -> bool {
         !self.clips.is_empty()
     }
 }

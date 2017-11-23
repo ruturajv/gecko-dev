@@ -57,7 +57,6 @@
 #include "nsPresState.h"
 #include "nsIDOMEvent.h"
 #include "nsIDOMNodeList.h"
-#include "nsIDOMHTMLCollection.h"
 #include "nsLinebreakConverter.h" //to strip out carriage returns
 #include "nsReadableUtils.h"
 #include "nsUnicharUtils.h"
@@ -4701,8 +4700,7 @@ HTMLInputElement::PostHandleEventForRangeThumb(EventChainPostVisitor& aVisitor)
 {
   MOZ_ASSERT(mType == NS_FORM_INPUT_RANGE);
 
-  if ((nsEventStatus_eConsumeNoDefault == aVisitor.mEventStatus &&
-       !MozInputRangeIgnorePreventDefault()) ||
+  if (nsEventStatus_eConsumeNoDefault == aVisitor.mEventStatus ||
       !(aVisitor.mEvent->mClass == eMouseEventClass ||
         aVisitor.mEvent->mClass == eTouchEventClass ||
         aVisitor.mEvent->mClass == eKeyboardEventClass)) {

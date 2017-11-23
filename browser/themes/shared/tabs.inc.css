@@ -66,7 +66,7 @@ tabbrowser {
   padding: 0 @horizontalTabPadding@;
 }
 
-.tab-content[pinned] {
+:root:not([uidensity=compact]) .tab-content[pinned] {
   padding: 0 12px;
 }
 
@@ -193,13 +193,22 @@ tabbrowser {
   100% { transform: translateX(100%); }
 }
 
+#TabsToolbar[brighttext] .tab-throbber[busy]:not([selected=true])::before {
+  /* Don't change the --tab-loading-fill variable because this should only affect
+     tabs that are not visually selected. */
+  fill: #717171;
+  opacity: 1;
+}
+
 :root[sessionrestored] .tab-throbber[progress]::before {
   fill: var(--tab-loading-fill);
   opacity: 1;
 }
 
-#TabsToolbar[brighttext] .tabbrowser-tab:not([visuallyselected=true]) {
-  --tab-loading-fill: #bbbbff;
+#TabsToolbar[brighttext] .tab-throbber[progress]:not([selected=true])::before {
+  /* Don't change the --tab-loading-fill variable because this should only affect
+     tabs that are not visually selected. */
+  fill: #84c1ff;
 }
 
 #tabbrowser-tabs[schedulepressure] .tab-throbber,
@@ -454,7 +463,7 @@ tabbrowser {
 }
 
 .tabbrowser-tab[visuallyselected=true]:-moz-lwtheme {
-  color: var(--toolbar-color, inherit);
+  color: var(--theme-tab-text, var(--toolbar-color, inherit));
 }
 
 .tab-line {

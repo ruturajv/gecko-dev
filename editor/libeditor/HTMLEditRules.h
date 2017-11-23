@@ -294,15 +294,39 @@ protected:
   nsAtom& DefaultParagraphSeparator();
   nsresult ReturnInHeader(Selection& aSelection, Element& aHeader,
                           nsINode& aNode, int32_t aOffset);
-  nsresult ReturnInParagraph(Selection* aSelection, nsINode* aHeader,
-                             nsINode* aTextNode, int32_t aOffset,
-                             nsIContent* aChildAtOffset, bool* aCancel,
-                             bool* aHandled);
-  nsresult SplitParagraph(nsIDOMNode* aPara,
+
+  /**
+   * ReturnInParagraph() does the right thing for Enter key press or
+   * 'insertParagraph' command in aParentDivOrP.  aParentDivOrP will be
+   * split at start of first selection range.
+   *
+   * @param aSelection      The selection.  aParentDivOrP will be split at
+   *                        start of the first selection range.
+   * @param aParentDivOrP   The parent block.  This must be <p> or <div>
+   *                        element.
+   * @return                Returns with NS_OK if this doesn't meat any
+   *                        unexpected situation.  If this method tries to
+   *                        split the paragraph, marked as handled.
+   */
+  EditActionResult ReturnInParagraph(Selection& aSelection,
+                                     Element& aParentDivOrP);
+
+  /**
+   * SplitParagraph() splits the parent block, aPara, at aSelNode - aOffset.
+   *
+   * @param aSelection  The selection.
+   * @param aPara       The parent block to be split.
+   * @param aBRNode     Next <br> node if there is.  Otherwise, nullptr.
+   *                    If this is not nullptr, the <br> node may be removed.
+   * @param aSelNode    Set the selection container to split aPara at.
+   * @param aOffset     Set the offset in the container.
+   */
+  nsresult SplitParagraph(Selection& aSelection,
+                          Element& aPara,
                           nsIContent* aBRNode,
-                          Selection* aSelection,
-                          nsCOMPtr<nsIDOMNode>* aSelNode,
-                          int32_t* aOffset);
+                          nsINode& aSelNode,
+                          int32_t aOffset);
+
   nsresult ReturnInListItem(Selection& aSelection, Element& aHeader,
                             nsINode& aNode, int32_t aOffset);
   nsresult AfterEditInner(EditAction action,

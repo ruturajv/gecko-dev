@@ -4,11 +4,10 @@
 
 use api::{ColorF, ColorU};
 use debug_render::DebugRenderer;
-use device::{Device, GpuMarker, GpuSampler, GpuTimer, NamedTag};
 use euclid::{Point2D, Rect, Size2D, vec2};
+use query::{GpuSampler, GpuTimer, NamedTag};
 use std::collections::vec_deque::VecDeque;
-use std::f32;
-use std::mem;
+use std::{f32, mem};
 use time::precise_time_ns;
 
 const GRAPH_WIDTH: f32 = 1024.0;
@@ -568,8 +567,8 @@ impl ProfileGraph {
             rect.origin.y,
             rect.origin.x + rect.size.width + 10.0,
             rect.origin.y + rect.size.height,
-            ColorF::new(0.1, 0.1, 0.1, 0.8).into(),
-            ColorF::new(0.2, 0.2, 0.2, 0.8).into(),
+            ColorU::new(25, 25, 25, 200),
+            ColorU::new(51, 51, 51, 200),
         );
 
         let bx0 = x + 10.0;
@@ -655,8 +654,8 @@ impl GpuFrameCollection {
             bounding_rect.origin.y,
             bounding_rect.origin.x + bounding_rect.size.width,
             bounding_rect.origin.y + bounding_rect.size.height,
-            ColorF::new(0.1, 0.1, 0.1, 0.8).into(),
-            ColorF::new(0.2, 0.2, 0.2, 0.8).into(),
+            ColorU::new(25, 25, 25, 200),
+            ColorU::new(51, 51, 51, 200),
         );
 
         let w = graph_rect.size.width;
@@ -794,7 +793,6 @@ impl Profiler {
 
     pub fn draw_profile(
         &mut self,
-        device: &mut Device,
         frame_profile: &FrameProfileCounters,
         backend_profile: &BackendProfileCounters,
         renderer_profile: &RendererProfileCounters,
@@ -803,15 +801,14 @@ impl Profiler {
         screen_fraction: f32,
         debug_renderer: &mut DebugRenderer,
     ) {
-        let _gm = GpuMarker::new(device.rc_gl(), "profile");
         self.x_left = 20.0;
         self.y_left = 40.0;
         self.x_right = 400.0;
         self.y_right = 40.0;
 
         let mut gpu_time = 0;
-        let gpu_samples = mem::replace(&mut renderer_timers.gpu_samples, Vec::new());
-        for sample in &gpu_samples {
+        let gpu_timers = mem::replace(&mut renderer_timers.gpu_samples, Vec::new());
+        for sample in &gpu_timers {
             gpu_time += sample.time_ns;
         }
         renderer_timers.gpu_time.set(gpu_time);
@@ -882,22 +879,24 @@ impl Profiler {
             false,
         );
 
-        let mut samplers = Vec::<FloatProfileCounter>::new();
-        // Gathering unique GPU samplers. This has O(N^2) complexity,
-        // but we only have a few samplers per target.
-        for sampler in gpu_samplers {
-            let value = sampler.count as f32 * screen_fraction;
-            match samplers.iter().position(|s| {
-                s.description as *const _ == sampler.tag.label as *const _
-            }) {
-                Some(pos) => samplers[pos].value += value,
-                None => samplers.push(FloatProfileCounter {
-                    description: sampler.tag.label,
-                    value,
-                }),
+        if !gpu_samplers.is_empty() {
+            let mut samplers = Vec::<FloatProfileCounter>::new();
+            // Gathering unique GPU samplers. This has O(N^2) complexity,
+            // but we only have a few samplers per target.
+            for sampler in gpu_samplers {
+                let value = sampler.count as f32 * screen_fraction;
+                match samplers.iter().position(|s| {
+                    s.description as *const _ == sampler.tag.label as *const _
+                }) {
+                    Some(pos) => samplers[pos].value += value,
+                    None => samplers.push(FloatProfileCounter {
+                        description: sampler.tag.label,
+                        value,
+                    }),
+                }
             }
+            self.draw_counters(&samplers, debug_renderer, false);
         }
-        self.draw_counters(&samplers, debug_renderer, false);
 
         self.backend_time
             .push(backend_profile.total_time.nanoseconds);
@@ -906,7 +905,7 @@ impl Profiler {
         self.ipc_time
             .push(backend_profile.ipc.total_time.nanoseconds);
         self.gpu_time.push(gpu_time);
-        self.gpu_frames.push(gpu_time, gpu_samples);
+        self.gpu_frames.push(gpu_time, gpu_timers);
 
 
         let rect =

@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use {BuiltDisplayList, BuiltDisplayListDescriptor, ClipId, ColorF, DeviceIntPoint, DeviceUintRect};
-use {DeviceUintSize, FontInstance, FontInstanceKey, FontInstanceOptions};
+use {DeviceUintSize, FontInstanceKey, FontInstanceOptions};
 use {FontInstancePlatformOptions, FontKey, FontVariation, GlyphDimensions, GlyphKey, ImageData};
 use {ImageDescriptor, ImageKey, ItemTag, LayoutPoint, LayoutSize, LayoutTransform, LayoutVector2D};
 use {NativeFontHandle, WorldPoint};
@@ -243,19 +243,23 @@ impl fmt::Debug for DocumentMsg {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum DebugCommand {
-    // Display the frame profiler on screen.
+    /// Display the frame profiler on screen.
     EnableProfiler(bool),
-    // Display all texture cache pages on screen.
+    /// Display all texture cache pages on screen.
     EnableTextureCacheDebug(bool),
-    // Display intermediate render targets on screen.
+    /// Display intermediate render targets on screen.
     EnableRenderTargetDebug(bool),
-    // Display alpha primitive rects.
+    /// Display alpha primitive rects.
     EnableAlphaRectsDebug(bool),
-    // Fetch current documents and display lists.
+    /// Display GPU timing results.
+    EnableGpuTimeQueries(bool),
+    /// Display GPU overdraw results
+    EnableGpuSampleQueries(bool),
+    /// Fetch current documents and display lists.
     FetchDocuments,
-    // Fetch current passes and batches.
+    /// Fetch current passes and batches.
     FetchPasses,
-    // Fetch clip-scroll tree.
+    /// Fetch clip-scroll tree.
     FetchClipScrollTree,
 }
 
@@ -265,7 +269,7 @@ pub enum ApiMsg {
     UpdateResources(ResourceUpdates),
     /// Gets the glyph dimensions
     GetGlyphDimensions(
-        FontInstance,
+        FontInstanceKey,
         Vec<GlyphKey>,
         MsgSender<Vec<Option<GlyphDimensions>>>,
     ),
@@ -387,13 +391,14 @@ impl RenderApiSender {
 
     /// Creates a new resource API object with a dedicated namespace.
     pub fn create_api(&self) -> RenderApi {
-        let (sync_tx, sync_rx) = channel::msg_channel().unwrap();
+        let (sync_tx, sync_rx) =
+            channel::msg_channel().expect("Failed to create channel");
         let msg = ApiMsg::CloneApi(sync_tx);
-        self.api_sender.send(msg).unwrap();
+        self.api_sender.send(msg).expect("Failed to send CloneApi message");
         RenderApi {
             api_sender: self.api_sender.clone(),
             payload_sender: self.payload_sender.clone(),
-            namespace_id: sync_rx.recv().unwrap(),
+            namespace_id: sync_rx.recv().expect("Failed to receive API response"),
             next_id: Cell::new(ResourceId(0)),
         }
     }
@@ -447,7 +452,7 @@ impl RenderApi {
     /// This means that glyph dimensions e.g. for spaces (' ') will mostly be None.
     pub fn get_glyph_dimensions(
         &self,
-        font: FontInstance,
+        font: FontInstanceKey,
         glyph_keys: Vec<GlyphKey>,
     ) -> Vec<Option<GlyphDimensions>> {
         let (tx, rx) = channel::msg_channel().unwrap();

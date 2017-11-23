@@ -137,12 +137,11 @@ AsyncImagePipelineManager::UpdateAsyncImagePipeline(const wr::PipelineId& aPipel
     return;
   }
   pipeline->mInitialised = true;
-  pipeline->mIsChanged = true;
-  pipeline->mScBounds = aScBounds;
-  pipeline->mScTransform = aScTransform;
-  pipeline->mScaleToSize = aScaleToSize;
-  pipeline->mFilter = aFilter;
-  pipeline->mMixBlendMode = aMixBlendMode;
+  pipeline->Update(aScBounds,
+                   aScTransform,
+                   aScaleToSize,
+                   aFilter,
+                   aMixBlendMode);
 }
 
 Maybe<TextureHost::ResourceUpdateOp>
@@ -290,7 +289,7 @@ AsyncImagePipelineManager::ApplyAsyncImages()
 
     float opacity = 1.0f;
     builder.PushStackingContext(wr::ToLayoutRect(pipeline->mScBounds),
-                                0,
+                                nullptr,
                                 &opacity,
                                 pipeline->mScTransform.IsIdentity() ? nullptr : &pipeline->mScTransform,
                                 wr::TransformStyle::Flat,

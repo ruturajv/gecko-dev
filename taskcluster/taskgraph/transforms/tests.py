@@ -76,6 +76,11 @@ WINDOWS_WORKER_TYPES = {
       'virtual-with-gpu': 'aws-provisioner-v1/gecko-t-win10-64-gpu',
       'hardware': 'releng-hardware/gecko-t-win10-64-hw',
     },
+    'windows10-64-ccov': {
+      'virtual': 'aws-provisioner-v1/gecko-t-win10-64',
+      'virtual-with-gpu': 'aws-provisioner-v1/gecko-t-win10-64-gpu',
+      'hardware': 'releng-hardware/gecko-t-win10-64-hw',
+    },
     'windows10-64-pgo': {
       'virtual': 'aws-provisioner-v1/gecko-t-win10-64',
       'virtual-with-gpu': 'aws-provisioner-v1/gecko-t-win10-64-gpu',
@@ -366,11 +371,10 @@ test_description_schema = Schema({
     # the product name, defaults to firefox
     Optional('product'): basestring,
 
-    Optional('when'): {
-        # Run this test when the given SCHEDULES components have changed; the
-        # test suite and platform family are added to this list automatically.
-        Optional('schedules'): [basestring],
-    },
+    # conditional files to determine when these tests should be run
+    Optional('when'): Any({
+        Optional('files-changed'): [basestring],
+    }),
 
     Optional('worker-type'): optionally_keyed_by(
         'test-platform',
@@ -568,6 +572,12 @@ def set_tier(config, tests):
                 test['tier'] = 1
             else:
                 test['tier'] = 2
+
+        # Temporarily set windows10-64-ccov/debug tests as tier 3, until we get the tests
+        # consistently green.
+        if test['test-platform'] == 'windows10-64-ccov/debug':
+            test['tier'] = 3
+
         yield test
 
 
@@ -619,6 +629,7 @@ def handle_keyed_by(config, tests):
         'mozharness.requires-signed-builds',
         'mozharness.script',
         'worker-type',
+        'virtualization',
     ]
     for test in tests:
         for field in fields:
@@ -641,7 +652,7 @@ def handle_suite_category(config, tests):
 
         script = test['mozharness']['script']
         category_arg = None
-        if suite == 'test-verify':
+        if suite == 'test-verification':
             pass
         elif script == 'android_emulator_unittest.py':
             category_arg = '--test-suite'
@@ -659,10 +670,10 @@ def handle_suite_category(config, tests):
 
 @transforms.add
 def enable_code_coverage(config, tests):
-    """Enable code coverage for the linux64-ccov/opt & linux64-jsdcov/opt build-platforms"""
+    """Enable code coverage for the linux64-ccov/opt & linux64-jsdcov/opt & win64-ccov/debug
+    build-platforms"""
     for test in tests:
-        if test['build-platform'] == 'linux64-ccov/opt' and \
-                not test['test-name'].startswith('test-verify'):
+        if 'ccov' in test['build-platform'] and not test['test-name'].startswith('test-verify'):
             test['mozharness'].setdefault('extra-options', []).append('--code-coverage')
             test['when'] = {}
             test['instance-size'] = 'xlarge'
@@ -671,10 +682,10 @@ def enable_code_coverage(config, tests):
                     test['run-on-projects'] == 'built-projects':
                 test['run-on-projects'] = ['mozilla-central', 'try']
 
-            if test['test-name'].startswith('talos'):
+            if 'talos' in test['test-name']:
                 test['max-run-time'] = 7200
-                test['docker-image'] = {"in-tree": "desktop1604-test"}
-                test['mozharness']['config'] = ['talos/linux64_config_taskcluster.py']
+                if 'linux' in test['build-platform']:
+                    test['docker-image'] = {"in-tree": "desktop1604-test"}
                 test['mozharness']['extra-options'].append('--add-option')
                 test['mozharness']['extra-options'].append('--cycles,1')
                 test['mozharness']['extra-options'].append('--add-option')
@@ -881,7 +892,7 @@ def set_worker_type(config, tests):
             win_worker_type_platform = WINDOWS_WORKER_TYPES[
                 test_platform.split('/')[0]
             ]
-            if test.get('suite', '') == 'talos':
+            if test.get('suite', '') == 'talos' and 'ccov' not in test['build-platform']:
                 if try_options.get('taskcluster_worker'):
                     test['worker-type'] = win_worker_type_platform['hardware']
                 else:
@@ -976,16 +987,16 @@ def make_job_description(config, tests):
             'platform': test.get('treeherder-machine-platform', test['build-platform']),
         }
 
-        schedules = [attributes['unittest_suite'], platform_family(test['build-platform'])]
-        when = test.get('when')
-        if when and 'schedules' in when:
-            schedules.extend(when['schedules'])
-        if config.params['project'] != 'try':
-            # for non-try branches, include SETA
-            jobdesc['optimization'] = {'skip-unless-schedules-or-seta': schedules}
+        if test.get('when'):
+            jobdesc['when'] = test['when']
         else:
-            # otherwise just use skip-unless-schedules
-            jobdesc['optimization'] = {'skip-unless-schedules': schedules}
+            schedules = [attributes['unittest_suite'], platform_family(test['build-platform'])]
+            if config.params['project'] != 'try':
+                # for non-try branches, include SETA
+                jobdesc['optimization'] = {'skip-unless-schedules-or-seta': schedules}
+            else:
+                # otherwise just use skip-unless-schedules
+                jobdesc['optimization'] = {'skip-unless-schedules': schedules}
 
         run = jobdesc['run'] = {}
         run['using'] = 'mozharness-test'

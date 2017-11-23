@@ -57,6 +57,9 @@ module.exports = {
   },
 
   "parserOptions": {
+    "ecmaFeatures": {
+      "experimentalObjectRestSpread": true
+    },
     "ecmaVersion": 8
   },
 
@@ -357,13 +360,17 @@ module.exports = {
     "rest-spread-spacing": "error",
 
     // Always require semicolon at end of statement
-    // "semi": ["error", "always"],
+    "semi": ["error", "always"],
 
     // Require space before blocks
     "space-before-blocks": "error",
 
     // Never use spaces before function parentheses
-    "space-before-function-paren": ["error", "never"],
+    "space-before-function-paren": ["error", {
+      "anonymous": "never",
+      "asyncArrow": "always",
+      "named": "never"
+    }],
 
     // No space padding in parentheses
     // "space-in-parens": ["error", "never"],
