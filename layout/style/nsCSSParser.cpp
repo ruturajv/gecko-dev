@@ -71,17 +71,6 @@ using namespace mozilla::css;
 
 typedef nsCSSProps::KTableEntry KTableEntry;
 
-const uint32_t
-nsCSSProps::kParserVariantTable[eCSSProperty_COUNT_no_shorthands] = {
-#define CSS_PROP(name_, id_, method_, flags_, pref_, parsevariant_, kwtable_, \
-                 stylestruct_, stylestructoffset_, animtype_)                 \
-  parsevariant_,
-#define CSS_PROP_LIST_INCLUDE_LOGICAL
-#include "nsCSSPropList.h"
-#undef CSS_PROP_LIST_INCLUDE_LOGICAL
-#undef CSS_PROP
-};
-
 // Maximum number of repetitions for the repeat() function
 // in the grid-template-rows and grid-template-columns properties,
 // to limit high memory usage from small stylesheets.
@@ -359,7 +348,7 @@ public:
     return mParsingMode == css::eAgentSheetFeatures;
   }
   bool ChromeRulesEnabled() const {
-    return mIsChrome;
+    return mIsChrome || mParsingMode == css::eUserSheetFeatures;
   }
 
   CSSEnabledState EnabledState() const {
@@ -996,6 +985,7 @@ protected:
   bool ParseScrollSnapPoints(nsCSSValue& aValue, nsCSSPropertyID aPropID);
   bool ParseScrollSnapDestination(nsCSSValue& aValue);
   bool ParseScrollSnapCoordinate(nsCSSValue& aValue);
+  bool ParseOverscrollBehavior();
   bool ParseWebkitTextStroke();
 
   /**
@@ -10658,7 +10648,7 @@ CSSParserImpl::ParseWebkitGradientRadius(float& aRadius)
 //   (either a percentage or a number between 0 and 1.0), and a color (any
 //   valid CSS color). In addition the shorthand functions from and to are
 //   supported. These functions only require a color argument and are
-//   equivalent to color-stop(0, ...) and color-stop(1.0, …) respectively.
+//   equivalent to color-stop(0, ...) and color-stop(1.0, ...) respectively.
 bool
 CSSParserImpl::ParseWebkitGradientColorStop(nsCSSValueGradient* aGradient)
 {
@@ -11811,6 +11801,8 @@ CSSParserImpl::ParsePropertyByFunction(nsCSSPropertyID aPropID)
     return ParseMarker();
   case eCSSProperty_paint_order:
     return ParsePaintOrder();
+  case eCSSProperty_overscroll_behavior:
+    return ParseOverscrollBehavior();
   case eCSSProperty_scroll_snap_type:
     return ParseScrollSnapType();
   case eCSSProperty_mask:
@@ -17489,6 +17481,31 @@ CSSParserImpl::ParseVariableDeclaration(CSSVariableDeclarations::Type* aType,
 
   *aType = type;
   aValue = variableValue;
+  return true;
+}
+
+bool
+CSSParserImpl::ParseOverscrollBehavior()
+{
+  static const nsCSSPropertyID ids[] = {
+    eCSSProperty_overscroll_behavior_x,
+    eCSSProperty_overscroll_behavior_y
+  };
+  const int32_t numProps = MOZ_ARRAY_LENGTH(ids);
+
+  nsCSSValue values[numProps];
+  int32_t found = ParseChoice(values, ids, numProps);
+  if (found < 1) {
+    return false;
+  }
+
+  // If only one value is specified, it's used for both axes.
+  if (found == 1) {
+    values[1] = values[0];
+  }
+
+  AppendValue(eCSSProperty_overscroll_behavior_x, values[0]);
+  AppendValue(eCSSProperty_overscroll_behavior_y, values[1]);
   return true;
 }
 

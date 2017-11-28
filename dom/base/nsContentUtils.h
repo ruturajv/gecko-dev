@@ -1977,16 +1977,6 @@ public:
    */
   static bool IsInStableOrMetaStableState();
 
-  /**
-   * Returns a nsISerialEventTarget which will run any event dispatched to it
-   * once the event loop has reached a "stable state". Runnables dispatched to
-   * this event target must not cause any queued events to be processed (i.e.
-   * must not spin the event loop).
-   *
-   * See RunInStableState for more information about stable states
-   */
-  static nsISerialEventTarget* GetStableStateEventTarget();
-
   /* Process viewport META data. This gives us information for the scale
    * and zoom of a page on mobile devices. We stick the information in
    * the document header and use it later on after rendering.
@@ -2355,6 +2345,15 @@ public:
   static bool AnimationsAPIElementAnimateEnabled()
   {
     return sAnimationsAPIElementAnimateEnabled;
+  }
+
+  /**
+   * Returns true if the DOM Animations API should report a pending animation
+   * using the separate 'pending' member instead of the 'playState' member.
+   */
+  static bool AnimationsAPIPendingMemberEnabled()
+  {
+    return sAnimationsAPIPendingMemberEnabled;
   }
 
   /**
@@ -3042,11 +3041,6 @@ public:
   static void RegisterUnresolvedElement(Element* aElement, nsAtom* aTypeName);
   static void UnregisterUnresolvedElement(Element* aElement);
 
-  static mozilla::dom::CustomElementDefinition*
-  GetElementDefinitionIfObservingAttr(Element* aCustomElement,
-                                      nsAtom* aExtensionType,
-                                      nsAtom* aAttrName);
-
   static void EnqueueUpgradeReaction(Element* aElement,
                                      mozilla::dom::CustomElementDefinition* aDefinition);
 
@@ -3258,6 +3252,38 @@ public:
 
   static void AsyncPrecreateStringBundles();
 
+  static bool ContentIsLink(nsIContent* aContent);
+
+  static already_AddRefed<mozilla::dom::EventTarget>
+  TryGetTabChildGlobalAsEventTarget(nsISupports* aFrom);
+
+  static PopupControlState
+  PushPopupControlState(PopupControlState aState, bool aForce)
+  {
+    MOZ_ASSERT(NS_IsMainThread());
+    PopupControlState old = sPopupControlState;
+    if (aState < old || aForce) {
+      sPopupControlState = aState;
+    }
+    return old;
+  }
+
+  static void
+  PopPopupControlState(PopupControlState aState)
+  {
+    MOZ_ASSERT(NS_IsMainThread());
+    sPopupControlState = aState;
+  }
+
+  static PopupControlState GetPopupControlState() { return sPopupControlState; }
+
+  // Get a serial number for a newly created inner or outer window.
+  static uint32_t InnerOrOuterWindowCreated();
+  // Record that an inner or outer window has been destroyed.
+  static void InnerOrOuterWindowDestroyed();
+  // Get the current number of inner or outer windows.
+  static int32_t GetCurrentInnerOrOuterWindowCount() { return sInnerOrOuterWindowCount; }
+
 private:
   static bool InitializeEventTable();
 
@@ -3398,6 +3424,7 @@ private:
   static bool sUseActivityCursor;
   static bool sAnimationsAPICoreEnabled;
   static bool sAnimationsAPIElementAnimateEnabled;
+  static bool sAnimationsAPIPendingMemberEnabled;
   static bool sGetBoxQuadsEnabled;
   static bool sSkipCursorMoveForSameValueSet;
   static bool sRequestIdleCallbackEnabled;
@@ -3430,8 +3457,6 @@ private:
    */
   static bool sFragmentParsingActive;
 
-  static nsISerialEventTarget* sStableStateEventTarget;
-
   static nsString* sShiftText;
   static nsString* sControlText;
   static nsString* sMetaText;
@@ -3448,6 +3473,11 @@ private:
 #endif
   static bool sDoNotTrackEnabled;
   static mozilla::LazyLogModule sDOMDumpLog;
+
+  static PopupControlState sPopupControlState;
+
+  static int32_t sInnerOrOuterWindowCount;
+  static uint32_t sInnerOrOuterWindowSerialCounter;
 };
 
 /* static */ inline

@@ -84,7 +84,7 @@ ChannelMediaResource::Listener::OnStopRequest(nsIRequest* aRequest,
   MOZ_ASSERT(NS_IsMainThread());
   if (!mResource)
     return NS_OK;
-  return mResource->OnStopRequest(aRequest, aStatus, mReopenOnError);
+  return mResource->OnStopRequest(aRequest, aStatus);
 }
 
 nsresult
@@ -192,6 +192,7 @@ ChannelMediaResource::OnStartRequest(nsIRequest* aRequest,
 
   nsCOMPtr<nsIHttpChannel> hc = do_QueryInterface(aRequest);
   bool seekable = false;
+  int64_t length = -1;
   int64_t startOffset = aRequestOffset;
 
   if (hc) {
@@ -275,7 +276,7 @@ ChannelMediaResource::OnStartRequest(nsIRequest* aRequest,
     if (aRequestOffset == 0 && contentLength >= 0 &&
         (responseStatus == HTTP_OK_CODE ||
          responseStatus == HTTP_PARTIAL_RESPONSE_CODE)) {
-      mCacheStream.NotifyDataLength(contentLength);
+      length = contentLength;
     }
     // XXX we probably should examine the Content-Range header in case
     // the server gave us a range which is not quite what we asked for
@@ -294,7 +295,7 @@ ChannelMediaResource::OnStartRequest(nsIRequest* aRequest,
   // any consumer can see the new data.
   UpdatePrincipal();
 
-  mCacheStream.NotifyDataStarted(mLoadID, startOffset, seekable);
+  mCacheStream.NotifyDataStarted(mLoadID, startOffset, seekable, length);
   mIsTransportSeekable = seekable;
   mChannelStatistics.Start();
 
@@ -303,7 +304,6 @@ ChannelMediaResource::OnStartRequest(nsIRequest* aRequest,
   // Fires an initial progress event.
   owner->DownloadProgressed();
 
-  // TODO: Don't turn this on until we fix all data races.
   nsCOMPtr<nsIThreadRetargetableRequest> retarget;
   if (Preferences::GetBool("media.omt_data_delivery.enabled", false) &&
       (retarget = do_QueryInterface(aRequest))) {
@@ -371,9 +371,7 @@ ChannelMediaResource::ParseContentRangeHeader(nsIHttpChannel * aHttpChan,
 }
 
 nsresult
-ChannelMediaResource::OnStopRequest(nsIRequest* aRequest,
-                                    nsresult aStatus,
-                                    bool aReopenOnError)
+ChannelMediaResource::OnStopRequest(nsIRequest* aRequest, nsresult aStatus)
 {
   NS_ASSERTION(mChannel.get() == aRequest, "Wrong channel!");
   NS_ASSERTION(!mSuspendAgent.IsSuspended(),
@@ -393,7 +391,7 @@ ChannelMediaResource::OnStopRequest(nsIRequest* aRequest,
     ModifyLoadFlags(loadFlags & ~nsIRequest::LOAD_BACKGROUND);
   }
 
-  mCacheStream.NotifyDataEnded(mLoadID, aStatus, aReopenOnError);
+  mCacheStream.NotifyDataEnded(mLoadID, aStatus, true /*aReopenOnError*/);
   return NS_OK;
 }
 
@@ -417,12 +415,25 @@ ChannelMediaResource::CopySegmentToCache(nsIInputStream* aInStream,
                                          uint32_t aCount,
                                          uint32_t* aWriteCount)
 {
-  Closure* closure = static_cast<Closure*>(aClosure);
-  closure->mResource->mCacheStream.NotifyDataReceived(
-    closure->mLoadID,
-    aCount,
-    reinterpret_cast<const uint8_t*>(aFromSegment));
   *aWriteCount = aCount;
+  Closure* closure = static_cast<Closure*>(aClosure);
+  MediaCacheStream* cacheStream = &closure->mResource->mCacheStream;
+  if (cacheStream->OwnerThread()->IsOnCurrentThread()) {
+    cacheStream->NotifyDataReceived(
+      closure->mLoadID, aCount, reinterpret_cast<const uint8_t*>(aFromSegment));
+    return NS_OK;
+  }
+
+  RefPtr<ChannelMediaResource> self = closure->mResource;
+  uint32_t loadID = closure->mLoadID;
+  UniquePtr<uint8_t[]> data = MakeUnique<uint8_t[]>(aCount);
+  memcpy(data.get(), aFromSegment, aCount);
+  cacheStream->OwnerThread()->Dispatch(NS_NewRunnableFunction(
+    "MediaCacheStream::NotifyDataReceived",
+    [ self, loadID, data = Move(data), aCount ]() {
+      self->mCacheStream.NotifyDataReceived(loadID, aCount, data.get());
+    }));
+
   return NS_OK;
 }
 
@@ -706,9 +717,6 @@ ChannelMediaResource::Resume()
     if (mChannel) {
       // Just wake up our existing channel
       mChannelStatistics.Start();
-      // if an error occurs after Resume, assume it's because the server
-      // timed out the connection and we should reopen it.
-      mListener->SetReopenOnError();
       element->DownloadResumed();
     } else {
       int64_t totalLength = GetLength();
@@ -841,13 +849,13 @@ ChannelMediaResource::UpdatePrincipal()
 }
 
 void
-ChannelMediaResource::CacheClientNotifySuspendedStatusChanged()
+ChannelMediaResource::CacheClientNotifySuspendedStatusChanged(bool aSuspended)
 {
   mCallback->AbstractMainThread()->Dispatch(NewRunnableMethod<bool>(
     "MediaResourceCallback::NotifySuspendedStatusChanged",
     mCallback.get(),
     &MediaResourceCallback::NotifySuspendedStatusChanged,
-    IsSuspendedByCache()));
+    aSuspended));
 }
 
 nsresult
@@ -933,12 +941,6 @@ bool
 ChannelMediaResource::IsDataCachedToEndOfResource(int64_t aOffset)
 {
   return mCacheStream.IsDataCachedToEndOfStream(aOffset);
-}
-
-bool
-ChannelMediaResource::IsSuspendedByCache()
-{
-  return mCacheStream.AreAllStreamsForResourceSuspended();
 }
 
 bool

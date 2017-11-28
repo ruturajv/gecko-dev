@@ -8,6 +8,7 @@
 
 /* all localizable skin settings shall live here */
 @import url("chrome://global/locale/intl.css");
+@import url("chrome://global/skin/menu.css");
 
 @namespace url("http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul");
 
@@ -60,7 +61,7 @@ window.dialog {
   list-style-image: url("chrome://global/skin/icons/info.svg");
 }
 
-.alert-dialog #info\.icon,
+.alert-dialog #infoIcon,
 .alert-icon {
   list-style-image: url("chrome://global/skin/icons/Warning.png");
 }
@@ -296,10 +297,7 @@ popupnotificationcontent {
 /* :::::: autoscroll popup ::::: */
 
 .autoscroller {
-  height: 28px;
-  width: 28px;
   border: none;
-  margin: -14px;
   padding: 0;
   background-image: url("chrome://global/skin/icons/autoscroll.svg");
   background-size: contain;

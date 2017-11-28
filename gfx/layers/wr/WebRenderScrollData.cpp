@@ -23,7 +23,6 @@ WebRenderLayerScrollData::WebRenderLayerScrollData()
   , mEventRegionsOverride(EventRegionsOverride::NoOverride)
   , mScrollbarAnimationId(0)
   , mScrollbarTargetContainerId(FrameMetrics::NULL_SCROLL_ID)
-  , mIsScrollbarContainer(false)
   , mFixedPosScrollContainerId(FrameMetrics::NULL_SCROLL_ID)
 {
 }
@@ -54,7 +53,7 @@ WebRenderLayerScrollData::Initialize(WebRenderScrollData& aOwner,
        asr && asr != aStopAtAsr;
        asr = asr->mParent) {
     MOZ_ASSERT(aOwner.GetManager());
-    FrameMetrics::ViewID scrollId = nsLayoutUtils::ViewIDForASR(asr);
+    FrameMetrics::ViewID scrollId = asr->GetViewId();
     if (Maybe<size_t> index = aOwner.HasMetadataFor(scrollId)) {
       mScrollIds.AppendElement(index.ref());
     } else {
@@ -118,7 +117,7 @@ WebRenderLayerScrollData::Dump(const WebRenderScrollData& aOwner) const
   //printf_stderr("  scroll thumb: %s animation: %" PRIu64 "\n",
   //  Stringify(mScrollThumbData).c_str(), mScrollbarAnimationId);
   printf_stderr("  scroll container: %d target: %" PRIu64 "\n",
-    mIsScrollbarContainer, mScrollbarTargetContainerId);
+    mScrollbarContainerDirection.isSome(), mScrollbarTargetContainerId);
   printf_stderr("  fixed pos container: %" PRIu64 "\n",
     mFixedPosScrollContainerId);
 }

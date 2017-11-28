@@ -152,6 +152,7 @@ public:
   virtual bool ParseAttribute(int32_t aNamespaceID,
                               nsAtom* aAttribute,
                               const nsAString& aValue,
+                              nsIPrincipal* aMaybeScriptedPrincipal,
                               nsAttrValue& aResult) override;
 
   virtual nsresult BindToTree(nsIDocument* aDocument, nsIContent* aParent,
@@ -740,9 +741,11 @@ public:
 
   void NotifyCueDisplayStatesChanged();
 
-  bool GetHasUserInteraction()
+  bool GetAndClearHasUserInteractedLoadOrSeek()
   {
-    return mHasUserInteraction;
+    bool result = mHasUserInteractedLoadOrSeek;
+    mHasUserInteractedLoadOrSeek = false;
+    return result;
   }
 
   // A method to check whether we are currently playing.
@@ -1782,9 +1785,9 @@ private:
   // Total time a video has (or would have) spent in video-decode-suspend mode.
   TimeDurationAccumulator mVideoDecodeSuspendTime;
 
-  // Indicates if user has interacted with the element.
-  // Used to block autoplay when disabled.
-  bool mHasUserInteraction;
+  // True if user has called load() or seek() via user input.
+  // It's *only* use for checking autoplay policy
+  bool mHasUserInteractedLoadOrSeek;
 
   // True if the first frame has been successfully loaded.
   bool mFirstFrameLoaded;

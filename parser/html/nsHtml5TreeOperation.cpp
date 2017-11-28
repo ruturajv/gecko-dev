@@ -428,7 +428,8 @@ nsHtml5TreeOperation::CreateHTMLElement(
       nsAutoMicroTask mt;
     }
     dom::AutoCEReaction
-      autoCEReaction(document->GetDocGroup()->CustomElementReactionsStack());
+      autoCEReaction(document->GetDocGroup()->CustomElementReactionsStack(),
+                     nullptr);
 
     nsCOMPtr<dom::Element> newElement;
     NS_NewHTMLElement(getter_AddRefs(newElement), nodeInfo.forget(),
@@ -1072,6 +1073,11 @@ nsHtml5TreeOperation::Perform(nsHtml5TreeOpExecutor* aBuilder,
       bool error = mTwo.integer;
       int32_t lineNumber = mThree.integer;
       aBuilder->MaybeComplainAboutCharset(msgId, error, (uint32_t)lineNumber);
+      return NS_OK;
+    }
+    case eTreeOpDisableEncodingMenu: {
+      nsIDocument* doc = aBuilder->GetDocument();
+      doc->DisableEncodingMenu();
       return NS_OK;
     }
     case eTreeOpAddClass: {

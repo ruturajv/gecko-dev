@@ -59,6 +59,7 @@ class nsSubDocumentFrame;
 class nsDisplayLayerEventRegions;
 class nsDisplayScrollInfoLayer;
 class nsCaret;
+enum class nsDisplayOwnLayerFlags;
 
 namespace mozilla {
 class FrameLayerBuilder;
@@ -262,6 +263,7 @@ struct ActiveScrolledRoot {
     }
     asr->mParent = aParent;
     asr->mScrollableFrame = aScrollableFrame;
+    asr->mViewId = Nothing();
     asr->mDepth = aParent ? aParent->mDepth + 1 : 1;
     asr->mRetained = aIsRetained;
 
@@ -289,6 +291,18 @@ struct ActiveScrolledRoot {
 
   // Call this when inserting an ancestor.
   void IncrementDepth() { mDepth++; }
+
+  /**
+   * Find the view ID (or generate a new one) for the content element
+   * corresponding to the ASR.
+   */
+  mozilla::layers::FrameMetrics::ViewID GetViewId() const {
+    if (!mViewId.isSome()) {
+      nsIContent* content = mScrollableFrame->GetScrolledFrame()->GetContent();
+      mViewId = Some(nsLayoutUtils::FindOrCreateIDFor(content));
+    }
+    return *mViewId;
+  }
 
   RefPtr<const ActiveScrolledRoot> mParent;
   nsIScrollableFrame* mScrollableFrame;
@@ -318,6 +332,11 @@ private:
   static uint32_t Depth(const ActiveScrolledRoot* aActiveScrolledRoot) {
     return aActiveScrolledRoot ? aActiveScrolledRoot->mDepth : 0;
   }
+
+  // This field is lazily populated in GetViewId(). We don't want to do the
+  // work of populating if webrender is disabled, because it is often not
+  // needed.
+  mutable Maybe<mozilla::layers::FrameMetrics::ViewID> mViewId;
 
   uint32_t mDepth;
   bool mRetained;
@@ -586,7 +605,7 @@ public:
    * which we are building display items at the moment.
    */
   ViewID GetCurrentScrollbarTarget() const { return mCurrentScrollbarTarget; }
-  uint32_t GetCurrentScrollbarFlags() const { return mCurrentScrollbarFlags; }
+  nsDisplayOwnLayerFlags GetCurrentScrollbarFlags() const { return mCurrentScrollbarFlags; }
   /**
    * Returns true if building a scrollbar, and the scrollbar will not be
    * layerized.
@@ -1321,7 +1340,7 @@ public:
   class AutoCurrentScrollbarInfoSetter {
   public:
     AutoCurrentScrollbarInfoSetter(nsDisplayListBuilder* aBuilder, ViewID aScrollTargetID,
-                                   uint32_t aScrollbarFlags, bool aWillHaveLayer)
+                                   nsDisplayOwnLayerFlags aScrollbarFlags, bool aWillHaveLayer)
      : mBuilder(aBuilder) {
       aBuilder->mIsBuildingScrollbar = true;
       aBuilder->mCurrentScrollbarTarget = aScrollTargetID;
@@ -1332,7 +1351,7 @@ public:
       // No need to restore old values because scrollbars cannot be nested.
       mBuilder->mIsBuildingScrollbar = false;
       mBuilder->mCurrentScrollbarTarget = FrameMetrics::NULL_SCROLL_ID;
-      mBuilder->mCurrentScrollbarFlags = 0;
+      mBuilder->mCurrentScrollbarFlags = (nsDisplayOwnLayerFlags)0;
       mBuilder->mCurrentScrollbarWillHaveLayer = false;
     }
   private:
@@ -1784,7 +1803,7 @@ private:
   nsDisplayListBuilderMode       mMode;
   ViewID                         mCurrentScrollParentId;
   ViewID                         mCurrentScrollbarTarget;
-  uint32_t                       mCurrentScrollbarFlags;
+  nsDisplayOwnLayerFlags         mCurrentScrollbarFlags;
   Preserves3DContext             mPreserves3DCtx;
   uint32_t                       mPerspectiveItemIndex;
   int32_t                        mSVGEffectsBuildingDepth;
@@ -2827,10 +2846,9 @@ public:
   bool IsEmpty() const { return mTop == &mSentinel; }
 
   /**
-   * This is *linear time*!
    * @return the number of items in the list
    */
-  uint32_t Count() const;
+  uint32_t Count() const { return mLength; }
   /**
    * Stable sort the list by the z-order of GetUnderlyingFrame() on
    * each item. 'auto' is counted as zero.
@@ -4325,17 +4343,8 @@ public:
 class nsDisplayCompositorHitTestInfo : public nsDisplayEventReceiver {
 public:
   nsDisplayCompositorHitTestInfo(nsDisplayListBuilder* aBuilder, nsIFrame* aFrame,
-                                 mozilla::gfx::CompositorHitTestInfo aHitTestInfo)
-    : nsDisplayEventReceiver(aBuilder, aFrame)
-    , mHitTestInfo(aHitTestInfo)
-  {
-    MOZ_COUNT_CTOR(nsDisplayCompositorHitTestInfo);
-    // We should never even create this display item if we're not building
-    // compositor hit-test info or if the computed hit info indicated the
-    // frame is invisible to hit-testing
-    MOZ_ASSERT(aBuilder->BuildCompositorHitTestInfo());
-    MOZ_ASSERT(mHitTestInfo != mozilla::gfx::CompositorHitTestInfo::eInvisibleToHitTest);
-  }
+                                 mozilla::gfx::CompositorHitTestInfo aHitTestInfo,
+                                 uint32_t aIndex = 0);
 
 #ifdef NS_BUILD_REFCNT_LOGGING
   virtual ~nsDisplayCompositorHitTestInfo()
@@ -4345,6 +4354,7 @@ public:
 #endif
 
   mozilla::gfx::CompositorHitTestInfo HitTestInfo() const { return mHitTestInfo; }
+  void SetArea(const nsRect& aArea);
 
   bool CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
                                mozilla::wr::IpcResourceUpdateQueue& aResources,
@@ -4352,11 +4362,18 @@ public:
                                mozilla::layers::WebRenderLayerManager* aManager,
                                nsDisplayListBuilder* aDisplayListBuilder) override;
   void WriteDebugInfo(std::stringstream& aStream) override;
+  uint32_t GetPerFrameKey() const override;
+  int32_t ZIndex() const override;
+  void SetOverrideZIndex(int32_t aZIndex);
 
   NS_DISPLAY_DECL_NAME("CompositorHitTestInfo", TYPE_COMPOSITOR_HITTEST_INFO)
 
 private:
   mozilla::gfx::CompositorHitTestInfo mHitTestInfo;
+  mozilla::Maybe<mozilla::layers::FrameMetrics::ViewID> mScrollTarget;
+  mozilla::Maybe<nsRect> mArea;
+  uint32_t mIndex;
+  mozilla::Maybe<int32_t> mOverrideZIndex;
 };
 
 /**
@@ -5056,6 +5073,22 @@ private:
 };
 
 /**
+ * nsDisplayOwnLayer constructor flags. If we nest this class inside
+ * nsDisplayOwnLayer then we can't forward-declare it up at the top of this
+ * file and that makes it hard to use in all the places that we need to use it.
+ */
+enum class nsDisplayOwnLayerFlags {
+  eNone = 0,
+  eGenerateSubdocInvalidations = 1 << 0,
+  eVerticalScrollbar = 1 << 1,
+  eHorizontalScrollbar = 1 << 2,
+  eGenerateScrollableLayer = 1 << 3,
+  eScrollbarContainer = 1 << 4,
+};
+
+MOZ_MAKE_ENUM_CLASS_BITWISE_OPERATORS(nsDisplayOwnLayerFlags)
+
+/**
  * A display item that has no purpose but to ensure its contents get
  * their own layer.
  */
@@ -5064,31 +5097,20 @@ public:
   typedef mozilla::layers::ScrollThumbData ScrollThumbData;
 
   /**
-   * nsDisplayOwnLayer constructor flags
-   */
-  enum {
-    GENERATE_SUBDOC_INVALIDATIONS = 0x01,
-    VERTICAL_SCROLLBAR = 0x02,
-    HORIZONTAL_SCROLLBAR = 0x04,
-    GENERATE_SCROLLABLE_LAYER = 0x08,
-    SCROLLBAR_CONTAINER = 0x10
-  };
-
-  /**
-   * @param aFlags GENERATE_SUBDOC_INVALIDATIONS :
+   * @param aFlags eGenerateSubdocInvalidations :
    * Add UserData to the created ContainerLayer, so that invalidations
    * for this layer are send to our nsPresContext.
-   * GENERATE_SCROLLABLE_LAYER : only valid on nsDisplaySubDocument (and
+   * eGenerateScrollableLayer : only valid on nsDisplaySubDocument (and
    * subclasses), indicates this layer is to be a scrollable layer, so call
    * ComputeFrameMetrics, etc.
-   * @param aScrollTarget when VERTICAL_SCROLLBAR or HORIZONTAL_SCROLLBAR
+   * @param aScrollTarget when eVerticalScrollbar or eHorizontalScrollbar
    * is set in the flags, this parameter should be the ViewID of the
    * scrollable content this scrollbar is for.
    */
   nsDisplayOwnLayer(nsDisplayListBuilder* aBuilder, nsIFrame* aFrame,
                     nsDisplayList* aList,
                     const ActiveScrolledRoot* aActiveScrolledRoot,
-                    uint32_t aFlags = 0,
+                    nsDisplayOwnLayerFlags aFlags = nsDisplayOwnLayerFlags::eNone,
                     ViewID aScrollTarget = mozilla::layers::FrameMetrics::NULL_SCROLL_ID,
                     const ScrollThumbData& aThumbData = ScrollThumbData{},
                     bool aForceActive = true,
@@ -5099,7 +5121,7 @@ public:
   nsDisplayOwnLayer(nsDisplayListBuilder* aBuilder, const nsDisplayOwnLayer& aOther)
     : nsDisplayWrapList(aBuilder, aOther)
     , mFlags(aOther.mFlags)
-    , mScrollTarget(aOther.mFlags)
+    , mScrollTarget(aOther.mScrollTarget)
     , mThumbData(aOther.mThumbData)
     , mForceActive(aOther.mForceActive)
     , mWrAnimationId(aOther.mWrAnimationId)
@@ -5133,15 +5155,17 @@ public:
     return false;
   }
 
-  uint32_t GetFlags() { return mFlags; }
+  void WriteDebugInfo(std::stringstream& aStream) override;
+
+  nsDisplayOwnLayerFlags GetFlags() { return mFlags; }
   bool IsScrollThumbLayer() const;
   NS_DISPLAY_DECL_NAME("OwnLayer", TYPE_OWN_LAYER)
 protected:
-  uint32_t mFlags;
+  nsDisplayOwnLayerFlags mFlags;
   ViewID mScrollTarget;
   // If this nsDisplayOwnLayer represents a scroll thumb layer, mThumbData
   // stores information about the scroll thumb. Otherwise, mThumbData will be
-  // default-constructed (in particular with mDirection == ScrollDirection::NONE)
+  // default-constructed (in particular with mDirection == Nothing())
   // and can be ignored.
   ScrollThumbData mThumbData;
   bool mForceActive;
@@ -5157,7 +5181,7 @@ class nsDisplaySubDocument : public nsDisplayOwnLayer {
 public:
   nsDisplaySubDocument(nsDisplayListBuilder* aBuilder,
                        nsIFrame* aFrame, nsSubDocumentFrame* aSubDocFrame,
-                       nsDisplayList* aList, uint32_t aFlags);
+                       nsDisplayList* aList, nsDisplayOwnLayerFlags aFlags);
 #ifdef NS_BUILD_REFCNT_LOGGING
   virtual ~nsDisplaySubDocument();
 #endif
@@ -5215,7 +5239,7 @@ protected:
 class nsDisplayResolution : public nsDisplaySubDocument {
 public:
   nsDisplayResolution(nsDisplayListBuilder* aBuilder, nsIFrame* aFrame,
-                      nsDisplayList* aList, uint32_t aFlags);
+                      nsDisplayList* aList, nsDisplayOwnLayerFlags aFlags);
 #ifdef NS_BUILD_REFCNT_LOGGING
   virtual ~nsDisplayResolution();
 #endif
@@ -5446,14 +5470,14 @@ public:
    * @param aAPD is the app units per dev pixel ratio of the subdocument.
    * @param aParentAPD is the app units per dev pixel ratio of the parent
    * document.
-   * @param aFlags GENERATE_SUBDOC_INVALIDATIONS :
+   * @param aFlags eGenerateSubdocInvalidations :
    * Add UserData to the created ContainerLayer, so that invalidations
    * for this layer are send to our nsPresContext.
    */
   nsDisplayZoom(nsDisplayListBuilder* aBuilder, nsIFrame* aFrame,
                 nsDisplayList* aList,
                 int32_t aAPD, int32_t aParentAPD,
-                uint32_t aFlags = 0);
+                nsDisplayOwnLayerFlags aFlags = nsDisplayOwnLayerFlags::eNone);
 #ifdef NS_BUILD_REFCNT_LOGGING
   virtual ~nsDisplayZoom();
 #endif

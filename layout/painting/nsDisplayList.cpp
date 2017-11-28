@@ -731,9 +731,8 @@ AddAnimationsForProperty(nsIFrame* aFrame, nsDisplayListBuilder* aBuilder,
     // Currently this only happens when the timeline is driven by a refresh
     // driver under test control. In this case, the next time the refresh
     // driver is advanced it will trigger any pending animations.
-    if (anim->PlayState() == AnimationPlayState::Pending &&
-        (anim->GetTimeline() &&
-         !anim->GetTimeline()->TracksWallclockTime())) {
+    if (anim->Pending() &&
+        (anim->GetTimeline() && !anim->GetTimeline()->TracksWallclockTime())) {
       continue;
     }
 
@@ -928,7 +927,7 @@ nsDisplayListBuilder::nsDisplayListBuilder(nsIFrame* aReferenceFrame,
       mMode(aMode),
       mCurrentScrollParentId(FrameMetrics::NULL_SCROLL_ID),
       mCurrentScrollbarTarget(FrameMetrics::NULL_SCROLL_ID),
-      mCurrentScrollbarFlags(0),
+      mCurrentScrollbarFlags(nsDisplayOwnLayerFlags::eNone),
       mPerspectiveItemIndex(0),
       mSVGEffectsBuildingDepth(0),
       mContainsBlendMode(false),
@@ -998,6 +997,7 @@ nsDisplayListBuilder::BeginFrame()
 void
 nsDisplayListBuilder::EndFrame()
 {
+  NS_ASSERTION(!mInInvalidSubtree, "Someone forgot to cleanup mInInvalidSubtree!");
   mFrameToAnimatedGeometryRootMap.Clear();
   mActiveScrolledRoots.Clear();
   FreeClipChains();
@@ -2631,10 +2631,6 @@ already_AddRefed<LayerManager> nsDisplayList::PaintRoot(nsDisplayListBuilder* aB
 
   layerManager->SetUserData(&gLayerManagerLayerBuilder, oldBuilder);
   return layerManager.forget();
-}
-
-uint32_t nsDisplayList::Count() const {
-  return mLength;
 }
 
 nsDisplayItem* nsDisplayList::RemoveBottom() {
@@ -4872,6 +4868,35 @@ nsDisplayEventReceiver::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder&
   return true;
 }
 
+nsDisplayCompositorHitTestInfo::nsDisplayCompositorHitTestInfo(nsDisplayListBuilder* aBuilder,
+                                                               nsIFrame* aFrame,
+                                                               mozilla::gfx::CompositorHitTestInfo aHitTestInfo,
+                                                               uint32_t aIndex)
+  : nsDisplayEventReceiver(aBuilder, aFrame)
+  , mHitTestInfo(aHitTestInfo)
+  , mIndex(aIndex)
+{
+  MOZ_COUNT_CTOR(nsDisplayCompositorHitTestInfo);
+  // We should never even create this display item if we're not building
+  // compositor hit-test info or if the computed hit info indicated the
+  // frame is invisible to hit-testing
+  MOZ_ASSERT(aBuilder->BuildCompositorHitTestInfo());
+  MOZ_ASSERT(mHitTestInfo != mozilla::gfx::CompositorHitTestInfo::eInvisibleToHitTest);
+
+  if (aBuilder->GetCurrentScrollbarFlags() != nsDisplayOwnLayerFlags::eNone) {
+    // In the case of scrollbar frames, we use the scrollbar's target scrollframe
+    // instead of the scrollframe with which the scrollbar actually moves.
+    MOZ_ASSERT(mHitTestInfo & CompositorHitTestInfo::eScrollbar);
+    mScrollTarget = Some(aBuilder->GetCurrentScrollbarTarget());
+  }
+}
+
+void
+nsDisplayCompositorHitTestInfo::SetArea(const nsRect& aArea)
+{
+  mArea = Some(aArea);
+}
+
 bool
 nsDisplayCompositorHitTestInfo::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBuilder,
                                                         mozilla::wr::IpcResourceUpdateQueue& aResources,
@@ -4879,26 +4904,31 @@ nsDisplayCompositorHitTestInfo::CreateWebRenderCommands(mozilla::wr::DisplayList
                                                         mozilla::layers::WebRenderLayerManager* aManager,
                                                         nsDisplayListBuilder* aDisplayListBuilder)
 {
-  nsRect borderBox;
-  nsIScrollableFrame* scrollFrame = nsLayoutUtils::GetScrollableFrameFor(mFrame);
-  if (scrollFrame) {
-    // If the frame is content of a scrollframe, then we need to pick up the
-    // area corresponding to the overflow rect as well. Otherwise the parts of
-    // the overflow that are not occupied by descendants get skipped and the
-    // APZ code sends touch events to the content underneath instead.
-    // See https://bugzilla.mozilla.org/show_bug.cgi?id=1127773#c15.
-    borderBox = mFrame->GetScrollableOverflowRect();
-  } else {
-    borderBox = nsRect(nsPoint(0, 0), mFrame->GetSize());
+  if (mArea.isNothing()) {
+    nsRect borderBox;
+    nsIScrollableFrame* scrollFrame = nsLayoutUtils::GetScrollableFrameFor(mFrame);
+    if (scrollFrame) {
+      // If the frame is content of a scrollframe, then we need to pick up the
+      // area corresponding to the overflow rect as well. Otherwise the parts of
+      // the overflow that are not occupied by descendants get skipped and the
+      // APZ code sends touch events to the content underneath instead.
+      // See https://bugzilla.mozilla.org/show_bug.cgi?id=1127773#c15.
+      borderBox = mFrame->GetScrollableOverflowRect();
+    } else {
+      borderBox = nsRect(nsPoint(0, 0), mFrame->GetSize());
+    }
+
+    if (borderBox.IsEmpty()) {
+      return true;
+    }
+
+    mArea = Some(borderBox + aDisplayListBuilder->ToReferenceFrame(mFrame));
   }
 
-  if (borderBox.IsEmpty()) {
-    return true;
-  }
-
+  MOZ_ASSERT(mArea.isSome());
   wr::LayoutRect rect = aSc.ToRelativeLayoutRect(
       LayoutDeviceRect::FromAppUnits(
-          borderBox + aDisplayListBuilder->ToReferenceFrame(mFrame),
+          *mArea,
           mFrame->PresContext()->AppUnitsPerDevPixel()));
 
   // XXX: eventually this scrollId computation and the SetHitTestInfo
@@ -4906,10 +4936,13 @@ nsDisplayCompositorHitTestInfo::CreateWebRenderCommands(mozilla::wr::DisplayList
   // we don't need to do it as often, and so that we can do it for other
   // display item types as well (reducing the need for as many instances of
   // this display item).
-  FrameMetrics::ViewID scrollId = FrameMetrics::NULL_SCROLL_ID;
-  if (const ActiveScrolledRoot* asr = GetActiveScrolledRoot()) {
-    scrollId = nsLayoutUtils::ViewIDForASR(asr);
-  }
+  FrameMetrics::ViewID scrollId = mScrollTarget.valueOrFrom(
+      [&]() -> FrameMetrics::ViewID {
+          if (const ActiveScrolledRoot* asr = GetActiveScrolledRoot()) {
+            return asr->GetViewId();
+          }
+          return FrameMetrics::NULL_SCROLL_ID;
+      });
 
   // Insert a transparent rectangle with the hit-test info
   aBuilder.SetHitTestInfo(scrollId, mHitTestInfo);
@@ -4923,6 +4956,24 @@ void
 nsDisplayCompositorHitTestInfo::WriteDebugInfo(std::stringstream& aStream)
 {
   aStream << nsPrintfCString(" (hitTestInfo 0x%x)", (int)mHitTestInfo).get();
+}
+
+uint32_t
+nsDisplayCompositorHitTestInfo::GetPerFrameKey() const
+{
+  return (mIndex << TYPE_BITS) | nsDisplayItem::GetPerFrameKey();
+}
+
+int32_t
+nsDisplayCompositorHitTestInfo::ZIndex() const
+{
+  return mOverrideZIndex ? *mOverrideZIndex : nsDisplayItem::ZIndex();
+}
+
+void
+nsDisplayCompositorHitTestInfo::SetOverrideZIndex(int32_t aZIndex)
+{
+  mOverrideZIndex = Some(aZIndex);
 }
 
 void
@@ -5009,13 +5060,34 @@ nsDisplayLayerEventRegions::AddFrame(nsDisplayListBuilder* aBuilder,
       // everything was disabled, so touch-action:none
       mNoActionRegion.Add(aFrame, borderBox);
     } else {
-      if (!(hitInfo & CompositorHitTestInfo::eTouchActionPanXDisabled)) {
-        // pan-x is allowed
-        mHorizontalPanRegion.Add(aFrame, borderBox);
-      }
-      if (!(hitInfo & CompositorHitTestInfo::eTouchActionPanYDisabled)) {
-        // pan-y is allowed
-        mVerticalPanRegion.Add(aFrame, borderBox);
+      // The event regions code does not store enough information to actually
+      // represent all the different states. Prior to the introduction of
+      // CompositorHitTestInfo here in bug 1389149, the following two cases
+      // were effectively getting collapsed:
+      //   (1) touch-action: auto
+      //   (2) touch-action: manipulation
+      // In both of these cases, none of {mNoActionRegion, mHorizontalPanRegion,
+      // mVerticalPanRegion} were modified, and so the fact that case (2) should
+      // have prevented double-tap-zooming was getting lost.
+      // With CompositorHitTestInfo we can now represent that case correctly,
+      // but only if we use CompositorHitTestInfo all the way to the compositor
+      // (i.e. in the WebRender-enabled case). In the non-WebRender case where
+      // we still use the event regions, we must collapse these two cases back
+      // together. Or add another region to the event regions to fix this
+      // properly.
+      if (touchFlags == CompositorHitTestInfo::eTouchActionDoubleTapZoomDisabled) {
+        // the touch-action: manipulation case described above. To preserve the
+        // existing behaviour, don't touch either mHorizontalPanRegion or
+        // mVerticalPanRegion
+      } else {
+        if (!(hitInfo & CompositorHitTestInfo::eTouchActionPanXDisabled)) {
+          // pan-x is allowed
+          mHorizontalPanRegion.Add(aFrame, borderBox);
+        }
+        if (!(hitInfo & CompositorHitTestInfo::eTouchActionPanYDisabled)) {
+          // pan-y is allowed
+          mVerticalPanRegion.Add(aFrame, borderBox);
+        }
       }
     }
   }
@@ -5424,12 +5496,21 @@ nsDisplayBorder::CreateBorderImageWebRenderCommands(mozilla::wr::DisplayListBuil
   switch (mBorderImageRenderer->mImageRenderer.GetType()) {
     case eStyleImageType_Image:
     {
-      uint32_t flags = aDisplayListBuilder->ShouldSyncDecodeImages() ?
-                       imgIContainer::FLAG_SYNC_DECODE :
-                       imgIContainer::FLAG_NONE;
+      uint32_t flags = imgIContainer::FLAG_ASYNC_NOTIFY;
+      if (aDisplayListBuilder->IsPaintingToWindow()) {
+        flags |= imgIContainer::FLAG_HIGH_QUALITY_SCALING;
+      }
+      if (aDisplayListBuilder->ShouldSyncDecodeImages()) {
+        flags |= imgIContainer::FLAG_SYNC_DECODE;
+      }
 
       RefPtr<imgIContainer> img = mBorderImageRenderer->mImageRenderer.GetImage();
-      RefPtr<layers::ImageContainer> container = img->GetImageContainer(aManager, flags);
+      Maybe<SVGImageContext> svgContext;
+      gfx::IntSize decodeSize =
+        nsLayoutUtils::ComputeImageContainerDrawingParameters(img, mFrame, destRect,
+                                                              aSc, flags, svgContext);
+      RefPtr<layers::ImageContainer> container =
+        img->GetImageContainerAtSize(aManager, decodeSize, svgContext, flags);
       if (!container) {
         return;
       }
@@ -6790,7 +6871,7 @@ nsDisplayBlendContainer::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder
 nsDisplayOwnLayer::nsDisplayOwnLayer(nsDisplayListBuilder* aBuilder,
                                      nsIFrame* aFrame, nsDisplayList* aList,
                                      const ActiveScrolledRoot* aActiveScrolledRoot,
-                                     uint32_t aFlags, ViewID aScrollTarget,
+                                     nsDisplayOwnLayerFlags aFlags, ViewID aScrollTarget,
                                      const ScrollThumbData& aThumbData,
                                      bool aForceActive,
                                      bool aClearClipChain)
@@ -6833,7 +6914,7 @@ nsDisplayOwnLayer::GetLayerState(nsDisplayListBuilder* aBuilder,
 bool
 nsDisplayOwnLayer::IsScrollThumbLayer() const
 {
-  return (mFlags & VERTICAL_SCROLLBAR) || (mFlags & HORIZONTAL_SCROLLBAR);
+  return mThumbData.mDirection.isSome();
 }
 
 bool
@@ -6854,14 +6935,17 @@ nsDisplayOwnLayer::BuildLayer(nsDisplayListBuilder* aBuilder,
     BuildContainerLayerFor(aBuilder, aManager, mFrame, this, &mList,
                            aContainerParameters, nullptr,
                            FrameLayerBuilder::CONTAINER_ALLOW_PULL_BACKGROUND_COLOR);
-  if (mThumbData.mDirection != ScrollDirection::NONE) {
+  if (IsScrollThumbLayer()) {
     layer->SetScrollThumbData(mScrollTarget, mThumbData);
   }
-  if (mFlags & SCROLLBAR_CONTAINER) {
-    layer->SetIsScrollbarContainer(mScrollTarget);
+  if (mFlags & nsDisplayOwnLayerFlags::eScrollbarContainer) {
+    ScrollDirection dir = (mFlags & nsDisplayOwnLayerFlags::eVerticalScrollbar)
+                        ? ScrollDirection::eVertical
+                        : ScrollDirection::eHorizontal;
+    layer->SetScrollbarContainer(mScrollTarget, dir);
   }
 
-  if (mFlags & GENERATE_SUBDOC_INVALIDATIONS) {
+  if (mFlags & nsDisplayOwnLayerFlags::eGenerateSubdocInvalidations) {
     mFrame->PresContext()->SetNotifySubDocInvalidationData(layer);
   }
   return layer.forget();
@@ -6874,8 +6958,7 @@ nsDisplayOwnLayer::CreateWebRenderCommands(mozilla::wr::DisplayListBuilder& aBui
                                            WebRenderLayerManager* aManager,
                                            nsDisplayListBuilder* aDisplayListBuilder)
 {
-  if (!aManager->AsyncPanZoomEnabled() ||
-      mThumbData.mDirection == ScrollDirection::NONE) {
+  if (!aManager->AsyncPanZoomEnabled() || !IsScrollThumbLayer()) {
     return nsDisplayWrapList::CreateWebRenderCommands(aBuilder, aResources, aSc,
                                                       aManager, aDisplayListBuilder);
   }
@@ -6914,20 +6997,30 @@ nsDisplayOwnLayer::UpdateScrollData(mozilla::layers::WebRenderScrollData* aData,
       aLayerData->SetScrollbarTargetContainerId(mScrollTarget);
     }
   }
-  if (mFlags & SCROLLBAR_CONTAINER) {
+  if (mFlags & nsDisplayOwnLayerFlags::eScrollbarContainer) {
     ret = true;
     if (aLayerData) {
-      aLayerData->SetIsScrollbarContainer();
+      ScrollDirection dir = (mFlags & nsDisplayOwnLayerFlags::eVerticalScrollbar)
+                          ? ScrollDirection::eVertical
+                          : ScrollDirection::eHorizontal;
+      aLayerData->SetScrollbarContainerDirection(dir);
       aLayerData->SetScrollbarTargetContainerId(mScrollTarget);
     }
   }
   return ret;
 }
 
+void
+nsDisplayOwnLayer::WriteDebugInfo(std::stringstream& aStream)
+{
+  aStream << nsPrintfCString(" (flags 0x%x) (scrolltarget %" PRIu64 ")", (int)mFlags, mScrollTarget).get();
+}
+
 nsDisplaySubDocument::nsDisplaySubDocument(nsDisplayListBuilder* aBuilder,
                                            nsIFrame* aFrame,
                                            nsSubDocumentFrame* aSubDocFrame,
-                                           nsDisplayList* aList, uint32_t aFlags)
+                                           nsDisplayList* aList,
+                                           nsDisplayOwnLayerFlags aFlags)
     : nsDisplayOwnLayer(aBuilder, aFrame, aList, aBuilder->CurrentActiveScrolledRoot(), aFlags)
     , mScrollParentId(aBuilder->GetCurrentScrollParentId())
     , mShouldFlatten(false)
@@ -6953,7 +7046,7 @@ UniquePtr<ScrollMetadata>
 nsDisplaySubDocument::ComputeScrollMetadata(LayerManager* aLayerManager,
                                             const ContainerLayerParameters& aContainerParameters)
 {
-  if (!(mFlags & GENERATE_SCROLLABLE_LAYER)) {
+  if (!(mFlags & nsDisplayOwnLayerFlags::eGenerateScrollableLayer)) {
     return UniquePtr<ScrollMetadata>(nullptr);
   }
 
@@ -6990,7 +7083,7 @@ nsDisplaySubDocument::GetBounds(nsDisplayListBuilder* aBuilder,
 {
   bool usingDisplayPort = UseDisplayPortForViewport(aBuilder, mFrame);
 
-  if ((mFlags & GENERATE_SCROLLABLE_LAYER) && usingDisplayPort) {
+  if ((mFlags & nsDisplayOwnLayerFlags::eGenerateScrollableLayer) && usingDisplayPort) {
     *aSnap = false;
     return mFrame->GetRect() + aBuilder->ToReferenceFrame(mFrame);
   }
@@ -7004,7 +7097,7 @@ nsDisplaySubDocument::ComputeVisibility(nsDisplayListBuilder* aBuilder,
 {
   bool usingDisplayPort = UseDisplayPortForViewport(aBuilder, mFrame);
 
-  if (!(mFlags & GENERATE_SCROLLABLE_LAYER) || !usingDisplayPort) {
+  if (!(mFlags & nsDisplayOwnLayerFlags::eGenerateScrollableLayer) || !usingDisplayPort) {
     return nsDisplayWrapList::ComputeVisibility(aBuilder, aVisibleRegion);
   }
 
@@ -7046,7 +7139,7 @@ nsDisplaySubDocument::ShouldBuildLayerEvenIfInvisible(nsDisplayListBuilder* aBui
 {
   bool usingDisplayPort = UseDisplayPortForViewport(aBuilder, mFrame);
 
-  if ((mFlags & GENERATE_SCROLLABLE_LAYER) && usingDisplayPort) {
+  if ((mFlags & nsDisplayOwnLayerFlags::eGenerateScrollableLayer) && usingDisplayPort) {
     return true;
   }
 
@@ -7059,7 +7152,7 @@ nsDisplaySubDocument::GetOpaqueRegion(nsDisplayListBuilder* aBuilder,
 {
   bool usingDisplayPort = UseDisplayPortForViewport(aBuilder, mFrame);
 
-  if ((mFlags & GENERATE_SCROLLABLE_LAYER) && usingDisplayPort) {
+  if ((mFlags & nsDisplayOwnLayerFlags::eGenerateScrollableLayer) && usingDisplayPort) {
     *aSnap = false;
     return nsRegion();
   }
@@ -7069,7 +7162,7 @@ nsDisplaySubDocument::GetOpaqueRegion(nsDisplayListBuilder* aBuilder,
 
 nsDisplayResolution::nsDisplayResolution(nsDisplayListBuilder* aBuilder,
                                          nsIFrame* aFrame, nsDisplayList* aList,
-                                         uint32_t aFlags)
+                                         nsDisplayOwnLayerFlags aFlags)
     : nsDisplaySubDocument(aBuilder, aFrame, nullptr, aList, aFlags) {
   MOZ_COUNT_CTOR(nsDisplayResolution);
 }
@@ -7605,7 +7698,7 @@ nsDisplayScrollInfoLayer::WriteDebugInfo(std::stringstream& aStream)
 nsDisplayZoom::nsDisplayZoom(nsDisplayListBuilder* aBuilder,
                              nsIFrame* aFrame, nsDisplayList* aList,
                              int32_t aAPD, int32_t aParentAPD,
-                             uint32_t aFlags)
+                             nsDisplayOwnLayerFlags aFlags)
     : nsDisplaySubDocument(aBuilder, aFrame, nullptr, aList, aFlags)
     , mAPD(aAPD), mParentAPD(aParentAPD) {
   MOZ_COUNT_CTOR(nsDisplayZoom);
@@ -7659,7 +7752,7 @@ bool nsDisplayZoom::ComputeVisibility(nsDisplayListBuilder *aBuilder,
   // nsDisplaySubDocument::ComputeVisibility to make the necessary adjustments
   // for ComputeVisibility, it does all it's calculations in the child APD.
   bool usingDisplayPort = UseDisplayPortForViewport(aBuilder, mFrame);
-  if (!(mFlags & GENERATE_SCROLLABLE_LAYER) || !usingDisplayPort) {
+  if (!(mFlags & nsDisplayOwnLayerFlags::eGenerateScrollableLayer) || !usingDisplayPort) {
     retval =
       mList.ComputeVisibilityForSublist(aBuilder, &visibleRegion,
                                         transformedVisibleRect);

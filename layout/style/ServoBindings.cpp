@@ -25,6 +25,7 @@
 #include "nsDOMTokenList.h"
 #include "nsDeviceContext.h"
 #include "nsIContentInlines.h"
+#include "nsICrashReporter.h"
 #include "nsIDOMNode.h"
 #include "nsIDocumentInlines.h"
 #include "nsILoadContext.h"
@@ -73,10 +74,6 @@
 
 #if defined(MOZ_MEMORY)
 # include "mozmemory.h"
-#endif
-
-#ifdef MOZ_CRASHREPORTER
-#include "nsICrashReporter.h"
 #endif
 
 using namespace mozilla;
@@ -850,15 +847,9 @@ Gecko_StyleTransition_SetUnsupportedProperty(StyleTransition* aTransition,
 }
 
 void
-Gecko_FillAllBackgroundLists(nsStyleImageLayers* aLayers, uint32_t aMaxLen)
+Gecko_FillAllImageLayers(nsStyleImageLayers* aLayers, uint32_t aMaxLen)
 {
-  nsRuleNode::FillAllBackgroundLists(*aLayers, aMaxLen);
-}
-
-void
-Gecko_FillAllMaskLists(nsStyleImageLayers* aLayers, uint32_t aMaxLen)
-{
-  nsRuleNode::FillAllMaskLists(*aLayers, aMaxLen);
+  aLayers->FillAllLayers(aMaxLen);
 }
 
 bool
@@ -1340,7 +1331,8 @@ Gecko_nsFont_InitSystem(nsFont* aDest, int32_t aFontId,
   LookAndFeel::FontID fontID = static_cast<LookAndFeel::FontID>(aFontId);
 
   AutoWriteLock guard(*sServoFFILock);
-  nsRuleNode::ComputeSystemFont(aDest, fontID, aPresContext, defaultVariableFont);
+  nsLayoutUtils::ComputeSystemFont(aDest, fontID, aPresContext,
+                                   defaultVariableFont);
 }
 
 void
@@ -2357,10 +2349,11 @@ void
 Gecko_nsStyleFont_FixupNoneGeneric(nsStyleFont* aFont,
                                    RawGeckoPresContextBorrowed aPresContext)
 {
-  const nsFont* defaultVariableFont = ThreadSafeGetDefaultFontHelper(aPresContext, aFont->mLanguage,
-                                                                     kPresContext_DefaultVariableFont_ID);
-  nsRuleNode::FixupNoneGeneric(&aFont->mFont, aPresContext,
-                               aFont->mGenericID, defaultVariableFont);
+  const nsFont* defaultVariableFont =
+    ThreadSafeGetDefaultFontHelper(aPresContext, aFont->mLanguage,
+                                   kPresContext_DefaultVariableFont_ID);
+  nsLayoutUtils::FixupNoneGeneric(&aFont->mFont, aPresContext,
+                                  aFont->mGenericID, defaultVariableFont);
 }
 
 void
@@ -2397,7 +2390,7 @@ Gecko_nsStyleFont_FixupMinFontSize(nsStyleFont* aFont,
     minFontSize = aPresContext->MinFontSize(aFont->mLanguage, nullptr);
   }
 
-  nsRuleNode::ApplyMinFontSize(aFont, aPresContext, minFontSize);
+  nsLayoutUtils::ApplyMinFontSize(aFont, aPresContext, minFontSize);
 }
 
 void
@@ -2513,9 +2506,9 @@ Gecko_GetFontMetrics(RawGeckoPresContextBorrowed aPresContext,
 
   nsPresContext* presContext = const_cast<nsPresContext*>(aPresContext);
   presContext->SetUsesExChUnits(true);
-  RefPtr<nsFontMetrics> fm = nsRuleNode::GetMetricsFor(
+  RefPtr<nsFontMetrics> fm = nsLayoutUtils::GetMetricsFor(
       presContext, aIsVertical, aFont, aFontSize, aUseUserFontSet,
-      nsRuleNode::FlushUserFontSet::No);
+      nsLayoutUtils::FlushUserFontSet::No);
 
   ret.mXSize = fm->XHeight();
   gfxFloat zeroWidth = fm->GetThebesFontGroup()->GetFirstValidFont()->
@@ -2741,8 +2734,8 @@ Gecko_DocumentRule_UseForPresentation(RawGeckoPresContextBorrowed aPresContext,
     NS_ENSURE_SUCCESS(rv, false);
   }
 
-  return css::DocumentRule::UseForPresentation(doc, docURI, docURISpec,
-                                               *aPattern, aURLMatchingFunction);
+  return CSSMozDocumentRule::Match(doc, docURI, docURISpec, *aPattern,
+                                   aURLMatchingFunction);
 }
 
 void
@@ -2826,11 +2819,9 @@ void
 Gecko_AddBufferToCrashReport(const void* addr, size_t len)
 {
   MOZ_ASSERT(NS_IsMainThread());
-#ifdef MOZ_CRASHREPORTER
   nsCOMPtr<nsICrashReporter> cr = do_GetService("@mozilla.org/toolkit/crash-reporter;1");
   NS_ENSURE_TRUE_VOID(cr);
   cr->RegisterAppMemory((uint64_t) addr, len);
-#endif
 }
 
 void
@@ -2839,11 +2830,9 @@ Gecko_AnnotateCrashReport(const char* key_str, const char* value_str)
   MOZ_ASSERT(NS_IsMainThread());
   nsDependentCString key(key_str);
   nsDependentCString value(value_str);
-#ifdef MOZ_CRASHREPORTER
   nsCOMPtr<nsICrashReporter> cr = do_GetService("@mozilla.org/toolkit/crash-reporter;1");
   NS_ENSURE_TRUE_VOID(cr);
   cr->AnnotateCrashReport(key, value);
-#endif
 }
 
 void

@@ -251,14 +251,21 @@ nsIContent::GetFlattenedTreeParentNodeInternal(FlattenedParentType aType) const
     }
     parent = destInsertionPoints->LastElement()->GetParent();
     MOZ_ASSERT(parent);
-  } else if (HasFlag(NODE_MAY_BE_IN_BINDING_MNGR)) {
+  } else if (HasFlag(NODE_MAY_BE_IN_BINDING_MNGR) ||
+             parent->HasFlag(NODE_MAY_BE_IN_BINDING_MNGR)) {
+    // We need to check `parent` to properly handle the unassigned child case
+    // below, since if we were never assigned we would never have the flag set.
+    //
+    // Note that unassigned child nodes _could_ have the flag set, if they were
+    // ever assigned, or if they have a binding themselves.
     if (nsIContent* insertionPoint = GetXBLInsertionPoint()) {
       parent = insertionPoint->GetParent();
       MOZ_ASSERT(parent);
+    } else if (parent->OwnerDoc()->BindingManager()->GetBindingWithContent(parent)) {
+      // This is an unassigned node child of the bound element, so it isn't part
+      // of the flat tree.
+      return nullptr;
     }
-  } else if (parent->OwnerDoc()->BindingManager()->GetBindingWithContent(parent)) {
-    // This is fallback content not assigned to any insertion point.
-    return nullptr;
   }
 
   // Shadow roots never shows up in the flattened tree. Return the host
@@ -497,20 +504,26 @@ nsIContent::GetBaseURIForStyleAttr() const
   return OwnerDoc()->GetDocBaseURI();
 }
 
-URLExtraData*
-nsIContent::GetURLDataForStyleAttr() const
+already_AddRefed<URLExtraData>
+nsIContent::GetURLDataForStyleAttr(nsIPrincipal* aSubjectPrincipal) const
 {
   if (IsInAnonymousSubtree() && IsAnonymousContentInSVGUseSubtree()) {
     nsIContent* bindingParent = GetBindingParent();
     MOZ_ASSERT(bindingParent);
     SVGUseElement* useElement = static_cast<SVGUseElement*>(bindingParent);
     if (URLExtraData* data = useElement->GetContentURLData()) {
-      return data;
+      return do_AddRef(data);
     }
+  }
+  if (aSubjectPrincipal && aSubjectPrincipal != NodePrincipal()) {
+    // TODO: Cache this?
+    return MakeAndAddRef<URLExtraData>(OwnerDoc()->GetDocBaseURI(),
+                                       OwnerDoc()->GetDocumentURI(),
+                                       aSubjectPrincipal);
   }
   // This also ignores the case that SVG inside XBL binding.
   // But it is probably fine.
-  return OwnerDoc()->DefaultStyleAttrURLData();
+  return do_AddRef(OwnerDoc()->DefaultStyleAttrURLData());
 }
 
 //----------------------------------------------------------------------
@@ -1214,15 +1227,12 @@ FragmentOrElement::GetBindingParent() const
 }
 
 nsXBLBinding*
-FragmentOrElement::GetXBLBinding() const
+FragmentOrElement::DoGetXBLBinding() const
 {
-  if (HasFlag(NODE_MAY_BE_IN_BINDING_MNGR)) {
-    nsExtendedDOMSlots* slots = GetExistingExtendedDOMSlots();
-    if (slots) {
-      return slots->mXBLBinding;
-    }
+  MOZ_ASSERT(HasFlag(NODE_MAY_BE_IN_BINDING_MNGR));
+  if (nsExtendedDOMSlots* slots = GetExistingExtendedDOMSlots()) {
+    return slots->mXBLBinding;
   }
-
   return nullptr;
 }
 
@@ -1384,6 +1394,7 @@ FragmentOrElement::GetTextContentInternal(nsAString& aTextContent,
 
 void
 FragmentOrElement::SetTextContentInternal(const nsAString& aTextContent,
+                                          nsIPrincipal* aSubjectPrincipal,
                                           ErrorResult& aError)
 {
   aError = nsContentUtils::SetNodeTextContent(this, aTextContent, false);

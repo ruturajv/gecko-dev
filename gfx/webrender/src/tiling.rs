@@ -3,9 +3,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use api::{BorderRadiusKind, ClipId, ColorF, DeviceIntPoint, ImageKey};
-use api::{DeviceIntRect, DeviceIntSize, DeviceUintPoint, DeviceUintSize};
-use api::{ExternalImageType, FilterOp, FontRenderMode, ImageRendering, LayerRect};
-use api::{MixBlendMode, PipelineId};
+use api::{DeviceIntRect, DeviceIntSize, DeviceUintPoint, DeviceUintRect, DeviceUintSize};
+use api::{DocumentLayer, ExternalImageType, FilterOp, FontRenderMode, ImageRendering};
+use api::{LayerRect, MixBlendMode, PipelineId};
 use api::{TileOffset, YuvColorSpace, YuvFormat};
 use api::{LayerToWorldTransform, WorldPixel};
 use border::{BorderCornerInstance, BorderCornerSide};
@@ -17,10 +17,10 @@ use glyph_rasterizer::GlyphFormat;
 use gpu_cache::{GpuCache, GpuCacheAddress, GpuCacheHandle, GpuCacheUpdateList};
 use gpu_types::{BlurDirection, BlurInstance, BrushInstance, BrushImageKind, ClipMaskInstance};
 use gpu_types::{CompositePrimitiveInstance, PrimitiveInstance, SimplePrimitiveInstance};
-use gpu_types::{BRUSH_FLAG_USES_PICTURE, ClipScrollNodeIndex, ClipScrollNodeData};
+use gpu_types::{ClipScrollNodeIndex, ClipScrollNodeData};
 use internal_types::{FastHashMap, SourceTexture};
 use internal_types::BatchTextures;
-use picture::{PictureCompositeMode, PictureKind, PicturePrimitive};
+use picture::{PictureCompositeMode, PictureKind, PicturePrimitive, RasterizationSpace};
 use plane_split::{BspSplitter, Polygon, Splitter};
 use prim_store::{PrimitiveIndex, PrimitiveKind, PrimitiveMetadata, PrimitiveStore};
 use prim_store::{BrushMaskKind, BrushKind, DeferredResolve, PrimitiveRun, RectangleContent};
@@ -32,6 +32,7 @@ use renderer::BlendMode;
 use renderer::ImageBufferKind;
 use resource_cache::{GlyphFetchResult, ResourceCache};
 use std::{cmp, usize, f32, i32};
+use std::collections::hash_map::Entry;
 use texture_allocator::GuillotineAllocator;
 use util::{MatrixHelpers, TransformedRectKind};
 
@@ -177,7 +178,7 @@ pub struct AlphaBatchList {
 }
 
 impl AlphaBatchList {
-    fn new() -> AlphaBatchList {
+    fn new() -> Self {
         AlphaBatchList {
             batches: Vec::new(),
         }
@@ -255,7 +256,7 @@ pub struct OpaqueBatchList {
 }
 
 impl OpaqueBatchList {
-    fn new(pixel_area_threshold_for_new_batch: i32) -> OpaqueBatchList {
+    fn new(pixel_area_threshold_for_new_batch: i32) -> Self {
         OpaqueBatchList {
             batches: Vec::new(),
             pixel_area_threshold_for_new_batch,
@@ -320,7 +321,7 @@ pub struct BatchList {
 }
 
 impl BatchList {
-    fn new(screen_size: DeviceIntSize) -> BatchList {
+    fn new(screen_size: DeviceIntSize) -> Self {
         // The threshold for creating a new batch is
         // one quarter the screen size.
         let batch_area_threshold = screen_size.width * screen_size.height / 4;
@@ -543,7 +544,11 @@ fn add_to_batch(
             let text_cpu =
                 &ctx.prim_store.cpu_text_runs[prim_metadata.cpu_prim_index.0];
 
-            let font = text_cpu.get_font(ctx.device_pixel_ratio);
+            let font = text_cpu.get_font(
+                ctx.device_pixel_ratio,
+                &scroll_node.transform,
+                RasterizationSpace::Screen,
+            );
 
             ctx.resource_cache.fetch_glyphs(
                 font,
@@ -1000,7 +1005,7 @@ impl PicturePrimitive {
 }
 
 impl AlphaBatcher {
-    fn new(screen_size: DeviceIntSize) -> AlphaBatcher {
+    fn new(screen_size: DeviceIntSize) -> Self {
         AlphaBatcher {
             tasks: Vec::new(),
             batch_list: BatchList::new(screen_size),
@@ -1019,19 +1024,25 @@ impl AlphaBatcher {
         render_tasks: &RenderTaskTree,
         deferred_resolves: &mut Vec<DeferredResolve>,
     ) {
-        for task_id in &self.tasks {
-            let task_id = *task_id;
-            let task = render_tasks.get(task_id).as_alpha_batch();
-            let pic = &ctx.prim_store.cpu_pictures[ctx.prim_store.cpu_metadata[task.prim_index.0].cpu_prim_index.0];
-            pic.add_to_batch(
-                task_id,
-                ctx,
-                gpu_cache,
-                render_tasks,
-                deferred_resolves,
-                &mut self.batch_list,
-                &mut self.glyph_fetch_buffer
-            );
+        for &task_id in &self.tasks {
+            match render_tasks[task_id].kind {
+                RenderTaskKind::Picture(ref pic_task) => {
+                    let pic_index = ctx.prim_store.cpu_metadata[pic_task.prim_index.0].cpu_prim_index;
+                    let pic = &ctx.prim_store.cpu_pictures[pic_index.0];
+                    pic.add_to_batch(
+                        task_id,
+                        ctx,
+                        gpu_cache,
+                        render_tasks,
+                        deferred_resolves,
+                        &mut self.batch_list,
+                        &mut self.glyph_fetch_buffer
+                    );
+                }
+                _ => {
+                    unreachable!();
+                }
+            }
         }
 
         self.batch_list.finalize();
@@ -1055,7 +1066,7 @@ pub struct ClipBatcher {
 }
 
 impl ClipBatcher {
-    fn new() -> ClipBatcher {
+    fn new() -> Self {
         ClipBatcher {
             rectangles: Vec::new(),
             images: FastHashMap::default(),
@@ -1189,7 +1200,7 @@ struct TextureAllocator {
 }
 
 impl TextureAllocator {
-    fn new(size: DeviceUintSize) -> TextureAllocator {
+    fn new(size: DeviceUintSize) -> Self {
         TextureAllocator {
             allocator: GuillotineAllocator::new(size),
             used_rect: DeviceIntRect::zero(),
@@ -1236,6 +1247,7 @@ pub trait RenderTarget {
         clip_store: &ClipStore,
     );
     fn used_rect(&self) -> DeviceIntRect;
+    fn needs_depth(&self) -> bool;
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -1246,27 +1258,21 @@ pub enum RenderTargetKind {
 
 pub struct RenderTargetList<T> {
     screen_size: DeviceIntSize,
+    pub max_size: DeviceUintSize,
     pub targets: Vec<T>,
+    pub texture: Option<Texture>,
 }
 
 impl<T: RenderTarget> RenderTargetList<T> {
     fn new(
-        create_initial_target: bool,
-        screen_size: DeviceIntSize
-    ) -> RenderTargetList<T> {
-        let mut targets = Vec::new();
-        if create_initial_target {
-            targets.push(T::new(None, screen_size));
-        }
-
+        screen_size: DeviceIntSize,
+    ) -> Self {
         RenderTargetList {
-            targets,
             screen_size,
+            max_size: DeviceUintSize::new(MIN_TARGET_SIZE, MIN_TARGET_SIZE),
+            targets: Vec::new(),
+            texture: None,
         }
-    }
-
-    pub fn target_count(&self) -> usize {
-        self.targets.len()
     }
 
     fn build(
@@ -1301,7 +1307,6 @@ impl<T: RenderTarget> RenderTargetList<T> {
     fn allocate(
         &mut self,
         alloc_size: DeviceUintSize,
-        target_size: DeviceUintSize,
     ) -> (DeviceUintPoint, RenderTargetIndex) {
         let existing_origin = self.targets
             .last_mut()
@@ -1310,7 +1315,7 @@ impl<T: RenderTarget> RenderTargetList<T> {
         let origin = match existing_origin {
             Some(origin) => origin,
             None => {
-                let mut new_target = T::new(Some(target_size), self.screen_size);
+                let mut new_target = T::new(Some(self.max_size), self.screen_size);
                 let origin = new_target.allocate(alloc_size).expect(&format!(
                     "Each render task must allocate <= size of one target! ({:?})",
                     alloc_size
@@ -1321,6 +1326,10 @@ impl<T: RenderTarget> RenderTargetList<T> {
         };
 
         (origin, RenderTargetIndex(self.targets.len() - 1))
+    }
+
+    pub fn needs_depth(&self) -> bool {
+        self.targets.iter().any(|target| target.needs_depth())
     }
 }
 
@@ -1375,17 +1384,10 @@ impl RenderTarget for ColorRenderTarget {
             horizontal_blurs: Vec::new(),
             readbacks: Vec::new(),
             scalings: Vec::new(),
-            allocator: size.map(|size| TextureAllocator::new(size)),
+            allocator: size.map(TextureAllocator::new),
             glyph_fetch_buffer: Vec::new(),
             outputs: Vec::new(),
         }
-    }
-
-    fn used_rect(&self) -> DeviceIntRect {
-        self.allocator
-            .as_ref()
-            .expect("bug: used_rect called on framebuffer")
-            .used_rect
     }
 
     fn build(
@@ -1407,23 +1409,11 @@ impl RenderTarget for ColorRenderTarget {
         render_tasks: &RenderTaskTree,
         _: &ClipStore,
     ) {
-        let task = render_tasks.get(task_id);
+        let task = &render_tasks[task_id];
 
         match task.kind {
             RenderTaskKind::Alias(..) => {
                 panic!("BUG: add_task() called on invalidated task");
-            }
-            RenderTaskKind::Alpha(ref info) => {
-                self.alpha_batcher.add_task(task_id);
-
-                // If this pipeline is registered as a frame output
-                // store the information necessary to do the copy.
-                if let Some(pipeline_id) = info.frame_output_pipeline_id {
-                    self.outputs.push(FrameOutput {
-                        pipeline_id,
-                        task_id,
-                    });
-                }
             }
             RenderTaskKind::VerticalBlur(ref info) => {
                 info.add_instances(
@@ -1449,61 +1439,82 @@ impl RenderTarget for ColorRenderTarget {
                     PrimitiveKind::Picture => {
                         let prim = &ctx.prim_store.cpu_pictures[prim_metadata.cpu_prim_index.0];
 
-                        let task_index = render_tasks.get_task_address(task_id);
+                        match prim.kind {
+                            PictureKind::Image { frame_output_pipeline_id, .. } => {
+                                self.alpha_batcher.add_task(task_id);
 
-                        for run in &prim.runs {
-                            for i in 0 .. run.count {
-                                let sub_prim_index = PrimitiveIndex(run.base_prim_index.0 + i);
+                                // If this pipeline is registered as a frame output
+                                // store the information necessary to do the copy.
+                                if let Some(pipeline_id) = frame_output_pipeline_id {
+                                    self.outputs.push(FrameOutput {
+                                        pipeline_id,
+                                        task_id,
+                                    });
+                                }
+                            }
+                            PictureKind::TextShadow { .. } |
+                            PictureKind::BoxShadow { .. } => {
+                                let task_index = render_tasks.get_task_address(task_id);
 
-                                let sub_metadata = ctx.prim_store.get_metadata(sub_prim_index);
-                                let sub_prim_address =
-                                    gpu_cache.get_address(&sub_metadata.gpu_location);
-                                let instance = SimplePrimitiveInstance::new(
-                                    sub_prim_address,
-                                    task_index,
-                                    RenderTaskAddress(0),
-                                    ClipScrollNodeIndex(0),
-                                    ClipScrollNodeIndex(0),
-                                    0,
-                                ); // z is disabled for rendering cache primitives
+                                for run in &prim.runs {
+                                    for i in 0 .. run.count {
+                                        let sub_prim_index = PrimitiveIndex(run.base_prim_index.0 + i);
 
-                                match sub_metadata.prim_kind {
-                                    PrimitiveKind::TextRun => {
-                                        // Add instances that reference the text run GPU location. Also supply
-                                        // the parent shadow prim address as a user data field, allowing
-                                        // the shader to fetch the shadow parameters.
-                                        let text = &ctx.prim_store.cpu_text_runs
-                                            [sub_metadata.cpu_prim_index.0];
-                                        let text_run_cache_prims = &mut self.text_run_cache_prims;
+                                        let sub_metadata = ctx.prim_store.get_metadata(sub_prim_index);
+                                        let sub_prim_address =
+                                            gpu_cache.get_address(&sub_metadata.gpu_location);
+                                        let instance = SimplePrimitiveInstance::new(
+                                            sub_prim_address,
+                                            task_index,
+                                            RenderTaskAddress(0),
+                                            ClipScrollNodeIndex(0),
+                                            ClipScrollNodeIndex(0),
+                                            0,
+                                        ); // z is disabled for rendering cache primitives
 
-                                        let font = text.get_font(ctx.device_pixel_ratio);
+                                        match sub_metadata.prim_kind {
+                                            PrimitiveKind::TextRun => {
+                                                // Add instances that reference the text run GPU location. Also supply
+                                                // the parent shadow prim address as a user data field, allowing
+                                                // the shader to fetch the shadow parameters.
+                                                let text = &ctx.prim_store.cpu_text_runs
+                                                    [sub_metadata.cpu_prim_index.0];
+                                                let text_run_cache_prims = &mut self.text_run_cache_prims;
 
-                                        ctx.resource_cache.fetch_glyphs(
-                                            font,
-                                            &text.glyph_keys,
-                                            &mut self.glyph_fetch_buffer,
-                                            gpu_cache,
-                                            |texture_id, _glyph_format, glyphs| {
-                                                let batch = text_run_cache_prims
-                                                    .entry(texture_id)
-                                                    .or_insert(Vec::new());
+                                                let font = text.get_font(
+                                                    ctx.device_pixel_ratio,
+                                                    &LayerToWorldTransform::identity(),
+                                                    RasterizationSpace::Local,
+                                                );
 
-                                                for glyph in glyphs {
-                                                    batch.push(instance.build(
-                                                        glyph.index_in_text_run,
-                                                        glyph.uv_rect_address.as_int(),
-                                                        0
-                                                    ));
-                                                }
-                                            },
-                                        );
-                                    }
-                                    PrimitiveKind::Line => {
-                                        self.line_cache_prims
-                                            .push(instance.build(0, 0, 0));
-                                    }
-                                    _ => {
-                                        unreachable!("Unexpected sub primitive type");
+                                                ctx.resource_cache.fetch_glyphs(
+                                                    font,
+                                                    &text.glyph_keys,
+                                                    &mut self.glyph_fetch_buffer,
+                                                    gpu_cache,
+                                                    |texture_id, _glyph_format, glyphs| {
+                                                        let batch = text_run_cache_prims
+                                                            .entry(texture_id)
+                                                            .or_insert(Vec::new());
+
+                                                        for glyph in glyphs {
+                                                            batch.push(instance.build(
+                                                                glyph.index_in_text_run,
+                                                                glyph.uv_rect_address.as_int(),
+                                                                0
+                                                            ));
+                                                        }
+                                                    },
+                                                );
+                                            }
+                                            PrimitiveKind::Line => {
+                                                self.line_cache_prims
+                                                    .push(instance.build(0, 0, 0));
+                                            }
+                                            _ => {
+                                                unreachable!("Unexpected sub primitive type");
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1528,6 +1539,17 @@ impl RenderTarget for ColorRenderTarget {
                 });
             }
         }
+    }
+
+    fn used_rect(&self) -> DeviceIntRect {
+        self.allocator
+            .as_ref()
+            .expect("bug: used_rect called on framebuffer")
+            .used_rect
+    }
+
+    fn needs_depth(&self) -> bool {
+        !self.alpha_batcher.batch_list.opaque_batch_list.batches.is_empty()
     }
 }
 
@@ -1564,10 +1586,6 @@ impl RenderTarget for AlphaRenderTarget {
         }
     }
 
-    fn used_rect(&self) -> DeviceIntRect {
-        self.allocator.used_rect
-    }
-
     fn add_task(
         &mut self,
         task_id: RenderTaskId,
@@ -1576,7 +1594,7 @@ impl RenderTarget for AlphaRenderTarget {
         render_tasks: &RenderTaskTree,
         clip_store: &ClipStore,
     ) {
-        let task = render_tasks.get(task_id);
+        let task = &render_tasks[task_id];
 
         match task.clear_mode {
             ClearMode::Zero => {
@@ -1592,7 +1610,6 @@ impl RenderTarget for AlphaRenderTarget {
             RenderTaskKind::Alias(..) => {
                 panic!("BUG: add_task() called on invalidated task");
             }
-            RenderTaskKind::Alpha(..) |
             RenderTaskKind::Readback(..) => {
                 panic!("Should not be added to alpha target!");
             }
@@ -1645,7 +1662,7 @@ impl RenderTarget for AlphaRenderTarget {
                                             scroll_id: ClipScrollNodeIndex(0),
                                             clip_task_address: RenderTaskAddress(0),
                                             z: 0,
-                                            flags: BRUSH_FLAG_USES_PICTURE,
+                                            flags: 0,
                                             user_data0: 0,
                                             user_data1: 0,
                                         };
@@ -1693,6 +1710,23 @@ impl RenderTarget for AlphaRenderTarget {
             }
         }
     }
+
+    fn used_rect(&self) -> DeviceIntRect {
+        self.allocator.used_rect
+    }
+
+    fn needs_depth(&self) -> bool {
+        false
+    }
+}
+
+
+pub enum RenderPassKind {
+    MainFramebuffer(ColorRenderTarget),
+    OffScreen {
+        alpha: RenderTargetList<AlphaRenderTarget>,
+        color: RenderTargetList<ColorRenderTarget>,
+    },
 }
 
 /// A render pass represents a set of rendering operations that don't depend on one
@@ -1701,32 +1735,29 @@ impl RenderTarget for AlphaRenderTarget {
 /// A render pass can have several render targets if there wasn't enough space in one
 /// target to do all of the rendering for that pass.
 pub struct RenderPass {
-    pub is_framebuffer: bool,
+    pub kind: RenderPassKind,
     tasks: Vec<RenderTaskId>,
-    pub color_targets: RenderTargetList<ColorRenderTarget>,
-    pub alpha_targets: RenderTargetList<AlphaRenderTarget>,
-    pub color_texture: Option<Texture>,
-    pub alpha_texture: Option<Texture>,
     dynamic_tasks: FastHashMap<RenderTaskKey, DynamicTaskInfo>,
-    pub max_color_target_size: DeviceUintSize,
-    pub max_alpha_target_size: DeviceUintSize,
 }
 
 impl RenderPass {
-    pub fn new(
-        is_framebuffer: bool,
-        screen_size: DeviceIntSize
-    ) -> RenderPass {
+    pub fn new_main_framebuffer(screen_size: DeviceIntSize) -> Self {
+        let target = ColorRenderTarget::new(None, screen_size);
         RenderPass {
-            is_framebuffer,
-            color_targets: RenderTargetList::new(is_framebuffer, screen_size),
-            alpha_targets: RenderTargetList::new(false, screen_size),
+            kind: RenderPassKind::MainFramebuffer(target),
             tasks: vec![],
-            color_texture: None,
-            alpha_texture: None,
             dynamic_tasks: FastHashMap::default(),
-            max_color_target_size: DeviceUintSize::new(MIN_TARGET_SIZE, MIN_TARGET_SIZE),
-            max_alpha_target_size: DeviceUintSize::new(MIN_TARGET_SIZE, MIN_TARGET_SIZE),
+        }
+    }
+
+    pub fn new_off_screen(screen_size: DeviceIntSize) -> Self {
+        RenderPass {
+            kind: RenderPassKind::OffScreen {
+                color: RenderTargetList::new(screen_size),
+                alpha: RenderTargetList::new(screen_size),
+            },
+            tasks: vec![],
+            dynamic_tasks: FastHashMap::default(),
         }
     }
 
@@ -1736,37 +1767,16 @@ impl RenderPass {
         size: DeviceIntSize,
         target_kind: RenderTargetKind,
     ) {
-        match target_kind {
-            RenderTargetKind::Color => {
-                self.max_color_target_size.width =
-                    cmp::max(self.max_color_target_size.width, size.width as u32);
-                self.max_color_target_size.height =
-                    cmp::max(self.max_color_target_size.height, size.height as u32);
-            }
-            RenderTargetKind::Alpha => {
-                self.max_alpha_target_size.width =
-                    cmp::max(self.max_alpha_target_size.width, size.width as u32);
-                self.max_alpha_target_size.height =
-                    cmp::max(self.max_alpha_target_size.height, size.height as u32);
-            }
+        if let RenderPassKind::OffScreen { ref mut color, ref mut alpha } = self.kind {
+            let max_size = match target_kind {
+                RenderTargetKind::Color => &mut color.max_size,
+                RenderTargetKind::Alpha => &mut alpha.max_size,
+            };
+            max_size.width = cmp::max(max_size.width, size.width as u32);
+            max_size.height = cmp::max(max_size.height, size.height as u32);
         }
 
         self.tasks.push(task_id);
-    }
-
-    pub fn needs_render_target_kind(&self, kind: RenderTargetKind) -> bool {
-        if self.is_framebuffer {
-            false
-        } else {
-            self.required_target_count(kind) > 0
-        }
-    }
-
-    pub fn required_target_count(&self, kind: RenderTargetKind) -> usize {
-        match kind {
-            RenderTargetKind::Color => self.color_targets.target_count(),
-            RenderTargetKind::Alpha => self.alpha_targets.target_count(),
-        }
     }
 
     pub fn build(
@@ -1779,86 +1789,76 @@ impl RenderPass {
     ) {
         profile_scope!("RenderPass::build");
 
-        // Step through each task, adding to batches as appropriate.
-        for task_id in &self.tasks {
-            let task_id = *task_id;
+        match self.kind {
+            RenderPassKind::MainFramebuffer(ref mut target) => {
+                for &task_id in &self.tasks {
+                    assert_eq!(render_tasks[task_id].target_kind(), RenderTargetKind::Color);
+                    target.add_task(task_id, ctx, gpu_cache, render_tasks, clip_store);
+                }
+                target.build(ctx, gpu_cache, render_tasks, deferred_resolves);
+            }
+            RenderPassKind::OffScreen { ref mut color, ref mut alpha } => {
+                // Step through each task, adding to batches as appropriate.
+                for &task_id in &self.tasks {
+                    let target_kind = {
+                        let task = &mut render_tasks[task_id];
+                        let target_kind = task.target_kind();
 
-            let target_kind = {
-                let task = render_tasks.get_mut(task_id);
-                let target_kind = task.target_kind();
+                        // Find a target to assign this task to, or create a new
+                        // one if required.
+                        match task.location {
+                            RenderTaskLocation::Fixed => {}
+                            RenderTaskLocation::Dynamic(ref mut origin, size) => {
+                                let dynamic_entry = match task.cache_key {
+                                    // See if this task is a duplicate.
+                                    // If so, just skip adding it!
+                                    Some(cache_key) => match self.dynamic_tasks.entry(cache_key) {
+                                        Entry::Occupied(entry) => {
+                                            // TODO(gw): We can easily handle invalidation of tasks that
+                                            // contain children in the future. Since we don't
+                                            // have any cases of that yet, just assert to simplify
+                                            // the current implementation.
+                                            debug_assert!(task.children.is_empty());
+                                            debug_assert_eq!(entry.get().rect.size, size);
+                                            task.kind = RenderTaskKind::Alias(entry.get().task_id);
+                                            continue;
+                                        },
+                                        Entry::Vacant(entry) => Some(entry),
+                                    },
+                                    None => None,
+                                };
 
-                // Find a target to assign this task to, or create a new
-                // one if required.
-                match task.location {
-                    RenderTaskLocation::Fixed => {}
-                    RenderTaskLocation::Dynamic(_, size) => {
-                        if let Some(cache_key) = task.cache_key {
-                            // See if this task is a duplicate.
-                            // If so, just skip adding it!
-                            if let Some(task_info) = self.dynamic_tasks.get(&cache_key) {
-                                task.set_alias(task_info.task_id);
-                                debug_assert_eq!(task_info.rect.size, size);
-                                continue;
+                                let alloc_size = DeviceUintSize::new(size.width as u32, size.height as u32);
+                                let (alloc_origin, target_index) =  match target_kind {
+                                    RenderTargetKind::Color => color.allocate(alloc_size),
+                                    RenderTargetKind::Alpha => alpha.allocate(alloc_size),
+                                };
+                                *origin = Some((alloc_origin.to_i32(), target_index));
+
+                                // If this task is cacheable / sharable, store it in the task hash
+                                // for this pass.
+                                if let Some(entry) = dynamic_entry {
+                                    entry.insert(DynamicTaskInfo {
+                                        task_id,
+                                        rect: DeviceIntRect::new(alloc_origin.to_i32(), size),
+                                    });
+                                }
                             }
                         }
 
-                        let alloc_size = DeviceUintSize::new(size.width as u32, size.height as u32);
-                        let (alloc_origin, target_index) = match target_kind {
-                            RenderTargetKind::Color => self.color_targets
-                                .allocate(alloc_size, self.max_color_target_size),
-                            RenderTargetKind::Alpha => self.alpha_targets
-                                .allocate(alloc_size, self.max_alpha_target_size),
-                        };
+                        target_kind
+                    };
 
-                        let origin = Some((
-                            DeviceIntPoint::new(alloc_origin.x as i32, alloc_origin.y as i32),
-                            target_index,
-                        ));
-                        task.location = RenderTaskLocation::Dynamic(origin, size);
-
-                        // If this task is cacheable / sharable, store it in the task hash
-                        // for this pass.
-                        if let Some(cache_key) = task.cache_key {
-                            self.dynamic_tasks.insert(
-                                cache_key,
-                                DynamicTaskInfo {
-                                    task_id,
-                                    rect: match task.location {
-                                        RenderTaskLocation::Fixed => {
-                                            panic!("Dynamic tasks should not have fixed locations!")
-                                        }
-                                        RenderTaskLocation::Dynamic(Some((origin, _)), size) => {
-                                            DeviceIntRect::new(origin, size)
-                                        }
-                                        RenderTaskLocation::Dynamic(None, _) => {
-                                            panic!("Expect the task to be already allocated here")
-                                        }
-                                    },
-                                },
-                            );
-                        }
+                    match target_kind {
+                        RenderTargetKind::Color => color.add_task(task_id, ctx, gpu_cache, render_tasks, clip_store),
+                        RenderTargetKind::Alpha => alpha.add_task(task_id, ctx, gpu_cache, render_tasks, clip_store),
                     }
                 }
 
-                target_kind
-            };
-
-            match target_kind {
-                RenderTargetKind::Color => {
-                    self.color_targets
-                        .add_task(task_id, ctx, gpu_cache, render_tasks, clip_store)
-                }
-                RenderTargetKind::Alpha => {
-                    self.alpha_targets
-                        .add_task(task_id, ctx, gpu_cache, render_tasks, clip_store)
-                }
+                color.build(ctx, gpu_cache, render_tasks, deferred_resolves);
+                alpha.build(ctx, gpu_cache, render_tasks, deferred_resolves);
             }
         }
-
-        self.color_targets
-            .build(ctx, gpu_cache, render_tasks, deferred_resolves);
-        self.alpha_targets
-            .build(ctx, gpu_cache, render_tasks, deferred_resolves);
     }
 }
 
@@ -1903,7 +1903,7 @@ pub struct BatchKey {
 }
 
 impl BatchKey {
-    fn new(kind: BatchKind, blend_mode: BlendMode, textures: BatchTextures) -> BatchKey {
+    fn new(kind: BatchKind, blend_mode: BlendMode, textures: BatchTextures) -> Self {
         BatchKey {
             kind,
             blend_mode,
@@ -1966,10 +1966,10 @@ pub struct CompositeOps {
 }
 
 impl CompositeOps {
-    pub fn new(filters: Vec<FilterOp>, mix_blend_mode: Option<MixBlendMode>) -> CompositeOps {
+    pub fn new(filters: Vec<FilterOp>, mix_blend_mode: Option<MixBlendMode>) -> Self {
         CompositeOps {
             filters,
-            mix_blend_mode: mix_blend_mode,
+            mix_blend_mode,
         }
     }
 
@@ -1982,7 +1982,9 @@ impl CompositeOps {
 /// and presented to the renderer.
 pub struct Frame {
     pub window_size: DeviceUintSize,
+    pub inner_rect: DeviceUintRect,
     pub background_color: Option<ColorF>,
+    pub layer: DocumentLayer,
     pub device_pixel_ratio: f32,
     pub passes: Vec<RenderPass>,
     pub profile_counters: FrameProfileCounters,

@@ -392,7 +392,6 @@ public:
   already_AddRefed<ServoStyleContext>
   GetBaseContextForElement(dom::Element* aElement,
                            nsPresContext* aPresContext,
-                           CSSPseudoElementType aPseudoType,
                            const ServoStyleContext* aStyle);
 
   // Get a style context that represents |aStyle|, but as though
@@ -581,8 +580,7 @@ private:
     ResolveStyleLazilyInternal(dom::Element* aElement,
                                CSSPseudoElementType aPseudoType,
                                StyleRuleInclusion aRules =
-                                 StyleRuleInclusion::All,
-                               bool aIgnoreExistingStyles = false);
+                                 StyleRuleInclusion::All);
 
   void RunPostTraversalTasks();
 

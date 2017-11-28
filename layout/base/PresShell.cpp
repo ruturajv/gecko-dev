@@ -803,6 +803,7 @@ PresShell::PresShell()
   , mScaleToResolution(false)
   , mIsLastChromeOnlyEscapeKeyConsumed(false)
   , mHasReceivedPaintMessage(false)
+  , mHasHandledUserInput(false)
 {
   MOZ_LOG(gLog, LogLevel::Debug, ("PresShell::PresShell this=%p", this));
 
@@ -3388,27 +3389,19 @@ ComputeWhereToScroll(int16_t aWhereToScroll,
                      nscoord* aRangeMin,
                      nscoord* aRangeMax) {
   nscoord resultCoord = aOriginalCoord;
-  // Allow the scroll operation to land anywhere that
-  // makes the whole rectangle visible.
+  nscoord scrollPortLength = aViewMax - aViewMin;
   if (nsIPresShell::SCROLL_MINIMUM == aWhereToScroll) {
-    if (aRectMin < aViewMin) {
-      // Scroll up so the frame's top edge is visible
-      resultCoord = aRectMin;
-    } else if (aRectMax > aViewMax) {
-      // Scroll down so the frame's bottom edge is visible. Make sure the
-      // frame's top edge is still visible
-      resultCoord = aOriginalCoord + aRectMax - aViewMax;
-      if (resultCoord > aRectMin) {
-        resultCoord = aRectMin;
-      }
-    }
+    // Scroll the minimum amount necessary to show as much as possible of the frame.
+    // If the frame is too large, don't hide any initially visible part of it.
+    nscoord min = std::min(aRectMin, aRectMax - scrollPortLength);
+    nscoord max = std::max(aRectMin, aRectMax - scrollPortLength);
+    resultCoord = std::min(std::max(aOriginalCoord, min), max);
   } else {
     nscoord frameAlignCoord =
       NSToCoordRound(aRectMin + (aRectMax - aRectMin) * (aWhereToScroll / 100.0f));
-    resultCoord =  NSToCoordRound(frameAlignCoord - (aViewMax - aViewMin) * (
+    resultCoord =  NSToCoordRound(frameAlignCoord - scrollPortLength * (
                                   aWhereToScroll / 100.0f));
   }
-  nscoord scrollPortLength = aViewMax - aViewMin;
   // Force the scroll range to extend to include resultCoord.
   *aRangeMin = std::min(resultCoord, aRectMax - scrollPortLength);
   *aRangeMax = std::max(resultCoord, aRectMin);
@@ -7653,6 +7646,10 @@ PresShell::HandleEventInternal(WidgetEvent* aEvent,
 
     // XXX How about IME events and input events for plugins?
     if (aEvent->IsTrusted()) {
+      if (aEvent->IsUserAction()) {
+        mHasHandledUserInput = true;
+      }
+
       switch (aEvent->mMessage) {
       case eKeyPress:
       case eKeyDown:
@@ -9749,41 +9746,56 @@ FindTopFrame(nsIFrame* aRoot)
 
 #ifdef DEBUG
 
-nsStyleSet*
-PresShell::CloneStyleSet(nsStyleSet* aSet)
+static void
+CopySheetsIntoClone(StyleSetHandle aSet, StyleSetHandle aClone)
 {
-  nsStyleSet* clone = new nsStyleSet();
-
   int32_t i, n = aSet->SheetCount(SheetType::Override);
   for (i = 0; i < n; i++) {
-    CSSStyleSheet* ss = aSet->StyleSheetAt(SheetType::Override, i);
+    StyleSheet* ss = aSet->StyleSheetAt(SheetType::Override, i);
     if (ss)
-      clone->AppendStyleSheet(SheetType::Override, ss);
+      aClone->AppendStyleSheet(SheetType::Override, ss);
   }
 
   // The document expects to insert document stylesheets itself
 #if 0
   n = aSet->SheetCount(SheetType::Doc);
   for (i = 0; i < n; i++) {
-    CSSStyleSheet* ss = aSet->StyleSheetAt(SheetType::Doc, i);
+    StyleSheet* ss = aSet->StyleSheetAt(SheetType::Doc, i);
     if (ss)
-      clone->AddDocStyleSheet(ss, mDocument);
+      aClone->AddDocStyleSheet(ss, mDocument);
   }
 #endif
 
   n = aSet->SheetCount(SheetType::User);
   for (i = 0; i < n; i++) {
-    CSSStyleSheet* ss = aSet->StyleSheetAt(SheetType::User, i);
+    StyleSheet* ss = aSet->StyleSheetAt(SheetType::User, i);
     if (ss)
-      clone->AppendStyleSheet(SheetType::User, ss);
+      aClone->AppendStyleSheet(SheetType::User, ss);
   }
 
   n = aSet->SheetCount(SheetType::Agent);
   for (i = 0; i < n; i++) {
-    CSSStyleSheet* ss = aSet->StyleSheetAt(SheetType::Agent, i);
+    StyleSheet* ss = aSet->StyleSheetAt(SheetType::Agent, i);
     if (ss)
-      clone->AppendStyleSheet(SheetType::Agent, ss);
+      aClone->AppendStyleSheet(SheetType::Agent, ss);
   }
+}
+
+nsStyleSet*
+PresShell::CloneStyleSet(nsStyleSet* aSet)
+{
+  nsStyleSet* clone = new nsStyleSet();
+  CopySheetsIntoClone(aSet, clone);
+  return clone;
+}
+
+ServoStyleSet*
+PresShell::CloneStyleSet(ServoStyleSet* aSet)
+{
+  MOZ_ASSERT(aSet->IsMaster());
+
+  ServoStyleSet* clone = new ServoStyleSet(ServoStyleSet::Kind::Master);
+  CopySheetsIntoClone(aSet, clone);
   return clone;
 }
 
@@ -9838,14 +9850,20 @@ PresShell::VerifyIncrementalReflow()
 
   // Create a new presentation shell to view the document. Use the
   // exact same style information that this document has.
+  nsAutoPtr<nsStyleSet> newGeckoSet;
+  nsAutoPtr<ServoStyleSet> newServoSet;
+  StyleSetHandle newSet;
   if (mStyleSet->IsServo()) {
-    NS_WARNING("VerifyIncrementalReflow cannot handle ServoStyleSets");
-    return true;
+    newServoSet = CloneStyleSet(mStyleSet->AsServo());
+    newSet = newServoSet;
+  } else {
+    newGeckoSet = CloneStyleSet(mStyleSet->AsGecko());
+    newSet = newGeckoSet;
   }
-  nsAutoPtr<nsStyleSet> newSet(CloneStyleSet(mStyleSet->AsGecko()));
-  nsCOMPtr<nsIPresShell> sh = mDocument->CreateShell(cx, vm, newSet.get());
+  nsCOMPtr<nsIPresShell> sh = mDocument->CreateShell(cx, vm, newSet);
   NS_ENSURE_TRUE(sh, false);
-  newSet.forget();
+  newGeckoSet.forget();
+  newServoSet.forget();
   // Note that after we create the shell, we must make sure to destroy it
   sh->SetVerifyReflowEnable(false); // turn off verify reflow while we're reflowing the test frame tree
   vm->SetPresShell(sh);

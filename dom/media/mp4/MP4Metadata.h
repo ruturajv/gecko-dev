@@ -17,18 +17,22 @@
 
 namespace mozilla {
 
-class IndiceWrapper {
+// The memory owner in mIndice.indices is rust mp4 parser, so lifetime of this
+// class SHOULD NOT longer than rust parser.
+class IndiceWrapper
+{
 public:
-  virtual size_t Length() const = 0;
+  size_t Length() const;
 
-  // TODO: Index::Indice is from stagefright, we should use another struct once
-  //       stagefrigth is removed.
-  virtual bool GetIndice(size_t aIndex, Index::Indice& aIndice) const = 0;
+  bool GetIndice(size_t aIndex, Index::Indice& aIndice) const;
 
-  virtual ~IndiceWrapper() {}
+  explicit IndiceWrapper(Mp4parseByteData& aRustIndice);
+
+protected:
+  Mp4parseByteData mIndice;
 };
 
-struct FreeMP4Parser { void operator()(mp4parse_parser* aPtr) { mp4parse_free(aPtr); } };
+struct FreeMP4Parser { void operator()(Mp4parseParser* aPtr) { mp4parse_free(aPtr); } };
 
 // Wrap an Stream to remember the read offset.
 class StreamAdaptor {
@@ -106,7 +110,7 @@ private:
   CryptoFile mCrypto;
   RefPtr<ByteStream> mSource;
   StreamAdaptor mSourceAdaptor;
-  mozilla::UniquePtr<mp4parse_parser, FreeMP4Parser> mParser;
+  mozilla::UniquePtr<Mp4parseParser, FreeMP4Parser> mParser;
 };
 
 } // namespace mozilla

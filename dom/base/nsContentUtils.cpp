@@ -303,6 +303,7 @@ bool nsContentUtils::sSendPerformanceTimingNotifications = false;
 bool nsContentUtils::sUseActivityCursor = false;
 bool nsContentUtils::sAnimationsAPICoreEnabled = false;
 bool nsContentUtils::sAnimationsAPIElementAnimateEnabled = false;
+bool nsContentUtils::sAnimationsAPIPendingMemberEnabled = false;
 bool nsContentUtils::sGetBoxQuadsEnabled = false;
 bool nsContentUtils::sSkipCursorMoveForSameValueSet = false;
 bool nsContentUtils::sRequestIdleCallbackEnabled = false;
@@ -334,7 +335,6 @@ nsHtml5StringParser* nsContentUtils::sHTMLFragmentParser = nullptr;
 nsIParser* nsContentUtils::sXMLFragmentParser = nullptr;
 nsIFragmentContentSink* nsContentUtils::sXMLFragmentSink = nullptr;
 bool nsContentUtils::sFragmentParsingActive = false;
-nsISerialEventTarget* nsContentUtils::sStableStateEventTarget = nullptr;
 
 #if !(defined(DEBUG) || defined(MOZ_ENABLE_JS_DUMP))
 bool nsContentUtils::sDOMWindowDumpEnabled;
@@ -343,6 +343,11 @@ bool nsContentUtils::sDOMWindowDumpEnabled;
 bool nsContentUtils::sDoNotTrackEnabled = false;
 
 mozilla::LazyLogModule nsContentUtils::sDOMDumpLog("Dump");
+
+PopupControlState nsContentUtils::sPopupControlState = openAbused;
+
+int32_t nsContentUtils::sInnerOrOuterWindowCount = 0;
+uint32_t nsContentUtils::sInnerOrOuterWindowSerialCounter = 0;
 
 // Subset of http://www.whatwg.org/specs/web-apps/current-work/#autofill-field-name
 enum AutocompleteUnsupportedFieldName : uint8_t
@@ -527,52 +532,6 @@ class SameOriginCheckerImpl final : public nsIChannelEventSink,
   NS_DECL_NSIINTERFACEREQUESTOR
 };
 
-class StableStateEventTarget final : public nsISerialEventTarget
-{
-public:
-  NS_DECL_THREADSAFE_ISUPPORTS
-  NS_DECL_NSIEVENTTARGET_FULL
-private:
-  ~StableStateEventTarget() {}
-};
-
-NS_IMPL_ISUPPORTS(StableStateEventTarget, nsISerialEventTarget);
-
-bool
-StableStateEventTarget::IsOnCurrentThreadInfallible()
-{
-  return true;
-}
-
-NS_IMETHODIMP
-StableStateEventTarget::IsOnCurrentThread(bool* aResult)
-{
-  *aResult = true;
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-StableStateEventTarget::Dispatch(already_AddRefed<nsIRunnable> aEvent, uint32_t aFlags)
-{
-  if (NS_WARN_IF(!CycleCollectedJSContext::Get())) {
-    return NS_ERROR_UNEXPECTED;
-  }
-  nsContentUtils::RunInStableState(Move(aEvent));
-  return NS_OK;
-}
-
-NS_IMETHODIMP
-StableStateEventTarget::DispatchFromScript(nsIRunnable* aEvent, uint32_t aFlags)
-{
-  return Dispatch(nsCOMPtr<nsIRunnable>(aEvent).forget(), aFlags);
-}
-
-NS_IMETHODIMP
-StableStateEventTarget::DelayedDispatch(already_AddRefed<nsIRunnable> aEvent, uint32_t aDelay)
-{
-  return NS_ERROR_NOT_IMPLEMENTED;
-}
-
 } // namespace
 
 /**
@@ -756,6 +715,10 @@ nsContentUtils::Init()
   Preferences::AddBoolVarCache(&sAnimationsAPIElementAnimateEnabled,
                                "dom.animations-api.element-animate.enabled", false);
 
+  Preferences::AddBoolVarCache(&sAnimationsAPIPendingMemberEnabled,
+                               "dom.animations-api.pending-member.enabled",
+                               false);
+
   Preferences::AddBoolVarCache(&sGetBoxQuadsEnabled,
                                "layout.css.getBoxQuads.enabled", false);
 
@@ -797,9 +760,6 @@ nsContentUtils::Init()
   Element::InitCCCallbacks();
 
   Unused << nsRFPService::GetOrCreate();
-
-  RefPtr<StableStateEventTarget> stableStateEventTarget = new StableStateEventTarget();
-  stableStateEventTarget.forget(&sStableStateEventTarget);
 
   nsCOMPtr<nsIUUIDGenerator> uuidGenerator =
     do_GetService("@mozilla.org/uuid-generator;1", &rv);
@@ -1187,7 +1147,7 @@ nsContentUtils::InternalSerializeAutocompleteAttribute(const nsAttrValue* aAttrV
                                                        mozilla::dom::AutocompleteInfo& aInfo,
                                                        bool aGrantAllValidValue)
 {
-  // No sandbox attribute so we are done
+  // No autocomplete attribute so we are done
   if (!aAttrVal) {
     return eAutocompleteAttrState_Invalid;
   }
@@ -2212,8 +2172,6 @@ nsContentUtils::Shutdown()
   sJSBytecodeMimeType = nullptr;
 
   NS_IF_RELEASE(sSameOriginChecker);
-
-  NS_IF_RELEASE(sStableStateEventTarget);
 
   if (sUserInteractionObserver) {
     sUserInteractionObserver->Shutdown();
@@ -5819,13 +5777,6 @@ nsContentUtils::IsInStableOrMetaStableState()
   return CycleCollectedJSContext::Get()->IsInStableOrMetaStableState();
 }
 
-/* static */
-nsISerialEventTarget*
-nsContentUtils::GetStableStateEventTarget()
-{
-  return sStableStateEventTarget;
-}
-
 /*
  * Helper function for nsContentUtils::ProcessViewportInfo.
  *
@@ -9076,8 +9027,6 @@ nsContentUtils::IsNonSubresourceRequest(nsIChannel* aChannel)
 nsContentUtils::StorageAccess
 nsContentUtils::StorageAllowedForWindow(nsPIDOMWindowInner* aWindow)
 {
-  MOZ_ASSERT(aWindow->IsInnerWindow());
-
   if (nsIDocument* document = aWindow->GetExtantDoc()) {
     nsCOMPtr<nsIPrincipal> principal = document->NodePrincipal();
     return InternalStorageAllowedForPrincipal(principal, aWindow);
@@ -9166,7 +9115,6 @@ nsContentUtils::InternalStorageAllowedForPrincipal(nsIPrincipal* aPrincipal,
                                                    nsPIDOMWindowInner* aWindow)
 {
   MOZ_ASSERT(aPrincipal);
-  MOZ_ASSERT(!aWindow || aWindow->IsInnerWindow());
 
   StorageAccess access = StorageAccess::eAllow;
 
@@ -10185,23 +10133,6 @@ nsContentUtils::UnregisterUnresolvedElement(Element* aElement)
   registry->UnregisterUnresolvedElement(aElement, typeAtom);
 }
 
-/* static */ CustomElementDefinition*
-nsContentUtils::GetElementDefinitionIfObservingAttr(Element* aCustomElement,
-                                                    nsAtom* aExtensionType,
-                                                    nsAtom* aAttrName)
-{
-  CustomElementDefinition* definition =
-    aCustomElement->GetCustomElementDefinition();
-
-  // Custom element not defined yet or attribute is not in the observed
-  // attribute list.
-  if (!definition || !definition->IsInObservedAttributeList(aAttrName)) {
-    return nullptr;
-  }
-
-  return definition;
-}
-
 /* static */ void
 nsContentUtils::EnqueueUpgradeReaction(Element* aElement,
                                        CustomElementDefinition* aDefinition)
@@ -11049,4 +10980,45 @@ nsContentUtils::DevToolsEnabled(JSContext* aCx)
   }
 
   return workerPrivate->DevToolsEnabled();
+}
+
+/* static */ bool
+nsContentUtils::ContentIsLink(nsIContent* aContent)
+{
+  return aContent && (aContent->IsHTMLElement(nsGkAtoms::a) ||
+                      aContent->AttrValueIs(kNameSpaceID_XLink, nsGkAtoms::type,
+                                            nsGkAtoms::simple, eCaseMatters));
+}
+
+/* static */ already_AddRefed<EventTarget>
+nsContentUtils::TryGetTabChildGlobalAsEventTarget(nsISupports* aFrom)
+{
+  nsCOMPtr<nsIFrameLoaderOwner> frameLoaderOwner = do_QueryInterface(aFrom);
+  if (!frameLoaderOwner) {
+    return nullptr;
+  }
+
+  RefPtr<nsFrameLoader> frameLoader = frameLoaderOwner->GetFrameLoader();
+  if (!frameLoader) {
+    return nullptr;
+  }
+
+  nsCOMPtr<EventTarget> target = frameLoader->GetTabChildGlobalAsEventTarget();
+  return target.forget();
+}
+
+/* static */ uint32_t
+nsContentUtils::InnerOrOuterWindowCreated()
+{
+  MOZ_ASSERT(NS_IsMainThread());
+  ++sInnerOrOuterWindowCount;
+  return ++sInnerOrOuterWindowSerialCounter;
+}
+
+/* static */ void
+nsContentUtils::InnerOrOuterWindowDestroyed()
+{
+  MOZ_ASSERT(NS_IsMainThread());
+  MOZ_ASSERT(sInnerOrOuterWindowCount > 0);
+  --sInnerOrOuterWindowCount;
 }

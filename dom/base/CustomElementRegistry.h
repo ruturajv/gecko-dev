@@ -313,12 +313,11 @@ private:
   void Enqueue(Element* aElement, CustomElementReaction* aReaction);
 
 private:
-  class ProcessBackupQueueRunnable : public mozilla::Runnable {
+  class BackupQueueMicroTask final : public mozilla::MicroTaskRunnable {
     public:
-      explicit ProcessBackupQueueRunnable(
+      explicit BackupQueueMicroTask(
         CustomElementReactionsStack* aReactionStack)
-        : Runnable(
-            "dom::CustomElementReactionsStack::ProcessBackupQueueRunnable")
+        : MicroTaskRunnable()
         , mReactionStack(aReactionStack)
       {
         MOZ_ASSERT(!mReactionStack->mIsBackupQueueProcessing,
@@ -326,11 +325,10 @@ private:
         mReactionStack->mIsBackupQueueProcessing = true;
       }
 
-      NS_IMETHOD Run() override
+      virtual void Run(AutoSlowOperation& aAso) override
       {
         mReactionStack->InvokeBackupQueue();
         mReactionStack->mIsBackupQueueProcessing = false;
-        return NS_OK;
       }
 
     private:
@@ -480,15 +478,24 @@ public:
 
 class MOZ_RAII AutoCEReaction final {
   public:
-    explicit AutoCEReaction(CustomElementReactionsStack* aReactionsStack)
-      : mReactionsStack(aReactionsStack) {
+    // JSContext is allowed to be a nullptr if we are guaranteeing that we're
+    // not doing something that might throw but not finish reporting a JS
+    // exception during the lifetime of the AutoCEReaction.
+    AutoCEReaction(CustomElementReactionsStack* aReactionsStack, JSContext* aCx)
+      : mReactionsStack(aReactionsStack)
+      , mCx(aCx) {
       mReactionsStack->CreateAndPushElementQueue();
     }
     ~AutoCEReaction() {
+      Maybe<JS::AutoSaveExceptionState> ases;
+      if (mCx) {
+        ases.emplace(mCx);
+      }
       mReactionsStack->PopAndInvokeElementQueue();
     }
   private:
     RefPtr<CustomElementReactionsStack> mReactionsStack;
+    JSContext* mCx;
 };
 
 } // namespace dom

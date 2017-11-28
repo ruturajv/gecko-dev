@@ -10,6 +10,7 @@
 #include "mozilla/dom/ElementInlines.h"
 #include "mozilla/dom/Promise.h"
 #include "mozilla/ArrayUtils.h"
+#include "mozilla/NotNull.h"
 #include "mozilla/MathAlgorithms.h"
 #include "mozilla/AsyncEventDispatcher.h"
 #include "mozilla/dom/MediaEncryptedEvent.h"
@@ -17,6 +18,7 @@
 #include "mozilla/EventDispatcher.h"
 #include "mozilla/Sprintf.h"
 
+#include "AutoplayPolicy.h"
 #include "base/basictypes.h"
 #include "nsIDOMHTMLMediaElement.h"
 #include "TimeRanges.h"
@@ -1966,6 +1968,13 @@ NS_IMETHODIMP HTMLMediaElement::Load()
 
 void HTMLMediaElement::DoLoad()
 {
+  // Check if media is allowed for the docshell.
+  nsCOMPtr<nsIDocShell> docShell = OwnerDoc()->GetDocShell();
+  if (docShell && !docShell->GetAllowMedia()) {
+    LOG(LogLevel::Debug, ("%p Media not allowed", this));
+    return;
+  }
+
   if (mIsRunningLoadMethod) {
     return;
   }
@@ -1975,8 +1984,7 @@ void HTMLMediaElement::DoLoad()
   // intent to play by calling load() in the click handler of a "catalog
   // view" of a gallery of videos.
   if (EventStateManager::IsHandlingUserInput()) {
-    mHasUserInteraction = true;
-
+    mHasUserInteractedLoadOrSeek = true;
     // Mark the channel as urgent-start when autopaly so that it will play the
     // media from src after loading enough resource.
     if (HasAttr(kNameSpaceID_None, nsGkAtoms::autoplay)) {
@@ -2514,12 +2522,6 @@ HTMLMediaElement::LoadResource()
     mChannelLoader = nullptr;
   }
 
-  // Check if media is allowed for the docshell.
-  nsCOMPtr<nsIDocShell> docShell = OwnerDoc()->GetDocShell();
-  if (docShell && !docShell->GetAllowMedia()) {
-    return MediaResult(NS_ERROR_FAILURE, "Media not allowed");
-  }
-
   // Set the media element's CORS mode only when loading a resource
   mCORSMode = AttrValueToCORSMode(GetParsedAttr(nsGkAtoms::crossorigin));
 
@@ -2755,7 +2757,7 @@ HTMLMediaElement::Seek(double aTime,
   // Detect if user has interacted with element by seeking so that
   // play will not be blocked when initiated by a script.
   if (EventStateManager::IsHandlingUserInput()) {
-    mHasUserInteraction = true;
+    mHasUserInteractedLoadOrSeek = true;
   }
 
   StopSuspendingAfterFirstFrame();
@@ -3158,6 +3160,8 @@ public:
     MOZ_ASSERT(mCapturedTrackSource);
     MOZ_ASSERT(mOwningStream);
     MOZ_ASSERT(IsTrackIDExplicit(mDestinationTrackID));
+
+    mCapturedTrackSource->RegisterSink(this);
   }
 
   void Destroy() override
@@ -3196,6 +3200,15 @@ public:
     Destroy();
   }
 
+  /**
+   * Do not keep the track source alive. The source lifetime is controlled by
+   * its associated tracks.
+   */
+  bool KeepsSourceAlive() const override
+  {
+    return false;
+  }
+
   void PrincipalChanged() override
   {
     if (!mCapturedTrackSource) {
@@ -3205,6 +3218,16 @@ public:
 
     mPrincipal = mCapturedTrackSource->GetPrincipal();
     MediaStreamTrackSource::PrincipalChanged();
+  }
+
+  void MutedChanged(bool aNewState) override
+  {
+    if (!mCapturedTrackSource) {
+      // This could happen during shutdown.
+      return;
+    }
+
+    MediaStreamTrackSource::MutedChanged(aNewState);
   }
 
 private:
@@ -4020,7 +4043,7 @@ HTMLMediaElement::HTMLMediaElement(already_AddRefed<mozilla::dom::NodeInfo>& aNo
     mIsEncrypted(false),
     mWaitingForKey(NOT_WAITING_FOR_KEY),
     mDisableVideo(false),
-    mHasUserInteraction(false),
+    mHasUserInteractedLoadOrSeek(false),
     mFirstFrameLoaded(false),
     mDefaultPlaybackStartPosition(0.0),
     mHasSuspendTaint(false),
@@ -4204,9 +4227,6 @@ HTMLMediaElement::PlayInternal(ErrorResult& aRv)
     return nullptr;
   }
   mPendingPlayPromises.AppendElement(promise);
-
-  // Play was not blocked so assume user interacted with the element.
-  mHasUserInteraction = true;
 
   if (mPreloadAction == HTMLMediaElement::PRELOAD_NONE) {
     // The media load algorithm will be initiated by a user interaction.
@@ -4451,6 +4471,7 @@ HTMLMediaElement::GetEventTargetParent(EventChainPreVisitor& aVisitor)
 bool HTMLMediaElement::ParseAttribute(int32_t aNamespaceID,
                                       nsAtom* aAttribute,
                                       const nsAString& aValue,
+                                      nsIPrincipal* aMaybeScriptedPrincipal,
                                       nsAttrValue& aResult)
 {
   // Mappings from 'preload' attribute strings to an enumeration.
@@ -4476,7 +4497,7 @@ bool HTMLMediaElement::ParseAttribute(int32_t aNamespaceID,
   }
 
   return nsGenericHTMLElement::ParseAttribute(aNamespaceID, aAttribute, aValue,
-                                              aResult);
+                                              aMaybeScriptedPrincipal, aResult);
 }
 
 void HTMLMediaElement::DoneCreatingElement()
@@ -7010,11 +7031,7 @@ HTMLMediaElement::UpdateAudioChannelPlayingState(bool aForcePlaying)
 bool
 HTMLMediaElement::IsAllowedToPlay()
 {
-  // Prevent media element from being auto-started by a script when
-  // media.autoplay.enabled=false
-  if (!mHasUserInteraction &&
-      !IsAutoplayEnabled() &&
-      !EventStateManager::IsHandlingUserInput()) {
+  if (!AutoplayPolicy::IsMediaElementAllowedToPlay(WrapNotNull(this))) {
 #if defined(MOZ_WIDGET_ANDROID)
     nsContentUtils::DispatchTrustedEvent(OwnerDoc(),
                                          static_cast<nsIContent*>(this),
