@@ -521,9 +521,9 @@
 }
 
 .requests-list-timings {
-  display: flex;
+/*  display: flex;
   flex: none;
-  align-items: center;
+*/  align-items: center;
   transform: scaleX(var(--timings-scale));
 }
 
