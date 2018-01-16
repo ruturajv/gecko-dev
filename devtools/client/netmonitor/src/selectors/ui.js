@@ -24,8 +24,11 @@ function getWaterfallScale(state) {
                                    timingMarkers.firstDocumentDOMContentLoadedTimestamp,
                                    timingMarkers.firstDocumentLoadTimestamp);
   const longestWidth = lastEventMillis - requests.firstStartedMillis;
+
+  // Reduce 50px for the last request's requests-list-timings-total
   return Math.min(Math.max(
-    (ui.waterfallWidth - REQUESTS_WATERFALL.LABEL_WIDTH) / longestWidth, EPSILON), 1);
+    (ui.waterfallWidth - REQUESTS_WATERFALL.LABEL_WIDTH - 50) / longestWidth,
+    EPSILON), 1);
 }
 
 module.exports = {

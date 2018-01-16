@@ -89,13 +89,14 @@ function requestsReducer(state = Requests(), action) {
         ...request,
         ...processNetworkUpdates(action.data),
       };
-      let requestEndTime = request.startedMillis + request.eventTimings.totalTime;
+      // let requestEndTime = request.startedMillis + request.eventTimings.totalTime;
 
       return {
         ...state,
         requests: mapSet(state.requests, action.id, request),
-        lastEndedMillis: requestEndTime > lastEndedMillis ?
-          requestEndTime : lastEndedMillis
+        // lastEndedMillis: requestEndTime > lastEndedMillis ?
+        //   requestEndTime : lastEndedMillis
+        lastEndedMillis: lastEndedMillis
       };
     }
 
