@@ -521,10 +521,7 @@
 }
 
 .requests-list-timings {
-/*  display: flex;
-  flex: none;
-  align-items: center;
-*/  transform: scaleX(var(--timings-scale));
+  transform: scaleX(var(--timings-scale));
 }
 
 .requests-list-timings:dir(ltr) {
