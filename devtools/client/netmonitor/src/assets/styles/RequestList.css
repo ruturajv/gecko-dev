@@ -578,7 +578,7 @@
   white-space: nowrap;
   /* This node should not be scaled - apply a reversed transformation */
   transform: scaleX(var(--timings-rev-scale));
-  width: 50px;
+  /*width: 20px;*/
   text-align: left;
 }
 
