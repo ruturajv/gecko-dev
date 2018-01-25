@@ -75,7 +75,6 @@
 .requests-list-column {
   display: table-cell;
   cursor: default;
-  text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
