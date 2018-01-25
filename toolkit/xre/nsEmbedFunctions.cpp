@@ -90,9 +90,8 @@
 #include "mozilla/Preferences.h"
 #endif
 
-#if defined(XP_LINUX) && defined(MOZ_GMP_SANDBOX)
+#if defined(XP_LINUX) && defined(MOZ_SANDBOX)
 #include "mozilla/Sandbox.h"
-#include "mozilla/SandboxInfo.h"
 #endif
 
 #if defined(XP_LINUX)
@@ -351,8 +350,8 @@ XRE_InitChildProcess(int aArgc,
   MOZ_ASSERT(aChildData);
 
 #if defined(XP_LINUX) && defined(MOZ_SANDBOX)
-    // This has to happen while we're still single-threaded.
-    mozilla::SandboxEarlyInit(XRE_GetProcessType());
+  // This has to happen before glib thread pools are started.
+  mozilla::SandboxEarlyInit();
 #endif
 
 #ifdef MOZ_JPROF
@@ -514,9 +513,6 @@ XRE_InitChildProcess(int aArgc,
 
 #ifdef MOZ_X11
   XInitThreads();
-#endif
-#if MOZ_WIDGET_GTK == 2
-  XRE_GlibInit();
 #endif
 #ifdef MOZ_WIDGET_GTK
   // Setting the name here avoids the need to pass this through to gtk_init().
@@ -977,7 +973,7 @@ XRE_ShutdownTestShell()
 void
 XRE_InstallX11ErrorHandler()
 {
-#if (MOZ_WIDGET_GTK == 3)
+#ifdef MOZ_WIDGET_GTK
   InstallGdkErrorHandler();
 #else
   InstallX11ErrorHandler();

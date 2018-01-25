@@ -20,7 +20,6 @@
 #include "nsIAuthPromptProvider.h"
 #include "nsIBaseWindow.h"
 #include "nsIClipboardCommands.h"
-#include "nsIContentViewerContainer.h"
 #include "nsIDeprecationWarner.h"
 #include "nsIDocCharset.h"
 #include "nsIDocShell.h"
@@ -71,7 +70,6 @@ namespace dom {
 class ClientInfo;
 class ClientSource;
 class EventTarget;
-class PendingGlobalHistoryEntry;
 typedef uint32_t ScreenOrientationInternal;
 } // namespace dom
 } // namespace mozilla
@@ -128,7 +126,6 @@ class nsDocShell final
   , public nsIScrollable
   , public nsITextScroll
   , public nsIDocCharset
-  , public nsIContentViewerContainer
   , public nsIRefreshURI
   , public nsIWebProgressListener
   , public nsIWebPageDescriptor
@@ -184,7 +181,6 @@ public:
   NS_DECL_NSIINTERFACEREQUESTOR
   NS_DECL_NSIWEBPROGRESSLISTENER
   NS_DECL_NSIREFRESHURI
-  NS_DECL_NSICONTENTVIEWERCONTAINER
   NS_DECL_NSIWEBPAGEDESCRIPTOR
   NS_DECL_NSIAUTHPROMPTPROVIDER
   NS_DECL_NSICLIPBOARDCOMMANDS
@@ -524,6 +520,7 @@ private: // member functions
                      bool aLoadReplace,
                      bool aLoadFromExternal,
                      bool aForceAllowDataURI,
+                     bool aOriginalFrameSrc,
                      nsIURI* aReferrer,
                      bool aSendReferrer,
                      uint32_t aReferrerPolicy,
@@ -869,6 +866,8 @@ private: // member functions
   nsresult EnsureFind();
   nsresult EnsureCommandHandler();
   nsresult RefreshURIFromQueue();
+  nsresult Embed(nsIContentViewer* aContentViewer,
+                 const char* aCommand, nsISupports* aExtraInfo);
   nsresult GetEldestPresContext(nsPresContext** aPresContext);
   nsresult CheckLoadingPermissions();
   nsresult PersistLayoutHistoryState();
@@ -910,7 +909,6 @@ private: // data members
   nsTObserverArray<nsWeakPtr> mReflowObservers;
   nsTObserverArray<nsWeakPtr> mScrollObservers;
   mozilla::OriginAttributes mOriginAttributes;
-  mozilla::UniquePtr<mozilla::dom::PendingGlobalHistoryEntry> mPrerenderGlobalHistory;
   mozilla::UniquePtr<mozilla::dom::ClientSource> mInitialClientSource;
   RefPtr<nsDOMNavigationTiming> mTiming;
   RefPtr<nsDSURIContentListener> mContentListener;
@@ -1112,7 +1110,6 @@ private: // data members
   bool mIsOffScreenBrowser : 1;
   bool mIsActive : 1;
   bool mDisableMetaRefreshWhenInactive : 1;
-  bool mIsPrerendered : 1;
   bool mIsAppTab : 1;
   bool mUseGlobalHistory : 1;
   bool mUseRemoteTabs : 1;

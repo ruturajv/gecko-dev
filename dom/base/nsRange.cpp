@@ -25,7 +25,6 @@
 #include "nsContentUtils.h"
 #include "nsGenericDOMDataNode.h"
 #include "nsTextFrame.h"
-#include "nsFontFaceList.h"
 #include "mozilla/dom/DocumentFragment.h"
 #include "mozilla/dom/DocumentType.h"
 #include "mozilla/dom/RangeBinding.h"
@@ -39,6 +38,7 @@
 #include "nsStyleStruct.h"
 #include "nsStyleStructInlines.h"
 #include "nsComputedDOMStyle.h"
+#include "mozilla/dom/InspectorFontFace.h"
 
 using namespace mozilla;
 using namespace mozilla::dom;
@@ -123,7 +123,7 @@ nsRange::CompareNodeToRange(nsINode* aNode, nsRange* aRange,
     nodeEnd = static_cast<int32_t>(childCount);
   }
   else {
-    nodeStart = parent->IndexOf(aNode);
+    nodeStart = parent->ComputeIndexOf(aNode);
     nodeEnd = nodeStart + 1;
     MOZ_ASSERT(nodeStart < nodeEnd, "nodeStart shouldn't be INT32_MAX");
   }
@@ -969,7 +969,7 @@ nsRange::IntersectsNode(nsINode& aNode, ErrorResult& aRv)
   }
 
   // Step 5.
-  int32_t nodeIndex = parent->IndexOf(&aNode);
+  int32_t nodeIndex = parent->ComputeIndexOf(&aNode);
 
   // Steps 6-7.
   // Note: if disconnected is true, ComparePoints returns 1.
@@ -1104,7 +1104,7 @@ IndexOf(nsINode* aChild)
 {
   nsINode* parent = aChild->GetParentNode();
 
-  return parent ? parent->IndexOf(aChild) : -1;
+  return parent ? parent->ComputeIndexOf(aChild) : -1;
 }
 
 void
@@ -1571,9 +1571,10 @@ nsRange::SelectNodesInContainer(nsINode* aContainer,
                                 nsIContent* aEndContent)
 {
   MOZ_ASSERT(aContainer);
-  MOZ_ASSERT(aContainer->IndexOf(aStartContent) <= aContainer->IndexOf(aEndContent));
-  MOZ_ASSERT(aStartContent && aContainer->IndexOf(aStartContent) != -1);
-  MOZ_ASSERT(aEndContent && aContainer->IndexOf(aEndContent) != -1);
+  MOZ_ASSERT(aContainer->ComputeIndexOf(aStartContent) <=
+               aContainer->ComputeIndexOf(aEndContent));
+  MOZ_ASSERT(aStartContent && aContainer->ComputeIndexOf(aStartContent) != -1);
+  MOZ_ASSERT(aEndContent && aContainer->ComputeIndexOf(aEndContent) != -1);
 
   nsINode* newRoot = ComputeRootNode(aContainer, mMaySpanAnonymousSubtrees);
   MOZ_ASSERT(newRoot);
@@ -1780,7 +1781,7 @@ nsRange::SelectNode(nsINode& aNode, ErrorResult& aRv)
     return;
   }
 
-  int32_t index = container->IndexOf(&aNode);
+  int32_t index = container->ComputeIndexOf(&aNode);
   // MOZ_ASSERT(index != -1);
   // We need to compute the index here unfortunately, because, while we have
   // support for XBL, |container| may be the node's binding parent without
@@ -3467,11 +3468,9 @@ nsRange::GetClientRectsAndTexts(
     mStart.Container(), mStart.Offset(), mEnd.Container(), mEnd.Offset(), true, true);
 }
 
-NS_IMETHODIMP
-nsRange::GetUsedFontFaces(nsIDOMFontFaceList** aResult)
+nsresult
+nsRange::GetUsedFontFaces(nsTArray<nsAutoPtr<InspectorFontFace>>& aResult)
 {
-  *aResult = nullptr;
-
   NS_ENSURE_TRUE(mStart.Container(), NS_ERROR_UNEXPECTED);
 
   nsCOMPtr<nsINode> startContainer = do_QueryInterface(mStart.Container());
@@ -3485,7 +3484,11 @@ nsRange::GetUsedFontFaces(nsIDOMFontFaceList** aResult)
   // Recheck whether we're still in the document
   NS_ENSURE_TRUE(mStart.Container()->IsInUncomposedDoc(), NS_ERROR_UNEXPECTED);
 
-  RefPtr<nsFontFaceList> fontFaceList = new nsFontFaceList();
+  // A table to map gfxFontEntry objects to InspectorFontFace objects.
+  // (We hold on to the InspectorFontFaces strongly due to the nsAutoPtrs
+  // in the nsClassHashtable, until we move them out into aResult at the end
+  // of the function.)
+  nsLayoutUtils::UsedFontFaceTable fontFaces;
 
   RangeSubtreeIterator iter;
   nsresult rv = iter.Init(this);
@@ -3510,20 +3513,25 @@ nsRange::GetUsedFontFaces(nsIDOMFontFaceList** aResult)
          int32_t offset = startContainer == endContainer ?
            mEnd.Offset() : content->GetText()->GetLength();
          nsLayoutUtils::GetFontFacesForText(frame, mStart.Offset(), offset,
-                                            true, fontFaceList);
+                                            true, fontFaces);
          continue;
        }
        if (node == endContainer) {
          nsLayoutUtils::GetFontFacesForText(frame, 0, mEnd.Offset(),
-                                            true, fontFaceList);
+                                            true, fontFaces);
          continue;
        }
     }
 
-    nsLayoutUtils::GetFontFacesForFrames(frame, fontFaceList);
+    nsLayoutUtils::GetFontFacesForFrames(frame, fontFaces);
   }
 
-  fontFaceList.forget(aResult);
+  // Take ownership of the InspectorFontFaces in the table and move them into
+  // the aResult outparam.
+  for (auto iter = fontFaces.Iter(); !iter.Done(); iter.Next()) {
+    aResult.AppendElement(Move(iter.Data()));
+  }
+
   return NS_OK;
 }
 
@@ -3669,7 +3677,7 @@ nsRange::ExcludeNonSelectableNodes(nsTArray<RefPtr<nsRange>>* aOutRanges)
           if (content && content->HasIndependentSelection()) {
             nsINode* parent = startContainer->GetParent();
             if (parent) {
-              startOffset = parent->IndexOf(startContainer);
+              startOffset = parent->ComputeIndexOf(startContainer);
               startContainer = parent;
             }
           }
@@ -3758,15 +3766,17 @@ ElementIsVisibleNoFlush(Element* aElement)
 }
 
 static void
-AppendTransformedText(InnerTextAccumulator& aResult,
-                      nsGenericDOMDataNode* aTextNode,
-                      uint32_t aStart, uint32_t aEnd)
+AppendTransformedText(InnerTextAccumulator& aResult, nsIContent* aContainer)
 {
-  nsIFrame* frame = aTextNode->GetPrimaryFrame();
+  auto textNode = static_cast<nsGenericDOMDataNode*>(aContainer);
+
+  nsIFrame* frame = textNode->GetPrimaryFrame();
   if (!IsVisibleAndNotInReplacedElement(frame)) {
     return;
   }
-  nsIFrame::RenderedText text = frame->GetRenderedText(aStart, aEnd);
+
+  nsIFrame::RenderedText text =
+    frame->GetRenderedText(0, aContainer->GetChildCount());
   aResult.Append(text.mString);
 }
 
@@ -3844,35 +3854,25 @@ IsLastNonemptyRowGroupOfTable(nsIFrame* aFrame)
 
 void
 nsRange::GetInnerTextNoFlush(DOMString& aValue, ErrorResult& aError,
-                             nsIContent* aStartContainer, uint32_t aStartOffset,
-                             nsIContent* aEndContainer, uint32_t aEndOffset)
+                             nsIContent* aContainer)
 {
   InnerTextAccumulator result(aValue);
-  nsIContent* currentNode = aStartContainer;
-  TreeTraversalState currentState = AFTER_NODE;
-  if (aStartContainer->IsNodeOfType(nsINode::eTEXT)) {
-    auto t = static_cast<nsGenericDOMDataNode*>(aStartContainer);
-    if (aStartContainer == aEndContainer) {
-      AppendTransformedText(result, t, aStartOffset, aEndOffset);
-      return;
-    }
-    AppendTransformedText(result, t, aStartOffset, t->TextLength());
-  } else {
-    if (uint32_t(aStartOffset) < aStartContainer->GetChildCount()) {
-      currentNode = aStartContainer->GetChildAt_Deprecated(aStartOffset);
-      currentState = AT_NODE;
-    }
+
+  if (aContainer->IsNodeOfType(nsINode::eTEXT)) {
+    AppendTransformedText(result, aContainer);
+    return;
   }
 
-  nsIContent* endNode = aEndContainer;
+  nsIContent* currentNode = aContainer;
+  TreeTraversalState currentState = AFTER_NODE;
+
+  nsIContent* endNode = aContainer;
   TreeTraversalState endState = AFTER_NODE;
-  if (aEndContainer->IsNodeOfType(nsINode::eTEXT)) {
-    endState = AT_NODE;
-  } else {
-    if (aEndOffset < aEndContainer->GetChildCount()) {
-      endNode = aEndContainer->GetChildAt_Deprecated(aEndOffset);
-      endState = AT_NODE;
-    }
+
+  nsIContent* firstChild = aContainer->GetFirstChild();
+  if (firstChild) {
+    currentNode = firstChild;
+    currentState = AT_NODE;
   }
 
   while (currentNode != endNode || currentState != endState) {
@@ -3932,10 +3932,6 @@ nsRange::GetInnerTextNoFlush(DOMString& aValue, ErrorResult& aError,
     }
   }
 
-  if (aEndContainer->IsNodeOfType(nsINode::eTEXT)) {
-    nsGenericDOMDataNode* t = static_cast<nsGenericDOMDataNode*>(aEndContainer);
-    AppendTransformedText(result, t, 0, aEndOffset);
-  }
   // Do not flush trailing line breaks! Required breaks at the end of the text
   // are suppressed.
 }

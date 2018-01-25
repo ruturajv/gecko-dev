@@ -4,7 +4,8 @@
 /* import-globals-from ../../framework/test/shared-head.js */
 /* exported Toolbox, restartNetMonitor, teardown, waitForExplicitFinish,
    verifyRequestItemTarget, waitFor, testFilterButtons, loadCommonFrameScript,
-   performRequestsInContent, waitForNetworkEvents, selectIndexAndWaitForSourceEditor */
+   performRequestsInContent, waitForNetworkEvents, selectIndexAndWaitForSourceEditor,
+   testColumnsAlignment */
 
 "use strict";
 
@@ -487,8 +488,8 @@ function* verifyRequestItemTarget(document, requestList, requestItem, method,
     latency, "The tooltip latency is correct.");
 
   if (status !== undefined) {
-    let value = target.querySelector(".requests-list-status-icon")
-                      .getAttribute("data-code");
+    let value = target.querySelector(".requests-list-status-code")
+                      .getAttribute("data-status-code");
     let codeValue = target.querySelector(".requests-list-status-code").textContent;
     let tooltip = target.querySelector(".requests-list-status").getAttribute("title");
     info("Displayed status: " + value);
@@ -687,6 +688,22 @@ function waitForContentMessage(name) {
       resolve(msg);
     });
   });
+}
+
+function testColumnsAlignment(headers, requestList) {
+  // Get first request line, not child 0 as this is the headers
+  let firstRequestLine = requestList.childNodes[1];
+
+  // Find number of columns
+  let numberOfColumns = headers.childElementCount;
+  for (let i = 0; i < numberOfColumns; i++) {
+    let headerColumn = headers.childNodes[i];
+    let requestColumn = firstRequestLine.childNodes[i];
+    is(headerColumn.getBoundingClientRect().left,
+       requestColumn.getBoundingClientRect().left,
+       "Headers for columns number " + i + " are aligned."
+    );
+  }
 }
 
 /**

@@ -14,6 +14,32 @@ Visit the [Servo Project page](https://servo.org/) for news and guides.
 
 ## Setting up your environment
 
+### Rustup.rs
+
+Building servo requires [rustup](https://rustup.rs/), version 1.8.0 or more recent.
+If you have an older version, run `rustup self update`.
+
+To install on Windows, download and run [`rustup-init.exe`](https://win.rustup.rs/)
+then follow the onscreen instructions.
+
+To install on other systems, run:
+
+```sh
+curl https://sh.rustup.rs -sSf | sh
+```
+
+This will also download the current stable version of Rust, which Servo won’t use.
+To skip that step, run instead:
+
+```
+curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain none
+```
+
+See also [Other installation methods](
+https://github.com/rust-lang-nursery/rustup.rs/#other-installation-methods)
+
+### Other dependencies
+
 Please select your operating system:
 * [OS X](#os-x)
 * [Debian-based Linuxes](#on-debian-based-linuxes)
@@ -56,10 +82,7 @@ sudo apt install git curl freeglut3-dev autoconf libx11-dev \
     libfreetype6-dev libgl1-mesa-dri libglib2.0-dev xorg-dev \
     gperf g++ build-essential cmake virtualenv python-pip \
     libssl1.0-dev libbz2-dev libosmesa6-dev libxmu6 libxmu-dev \
-    libglu1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev \
-    pulseaudio dbus-x11 libavcodec-dev libavformat-dev \
-    libavutil-dev libswresample-dev  libswscale-dev libdbus-1-dev \
-    libpulse-dev clang
+    libglu1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev
 ```
 
 If you using a version prior to **Ubuntu 17.04** or **Debian Sid**, replace `libssl1.0-dev` with `libssl-dev`.
@@ -75,7 +98,7 @@ sudo dnf install curl freeglut-devel libtool gcc-c++ libXi-devel \
     freetype-devel mesa-libGL-devel mesa-libEGL-devel glib2-devel libX11-devel libXrandr-devel gperf \
     fontconfig-devel cabextract ttmkfdir python python-virtualenv python-pip expat-devel \
     rpm-build openssl-devel cmake bzip2-devel libXcursor-devel libXmu-devel mesa-libOSMesa-devel \
-    dbus-devel ncurses-devel pulseaudio-libs-devel clang clang-libs
+    dbus-devel ncurses-devel
 ```
 #### On CentOS
 
@@ -84,30 +107,19 @@ sudo yum install curl freeglut-devel libtool gcc-c++ libXi-devel \
     freetype-devel mesa-libGL-devel mesa-libEGL-devel glib2-devel libX11-devel libXrandr-devel gperf \
     fontconfig-devel cabextract ttmkfdir python python-virtualenv python-pip expat-devel \
     rpm-build openssl-devel cmake3 bzip2-devel libXcursor-devel libXmu-devel mesa-libOSMesa-devel \
-    dbus-devel ncurses-devel python34 pulseaudio-libs-devel clang clang-libs llvm-toolset-7
+    dbus-devel ncurses-devel python34
 ```
-
-Build inside `llvm-toolset` and `devtoolset`:
-```
-scl enable devtoolset-7 llvm-toolset-7 bash
-```
-with the following environmental variables set:
-```
-export CMAKE=cmake3
-export LIBCLANG_PATH=/opt/rh/llvm-toolset-7/root/usr/lib64
-```
-
 #### On openSUSE Linux
 ``` sh
 sudo zypper install libX11-devel libexpat-devel libbz2-devel Mesa-libEGL-devel Mesa-libGL-devel cabextract cmake \
     dbus-1-devel fontconfig-devel freetype-devel gcc-c++ git glib2-devel gperf \
     harfbuzz-devel libOSMesa-devel libXcursor-devel libXi-devel libXmu-devel libXrandr-devel libopenssl-devel \
-    python-pip python-virtualenv rpm-build glu-devel llvm-clang libclang
+    python-pip python-virtualenv rpm-build glu-devel
 ```
 #### On Arch Linux
 
 ``` sh
-sudo pacman -S --needed base-devel git python2 python2-virtualenv python2-pip mesa cmake bzip2 libxmu glu pkg-config clang
+sudo pacman -S --needed base-devel git python2 python2-virtualenv python2-pip mesa cmake bzip2 libxmu glu pkg-config
 ```
 #### On Gentoo Linux
 
@@ -115,7 +127,7 @@ sudo pacman -S --needed base-devel git python2 python2-virtualenv python2-pip me
 sudo emerge net-misc/curl media-libs/freeglut \
     media-libs/freetype media-libs/mesa dev-util/gperf \
     dev-python/virtualenv dev-python/pip dev-libs/openssl \
-    x11-libs/libXmu media-libs/glu x11-base/xorg-server sys-devel/clang
+    x11-libs/libXmu media-libs/glu x11-base/xorg-server
 ```
 #### On Windows (MSVC)
 
@@ -152,11 +164,9 @@ Pre-installed Android tools are needed. See wiki for
 
 ## The Rust compiler
 
-Servo's build system automatically downloads a Rust compiler to build itself.
-This is normally a specific revision of Rust upstream, but sometimes has a
-backported patch or two.
-If you'd like to know which nightly build of Rust we use, see
-[`rust-toolchain`](https://github.com/servo/servo/blob/master/rust-toolchain).
+Servo's build system uses rustup.rs to automatically download a Rust compiler.
+This is a specific version of Rust Nightly determined by the
+[`rust-toolchain`](https://github.com/servo/servo/blob/master/rust-toolchain) file.
 
 ## Building
 

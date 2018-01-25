@@ -380,10 +380,6 @@ nsStyleBorder::nsStyleBorder(const nsStyleBorder& aSrc)
   , mTwipsPerPixel(aSrc.mTwipsPerPixel)
 {
   MOZ_COUNT_CTOR(nsStyleBorder);
-  if (aSrc.mBorderColors) {
-    mBorderColors.reset(new nsBorderColors(*aSrc.mBorderColors));
-  }
-
   NS_FOR_CSS_SIDES(side) {
     mBorderStyle[side] = aSrc.mBorderStyle[side];
     mBorderColor[side] = aSrc.mBorderColor[side];
@@ -481,8 +477,7 @@ nsStyleBorder::CalcDifference(const nsStyleBorder& aNewData) const
     }
   }
 
-  if (mBorderRadius != aNewData.mBorderRadius ||
-      !mBorderColors != !aNewData.mBorderColors) {
+  if (mBorderRadius != aNewData.mBorderRadius) {
     return nsChangeHint_RepaintFrame;
   }
 
@@ -498,16 +493,6 @@ nsStyleBorder::CalcDifference(const nsStyleBorder& aNewData) const
         mBorderImageFill    != aNewData.mBorderImageFill    ||
         mBorderImageWidth   != aNewData.mBorderImageWidth) {
       return nsChangeHint_RepaintFrame;
-    }
-  }
-
-  // Note that at this point if mBorderColors is non-null so is
-  // aNewData.mBorderColors
-  if (mBorderColors) {
-    NS_FOR_CSS_SIDES(side) {
-      if ((*mBorderColors)[side] != (*aNewData.mBorderColors)[side]) {
-        return nsChangeHint_RepaintFrame;
-      }
     }
   }
 
@@ -2105,7 +2090,7 @@ public:
   {
   }
 
-  NS_IMETHOD Run() final
+  NS_IMETHOD Run() final override
   {
     MOZ_ASSERT(!mRequestProxy || NS_IsMainThread(),
                "If mRequestProxy is non-null, we need to run on main thread!");
@@ -2288,7 +2273,7 @@ CachedBorderImageData::GetCachedSVGViewportSize()
 struct PurgeCachedImagesTask : mozilla::Runnable
 {
   PurgeCachedImagesTask() : mozilla::Runnable("PurgeCachedImagesTask") {}
-  NS_IMETHOD Run() final
+  NS_IMETHOD Run() final override
   {
     mSubImages.Clear();
     return NS_OK;

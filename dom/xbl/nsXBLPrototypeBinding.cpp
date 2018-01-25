@@ -384,9 +384,9 @@ nsXBLPrototypeBinding::AttributeChanged(nsAtom* aAttribute,
                                            kNameSpaceID_XUL) &&
            dstAttr == nsGkAtoms::value)) {
         // Flush out all our kids.
-        uint32_t childCount = realElement->GetChildCount();
-        for (uint32_t i = 0; i < childCount; i++)
-          realElement->RemoveChildAt_Deprecated(0, aNotify);
+        while (realElement->HasChildren()) {
+          realElement->RemoveChildNode(realElement->GetFirstChild(), aNotify);
+        }
 
         if (!aRemoveFlag) {
           // Construct a new text node and insert it.
@@ -483,7 +483,8 @@ nsXBLPrototypeBinding::LocateInstance(Element* aBoundElement,
   if (!copyParent)
     return nullptr;
 
-  nsIContent* child = copyParent->GetChildAt_Deprecated(templParent->IndexOf(aTemplChild));
+  nsIContent* child =
+    copyParent->GetChildAt_Deprecated(templParent->ComputeIndexOf(aTemplChild));
   if (child && child->IsElement()) {
     return child->AsElement();
   }

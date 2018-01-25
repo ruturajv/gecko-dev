@@ -61,7 +61,6 @@
 #include "nsXULPrototypeCache.h"
 #endif
 
-#include "nsIDOMStyleSheet.h"
 #include "nsError.h"
 
 #include "nsIContentSecurityPolicy.h"
@@ -1004,9 +1003,12 @@ Loader::CreateSheet(nsIURI* aURI,
       NS_ASSERTION(sheet->IsComplete(),
                    "Sheet thinks it's not complete while we think it is");
 
-      // Make sure it hasn't been modified; if it has, we can't use it
-      if (sheet->IsModified()) {
-        LOG(("  Not cloning completed sheet %p because it's been modified",
+      // Make sure it hasn't been forced to have a unique inner;
+      // that is an indication that its rules have been exposed to
+      // CSSOM and so we can't use it.
+      if (sheet->HasForcedUniqueInner()) {
+        LOG(("  Not cloning completed sheet %p because it has a "
+             "forced unique inner",
              sheet.get()));
         sheet = nullptr;
         fromCompleteSheets = false;
@@ -1057,10 +1059,11 @@ Loader::CreateSheet(nsIURI* aURI,
     }
 
     if (sheet) {
-      // The sheet we have now should be either incomplete or unmodified
-      NS_ASSERTION(!sheet->IsModified() ||
+      // The sheet we have now should be either incomplete or without
+      // a forced unique inner.
+      NS_ASSERTION(!sheet->HasForcedUniqueInner() ||
                    !sheet->IsComplete(),
-                   "Unexpected modified complete sheet");
+                   "Unexpected complete sheet with forced unique inner");
       NS_ASSERTION(sheet->IsComplete() ||
                    aSheetState != eSheetComplete,
                    "Sheet thinks it's not complete while we think it is");
@@ -1813,8 +1816,8 @@ Loader::DoSheetComplete(SheetLoadData* aLoadData, nsresult aStatus,
       // If mSheetAlreadyComplete, then the sheet could well be modified between
       // when we posted the async call to SheetComplete and now, since the sheet
       // was page-accessible during that whole time.
-      MOZ_ASSERT(!data->mSheet->IsModified(),
-                 "should not get marked modified during parsing");
+      MOZ_ASSERT(!data->mSheet->HasForcedUniqueInner(),
+                 "should not get a forced unique inner during parsing");
       data->mSheet->SetComplete();
       data->ScheduleLoadEventIfNeeded(aStatus);
     }
@@ -2600,7 +2603,7 @@ NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN(Loader)
          !iter.Done();
          iter.Next()) {
       NS_CYCLE_COLLECTION_NOTE_EDGE_NAME(cb, "Sheet cache nsCSSLoader");
-      cb.NoteXPCOMChild(NS_ISUPPORTS_CAST(nsIDOMCSSStyleSheet*, iter.UserData()));
+      cb.NoteXPCOMChild(iter.UserData());
     }
   }
   nsTObserverArray<nsCOMPtr<nsICSSLoaderObserver>>::ForwardIterator

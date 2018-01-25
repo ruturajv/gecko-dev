@@ -147,12 +147,6 @@ Gecko_RecordTraversalStatistics(uint32_t total, uint32_t parallel,
 #endif
 }
 
-bool
-Gecko_IsInDocument(RawGeckoNodeBorrowed aNode)
-{
-  return aNode->IsInComposedDoc();
-}
-
 /*
  * Does this child count as significant for selector matching?
  *
@@ -849,17 +843,6 @@ Gecko_GetLookAndFeelSystemColor(int32_t aId,
 }
 
 bool
-Gecko_MatchStringArgPseudo(RawGeckoElementBorrowed aElement,
-                           CSSPseudoClassType aType,
-                           const char16_t* aIdent)
-{
-  EventStates dummyMask; // mask is never read because we pass aDependence=nullptr
-  return nsCSSPseudoClasses::StringPseudoMatches(aElement, aType, aIdent,
-                                                 aElement->OwnerDoc(),
-                                                 dummyMask, nullptr);
-}
-
-bool
 Gecko_MatchLang(RawGeckoElementBorrowed aElement,
                 nsAtom* aOverrideLang,
                 bool aHasOverrideLang,
@@ -1230,12 +1213,6 @@ Gecko_AtomEqualsUTF8IgnoreCase(nsAtom* aAtom, const char* aString, uint32_t aLen
   nsDependentAtomString atomStr(aAtom);
   NS_ConvertUTF8toUTF16 inStr(nsDependentCSubstring(aString, aLength));
   return nsContentUtils::EqualsIgnoreASCIICase(atomStr, inStr);
-}
-
-void
-Gecko_EnsureMozBorderColors(nsStyleBorder* aBorder)
-{
-  aBorder->EnsureBorderColors();
 }
 
 void
@@ -2849,4 +2826,16 @@ Gecko_GetBoolPrefValue(const char* aPrefName)
 {
   MOZ_ASSERT(NS_IsMainThread());
   return Preferences::GetBool(aPrefName);
+}
+
+bool
+Gecko_IsInServoTraversal()
+{
+  return ServoStyleSet::IsInServoTraversal();
+}
+
+bool
+Gecko_IsMainThread()
+{
+  return NS_IsMainThread();
 }

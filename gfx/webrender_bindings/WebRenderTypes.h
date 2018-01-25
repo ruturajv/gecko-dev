@@ -76,11 +76,10 @@ SurfaceFormatToImageFormat(gfx::SurfaceFormat aFormat) {
     case gfx::SurfaceFormat::B8G8R8A8:
       return Some(wr::ImageFormat::BGRA8);
     case gfx::SurfaceFormat::A8:
-      return Some(wr::ImageFormat::A8);
+      return Some(wr::ImageFormat::R8);
     case gfx::SurfaceFormat::R8G8:
       return Some(wr::ImageFormat::RG8);
     case gfx::SurfaceFormat::UNKNOWN:
-      return Some(wr::ImageFormat::Invalid);
     default:
       return Nothing();
   }
@@ -91,7 +90,7 @@ ImageFormatToSurfaceFormat(ImageFormat aFormat) {
   switch (aFormat) {
     case ImageFormat::BGRA8:
       return gfx::SurfaceFormat::B8G8R8A8;
-    case ImageFormat::A8:
+    case ImageFormat::R8:
       return gfx::SurfaceFormat::A8;
     default:
       return gfx::SurfaceFormat::UNKNOWN;
@@ -102,7 +101,7 @@ struct ImageDescriptor: public wr::WrImageDescriptor {
   // We need a default constructor for ipdl serialization.
   ImageDescriptor()
   {
-    format = wr::ImageFormat::Invalid;
+    format = (ImageFormat)0;
     width = 0;
     height = 0;
     stride = 0;
@@ -552,6 +551,15 @@ static inline wr::WrExternalImage NativeTextureToWrExternalImage(uint32_t aHandl
   return wr::WrExternalImage {
     wr::WrExternalImageType::NativeTexture,
     aHandle, u0, v0, u1, v1,
+    nullptr, 0
+  };
+}
+
+static inline wr::WrExternalImage InvalidToWrExternalImage()
+{
+  return wr::WrExternalImage {
+    wr::WrExternalImageType::Invalid,
+    0, 0, 0, 0, 0,
     nullptr, 0
   };
 }

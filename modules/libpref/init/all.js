@@ -108,6 +108,13 @@ pref("browser.cache.compression_level", 0);
 // Don't show "Open with" option on download dialog if true.
 pref("browser.download.forbid_open_with", false);
 
+// Remove navigator.registerContentHandler
+#ifdef EARLY_BETA_OR_EARLIER
+pref("dom.registerContentHandler.enabled", false);
+#else
+pref("dom.registerContentHandler.enabled", true);
+#endif
+
 // Whether or not testing features are enabled.
 pref("dom.quotaManager.testing", false);
 
@@ -495,6 +502,7 @@ pref("media.peerconnection.ice.trickle_grace_period", 5000);
 pref("media.peerconnection.ice.no_host", false);
 pref("media.peerconnection.ice.default_address_only", false);
 pref("media.peerconnection.ice.proxy_only", false);
+pref("media.peerconnection.rtpsourcesapi.enabled", true);
 
 // These values (aec, agc, and noise) are from media/webrtc/trunk/webrtc/common_types.h
 // kXxxUnchanged = 0, kXxxDefault = 1, and higher values are specific to each
@@ -624,7 +632,11 @@ pref("media.cubeb.logging_level", "");
 
 #ifdef NIGHTLY_BUILD
 // Cubeb sandbox (remoting) control
+#ifdef XP_MACOSX
+pref("media.cubeb.sandbox", false);
+#else
 pref("media.cubeb.sandbox", true);
+#endif
 #endif
 
 // Set to true to force demux/decode warnings to be treated as errors.
@@ -869,6 +881,7 @@ pref("gfx.logging.peak-texture-usage.enabled", false);
 
 pref("gfx.ycbcr.accurate-conversion", false);
 
+pref("gfx.webrender.all", false);
 #ifdef MOZ_ENABLE_WEBRENDER
 pref("gfx.webrender.enabled", true);
 #else
@@ -880,7 +893,7 @@ pref("gfx.webrender.program-binary", true);
 #endif
 
 pref("gfx.webrender.highlight-painted-layers", false);
-pref("gfx.webrender.blob-images", false);
+pref("gfx.webrender.blob-images", 2);
 pref("gfx.webrender.hit-test", false);
 
 // WebRender debugging utilities.
@@ -1277,14 +1290,10 @@ pref("dom.min_timeout_value", 4);
 pref("dom.min_background_timeout_value", 1000);
 // Timeout clamp in ms for tracking timeouts we clamp
 // Note that this requires the privacy.trackingprotection.annotate_channels pref to be on in order to have any effect.
-#ifdef NIGHTLY_BUILD
-pref("dom.min_tracking_timeout_value", 10000);
-#else
 pref("dom.min_tracking_timeout_value", 4);
-#endif
 // And for background windows
 // Note that this requires the privacy.trackingprotection.annotate_channels pref to be on in order to have any effect.
-pref("dom.min_tracking_background_timeout_value", 10000);
+pref("dom.min_tracking_background_timeout_value", 4);
 // Delay in ms from document load until we start throttling background timeouts.
 pref("dom.timeout.throttling_delay", 30000);
 
@@ -1380,6 +1389,12 @@ pref("privacy.firstparty.isolate",                        false);
 pref("privacy.firstparty.isolate.restrict_opener_access", true);
 // Anti-fingerprinting, disabled by default
 pref("privacy.resistFingerprinting", false);
+// A subset of Resist Fingerprinting protections focused specifically on timers for testing
+// This affects the Animation API, the performance APIs, Date.getTime, Event.timestamp,
+//   File.lastModified, audioContext.currentTime, canvas.captureStream.currentTime
+pref("privacy.reduceTimerPrecision", true);
+// Dynamically tune the resolution of the timer reduction for both of the two above prefs
+pref("privacy.resistFingerprinting.reduceTimerPrecision.microseconds", 20);
 // Lower the priority of network loads for resources on the tracking protection list.
 // Note that this requires the privacy.trackingprotection.annotate_channels pref to be on in order to have any effect.
 #ifdef NIGHTLY_BUILD
@@ -1393,7 +1408,7 @@ pref("dom.event.clipboardevents.enabled",   true);
 pref("dom.event.highrestimestamp.enabled",  true);
 pref("dom.event.coalesce_mouse_move",       true);
 
-pref("dom.webcomponents.enabled",           false);
+pref("dom.webcomponents.shadowdom.enabled", false);
 #ifdef NIGHTLY_BUILD
 pref("dom.webcomponents.customelements.enabled", true);
 #else
@@ -1517,6 +1532,9 @@ pref("javascript.options.shared_memory", false);
 
 pref("javascript.options.throw_on_debuggee_would_run", false);
 pref("javascript.options.dump_stack_on_debuggee_would_run", false);
+
+// Spectre security vulnerability mitigations.
+pref("javascript.options.spectre.index_masking", false);
 
 // Streams API
 pref("javascript.options.streams", false);
@@ -1681,10 +1699,14 @@ pref("network.http.accept.default", "text/html,application/xhtml+xml,application
 // Prefs allowing granular control of referers
 // 0=don't send any, 1=send only on clicks, 2=send on image requests as well
 pref("network.http.sendRefererHeader",      2);
-// Set the default Referrer Policy to be used unless overriden by the site
+// Set the default Referrer Policy; to be used unless overriden by the site
 // 0=no-referrer, 1=same-origin, 2=strict-origin-when-cross-origin,
 // 3=no-referrer-when-downgrade
-pref("network.http.referer.userControlPolicy", 3);
+pref("network.http.referer.defaultPolicy", 3);
+// Set the Private Browsing Default Referrer Policy;
+// to be used unless overriden by the site;
+// values are identical to defaultPolicy above
+pref("network.http.referer.defaultPolicy.pbmode", 2);
 // false=real referer, true=spoof referer (use target URI as referer)
 pref("network.http.referer.spoofSource", false);
 // false=allow onion referer, true=hide onion referer (use empty referer)
@@ -2866,6 +2888,10 @@ pref("bidi.browser.ui", false);
 pref("layout.word_select.eat_space_to_next_word", false);
 pref("layout.word_select.stop_at_punctuation", true);
 
+// Whether underscore should be treated as a word-breaking character for
+// word selection/arrow-key movement purposes.
+pref("layout.word_select.stop_at_underscore", false);
+
 // controls caret style and word-delete during text selection
 // 0 = use platform default
 // 1 = caret moves and blinks as when there is no selection; word
@@ -3317,8 +3343,12 @@ pref("dom.ipc.processCount.file", 1);
 // WebExtensions only support a single extension process.
 pref("dom.ipc.processCount.extension", 1);
 
-// Don't use a native event loop in the content process.
+// Whether a native event loop should be used in the content process.
+#if defined(XP_WIN) && defined(NIGHTLY_BUILD)
+pref("dom.ipc.useNativeEventProcessing.content", false);
+#else
 pref("dom.ipc.useNativeEventProcessing.content", true);
+#endif
 
 // Quantum DOM scheduling:
 pref("dom.ipc.scheduler", false);
@@ -4272,10 +4302,6 @@ pref("browser.urlbar.clickSelectsAll", false);
 // Leave this at the default, 7, to match mozilla1.0-era user expectations.
 // pref("accessibility.tabfocus", 1);
 
-// Default to using the system filepicker if possible, but allow
-// toggling to use the XUL filepicker
-pref("ui.allow_platform_file_picker", true);
-
 pref("helpers.global_mime_types_file", "/etc/mime.types");
 pref("helpers.global_mailcap_file", "/etc/mailcap");
 pref("helpers.private_mime_types_file", "~/.mime.types");
@@ -4326,10 +4352,6 @@ pref("browser.urlbar.clickSelectsAll", false);
 // 1 focuses text controls, 2 focuses other form elements, 4 adds links.
 // Leave this at the default, 7, to match mozilla1.0-era user expectations.
 // pref("accessibility.tabfocus", 1);
-
-// Default to using the system filepicker if possible, but allow
-// toggling to use the XUL filepicker
-pref("ui.allow_platform_file_picker", true);
 
 pref("helpers.global_mime_types_file", "/etc/mime.types");
 pref("helpers.global_mailcap_file", "/etc/mailcap");
@@ -4480,11 +4502,7 @@ pref("ui.panel.default_level_parent", true);
 
 pref("mousewheel.system_scroll_override_on_root_content.enabled", false);
 
-#if MOZ_WIDGET_GTK == 2
-pref("intl.ime.use_simple_context_on_password_field", true);
-#else
 pref("intl.ime.use_simple_context_on_password_field", false);
-#endif
 
 #ifdef MOZ_WIDGET_GTK
 // maximum number of fonts to substitute for a generic
@@ -4679,7 +4697,7 @@ pref("image.mem.animated.discardable", true);
 
 // Decodes images into shared memory to allow direct use in separate
 // rendering processes.
-pref("image.mem.shared", false);
+pref("image.mem.shared", 2);
 
 // Allows image locking of decoded image data in content processes.
 pref("image.mem.allow_locking_in_content_processes", true);
@@ -4807,11 +4825,14 @@ pref("network.tcp.keepalive.retry_interval", 1); // seconds
 pref("network.tcp.keepalive.probe_count", 4);
 #endif
 
-#if defined(XP_WIN) || defined(XP_MACOSX)
+#if !defined(EARLY_BETA_OR_EARLIER)
+pref("network.tcp.tcp_fastopen_enable", false);
+#elif  defined(XP_WIN) || defined(XP_MACOSX)
 pref("network.tcp.tcp_fastopen_enable", true);
 #else
 pref("network.tcp.tcp_fastopen_enable", false);
 #endif
+
 pref("network.tcp.tcp_fastopen_consecutive_failure_limit", 5);
 // We are trying to detect stalled tcp connections that use TFO and TLS
 // (bug 1395494).
@@ -5016,6 +5037,9 @@ pref("extensions.webextensions.remote", false);
 // purposes only. Setting this to false will break moz-extension URI loading
 // unless other process sandboxing and extension remoting prefs are changed.
 pref("extensions.webextensions.protocol.remote", true);
+
+// Disable tab hiding API by default.
+pref("extensions.webextensions.tabhide.enabled", false);
 
 // Report Site Issue button
 pref("extensions.webcompat-reporter.newIssueEndpoint", "https://webcompat.com/issues/new");
@@ -5229,7 +5253,7 @@ pref("dom.placeholder.show_on_focus", true);
 
 // WebVR is enabled by default in beta and release for Windows and for all
 // platforms in nightly and aurora.
-#if defined(XP_WIN) || defined(XP_MACOSX) || !defined(RELEASE_OR_BETA)
+#if defined(XP_WIN) || !defined(RELEASE_OR_BETA)
 pref("dom.vr.enabled", true);
 #else
 pref("dom.vr.enabled", false);
@@ -5287,7 +5311,7 @@ pref("dom.vr.osvr.enabled", false);
 // We are only enabling WebVR by default on 64-bit builds (Bug 1384459)
 pref("dom.vr.openvr.enabled", false);
 #elif defined(XP_WIN) || defined(XP_MACOSX)
-// We enable WebVR by default for Windows and macOS
+// We enable OpenVR by default for Windows and macOS
 pref("dom.vr.openvr.enabled", true);
 #else
 // See Bug 1310663 (Linux)
@@ -5794,25 +5818,6 @@ pref("layout.css.servo.enabled", false);
 pref("layout.css.servo.chrome.enabled", false);
 #endif
 
-// HSTS Priming
-// If a request is mixed-content, send an HSTS priming request to attempt to
-// see if it is available over HTTPS.
-// Don't change the order of evaluation of mixed-content and HSTS upgrades in
-// order to be most compatible with current standards in Release
-pref("security.mixed_content.send_hsts_priming", false);
-pref("security.mixed_content.use_hsts", false);
-#ifdef EARLY_BETA_OR_EARLIER
-// Change the order of evaluation so HSTS upgrades happen before
-// mixed-content blocking
-pref("security.mixed_content.send_hsts_priming", true);
-pref("security.mixed_content.use_hsts", true);
-#endif
-// Approximately 1 week default cache for HSTS priming failures, in seconds
-pref("security.mixed_content.hsts_priming_cache_timeout", 604800);
-// Force the channel to timeout in 2 seconds if we have not received
-// expects a time in milliseconds
-pref("security.mixed_content.hsts_priming_request_timeout", 2000);
-
 // TODO: Bug 1324406: Treat 'data:' documents as unique, opaque origins
 // If true, data: URIs will be treated as unique opaque origins, hence will use
 // a NullPrincipal as the security context.
@@ -5925,3 +5930,4 @@ pref("layers.omtp.enabled", true);
 pref("layers.omtp.enabled", false);
 #endif
 pref("layers.omtp.release-capture-on-main-thread", false);
+pref("layers.omtp.paint-workers", 1);

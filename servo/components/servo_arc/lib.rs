@@ -8,7 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! Fork of Arc for Servo. This has the following advantages over std::Arc:
+//! Fork of Arc for Servo. This has the following advantages over std::sync::Arc:
 //!
 //! * We don't waste storage on the weak reference count.
 //! * We don't do extra RMU operations to handle the possibility of weak references.
@@ -83,6 +83,7 @@ const MAX_REFCOUNT: usize = (isize::MAX) as usize;
 /// that this is all a temporary hack, this restriction is fine for now.
 ///
 /// [1]: https://github.com/rust-lang/rust/issues/27730
+// FIXME: remove this and use std::ptr::NonNull when Firefox requires Rust 1.25+
 pub struct NonZeroPtrMut<T: ?Sized + 'static>(&'static mut T);
 impl<T: ?Sized> NonZeroPtrMut<T> {
     pub fn new(ptr: *mut T) -> Self {

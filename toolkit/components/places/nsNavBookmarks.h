@@ -115,6 +115,12 @@ public:
   typedef mozilla::places::ItemChangeData ItemChangeData;
   typedef mozilla::places::BookmarkStatementId BookmarkStatementId;
 
+  nsresult OnVisit(nsIURI* aURI, int64_t aVisitId, PRTime aTime,
+                   int64_t aSessionId, int64_t aReferringId,
+                   uint32_t aTransitionType, const nsACString& aGUID,
+                   bool aHidden, uint32_t aVisitCount,
+                   uint32_t aTyped, const nsAString& aLastKnownTitle);
+
   nsresult ResultNodeForContainer(int64_t aID,
                                   nsNavHistoryQueryOptions* aOptions,
                                   nsNavHistoryResultNode** aNode);
@@ -123,6 +129,7 @@ public:
   // For each child, a ResultNode is created and added to |children|.
   // The results are ordered by folder position.
   nsresult QueryFolderChildren(int64_t aFolderId,
+                               nsNavHistoryQueryOptions* aOriginalOptions,
                                nsNavHistoryQueryOptions* aOptions,
                                nsCOMArray<nsNavHistoryResultNode>* children);
 
@@ -133,8 +140,12 @@ public:
    * @param aRow
    *        A Storage statement (in the case of synchronous execution) or row of
    *        a result set (in the case of asynchronous execution).
+   * @param aOriginalOptions
+   *        The original options of the parent folder node.  These are the
+   *        options used to define the parent node.
    * @param aOptions
-   *        The options of the parent folder node.
+   *        The options of the parent folder node. These are the options used
+   *        to fill the parent node.
    * @param aChildren
    *        The children of the parent folder node.
    * @param aCurrentIndex
@@ -142,6 +153,7 @@ public:
    *        this should be set to -1.
    */
   nsresult ProcessFolderNodeRow(mozIStorageValueArray* aRow,
+                                nsNavHistoryQueryOptions* aOriginalOptions,
                                 nsNavHistoryQueryOptions* aOptions,
                                 nsCOMArray<nsNavHistoryResultNode>* aChildren,
                                 int32_t& aCurrentIndex);

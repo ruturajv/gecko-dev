@@ -33,6 +33,7 @@ class DocGroup;
 class DocumentFragment;
 class DOMRect;
 class DOMRectList;
+class InspectorFontFace;
 class Selection;
 } // namespace dom
 } // namespace mozilla
@@ -256,7 +257,7 @@ public:
     if (!parentNode) {
       return nullptr;
     }
-    int32_t indexInParent = parentNode->IndexOf(aNode);
+    int32_t indexInParent = parentNode->ComputeIndexOf(aNode);
     if (NS_WARN_IF(indexInParent < 0)) {
       return nullptr;
     }
@@ -272,7 +273,7 @@ public:
     if (!parentNode) {
       return nullptr;
     }
-    int32_t indexInParent = parentNode->IndexOf(aNode);
+    int32_t indexInParent = parentNode->ComputeIndexOf(aNode);
     if (NS_WARN_IF(indexInParent < 0)) {
       return nullptr;
     }
@@ -280,7 +281,8 @@ public:
     return parentNode;
   }
 
-  NS_IMETHOD GetUsedFontFaces(nsIDOMFontFaceList** aResult);
+  nsresult GetUsedFontFaces(
+      nsTArray<nsAutoPtr<mozilla::dom::InspectorFontFace>>& aResult);
 
   // nsIMutationObserver methods
   NS_DECL_NSIMUTATIONOBSERVER_CHARACTERDATACHANGED
@@ -363,10 +365,7 @@ public:
 
   static void GetInnerTextNoFlush(mozilla::dom::DOMString& aValue,
                                   mozilla::ErrorResult& aError,
-                                  nsIContent* aStartContainer,
-                                  uint32_t aStartOffset,
-                                  nsIContent* aEndContainer,
-                                  uint32_t aEndOffset);
+                                  nsIContent* aContainer);
 
   nsINode* GetParentObject() const { return mOwner; }
   virtual JSObject* WrapObject(JSContext* cx, JS::Handle<JSObject*> aGivenProto) override final;
@@ -476,8 +475,8 @@ protected:
   /**
    * XXX nsRange should accept 0 - UINT32_MAX as offset.  However, users of
    *     nsRange treat offset as int32_t.  Additionally, some other internal
-   *     APIs like nsINode::IndexOf() use int32_t.  Therefore, nsRange should
-   *     accept only 0 - INT32_MAX as valid offset for now.
+   *     APIs like nsINode::ComputeIndexOf() use int32_t.  Therefore,
+   *     nsRange should accept only 0 - INT32_MAX as valid offset for now.
    */
   static bool IsValidOffset(uint32_t aOffset)
   {

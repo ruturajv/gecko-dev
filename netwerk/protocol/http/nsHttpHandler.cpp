@@ -16,8 +16,6 @@
 #include "nsHttpAuthCache.h"
 #include "nsStandardURL.h"
 #include "nsIDOMWindow.h"
-#include "nsIDOMNavigator.h"
-#include "nsIMozNavigatorNetwork.h"
 #include "nsINetworkProperties.h"
 #include "nsIHttpChannel.h"
 #include "nsIStandardURL.h"
@@ -69,6 +67,7 @@
 #include "mozilla/BasePrincipal.h"
 
 #include "mozilla/dom/ContentParent.h"
+#include "mozilla/dom/Navigator.h"
 
 #include "nsNSSComponent.h"
 
@@ -318,6 +317,13 @@ nsHttpHandler::SetFastOpenOSSupport()
     return;
 #elif defined(XP_WIN)
     mFastOpenSupported = IsWindows10BuildOrLater(16299);
+
+    if (mFastOpenSupported) {
+        // We have some problems with lavasoft software and tcp fast open.
+        if (GetModuleHandleW(L"pmls64.dll") || GetModuleHandleW(L"rlls64.dll")) {
+            mFastOpenSupported = false;
+        }
+    }
 #else
 
     nsAutoCString version;
@@ -2648,14 +2654,12 @@ nsHttpHandler::TickleWifi(nsIInterfaceRequestor *cb)
     if (!piWindow)
         return;
 
-    nsCOMPtr<nsIDOMNavigator> domNavigator = piWindow->GetNavigator();
-    nsCOMPtr<nsIMozNavigatorNetwork> networkNavigator =
-        do_QueryInterface(domNavigator);
-    if (!networkNavigator)
+    RefPtr<dom::Navigator> navigator = piWindow->GetNavigator();
+    if (!navigator)
         return;
 
-    nsCOMPtr<nsINetworkProperties> networkProperties;
-    networkNavigator->GetProperties(getter_AddRefs(networkProperties));
+    nsCOMPtr<nsINetworkProperties> networkProperties =
+        navigator->GetNetworkProperties();
     if (!networkProperties)
         return;
 

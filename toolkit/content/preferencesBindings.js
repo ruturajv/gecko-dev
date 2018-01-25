@@ -13,7 +13,8 @@ const Preferences = window.Preferences = (function() {
   Cu.import("resource://gre/modules/Services.jsm");
   Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 
-  XPCOMUtils.defineLazyModuleGetter(this, "DeferredTask",
+  const lazy = {};
+  XPCOMUtils.defineLazyModuleGetter(lazy, "DeferredTask",
                                     "resource://gre/modules/DeferredTask.jsm");
 
   function getElementsByAttribute(name, value) {
@@ -180,7 +181,7 @@ const Preferences = window.Preferences = (function() {
         } else {
           if (!element._deferredValueUpdateTask) {
             element._deferredValueUpdateTask =
-              new DeferredTask(this._deferredValueUpdate.bind(this, element), 1000);
+              new lazy.DeferredTask(this._deferredValueUpdate.bind(this, element), 1000);
             this._deferredValueUpdateElements.add(element);
           } else {
             // Each time the preference is changed, restart the delay.
@@ -359,10 +360,21 @@ const Preferences = window.Preferences = (function() {
        * constructor or property getters appropriately handle this state.
        */
       function setValue(element, attribute, value) {
-        if (attribute in element)
+        if (attribute in element) {
           element[attribute] = value;
-        else
+        } else if (attribute === "checked") {
+          // The "checked" attribute can't simply be set to the specified value;
+          // it has to be set if the value is true and removed if the value
+          // is false in order to be interpreted correctly by the element.
+          if (value) {
+            // We can set it to anything; convention is to set it to itself.
+            element.setAttribute(attribute, attribute);
+          } else {
+            element.removeAttribute(attribute);
+          }
+        } else {
           element.setAttribute(attribute, value);
+        }
       }
       if (aElement.localName == "checkbox" ||
           aElement.localName == "listitem")
@@ -613,4 +625,4 @@ const Preferences = window.Preferences = (function() {
   }
 
   return Preferences;
-}.bind({})());
+}());

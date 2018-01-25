@@ -339,24 +339,24 @@ class ObjectMemoryView : public MDefinitionVisitorDefaultNoop
 
   public:
     void visitResumePoint(MResumePoint* rp);
-    void visitObjectState(MObjectState* ins);
-    void visitStoreFixedSlot(MStoreFixedSlot* ins);
-    void visitLoadFixedSlot(MLoadFixedSlot* ins);
-    void visitPostWriteBarrier(MPostWriteBarrier* ins);
-    void visitStoreSlot(MStoreSlot* ins);
-    void visitLoadSlot(MLoadSlot* ins);
-    void visitGuardShape(MGuardShape* ins);
-    void visitGuardObjectGroup(MGuardObjectGroup* ins);
-    void visitGuardUnboxedExpando(MGuardUnboxedExpando* ins);
-    void visitFunctionEnvironment(MFunctionEnvironment* ins);
-    void visitLambda(MLambda* ins);
-    void visitLambdaArrow(MLambdaArrow* ins);
-    void visitStoreUnboxedScalar(MStoreUnboxedScalar* ins);
-    void visitLoadUnboxedScalar(MLoadUnboxedScalar* ins);
-    void visitStoreUnboxedObjectOrNull(MStoreUnboxedObjectOrNull* ins);
-    void visitLoadUnboxedObjectOrNull(MLoadUnboxedObjectOrNull* ins);
-    void visitStoreUnboxedString(MStoreUnboxedString* ins);
-    void visitLoadUnboxedString(MLoadUnboxedString* ins);
+    void visitObjectState(MObjectState* ins) override;
+    void visitStoreFixedSlot(MStoreFixedSlot* ins) override;
+    void visitLoadFixedSlot(MLoadFixedSlot* ins) override;
+    void visitPostWriteBarrier(MPostWriteBarrier* ins) override;
+    void visitStoreSlot(MStoreSlot* ins) override;
+    void visitLoadSlot(MLoadSlot* ins) override;
+    void visitGuardShape(MGuardShape* ins) override;
+    void visitGuardObjectGroup(MGuardObjectGroup* ins) override;
+    void visitGuardUnboxedExpando(MGuardUnboxedExpando* ins) override;
+    void visitFunctionEnvironment(MFunctionEnvironment* ins) override;
+    void visitLambda(MLambda* ins) override;
+    void visitLambdaArrow(MLambdaArrow* ins) override;
+    void visitStoreUnboxedScalar(MStoreUnboxedScalar* ins) override;
+    void visitLoadUnboxedScalar(MLoadUnboxedScalar* ins) override;
+    void visitStoreUnboxedObjectOrNull(MStoreUnboxedObjectOrNull* ins) override;
+    void visitLoadUnboxedObjectOrNull(MLoadUnboxedObjectOrNull* ins) override;
+    void visitStoreUnboxedString(MStoreUnboxedString* ins) override;
+    void visitLoadUnboxedString(MLoadUnboxedString* ins) override;
 
   private:
     void storeOffset(MInstruction* ins, size_t offset, MDefinition* value);
@@ -861,10 +861,12 @@ IndexOf(MDefinition* ins, int32_t* res)
 {
     MOZ_ASSERT(ins->isLoadElement() || ins->isStoreElement());
     MDefinition* indexDef = ins->getOperand(1); // ins->index();
+    if (indexDef->isSpectreMaskIndex())
+        indexDef = indexDef->toSpectreMaskIndex()->index();
     if (indexDef->isBoundsCheck())
         indexDef = indexDef->toBoundsCheck()->index();
-    if (indexDef->isToInt32())
-        indexDef = indexDef->toToInt32()->getOperand(0);
+    if (indexDef->isToNumberInt32())
+        indexDef = indexDef->toToNumberInt32()->getOperand(0);
     MConstant* indexDefConst = indexDef->maybeConstantValue();
     if (!indexDefConst || indexDefConst->type() != MIRType::Int32)
         return false;
@@ -1120,14 +1122,14 @@ class ArrayMemoryView : public MDefinitionVisitorDefaultNoop
 
   public:
     void visitResumePoint(MResumePoint* rp);
-    void visitArrayState(MArrayState* ins);
-    void visitStoreElement(MStoreElement* ins);
-    void visitLoadElement(MLoadElement* ins);
-    void visitSetInitializedLength(MSetInitializedLength* ins);
-    void visitInitializedLength(MInitializedLength* ins);
-    void visitArrayLength(MArrayLength* ins);
-    void visitMaybeCopyElementsForWrite(MMaybeCopyElementsForWrite* ins);
-    void visitConvertElementsToDoubles(MConvertElementsToDoubles* ins);
+    void visitArrayState(MArrayState* ins) override;
+    void visitStoreElement(MStoreElement* ins) override;
+    void visitLoadElement(MLoadElement* ins) override;
+    void visitSetInitializedLength(MSetInitializedLength* ins) override;
+    void visitInitializedLength(MInitializedLength* ins) override;
+    void visitArrayLength(MArrayLength* ins) override;
+    void visitMaybeCopyElementsForWrite(MMaybeCopyElementsForWrite* ins) override;
+    void visitConvertElementsToDoubles(MConvertElementsToDoubles* ins) override;
 };
 
 const char* ArrayMemoryView::phaseName = "Scalar Replacement of Array";

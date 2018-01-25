@@ -27,7 +27,6 @@
 #include "nsIDocument.h"
 #include "nsIDocumentEncoder.h"
 #include "nsIDOMHTMLDocument.h"
-#include "nsIDOMAttr.h"
 #include "nsIDOMDocumentFragment.h"
 #include "nsIDOMHTMLElement.h"
 #include "nsIDOMWindow.h"
@@ -560,7 +559,7 @@ nsGenericHTMLElement::FindAncestorForm(HTMLFormElement* aCurrentForm)
         // anonymous.  Check for this the hard way.
         for (nsIContent* child = this; child != content;
              child = child->GetParent()) {
-          NS_ASSERTION(child->GetParent()->IndexOf(child) != -1,
+          NS_ASSERTION(child->GetParent()->ComputeIndexOf(child) != -1,
                        "Walked too far?");
         }
       }
@@ -3086,7 +3085,7 @@ nsGenericHTMLElement::GetInnerText(mozilla::dom::DOMString& aValue,
     }
   }
 
-  nsRange::GetInnerTextNoFlush(aValue, aError, this, 0, this, GetChildCount());
+  nsRange::GetInnerTextNoFlush(aValue, aError, this);
 }
 
 void
@@ -3102,12 +3101,12 @@ nsGenericHTMLElement::SetInnerText(const nsAString& aValue)
     UPDATE_CONTENT_MODEL, true);
   nsAutoMutationBatch mb;
 
-  uint32_t childCount = GetChildCount();
-
   mb.Init(this, true, false);
-  for (uint32_t i = 0; i < childCount; ++i) {
-    RemoveChildAt_Deprecated(0, true);
+
+  while (HasChildren()) {
+    RemoveChildNode(nsINode::GetFirstChild(), true);
   }
+
   mb.RemovalDone();
 
   nsString str;

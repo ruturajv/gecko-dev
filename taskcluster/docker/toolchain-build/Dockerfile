@@ -22,13 +22,14 @@ ENV HOME=/builds/worker \
     USER=worker \
     LOGNAME=worker \
     HOSTNAME=taskcluster-worker \
+    XZ_OPT=-T0 \
     DEBIAN_FRONTEND=noninteractive
 
 # Set a default command useful for debugging
 CMD ["/bin/bash", "--login"]
 
 # Set apt sources list to a snapshot.
-RUN for s in debian_wheezy debian_wheezy-updates debian_wheezy-backports debian-security_wheezy/updates; do \
+RUN for s in debian_wheezy debian_wheezy-updates debian-security_wheezy/updates; do \
       echo "deb http://snapshot.debian.org/archive/${s%_*}/20171210T214726Z/ ${s#*_} main"; \
     done > /etc/apt/sources.list
 
@@ -62,10 +63,10 @@ RUN apt-get -o Acquire::Check-Valid-Until=false update -q && \
       libtool \
       libx11-dev:i386 \
       make \
+      mercurial \
       ninja-build \
       p7zip-full \
       procps \
-      pxz/wheezy-backports \
       python-dev \
       python-pip \
       python-setuptools \
@@ -83,22 +84,11 @@ RUN apt-get -o Acquire::Check-Valid-Until=false update -q && \
     && \
     apt-get clean
 
-# %include python/mozbuild/mozbuild/action/tooltool.py
-COPY topsrcdir/python/mozbuild/mozbuild/action/tooltool.py /setup/tooltool.py
-
 # %include testing/mozharness/external_tools/robustcheckout.py
 COPY topsrcdir/testing/mozharness/external_tools/robustcheckout.py /usr/local/mercurial/robustcheckout.py
 
-# %include taskcluster/docker/recipes/common.sh
-COPY topsrcdir/taskcluster/docker/recipes/common.sh /setup/common.sh
-
-# %include taskcluster/docker/recipes/install-mercurial.sh
-COPY topsrcdir/taskcluster/docker/recipes/install-mercurial.sh /setup/install-mercurial.sh
-
-# %include taskcluster/docker/recipes/debian-build-system-setup.sh
-COPY topsrcdir/taskcluster/docker/recipes/debian-build-system-setup.sh /setup/system-setup.sh
-
-RUN bash /setup/system-setup.sh
+# %include taskcluster/docker/recipes/hgrc
+COPY topsrcdir/taskcluster/docker/recipes/hgrc /etc/mercurial/hgrc.d/mozilla.rc
 
 # Add pip configuration, among other things.
 # %include taskcluster/docker/recipes/dot-config

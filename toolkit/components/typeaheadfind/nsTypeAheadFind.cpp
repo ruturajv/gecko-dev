@@ -457,15 +457,25 @@ nsTypeAheadFind::FindItNow(nsIPresShell *aPresShell, bool aIsLinksOnly,
 
       if (aIsLinksOnly) {
         // Don't check if inside link when searching all text
-        RangeStartsInsideLink(returnRange, presShell, &isInsideLink,
-                              &isStartingLink);
+        RangeStartsInsideLink(static_cast<nsRange*>(returnRange.get()),
+                              presShell, &isInsideLink, &isStartingLink);
       }
 
       bool usesIndependentSelection;
-      if (!IsRangeVisible(presShell, presContext, returnRange,
-                          aIsFirstVisiblePreferred, false,
-                          getter_AddRefs(mStartPointRange),
-                          &usesIndependentSelection) ||
+      // Check actual visibility of the range, and generate some
+      // side effects (like updating mStartPointRange and
+      // setting usesIndependentSelection) that we'll need whether
+      // or not the range is visible.
+      bool canSeeRange = IsRangeVisible(presShell, presContext,
+                                        returnRange,
+                                        aIsFirstVisiblePreferred, false,
+                                        getter_AddRefs(mStartPointRange),
+                                        &usesIndependentSelection);
+
+      // If we can't see the range, we still might be able to scroll
+      // it into view if usesIndependentSelection is true. If both are
+      // false, then we treat it as a failure condition.
+      if ((!canSeeRange && !usesIndependentSelection) ||
           (aIsLinksOnly && !isInsideLink) ||
           (mStartLinksOnlyPref && aIsLinksOnly && !isStartingLink)) {
         // ------ Failure ------
@@ -841,7 +851,7 @@ nsTypeAheadFind::GetSearchContainers(nsISupports *aContainer,
 
   if (!currentSelectionRange) {
     // Ensure visible range, move forward if necessary
-    // This uses ignores the return value, but usese the side effect of
+    // This ignores the return value, but uses the side effect of
     // IsRangeVisible. It returns the first visible range after searchRange
     IsRangeVisible(presShell, presContext, mSearchRange,
                    aIsFirstVisiblePreferred, true,
@@ -874,7 +884,7 @@ nsTypeAheadFind::GetSearchContainers(nsISupports *aContainer,
 }
 
 void
-nsTypeAheadFind::RangeStartsInsideLink(nsIDOMRange *aRange,
+nsTypeAheadFind::RangeStartsInsideLink(nsRange *aRange,
                                        nsIPresShell *aPresShell,
                                        bool *aIsInsideLink,
                                        bool *aIsStartingLink)
@@ -897,7 +907,7 @@ nsTypeAheadFind::RangeStartsInsideLink(nsIDOMRange *aRange,
   origContent = startContent;
 
   if (startContent->IsElement()) {
-    nsIContent *childContent = startContent->GetChildAt_Deprecated(startOffset);
+    nsIContent *childContent = aRange->GetChildAtStartOffset();
     if (childContent) {
       startContent = childContent;
     }

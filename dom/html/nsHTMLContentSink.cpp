@@ -226,7 +226,7 @@ public:
 
 nsresult
 NS_NewHTMLElement(Element** aResult, already_AddRefed<mozilla::dom::NodeInfo>&& aNodeInfo,
-                  FromParser aFromParser, const nsAString* aIs,
+                  FromParser aFromParser, nsAtom* aIsAtom,
                   mozilla::dom::CustomElementDefinition* aDefinition)
 {
   RefPtr<mozilla::dom::NodeInfo> nodeInfo = aNodeInfo;
@@ -234,7 +234,7 @@ NS_NewHTMLElement(Element** aResult, already_AddRefed<mozilla::dom::NodeInfo>&& 
   NS_ASSERTION(nodeInfo->NamespaceEquals(kNameSpaceID_XHTML),
                "Trying to create HTML elements that don't have the XHTML namespace");
 
-  return nsContentUtils::NewXULOrHTMLElement(aResult, nodeInfo, aFromParser, aIs, aDefinition);
+  return nsContentUtils::NewXULOrHTMLElement(aResult, nodeInfo, aFromParser, aIsAtom, aDefinition);
 }
 
 already_AddRefed<nsGenericHTMLElement>
@@ -397,7 +397,7 @@ SinkContext::Node::Add(nsIContent *child)
   if (mInsertionPoint != -1) {
     NS_ASSERTION(mNumFlushed == mContent->GetChildCount(),
                  "Inserting multiple children without flushing.");
-    mContent->InsertChildAt(child, mInsertionPoint++, false);
+    mContent->InsertChildAt_Deprecated(child, mInsertionPoint++, false);
   } else {
     mContent->AppendChildTo(child, false);
   }
@@ -983,7 +983,7 @@ HTMLContentSink::NotifyRootInsertion()
   // document; in those cases we just want to put all the attrs on one
   // tag.
   mNotifiedRootInsertion = true;
-  int32_t index = mDocument->IndexOf(mRoot);
+  int32_t index = mDocument->ComputeIndexOf(mRoot);
   NS_ASSERTION(index != -1, "mRoot not child of document?");
   NotifyInsert(nullptr, mRoot, index);
 

@@ -21,12 +21,11 @@
 %define inAnyPanel :-moz-any(:not([cui-areatype="toolbar"]), [overflowedItem=true])
 %define panelPaletteIconSize 16px
 
-:root {
-  --appmenu-yellow-warning-border-color: hsl(45, 100%, 77%);
-  --appmenu-yellow-warning-color: #FFEFBF;
-  --appmenu-yellow-warning-hover-color: #FFE8A2;
-  --appmenu-yellow-warning-active-color: #FFE38F;
-}
+%define appmenuWarningBackgroundColor #FFEFBF
+%define appmenuWarningBackgroundColorHover #FFE8A2
+%define appmenuWarningBackgroundColorActive #FFE38F
+%define appmenuWarningColor black
+%define appmenuWarningBorderColor hsl(45,100%,77%)
 
 :root:not([uidensity=compact]):not([chromehidden~="toolbar"]) #PanelUI-button {
   margin-inline-start: 3px;
@@ -437,9 +436,10 @@ toolbarbutton[constrain-size="true"][cui-areatype="menu-panel"] > .toolbarbutton
 }
 
 .addon-banner-item {
-  background-color: var(--appmenu-yellow-warning-color);
+  background-color: @appmenuWarningBackgroundColor@;
+  color: @appmenuWarningColor@;
   /* Force border to override `.addon-banner-item` selector below */
-  border-top: 1px solid var(--appmenu-yellow-warning-border-color) !important;
+  border-top: 1px solid @appmenuWarningBorderColor@ !important;
   display: flex;
   flex: 1 1 0%;
   width: calc(@menuPanelWidth@ + 30px);
@@ -448,12 +448,16 @@ toolbarbutton[constrain-size="true"][cui-areatype="menu-panel"] > .toolbarbutton
   -moz-image-region: rect(0, 16px, 16px, 0);
 }
 
-.addon-banner-item:hover {
-  background-color: var(--appmenu-yellow-warning-hover-color);
+.addon-banner-item:last-child {
+  border-bottom: 1px solid @appmenuWarningBorderColor@;
 }
 
-.addon-banner-item:active {
-  background-color: var(--appmenu-yellow-warning-active-color);
+.addon-banner-item:hover {
+  background-color: @appmenuWarningBackgroundColorHover@;
+}
+
+.addon-banner-item:hover:active {
+  background-color: @appmenuWarningBackgroundColorActive@;
 }
 
 .addon-banner-item > .toolbarbutton-icon {
@@ -482,8 +486,12 @@ toolbarbutton[constrain-size="true"][cui-areatype="menu-panel"] > .toolbarbutton
 .panel-banner-item {
   border-top: 1px solid var(--panel-separator-color);
   border-bottom: 1px solid var(--panel-separator-color);
-  margin-bottom: 3px;
   padding-inline-start: 12px;
+}
+
+#appMenu-addon-banners:not(:empty) + .panel-banner-item {
+  /* Overlap the .addon-banner-item border so there's one border. */
+  margin-top: -1px;
 }
 
 #appMenu-addon-banners > .addon-banner-item {
@@ -496,6 +504,11 @@ toolbarbutton[constrain-size="true"][cui-areatype="menu-panel"] > .toolbarbutton
 
 .panel-banner-item > .toolbarbutton-icon {
   width: 16px;
+}
+
+#appMenu-addon-banners:not(:empty) ~ #appMenu-fxa-container,
+.panel-banner-item:not([hidden]) + #appMenu-fxa-container {
+  margin-top: 6px;
 }
 
 /* FxAccount indicator bits. */
@@ -564,19 +577,20 @@ toolbarbutton[constrain-size="true"][cui-areatype="menu-panel"] > .toolbarbutton
 
 #appMenu-fxa-container[fxastatus="login-failed"],
 #appMenu-fxa-container[fxastatus="unverified"] {
-  background-color: var(--appmenu-yellow-warning-color);
-  border-top: 1px solid var(--appmenu-yellow-warning-border-color);
-  border-bottom: 1px solid var(--appmenu-yellow-warning-border-color);
+  background-color: @appmenuWarningBackgroundColor@;
+  color: @appmenuWarningColor@;
+  border-top: 1px solid @appmenuWarningBorderColor@;
+  border-bottom: 1px solid @appmenuWarningBorderColor@;
 }
 
 #appMenu-fxa-container[fxastatus="login-failed"] > #appMenu-fxa-status:hover,
 #appMenu-fxa-container[fxastatus="unverified"] > #appMenu-fxa-status:hover {
-  background-color: var(--appmenu-yellow-warning-hover-color);
+  background-color: @appmenuWarningBackgroundColorHover@;
 }
 
 #appMenu-fxa-container[fxastatus="login-failed"] > #appMenu-fxa-status:hover:active,
 #appMenu-fxa-container[fxastatus="unverified"] > #appMenu-fxa-status:hover:active {
-  background-color: var(--appmenu-yellow-warning-active-color);
+  background-color: @appmenuWarningBackgroundColorActive@;
 }
 
 .addon-banner-item > .toolbarbutton-text,
@@ -606,7 +620,7 @@ toolbarbutton[constrain-size="true"][cui-areatype="menu-panel"] > .toolbarbutton
   /* If you change the margin here, the min-height of the synced tabs panel
     (e.g. #PanelUI-remotetabs[mainview] #PanelUI-remotetabs-setupsync, etc) may
     need adjusting (see bug 1248506) */
-  margin: 15px;
+  margin-bottom: 15px;
   text-align: center;
   text-shadow: none;
   max-width: 15em;
@@ -624,7 +638,6 @@ toolbarbutton[constrain-size="true"][cui-areatype="menu-panel"] > .toolbarbutton
     (e.g. #PanelUI-remotetabs[mainview] #PanelUI-remotetabs-setupsync, etc) may
     need adjusting (see bug 1248506) */
   padding-bottom: 30px;
-  padding-top: 15px;
 }
 
 .PanelUI-remotetabs-button {
@@ -668,8 +681,12 @@ toolbarbutton[constrain-size="true"][cui-areatype="menu-panel"] > .toolbarbutton
 
 .fxaSyncIllustration,
 .fxaSyncIllustrationIssue {
+  /* If you change the margin here, the min-height of the synced tabs panel
+    (e.g. #PanelUI-remotetabs[mainview] #PanelUI-remotetabs-setupsync, etc) may
+    need adjusting (see bug 1248506) */
   width: 180px;
   height: var(--panel-ui-sync-illustration-height);
+  margin: 38px 0;
   -moz-context-properties: fill;
   fill: #cdcdcd;
 }
@@ -701,10 +718,11 @@ toolbarbutton[constrain-size="true"][cui-areatype="menu-panel"] > .toolbarbutton
 #PanelUI-remotetabs[mainview] #PanelUI-remotetabs-nodevicespane,
 #PanelUI-remotetabs[mainview] #PanelUI-remotetabs-tabsdisabledpane {
   min-height: calc(var(--panel-ui-sync-illustration-height) +
+                   76px + /* margin of .fxaSyncIllustration */
                    20px + /* margin of .PanelUI-remotetabs-button */
                    16px + /* padding of .PanelUI-remotetabs-button */
-                   30px + /* margin of .PanelUI-remotetabs-instruction-label */
-                   30px + 15px + /* padding of .PanelUI-remotetabs-instruction-box */
+                   15px + /* margin of .PanelUI-remotetabs-instruction-label */
+                   30px + /* padding of .PanelUI-remotetabs-instruction-box */
                    11em);
 }
 
@@ -902,6 +920,7 @@ panelmultiview .toolbaritem-combined-buttons > label {
   -moz-box-flex: 1;
   font: menu;
   margin: 0;
+  padding: 4px 0px;
 }
 
 panelmultiview .toolbaritem-combined-buttons > spacer.before-label {
@@ -1252,6 +1271,19 @@ toolbarpaletteitem[place="menu-panel"] > .subviewbutton-nav::after {
   -moz-appearance: none;
   margin-inline-end: 0;
 }
+
+%ifdef XP_WIN
+/* Overrides from menu.css to prevent items in the bookmarks popup from being too tall.
+   These won't be necessary once menu.css is loaded as a UA style (Bug 1420229). */
+#BMB_bookmarksPopup .subviewbutton > .menu-iconic-left {
+  padding-top: 0;
+  -moz-appearance: none;
+}
+
+#BMB_bookmarksPopup .subviewbutton {
+  -moz-appearance: none;
+}
+%endif
 
 menuitem[checked="true"].subviewbutton > .menu-iconic-left {
   visibility: hidden;

@@ -2,11 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use api::{DeviceIntRect, DeviceIntSize, ImageKey, LayerToWorldScale};
+use api::{AlphaType, DeviceIntRect, DeviceIntSize, ImageKey, LayerToWorldScale};
 use api::{ExternalImageType, FilterOp, ImageRendering, LayerRect};
 use api::{SubpixelDirection, TileOffset, YuvColorSpace, YuvFormat};
 use api::{LayerToWorldTransform, WorldPixel};
-use border::{BorderCornerInstance, BorderCornerSide};
+use border::{BorderCornerInstance, BorderCornerSide, BorderEdgeKind};
 use clip::{ClipSource, ClipStore};
 use clip_scroll_tree::{CoordinateSystemId};
 use euclid::{TypedTransform3D, vec3};
@@ -16,10 +16,10 @@ use gpu_types::{BrushImageKind, BrushInstance, ClipChainRectIndex};
 use gpu_types::{ClipMaskInstance, ClipScrollNodeIndex, PictureType};
 use gpu_types::{CompositePrimitiveInstance, PrimitiveInstance, SimplePrimitiveInstance};
 use internal_types::{FastHashMap, SourceTexture};
-use picture::{PictureCompositeMode, PictureKind, PicturePrimitive};
+use picture::{PictureCompositeMode, PictureKind, PicturePrimitive, PictureSurface};
 use plane_split::{BspSplitter, Polygon, Splitter};
 use prim_store::{PrimitiveIndex, PrimitiveKind, PrimitiveMetadata, PrimitiveStore};
-use prim_store::{BrushPrimitive, BrushKind, DeferredResolve, PrimitiveRun};
+use prim_store::{BrushPrimitive, BrushKind, DeferredResolve, EdgeAaSegmentMask, PrimitiveRun};
 use render_task::{ClipWorkItem};
 use render_task::{RenderTaskAddress, RenderTaskId, RenderTaskKind};
 use render_task::{RenderTaskTree};
@@ -35,6 +35,7 @@ use util::{MatrixHelpers, TransformedRectKind};
 const OPAQUE_TASK_ADDRESS: RenderTaskAddress = RenderTaskAddress(i32::MAX as u32);
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[cfg_attr(feature = "capture", derive(Deserialize, Serialize))]
 pub enum TransformBatchKind {
     TextRun(GlyphFormat),
     Image(ImageBufferKind),
@@ -47,6 +48,7 @@ pub enum TransformBatchKind {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[cfg_attr(feature = "capture", derive(Deserialize, Serialize))]
 pub enum BrushImageSourceKind {
     Alpha,
     Color,
@@ -63,13 +65,15 @@ impl BrushImageSourceKind {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[cfg_attr(feature = "capture", derive(Deserialize, Serialize))]
 pub enum BrushBatchKind {
-    Image(BrushImageSourceKind),
+    Picture(BrushImageSourceKind),
     Solid,
     Line,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[cfg_attr(feature = "capture", derive(Deserialize, Serialize))]
 pub enum BatchKind {
     Composite {
         task_id: RenderTaskId,
@@ -86,6 +90,7 @@ pub enum BatchKind {
 /// Optional textures that can be used as a source in the shaders.
 /// Textures that are not used by the batch are equal to TextureId::invalid().
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "capture", derive(Deserialize, Serialize))]
 pub struct BatchTextures {
     pub colors: [SourceTexture; 3],
 }
@@ -109,12 +114,13 @@ impl BatchTextures {
 
     pub fn color(texture: SourceTexture) -> Self {
         BatchTextures {
-            colors: [texture, SourceTexture::Invalid, SourceTexture::Invalid],
+            colors: [texture, texture, SourceTexture::Invalid],
         }
     }
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "capture", derive(Deserialize, Serialize))]
 pub struct AlphaPrimitiveBatch {
     pub key: BatchKey,
     pub instances: Vec<PrimitiveInstance>,
@@ -132,6 +138,7 @@ impl AlphaPrimitiveBatch {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "capture", derive(Deserialize, Serialize))]
 pub struct OpaquePrimitiveBatch {
     pub key: BatchKey,
     pub instances: Vec<PrimitiveInstance>,
@@ -147,6 +154,7 @@ impl OpaquePrimitiveBatch {
 }
 
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "capture", derive(Deserialize, Serialize))]
 pub struct BatchKey {
     pub kind: BatchKind,
     pub blend_mode: BlendMode,
@@ -175,6 +183,7 @@ fn textures_compatible(t1: SourceTexture, t2: SourceTexture) -> bool {
     t1 == SourceTexture::Invalid || t2 == SourceTexture::Invalid || t1 == t2
 }
 
+#[cfg_attr(feature = "capture", derive(Deserialize, Serialize))]
 pub struct AlphaBatchList {
     pub batches: Vec<AlphaPrimitiveBatch>,
 }
@@ -252,6 +261,7 @@ impl AlphaBatchList {
     }
 }
 
+#[cfg_attr(feature = "capture", derive(Deserialize, Serialize))]
 pub struct OpaqueBatchList {
     pub pixel_area_threshold_for_new_batch: i32,
     pub batches: Vec<OpaquePrimitiveBatch>,
@@ -317,6 +327,7 @@ impl OpaqueBatchList {
     }
 }
 
+#[cfg_attr(feature = "capture", derive(Deserialize, Serialize))]
 pub struct BatchList {
     pub alpha_batch_list: AlphaBatchList,
     pub opaque_batch_list: OpaqueBatchList,
@@ -344,6 +355,7 @@ impl BatchList {
                 self.opaque_batch_list
                     .get_suitable_batch(key, item_bounding_rect)
             }
+            BlendMode::Alpha |
             BlendMode::PremultipliedAlpha |
             BlendMode::PremultipliedDestOut |
             BlendMode::SubpixelConstantTextColor(..) |
@@ -362,10 +374,10 @@ impl BatchList {
 }
 
 /// Encapsulates the logic of building batches for items that are blended.
+#[cfg_attr(feature = "capture", derive(Deserialize, Serialize))]
 pub struct AlphaBatcher {
     pub batch_list: BatchList,
     pub text_run_cache_prims: FastHashMap<SourceTexture, Vec<PrimitiveInstance>>,
-    pub line_cache_prims: Vec<PrimitiveInstance>,
     glyph_fetch_buffer: Vec<GlyphFetchResult>,
 }
 
@@ -375,7 +387,6 @@ impl AlphaBatcher {
             batch_list: BatchList::new(screen_size),
             glyph_fetch_buffer: Vec::new(),
             text_run_cache_prims: FastHashMap::default(),
-            line_cache_prims: Vec::new(),
         }
     }
 
@@ -468,7 +479,12 @@ impl AlphaBatcher {
             let pic_metadata = &ctx.prim_store.cpu_metadata[prim_index.0];
             let pic = &ctx.prim_store.cpu_pictures[pic_metadata.cpu_prim_index.0];
             let batch = self.batch_list.get_suitable_batch(key, pic_metadata.screen_rect.as_ref().expect("bug"));
-            let source_task_address = render_tasks.get_task_address(pic.render_task_id.expect("bug"));
+
+            let render_task_id = match pic.surface {
+                Some(PictureSurface::RenderTask(render_task_id)) => render_task_id,
+                Some(PictureSurface::TextureCache(..)) | None => panic!("BUG: unexpected surface in splitting"),
+            };
+            let source_task_address = render_tasks.get_task_address(render_task_id);
             let gpu_address = gpu_handle.as_int(gpu_cache);
 
             let instance = CompositePrimitiveInstance::new(
@@ -582,61 +598,24 @@ impl AlphaBatcher {
         match prim_metadata.prim_kind {
             PrimitiveKind::Brush => {
                 let brush = &ctx.prim_store.cpu_brushes[prim_metadata.cpu_prim_index.0];
-                let base_instance = BrushInstance {
-                    picture_address: task_address,
-                    prim_address: prim_cache_address,
+                let batch_key = brush.get_batch_key(blend_mode);
+
+                self.add_brush_to_batch(
+                    brush,
+                    prim_metadata,
+                    batch_key,
                     clip_chain_rect_index,
-                    scroll_id,
                     clip_task_address,
+                    item_bounding_rect,
+                    prim_cache_address,
+                    scroll_id,
+                    task_address,
+                    transform_kind,
                     z,
-                    segment_index: 0,
-                    user_data0: 0,
-                    user_data1: 0,
-                };
-
-                match brush.segment_desc {
-                    Some(ref segment_desc) => {
-                        let opaque_batch = self.batch_list.opaque_batch_list.get_suitable_batch(
-                            brush.get_batch_key(
-                                BlendMode::None
-                            ),
-                            item_bounding_rect
-                        );
-                        let alpha_batch = self.batch_list.alpha_batch_list.get_suitable_batch(
-                            brush.get_batch_key(
-                                BlendMode::PremultipliedAlpha
-                            ),
-                            item_bounding_rect
-                        );
-
-                        for (i, segment) in segment_desc.segments.iter().enumerate() {
-                            let is_inner = segment.edge_flags.is_empty();
-                            let needs_blending = !prim_metadata.opacity.is_opaque ||
-                                                 segment.clip_task_id.is_some() ||
-                                                 (!is_inner && transform_kind == TransformedRectKind::Complex);
-
-                            let clip_task_address = segment
-                                .clip_task_id
-                                .map_or(OPAQUE_TASK_ADDRESS, |id| render_tasks.get_task_address(id));
-
-                            let instance = PrimitiveInstance::from(BrushInstance {
-                                segment_index: i as i32,
-                                clip_task_address,
-                                ..base_instance
-                            });
-
-                            if needs_blending {
-                                alpha_batch.push(instance);
-                            } else {
-                                opaque_batch.push(instance);
-                            }
-                        }
-                    }
-                    None => {
-                        let batch = self.batch_list.get_suitable_batch(brush.get_batch_key(blend_mode), item_bounding_rect);
-                        batch.push(PrimitiveInstance::from(base_instance));
-                    }
-                }
+                    render_tasks,
+                    0,
+                    0,
+                );
             }
             PrimitiveKind::Border => {
                 let border_cpu =
@@ -686,37 +665,13 @@ impl AlphaBatcher {
                 }
 
                 let batch = self.batch_list.get_suitable_batch(edge_key, item_bounding_rect);
-                for border_segment in 0 .. 4 {
-                    batch.push(base_instance.build(border_segment, 0, 0));
-                }
-            }
-            PrimitiveKind::Line => {
-                let base_instance = BrushInstance {
-                    picture_address: task_address,
-                    prim_address: prim_cache_address,
-                    clip_chain_rect_index,
-                    scroll_id,
-                    clip_task_address,
-                    z,
-                    segment_index: 0,
-                    user_data0: 0,
-                    user_data1: 0,
-                };
-
-                let instance = PrimitiveInstance::from(base_instance);
-
-                match pic_type {
-                    PictureType::TextShadow => {
-                        self.line_cache_prims.push(instance);
+                for (border_segment, instance_kind) in border_cpu.edges.iter().enumerate() {
+                    match *instance_kind {
+                        BorderEdgeKind::None => {},
+                        _ => {
+                          batch.push(base_instance.build(border_segment as i32, 0, 0));
+                        }
                     }
-                    PictureType::Image => {
-                        let kind =
-                            BatchKind::Brush(BrushBatchKind::Line);
-                        let key = BatchKey::new(kind, blend_mode, no_textures);
-                        let batch = self.batch_list.get_suitable_batch(key, item_bounding_rect);
-                        batch.push(instance);
-                    }
-                    PictureType::BoxShadow => unreachable!(),
                 }
             }
             PrimitiveKind::Image => {
@@ -846,7 +801,7 @@ impl AlphaBatcher {
                                     } else if ctx.use_dual_source_blending {
                                         BlendMode::SubpixelDualSource
                                     } else {
-                                        BlendMode::SubpixelConstantTextColor(text_cpu.font.color.into())
+                                        BlendMode::SubpixelConstantTextColor(text_cpu.get_color())
                                     }
                                 }
                                 GlyphFormat::Alpha |
@@ -873,15 +828,52 @@ impl AlphaBatcher {
                 let picture =
                     &ctx.prim_store.cpu_pictures[prim_metadata.cpu_prim_index.0];
 
-                match picture.render_task_id {
-                    Some(cache_task_id) => {
+                match picture.surface {
+                    Some(PictureSurface::TextureCache(ref cache_item)) => {
+                        match picture.kind {
+                            PictureKind::TextShadow { .. } |
+                            PictureKind::Image { .. } => {
+                                panic!("BUG: only supported as render tasks for now");
+                            }
+                            PictureKind::BoxShadow { image_kind, .. } => {
+                                let textures = BatchTextures::color(cache_item.texture_id);
+                                let kind = BatchKind::Brush(
+                                    BrushBatchKind::Picture(
+                                        BrushImageSourceKind::from_render_target_kind(picture.target_kind())),
+                                );
+                                let alpha_batch_key = BatchKey::new(
+                                    kind,
+                                    blend_mode,
+                                    textures,
+                                );
+
+                                self.add_brush_to_batch(
+                                    &picture.brush,
+                                    prim_metadata,
+                                    alpha_batch_key,
+                                    clip_chain_rect_index,
+                                    clip_task_address,
+                                    item_bounding_rect,
+                                    prim_cache_address,
+                                    scroll_id,
+                                    task_address,
+                                    transform_kind,
+                                    z,
+                                    render_tasks,
+                                    cache_item.uv_rect_handle.as_int(gpu_cache),
+                                    image_kind as i32,
+                                );
+                            }
+                        }
+                    }
+                    Some(PictureSurface::RenderTask(cache_task_id)) => {
                         let cache_task_address = render_tasks.get_task_address(cache_task_id);
                         let textures = BatchTextures::render_target_cache();
 
                         match picture.kind {
                             PictureKind::TextShadow { .. } => {
                                 let kind = BatchKind::Brush(
-                                    BrushBatchKind::Image(
+                                    BrushBatchKind::Picture(
                                         BrushImageSourceKind::from_render_target_kind(picture.target_kind())),
                                 );
                                 let key = BatchKey::new(kind, blend_mode, textures);
@@ -895,31 +887,14 @@ impl AlphaBatcher {
                                     clip_task_address,
                                     z,
                                     segment_index: 0,
+                                    edge_flags: EdgeAaSegmentMask::empty(),
                                     user_data0: cache_task_address.0 as i32,
                                     user_data1: BrushImageKind::Simple as i32,
                                 };
                                 batch.push(PrimitiveInstance::from(instance));
                             }
-                            PictureKind::BoxShadow { image_kind, .. } => {
-                                let kind = BatchKind::Brush(
-                                    BrushBatchKind::Image(
-                                        BrushImageSourceKind::from_render_target_kind(picture.target_kind())),
-                                );
-                                let key = BatchKey::new(kind, blend_mode, textures);
-                                let batch = self.batch_list.get_suitable_batch(key, item_bounding_rect);
-
-                                let instance = BrushInstance {
-                                    picture_address: task_address,
-                                    prim_address: prim_cache_address,
-                                    clip_chain_rect_index,
-                                    scroll_id,
-                                    clip_task_address,
-                                    z,
-                                    segment_index: 0,
-                                    user_data0: cache_task_address.0 as i32,
-                                    user_data1: image_kind as i32,
-                                };
-                                batch.push(PrimitiveInstance::from(instance));
+                            PictureKind::BoxShadow { .. } => {
+                                panic!("BUG: should be handled as a texture cache surface");
                             }
                             PictureKind::Image {
                                 composite_mode,
@@ -954,7 +929,7 @@ impl AlphaBatcher {
                                 // This will allow us to unify some of the shaders, apply clip masks
                                 // when compositing pictures, and also correctly apply pixel snapping
                                 // to picture compositing operations.
-                                let source_id = picture.render_task_id.expect("no source!?");
+                                let source_id = cache_task_id;
 
                                 match composite_mode.expect("bug: only composites here") {
                                     PictureCompositeMode::Filter(filter) => {
@@ -982,7 +957,7 @@ impl AlphaBatcher {
                                             }
                                             FilterOp::DropShadow(offset, _, _) => {
                                                 let kind = BatchKind::Brush(
-                                                    BrushBatchKind::Image(BrushImageSourceKind::ColorAlphaMask),
+                                                    BrushBatchKind::Picture(BrushImageSourceKind::ColorAlphaMask),
                                                 );
                                                 let key = BatchKey::new(kind, blend_mode, textures);
 
@@ -994,6 +969,7 @@ impl AlphaBatcher {
                                                     clip_task_address,
                                                     z,
                                                     segment_index: 0,
+                                                    edge_flags: EdgeAaSegmentMask::empty(),
                                                     user_data0: cache_task_address.0 as i32,
                                                     user_data1: BrushImageKind::Simple as i32,
                                                 };
@@ -1020,16 +996,20 @@ impl AlphaBatcher {
                                                     secondary_textures,
                                                 );
                                                 let batch = self.batch_list.get_suitable_batch(key, &item_bounding_rect);
-                                                let device_offset = (offset * LayerToWorldScale::new(1.0) * ctx.device_pixel_scale).round().to_i32();
+                                                let content_rect = prim_metadata.local_rect.translate(&-offset);
+                                                let rect =
+                                                    (content_rect * LayerToWorldScale::new(1.0) * ctx.device_pixel_scale).round()
+                                                                                                                         .to_i32();
+
                                                 let instance = CompositePrimitiveInstance::new(
                                                     task_address,
                                                     secondary_task_address,
                                                     RenderTaskAddress(0),
-                                                    item_bounding_rect.origin.x - device_offset.x,
-                                                    item_bounding_rect.origin.y - device_offset.y,
+                                                    rect.origin.x,
+                                                    rect.origin.y,
                                                     z,
-                                                    item_bounding_rect.size.width,
-                                                    item_bounding_rect.size.height,
+                                                    rect.size.width,
+                                                    rect.size.height,
                                                 );
 
                                                 batch.push(PrimitiveInstance::from(instance));
@@ -1256,11 +1236,104 @@ impl AlphaBatcher {
             }
         }
     }
+
+    fn add_brush_to_batch(
+        &mut self,
+        brush: &BrushPrimitive,
+        prim_metadata: &PrimitiveMetadata,
+        batch_key: BatchKey,
+        clip_chain_rect_index: ClipChainRectIndex,
+        clip_task_address: RenderTaskAddress,
+        item_bounding_rect: &DeviceIntRect,
+        prim_cache_address: GpuCacheAddress,
+        scroll_id: ClipScrollNodeIndex,
+        task_address: RenderTaskAddress,
+        transform_kind: TransformedRectKind,
+        z: i32,
+        render_tasks: &RenderTaskTree,
+        user_data0: i32,
+        user_data1: i32,
+    ) {
+        let base_instance = BrushInstance {
+            picture_address: task_address,
+            prim_address: prim_cache_address,
+            clip_chain_rect_index,
+            scroll_id,
+            clip_task_address,
+            z,
+            segment_index: 0,
+            edge_flags: EdgeAaSegmentMask::all(),
+            user_data0,
+            user_data1,
+        };
+
+        match brush.segment_desc {
+            Some(ref segment_desc) => {
+                let alpha_batch_key = BatchKey {
+                    blend_mode: BlendMode::PremultipliedAlpha,
+                    ..batch_key
+                };
+
+                let alpha_batch = self.batch_list.alpha_batch_list.get_suitable_batch(
+                    alpha_batch_key,
+                    item_bounding_rect
+                );
+
+                let opaque_batch_key = BatchKey {
+                    blend_mode: BlendMode::None,
+                    ..batch_key
+                };
+
+                let opaque_batch = self.batch_list.opaque_batch_list.get_suitable_batch(
+                    opaque_batch_key,
+                    item_bounding_rect
+                );
+
+                for (i, segment) in segment_desc.segments.iter().enumerate() {
+                    let is_inner = segment.edge_flags.is_empty();
+                    let needs_blending = !prim_metadata.opacity.is_opaque ||
+                                         segment.clip_task_id.is_some() ||
+                                         (!is_inner && transform_kind == TransformedRectKind::Complex);
+
+                    let clip_task_address = segment
+                        .clip_task_id
+                        .map_or(OPAQUE_TASK_ADDRESS, |id| render_tasks.get_task_address(id));
+
+                    let instance = PrimitiveInstance::from(BrushInstance {
+                        segment_index: i as i32,
+                        edge_flags: segment.edge_flags,
+                        clip_task_address,
+                        ..base_instance
+                    });
+
+                    if needs_blending {
+                        alpha_batch.push(instance);
+                    } else {
+                        opaque_batch.push(instance);
+                    }
+                }
+            }
+            None => {
+                let batch = self.batch_list.get_suitable_batch(batch_key, item_bounding_rect);
+                batch.push(PrimitiveInstance::from(base_instance));
+            }
+        }
+    }
 }
 
 impl BrushPrimitive {
     fn get_batch_key(&self, blend_mode: BlendMode) -> BatchKey {
         match self.kind {
+            BrushKind::Line { .. } => {
+                BatchKey::new(
+                    BatchKind::Brush(BrushBatchKind::Line),
+                    blend_mode,
+                    BatchTextures::no_texture(),
+                )
+            }
+            BrushKind::Picture => {
+                panic!("bug: get_batch_key is handled at higher level for pictures");
+            }
             BrushKind::Solid { .. } => {
                 BatchKey::new(
                     BatchKind::Brush(BrushBatchKind::Solid),
@@ -1303,15 +1376,22 @@ impl AlphaBatchHelpers for PrimitiveStore {
             // Can only resolve the TextRun's blend mode once glyphs are fetched.
             PrimitiveKind::TextRun => BlendMode::PremultipliedAlpha,
             PrimitiveKind::Border |
-            PrimitiveKind::Image |
             PrimitiveKind::YuvImage |
             PrimitiveKind::AlignedGradient |
             PrimitiveKind::AngleGradient |
             PrimitiveKind::RadialGradient |
-            PrimitiveKind::Line |
             PrimitiveKind::Brush |
             PrimitiveKind::Picture => if needs_blending {
                 BlendMode::PremultipliedAlpha
+            } else {
+                BlendMode::None
+            },
+            PrimitiveKind::Image => if needs_blending {
+                let image_cpu = &self.cpu_images[metadata.cpu_prim_index.0];
+                match image_cpu.alpha_type {
+                    AlphaType::PremultipliedAlpha => BlendMode::PremultipliedAlpha,
+                    AlphaType::Alpha => BlendMode::Alpha,
+                }
             } else {
                 BlendMode::None
             },
@@ -1388,6 +1468,7 @@ fn make_polygon(
 
 /// Batcher managing draw calls into the clip mask (in the RT cache).
 #[derive(Debug)]
+#[cfg_attr(feature = "capture", derive(Deserialize, Serialize))]
 pub struct ClipBatcher {
     /// Rectangle draws fill up the rectangles with rounded corners.
     pub rectangles: Vec<ClipMaskInstance>,

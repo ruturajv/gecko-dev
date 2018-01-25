@@ -519,7 +519,7 @@ public:
    * If the return value is not -1, then calling GetChildAt_Deprecated() with
    * that value will return aPossibleChild.
    */
-  virtual int32_t IndexOf(const nsINode* aPossibleChild) const = 0;
+  virtual int32_t ComputeIndexOf(const nsINode* aPossibleChild) const = 0;
 
   /**
    * Returns the "node document" of this node.
@@ -736,8 +736,8 @@ public:
    *
    * @throws NS_ERROR_OUT_OF_MEMORY in some cases (from BindToTree).
    */
-  virtual nsresult InsertChildAt(nsIContent* aKid, uint32_t aIndex,
-                                 bool aNotify) = 0;
+  virtual nsresult InsertChildAt_Deprecated(nsIContent* aKid, uint32_t aIndex,
+                                            bool aNotify) = 0;
 
   /**
    * Append a content node to the end of the child list.  This method handles
@@ -759,7 +759,7 @@ public:
    */
   nsresult AppendChildTo(nsIContent* aKid, bool aNotify)
   {
-    return InsertChildAt(aKid, GetChildCount(), aNotify);
+    return InsertChildAt_Deprecated(aKid, GetChildCount(), aNotify);
   }
 
   /**
@@ -777,6 +777,17 @@ public:
    * Note: If there is no child at aIndex, this method will simply do nothing.
    */
   virtual void RemoveChildAt_Deprecated(uint32_t aIndex, bool aNotify) = 0;
+
+  /**
+   * Remove a child from this node.  This method handles calling UnbindFromTree
+   * on the child appropriately.
+   *
+   * @param aKid the content to remove
+   * @param aNotify whether to notify the document (current document for
+   *        nsIContent, and |this| for nsIDocument) that the remove has
+   *        occurred
+   */
+  virtual void RemoveChildNode(nsIContent* aKid, bool aNotify) = 0;
 
   /**
    * Get a property associated with this node.
@@ -2082,7 +2093,7 @@ protected:
                        nsAttrAndChildArray& aChildArray);
 
   /**
-   * Most of the implementation of the nsINode InsertChildAt method.
+   * Most of the implementation of the nsINode InsertChildAt_Deprecated method.
    * Should only be called on document, element, and document fragment
    * nodes.  The aChildArray passed in should be the one for |this|.
    *

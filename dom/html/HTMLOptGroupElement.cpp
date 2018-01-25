@@ -75,12 +75,13 @@ HTMLOptGroupElement::GetSelect()
 }
 
 nsresult
-HTMLOptGroupElement::InsertChildAt(nsIContent* aKid,
-                                   uint32_t aIndex,
-                                   bool aNotify)
+HTMLOptGroupElement::InsertChildAt_Deprecated(nsIContent* aKid,
+                                              uint32_t aIndex,
+                                              bool aNotify)
 {
   SafeOptionListMutation safeMutation(GetSelect(), this, aKid, aIndex, aNotify);
-  nsresult rv = nsGenericHTMLElement::InsertChildAt(aKid, aIndex, aNotify);
+  nsresult rv = nsGenericHTMLElement::InsertChildAt_Deprecated(aKid, aIndex,
+                                                               aNotify);
   if (NS_FAILED(rv)) {
     safeMutation.MutationFailed();
   }
@@ -93,6 +94,14 @@ HTMLOptGroupElement::RemoveChildAt_Deprecated(uint32_t aIndex, bool aNotify)
   SafeOptionListMutation safeMutation(GetSelect(), this, nullptr, aIndex,
                                       aNotify);
   nsGenericHTMLElement::RemoveChildAt_Deprecated(aIndex, aNotify);
+}
+
+void
+HTMLOptGroupElement::RemoveChildNode(nsIContent* aKid, bool aNotify)
+{
+  SafeOptionListMutation safeMutation(GetSelect(), this, nullptr,
+                                      ComputeIndexOf(aKid), aNotify);
+  nsGenericHTMLElement::RemoveChildNode(aKid, aNotify);
 }
 
 nsresult

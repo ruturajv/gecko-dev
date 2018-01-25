@@ -88,10 +88,6 @@
 #include "nsMenuBarListener.h"
 #endif
 
-#ifdef MOZ_WEBSPEECH
-#include "nsSynthVoiceRegistry.h"
-#endif
-
 #include "CubebUtils.h"
 #include "Latency.h"
 #include "WebAudioUtils.h"
@@ -103,7 +99,6 @@
 #include "nsFrameMessageManager.h"
 #include "nsDOMMutationObserver.h"
 #include "nsHyphenationManager.h"
-#include "nsEditorSpellCheck.h"
 #include "nsWindowMemoryReporter.h"
 #include "mozilla/dom/ContentParent.h"
 #include "mozilla/ProcessPriorityManager.h"
@@ -405,10 +400,6 @@ nsLayoutStatics::Shutdown()
   CubebUtils::ShutdownLibrary();
   AsyncLatencyLogger::ShutdownLogger();
   WebAudioUtils::Shutdown();
-
-#ifdef MOZ_WEBSPEECH
-  nsSynthVoiceRegistry::Shutdown();
-#endif
 
   nsCORSListenerProxy::Shutdown();
 

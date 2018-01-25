@@ -8,6 +8,7 @@
 #define mozilla_EditorUtils_h
 
 #include "mozilla/dom/Selection.h"
+#include "mozilla/EditAction.h"
 #include "mozilla/EditorBase.h"
 #include "mozilla/EditorDOMPoint.h"
 #include "mozilla/GuardObjects.h"
@@ -522,7 +523,7 @@ class TrivialFunctor final : public BoolDomIterFunctor
 {
 public:
   // Used to build list of all nodes iterator covers
-  virtual bool operator()(nsINode* aNode) const
+  virtual bool operator()(nsINode* aNode) const override
   {
     return true;
   }

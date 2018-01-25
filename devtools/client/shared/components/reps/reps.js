@@ -7,7 +7,7 @@
 		var a = typeof exports === 'object' ? factory(require("devtools/client/shared/vendor/react-dom-factories"), require("devtools/client/shared/vendor/lodash"), require("devtools/client/shared/vendor/react-prop-types"), require("devtools/client/shared/vendor/react")) : factory(root["devtools/client/shared/vendor/react-dom-factories"], root["devtools/client/shared/vendor/lodash"], root["devtools/client/shared/vendor/react-prop-types"], root["devtools/client/shared/vendor/react"]);
 		for(var i in a) (typeof exports === 'object' ? exports : root)[i] = a[i];
 	}
-})(this, function(__WEBPACK_EXTERNAL_MODULE_1__, __WEBPACK_EXTERNAL_MODULE_53__, __WEBPACK_EXTERNAL_MODULE_2__, __WEBPACK_EXTERNAL_MODULE_7__) {
+})(this, function(__WEBPACK_EXTERNAL_MODULE_1__, __WEBPACK_EXTERNAL_MODULE_56__, __WEBPACK_EXTERNAL_MODULE_2__, __WEBPACK_EXTERNAL_MODULE_7__) {
 return /******/ (function(modules) { // webpackBootstrap
 /******/ 	// The module cache
 /******/ 	var installedModules = {};
@@ -70,7 +70,7 @@ return /******/ (function(modules) { // webpackBootstrap
 /******/ 	__webpack_require__.p = "/assets/build";
 /******/
 /******/ 	// Load entry module and return exports
-/******/ 	return __webpack_require__(__webpack_require__.s = 17);
+/******/ 	return __webpack_require__(__webpack_require__.s = 19);
 /******/ })
 /************************************************************************/
 /******/ ([
@@ -523,37 +523,37 @@ module.exports = {
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-__webpack_require__(18);
+__webpack_require__(20);
 
 // Load all existing rep templates
-const Undefined = __webpack_require__(19);
-const Null = __webpack_require__(20);
+const Undefined = __webpack_require__(21);
+const Null = __webpack_require__(22);
 const StringRep = __webpack_require__(6);
-const LongStringRep = __webpack_require__(21);
-const Number = __webpack_require__(22);
+const LongStringRep = __webpack_require__(23);
+const Number = __webpack_require__(24);
 const ArrayRep = __webpack_require__(10);
-const Obj = __webpack_require__(23);
-const SymbolRep = __webpack_require__(24);
-const InfinityRep = __webpack_require__(25);
-const NaNRep = __webpack_require__(26);
-const Accessor = __webpack_require__(27);
+const Obj = __webpack_require__(25);
+const SymbolRep = __webpack_require__(26);
+const InfinityRep = __webpack_require__(27);
+const NaNRep = __webpack_require__(28);
+const Accessor = __webpack_require__(29);
 
 // DOM types (grips)
-const Attribute = __webpack_require__(28);
-const DateTime = __webpack_require__(29);
-const Document = __webpack_require__(30);
-const Event = __webpack_require__(31);
-const Func = __webpack_require__(32);
-const PromiseRep = __webpack_require__(36);
-const RegExp = __webpack_require__(37);
-const StyleSheet = __webpack_require__(38);
-const CommentNode = __webpack_require__(39);
-const ElementNode = __webpack_require__(40);
-const TextNode = __webpack_require__(41);
-const ErrorRep = __webpack_require__(42);
-const Window = __webpack_require__(43);
-const ObjectWithText = __webpack_require__(44);
-const ObjectWithURL = __webpack_require__(45);
+const Attribute = __webpack_require__(30);
+const DateTime = __webpack_require__(31);
+const Document = __webpack_require__(32);
+const Event = __webpack_require__(33);
+const Func = __webpack_require__(34);
+const PromiseRep = __webpack_require__(38);
+const RegExp = __webpack_require__(39);
+const StyleSheet = __webpack_require__(40);
+const CommentNode = __webpack_require__(41);
+const ElementNode = __webpack_require__(42);
+const TextNode = __webpack_require__(43);
+const ErrorRep = __webpack_require__(44);
+const Window = __webpack_require__(45);
+const ObjectWithText = __webpack_require__(46);
+const ObjectWithURL = __webpack_require__(47);
 const GripArray = __webpack_require__(13);
 const GripMap = __webpack_require__(14);
 const GripMapEntry = __webpack_require__(15);
@@ -1283,8 +1283,8 @@ const PropTypes = __webpack_require__(2);
 
 
 const svg = {
-  "open-inspector": __webpack_require__(34),
-  "jump-definition": __webpack_require__(35)
+  "open-inspector": __webpack_require__(36),
+  "jump-definition": __webpack_require__(37)
 };
 
 Svg.propTypes = {
@@ -1475,7 +1475,7 @@ var _react2 = _interopRequireDefault(_react);
 
 var _propTypes = __webpack_require__(2);
 
-var _util = __webpack_require__(33);
+var _util = __webpack_require__(35);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -2101,7 +2101,103 @@ module.exports = {
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-const { get, has } = __webpack_require__(53);
+const client = __webpack_require__(17);
+const loadProperties = __webpack_require__(55);
+const node = __webpack_require__(18);
+
+module.exports = {
+  client,
+  loadProperties,
+  node
+};
+
+/***/ }),
+/* 17 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+async function enumIndexedProperties(objectClient, start, end) {
+  try {
+    const { iterator } = await objectClient.enumProperties({ ignoreNonIndexedProperties: true });
+    const response = await iteratorSlice(iterator, start, end);
+    return response;
+  } catch (e) {
+    console.error("Error in enumIndexedProperties", e);
+    return {};
+  }
+} /* This Source Code Form is subject to the terms of the Mozilla Public
+   * License, v. 2.0. If a copy of the MPL was not distributed with this
+   * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+async function enumNonIndexedProperties(objectClient, start, end) {
+  try {
+    const { iterator } = await objectClient.enumProperties({ ignoreIndexedProperties: true });
+    const response = await iteratorSlice(iterator, start, end);
+    return response;
+  } catch (e) {
+    console.error("Error in enumNonIndexedProperties", e);
+    return {};
+  }
+}
+
+async function enumEntries(objectClient, start, end) {
+  try {
+    const { iterator } = await objectClient.enumEntries();
+    const response = await iteratorSlice(iterator, start, end);
+    return response;
+  } catch (e) {
+    console.error("Error in enumEntries", e);
+    return {};
+  }
+}
+
+async function enumSymbols(objectClient, start, end) {
+  try {
+    const { iterator } = await objectClient.enumSymbols();
+    const response = await iteratorSlice(iterator, start, end);
+    return response;
+  } catch (e) {
+    console.error("Error in enumSymbols", e);
+    return {};
+  }
+}
+
+async function getPrototype(objectClient) {
+  if (typeof objectClient.getPrototype !== "function") {
+    console.error("objectClient.getPrototype is not a function");
+    return Promise.resolve({});
+  }
+  return objectClient.getPrototype();
+}
+
+function iteratorSlice(iterator, start, end) {
+  start = start || 0;
+  const count = end ? end - start + 1 : iterator.count;
+  return iterator.slice(start, count);
+}
+
+module.exports = {
+  enumEntries,
+  enumIndexedProperties,
+  enumNonIndexedProperties,
+  enumSymbols,
+  getPrototype
+};
+
+/***/ }),
+/* 18 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+const { get, has } = __webpack_require__(56);
 const { maybeEscapePropertyName } = __webpack_require__(0);
 const ArrayRep = __webpack_require__(10);
 const GripArrayRep = __webpack_require__(13);
@@ -2684,43 +2780,6 @@ function getClosestNonBucketNode(item) {
   return getClosestNonBucketNode(parent);
 }
 
-function shouldLoadItemIndexedProperties(item, loadedProperties = new Map()) {
-  const gripItem = getClosestGripNode(item);
-  const value = getValue(gripItem);
-
-  return value && nodeHasProperties(gripItem) && !loadedProperties.has(item.path) && !nodeIsProxy(item) && !nodeNeedsNumericalBuckets(item) && !nodeIsEntries(getClosestNonBucketNode(item))
-  // The data is loaded when expanding the window node.
-  && !nodeIsDefaultProperties(item);
-}
-
-function shouldLoadItemNonIndexedProperties(item, loadedProperties = new Map()) {
-  const gripItem = getClosestGripNode(item);
-  const value = getValue(gripItem);
-
-  return value && nodeHasProperties(gripItem) && !loadedProperties.has(item.path) && !nodeIsProxy(item) && !nodeIsEntries(getClosestNonBucketNode(item)) && !nodeIsBucket(item)
-  // The data is loaded when expanding the window node.
-  && !nodeIsDefaultProperties(item);
-}
-
-function shouldLoadItemEntries(item, loadedProperties = new Map()) {
-  const gripItem = getClosestGripNode(item);
-  const value = getValue(gripItem);
-
-  return value && nodeIsEntries(getClosestNonBucketNode(item)) && !nodeHasAllEntriesInPreview(gripItem) && !loadedProperties.has(item.path) && !nodeNeedsNumericalBuckets(item);
-}
-
-function shouldLoadItemPrototype(item, loadedProperties = new Map()) {
-  const value = getValue(item);
-
-  return value && !loadedProperties.has(item.path) && !nodeIsBucket(item) && !nodeIsMapEntry(item) && !nodeIsEntries(item) && !nodeIsDefaultProperties(item) && !nodeHasAccessors(item) && !nodeIsPrimitive(item);
-}
-
-function shouldLoadItemSymbols(item, loadedProperties = new Map()) {
-  const value = getValue(item);
-
-  return value && !loadedProperties.has(item.path) && !nodeIsBucket(item) && !nodeIsMapEntry(item) && !nodeIsEntries(item) && !nodeIsDefaultProperties(item) && !nodeHasAccessors(item) && !nodeIsPrimitive(item) && !nodeIsProxy(item);
-}
-
 module.exports = {
   createNode,
   getChildren,
@@ -2756,11 +2815,6 @@ module.exports = {
   nodeNeedsNumericalBuckets,
   nodeSupportsNumericalBucketing,
   setNodeChildren,
-  shouldLoadItemEntries,
-  shouldLoadItemIndexedProperties,
-  shouldLoadItemNonIndexedProperties,
-  shouldLoadItemPrototype,
-  shouldLoadItemSymbols,
   sortProperties,
   NODE_TYPES,
   // Export for testing purpose.
@@ -2768,7 +2822,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 17 */
+/* 19 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -2780,7 +2834,7 @@ module.exports = {
 
 const { MODE } = __webpack_require__(3);
 const { REPS, getRep } = __webpack_require__(4);
-const ObjectInspector = __webpack_require__(46);
+const ObjectInspector = __webpack_require__(48);
 const ObjectInspectorUtils = __webpack_require__(16);
 
 const {
@@ -2803,13 +2857,13 @@ module.exports = {
 };
 
 /***/ }),
-/* 18 */
+/* 20 */
 /***/ (function(module, exports) {
 
 // removed by extract-text-webpack-plugin
 
 /***/ }),
-/* 19 */
+/* 21 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -2851,7 +2905,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 20 */
+/* 22 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -2893,7 +2947,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 21 */
+/* 23 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -2970,7 +3024,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 22 */
+/* 24 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -3022,7 +3076,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 23 */
+/* 25 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -3200,7 +3254,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 24 */
+/* 26 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -3252,7 +3306,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 25 */
+/* 27 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -3300,7 +3354,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 26 */
+/* 28 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -3337,7 +3391,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 27 */
+/* 29 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -3407,7 +3461,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 28 */
+/* 30 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -3468,7 +3522,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 29 */
+/* 31 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -3535,7 +3589,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 30 */
+/* 32 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -3602,7 +3656,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 31 */
+/* 33 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -3709,7 +3763,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 32 */
+/* 34 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -3870,7 +3924,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 33 */
+/* 35 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -3925,19 +3979,19 @@ function extractSVGProps(src) {
 }
 
 /***/ }),
-/* 34 */
+/* 36 */
 /***/ (function(module, exports) {
 
 module.exports = "<!-- This Source Code Form is subject to the terms of the Mozilla Public - License, v. 2.0. If a copy of the MPL was not distributed with this - file, You can obtain one at http://mozilla.org/MPL/2.0/. --><svg viewBox=\"0 0 16 16\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M8,3L12,3L12,7L14,7L14,8L12,8L12,12L8,12L8,14L7,14L7,12L3,12L3,8L1,8L1,7L3,7L3,3L7,3L7,1L8,1L8,3ZM10,10L10,5L5,5L5,10L10,10Z\"></path></svg>"
 
 /***/ }),
-/* 35 */
+/* 37 */
 /***/ (function(module, exports) {
 
 module.exports = "<!-- This Source Code Form is subject to the terms of the Mozilla Public - License, v. 2.0. If a copy of the MPL was not distributed with this - file, You can obtain one at http://mozilla.org/MPL/2.0/. --><svg viewBox=\"0 0 16 16\" xmlns=\"http://www.w3.org/2000/svg\"><g stroke-width=\"1\" fill=\"none\" fill-rule=\"evenodd\" stroke-linecap=\"round\"><g id=\"arrow\" transform=\"translate(1.000000, 3.000000)\"><path d=\"M4.5,0.5 L6.5,2.5\"></path><path d=\"M4.5,2.5 L6.5,4.5\" transform=\"translate(5.500000, 3.500000) scale(1, -1) translate(-5.500000, -3.500000) \"></path><path d=\"M6.00090144,2.5 C4.67806937,2.5 3.67938478,2.5 3.00484766,2.5 C1.99304199,2.5 1.01049805,3.5168457 0.993840144,4.52403846 C0.988750751,4.54723808 0.988750751,5.87097168 0.993840144,8.49523926\" id=\"Path-2\" stroke-linejoin=\"round\"></path></g><g id=\"content-lines\" transform=\"translate(9.000000, 2.000000)\"><path d=\"M1.5,3.5 L5.5,3.5\"></path><path d=\"M0.5,1.5 L5.5,1.5\"></path><path d=\"M0.5,5.5 L5.5,5.5\"></path></g></g></svg>"
 
 /***/ }),
-/* 36 */
+/* 38 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -4047,7 +4101,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 37 */
+/* 39 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -4106,7 +4160,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 38 */
+/* 40 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -4174,7 +4228,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 39 */
+/* 41 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -4240,7 +4294,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 40 */
+/* 42 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -4372,7 +4426,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 41 */
+/* 43 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -4481,7 +4535,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 42 */
+/* 44 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -4565,7 +4619,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 43 */
+/* 45 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -4643,7 +4697,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 44 */
+/* 46 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -4708,7 +4762,7 @@ module.exports = {
 };
 
 /***/ }),
-/* 45 */
+/* 47 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -4774,13 +4828,13 @@ module.exports = {
 };
 
 /***/ }),
-/* 46 */
+/* 48 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 
-var _devtoolsComponents = __webpack_require__(47);
+var _devtoolsComponents = __webpack_require__(49);
 
 var _devtoolsComponents2 = _interopRequireDefault(_devtoolsComponents);
 
@@ -4795,9 +4849,9 @@ const PropTypes = __webpack_require__(2);
 const dom = __webpack_require__(1);
 
 const Tree = createFactory(_devtoolsComponents2.default.Tree);
-__webpack_require__(51);
+__webpack_require__(53);
 
-const classnames = __webpack_require__(52);
+const classnames = __webpack_require__(54);
 
 const {
   REPS: {
@@ -4808,6 +4862,8 @@ const {
 const {
   MODE
 } = __webpack_require__(3);
+
+const Utils = __webpack_require__(16);
 
 const {
   getChildren,
@@ -4825,21 +4881,12 @@ const {
   nodeIsPrimitive,
   nodeIsPrototype,
   nodeIsSetter,
-  nodeIsWindow,
-  shouldLoadItemEntries,
-  shouldLoadItemIndexedProperties,
-  shouldLoadItemNonIndexedProperties,
-  shouldLoadItemPrototype,
-  shouldLoadItemSymbols
-} = __webpack_require__(16);
+  nodeIsWindow
+} = Utils.node;
 
 const {
-  enumEntries,
-  enumIndexedProperties,
-  enumNonIndexedProperties,
-  getPrototype,
-  enumSymbols
-} = __webpack_require__(54);
+  loadItemProperties
+} = Utils.loadProperties;
 
 // This implements a component that renders an interactive inspector
 // for looking at JavaScript objects. It expects descriptions of
@@ -4895,7 +4942,15 @@ class ObjectInspector extends Component {
       expandedPaths,
       loadedProperties
     } = this.state;
-    return this.props.roots !== nextProps.roots || expandedPaths.size !== nextState.expandedPaths.size || loadedProperties.size !== nextState.loadedProperties.size || [...expandedPaths].some(key => !nextState.expandedPaths.has(key));
+
+    if (this.props.roots !== nextProps.roots) {
+      // Since the roots changed, we assume the properties did as well. Thus we can clear
+      // the cachedNodes to avoid bugs and memory leaks.
+      this.cachedNodes.clear();
+      return true;
+    }
+
+    return expandedPaths.size !== nextState.expandedPaths.size || loadedProperties.size !== nextState.loadedProperties.size || [...expandedPaths].some(key => !nextState.expandedPaths.has(key));
   }
 
   componentWillUnmount() {
@@ -4964,66 +5019,19 @@ class ObjectInspector extends Component {
     if (expand === true) {
       const gripItem = getClosestGripNode(item);
       const value = getValue(gripItem);
-
       const path = item.path;
-      const [start, end] = item.meta ? [item.meta.startIndex, item.meta.endIndex] : [];
 
-      let promises = [];
-      let objectClient;
-      const getObjectClient = () => {
-        if (objectClient) {
-          return objectClient;
-        }
-        return this.props.createObjectClient(value);
-      };
-
-      if (shouldLoadItemIndexedProperties(item, loadedProperties)) {
-        promises.push(enumIndexedProperties(getObjectClient(), start, end));
-      }
-
-      if (shouldLoadItemNonIndexedProperties(item, loadedProperties)) {
-        promises.push(enumNonIndexedProperties(getObjectClient(), start, end));
-      }
-
-      if (shouldLoadItemEntries(item, loadedProperties)) {
-        promises.push(enumEntries(getObjectClient(), start, end));
-      }
-
-      if (shouldLoadItemPrototype(item, loadedProperties)) {
-        promises.push(getPrototype(getObjectClient()));
-      }
-
-      if (shouldLoadItemSymbols(item, loadedProperties)) {
-        promises.push(enumSymbols(getObjectClient(), start, end));
-      }
-
-      if (promises.length > 0) {
-        // Set the loading state with the pending promises.
+      const onItemPropertiesLoaded = loadItemProperties(item, this.props.createObjectClient, loadedProperties);
+      if (onItemPropertiesLoaded !== null) {
         this.setState((prevState, props) => {
           const nextLoading = new Map(prevState.loading);
-          nextLoading.set(path, promises);
+          nextLoading.set(path, onItemPropertiesLoaded);
           return {
             loading: nextLoading
           };
         });
 
-        const responses = await Promise.all(promises);
-
-        // Let's loop through the responses to build a single response object.
-        const response = responses.reduce((accumulator, res) => {
-          Object.entries(res).forEach(([k, v]) => {
-            if (accumulator.hasOwnProperty(k)) {
-              if (Array.isArray(accumulator[k])) {
-                accumulator[k].push(...v);
-              } else if (typeof accumulator[k] === "object") {
-                accumulator[k] = Object.assign({}, accumulator[k], v);
-              }
-            } else {
-              accumulator[k] = v;
-            }
-          });
-          return accumulator;
-        }, {});
+        const properties = await onItemPropertiesLoaded;
 
         this.setState((prevState, props) => {
           const nextLoading = new Map(prevState.loading);
@@ -5036,7 +5044,7 @@ class ObjectInspector extends Component {
 
           return {
             actors: isRoot ? prevState.actors : new Set(prevState.actors).add(value.actor),
-            loadedProperties: new Map(prevState.loadedProperties).set(path, response),
+            loadedProperties: new Map(prevState.loadedProperties).set(path, properties),
             loading: nextLoading
           };
         });
@@ -5210,30 +5218,26 @@ ObjectInspector.propTypes = {
 module.exports = ObjectInspector;
 
 /***/ }),
-/* 47 */
+/* 49 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 
-Object.defineProperty(exports, "__esModule", {
-  value: true
-});
-
-var _tree = __webpack_require__(48);
+var _tree = __webpack_require__(50);
 
 var _tree2 = _interopRequireDefault(_tree);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-exports.default = {
+module.exports = {
   Tree: _tree2.default
 }; /* This Source Code Form is subject to the terms of the Mozilla Public
     * License, v. 2.0. If a copy of the MPL was not distributed with this
     * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /***/ }),
-/* 48 */
+/* 50 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -5259,7 +5263,7 @@ var _svgInlineReact = __webpack_require__(11);
 
 var _svgInlineReact2 = _interopRequireDefault(_svgInlineReact);
 
-var _arrow = __webpack_require__(49);
+var _arrow = __webpack_require__(51);
 
 var _arrow2 = _interopRequireDefault(_arrow);
 
@@ -5269,7 +5273,7 @@ const { Component, createFactory, createElement } = _react2.default; /* This Sou
                                                                       * License, v. 2.0. If a copy of the MPL was not distributed with this
                                                                       * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-__webpack_require__(50);
+__webpack_require__(52);
 
 const AUTO_EXPAND_DEPTH = 0; // depth
 
@@ -6027,25 +6031,25 @@ class Tree extends Component {
 exports.default = Tree;
 
 /***/ }),
-/* 49 */
+/* 51 */
 /***/ (function(module, exports) {
 
 module.exports = "<!-- This Source Code Form is subject to the terms of the Mozilla Public - License, v. 2.0. If a copy of the MPL was not distributed with this - file, You can obtain one at http://mozilla.org/MPL/2.0/. --><svg viewBox=\"0 0 16 16\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M8 13.4c-.5 0-.9-.2-1.2-.6L.4 5.2C0 4.7-.1 4.3.2 3.7S1 3 1.6 3h12.8c.6 0 1.2.1 1.4.7.3.6.2 1.1-.2 1.6l-6.4 7.6c-.3.4-.7.5-1.2.5z\"></path></svg>"
 
 /***/ }),
-/* 50 */
-/***/ (function(module, exports) {
-
-// removed by extract-text-webpack-plugin
-
-/***/ }),
-/* 51 */
-/***/ (function(module, exports) {
-
-// removed by extract-text-webpack-plugin
-
-/***/ }),
 /* 52 */
+/***/ (function(module, exports) {
+
+// removed by extract-text-webpack-plugin
+
+/***/ }),
+/* 53 */
+/***/ (function(module, exports) {
+
+// removed by extract-text-webpack-plugin
+
+/***/ }),
+/* 54 */
 /***/ (function(module, exports, __webpack_require__) {
 
 var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;/*!
@@ -6100,85 +6104,147 @@ var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;/*!
 
 
 /***/ }),
-/* 53 */
-/***/ (function(module, exports) {
-
-module.exports = __WEBPACK_EXTERNAL_MODULE_53__;
-
-/***/ }),
-/* 54 */
+/* 55 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 
-async function enumIndexedProperties(objectClient, start, end) {
-  try {
-    const { iterator } = await objectClient.enumProperties({ ignoreNonIndexedProperties: true });
-    const response = await iteratorSlice(iterator, start, end);
-    return response;
-  } catch (e) {
-    console.error("Error in enumIndexedProperties", e);
-    return {};
-  }
-} /* This Source Code Form is subject to the terms of the Mozilla Public
-   * License, v. 2.0. If a copy of the MPL was not distributed with this
-   * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-async function enumNonIndexedProperties(objectClient, start, end) {
-  try {
-    const { iterator } = await objectClient.enumProperties({ ignoreIndexedProperties: true });
-    const response = await iteratorSlice(iterator, start, end);
-    return response;
-  } catch (e) {
-    console.error("Error in enumNonIndexedProperties", e);
-    return {};
-  }
-}
-
-async function enumEntries(objectClient, start, end) {
-  try {
-    const { iterator } = await objectClient.enumEntries();
-    const response = await iteratorSlice(iterator, start, end);
-    return response;
-  } catch (e) {
-    console.error("Error in enumEntries", e);
-    return {};
-  }
-}
-
-async function enumSymbols(objectClient, start, end) {
-  try {
-    const { iterator } = await objectClient.enumSymbols();
-    const response = await iteratorSlice(iterator, start, end);
-    return response;
-  } catch (e) {
-    console.error("Error in enumSymbols", e);
-    return {};
-  }
-}
-
-async function getPrototype(objectClient) {
-  if (typeof objectClient.getPrototype !== "function") {
-    console.error("objectClient.getPrototype is not a function");
-    return Promise.resolve({});
-  }
-  return objectClient.getPrototype();
-}
-
-function iteratorSlice(iterator, start, end) {
-  start = start || 0;
-  const count = end ? end - start + 1 : iterator.count;
-  return iterator.slice(start, count);
-}
-
-module.exports = {
+const {
   enumEntries,
   enumIndexedProperties,
   enumNonIndexedProperties,
-  enumSymbols,
-  getPrototype
+  getPrototype,
+  enumSymbols
+} = __webpack_require__(17);
+
+const {
+  getClosestGripNode,
+  getClosestNonBucketNode,
+  getValue,
+  nodeHasAccessors,
+  nodeHasAllEntriesInPreview,
+  nodeHasProperties,
+  nodeIsBucket,
+  nodeIsDefaultProperties,
+  nodeIsEntries,
+  nodeIsMapEntry,
+  nodeIsPrimitive,
+  nodeIsProxy,
+  nodeNeedsNumericalBuckets
+} = __webpack_require__(18);
+
+function loadItemProperties(item, createObjectClient, loadedProperties) {
+  const [start, end] = item.meta ? [item.meta.startIndex, item.meta.endIndex] : [];
+
+  let objectClient;
+  const getObjectClient = () => {
+    if (objectClient) {
+      return objectClient;
+    }
+
+    const gripItem = getClosestGripNode(item);
+    const value = getValue(gripItem);
+    return createObjectClient(value);
+  };
+
+  let loadingPromises = [];
+  if (shouldLoadItemIndexedProperties(item, loadedProperties)) {
+    loadingPromises.push(enumIndexedProperties(getObjectClient(), start, end));
+  }
+
+  if (shouldLoadItemNonIndexedProperties(item, loadedProperties)) {
+    loadingPromises.push(enumNonIndexedProperties(getObjectClient(), start, end));
+  }
+
+  if (shouldLoadItemEntries(item, loadedProperties)) {
+    loadingPromises.push(enumEntries(getObjectClient(), start, end));
+  }
+
+  if (shouldLoadItemPrototype(item, loadedProperties)) {
+    loadingPromises.push(getPrototype(getObjectClient()));
+  }
+
+  if (shouldLoadItemSymbols(item, loadedProperties)) {
+    loadingPromises.push(enumSymbols(getObjectClient(), start, end));
+  }
+
+  if (loadingPromises.length === 0) {
+    return null;
+  }
+
+  return Promise.all(loadingPromises).then(responses => responses.reduce((accumulator, res) => {
+    // Let's loop through the responses to build a single response object.
+    Object.entries(res).forEach(([k, v]) => {
+      if (accumulator.hasOwnProperty(k)) {
+        if (Array.isArray(accumulator[k])) {
+          accumulator[k].push(...v);
+        } else if (typeof accumulator[k] === "object") {
+          accumulator[k] = Object.assign({}, accumulator[k], v);
+        }
+      } else {
+        accumulator[k] = v;
+      }
+    });
+    return accumulator;
+  }, {}));
+}
+
+function shouldLoadItemIndexedProperties(item, loadedProperties = new Map()) {
+  const gripItem = getClosestGripNode(item);
+  const value = getValue(gripItem);
+
+  return value && nodeHasProperties(gripItem) && !loadedProperties.has(item.path) && !nodeIsProxy(item) && !nodeNeedsNumericalBuckets(item) && !nodeIsEntries(getClosestNonBucketNode(item))
+  // The data is loaded when expanding the window node.
+  && !nodeIsDefaultProperties(item);
+}
+
+function shouldLoadItemNonIndexedProperties(item, loadedProperties = new Map()) {
+  const gripItem = getClosestGripNode(item);
+  const value = getValue(gripItem);
+
+  return value && nodeHasProperties(gripItem) && !loadedProperties.has(item.path) && !nodeIsProxy(item) && !nodeIsEntries(getClosestNonBucketNode(item)) && !nodeIsBucket(item)
+  // The data is loaded when expanding the window node.
+  && !nodeIsDefaultProperties(item);
+}
+
+function shouldLoadItemEntries(item, loadedProperties = new Map()) {
+  const gripItem = getClosestGripNode(item);
+  const value = getValue(gripItem);
+
+  return value && nodeIsEntries(getClosestNonBucketNode(item)) && !nodeHasAllEntriesInPreview(gripItem) && !loadedProperties.has(item.path) && !nodeNeedsNumericalBuckets(item);
+}
+
+function shouldLoadItemPrototype(item, loadedProperties = new Map()) {
+  const value = getValue(item);
+
+  return value && !loadedProperties.has(item.path) && !nodeIsBucket(item) && !nodeIsMapEntry(item) && !nodeIsEntries(item) && !nodeIsDefaultProperties(item) && !nodeHasAccessors(item) && !nodeIsPrimitive(item);
+}
+
+function shouldLoadItemSymbols(item, loadedProperties = new Map()) {
+  const value = getValue(item);
+
+  return value && !loadedProperties.has(item.path) && !nodeIsBucket(item) && !nodeIsMapEntry(item) && !nodeIsEntries(item) && !nodeIsDefaultProperties(item) && !nodeHasAccessors(item) && !nodeIsPrimitive(item) && !nodeIsProxy(item);
+}
+
+module.exports = {
+  loadItemProperties,
+  shouldLoadItemEntries,
+  shouldLoadItemIndexedProperties,
+  shouldLoadItemNonIndexedProperties,
+  shouldLoadItemPrototype,
+  shouldLoadItemSymbols
 };
+
+/***/ }),
+/* 56 */
+/***/ (function(module, exports) {
+
+module.exports = __WEBPACK_EXTERNAL_MODULE_56__;
 
 /***/ })
 /******/ ]);

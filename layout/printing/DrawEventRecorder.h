@@ -29,7 +29,7 @@ public:
 
   void OpenFD(PRFileDesc* aFd)
   {
-    MOZ_ASSERT(!IsOpen());
+    MOZ_DIAGNOSTIC_ASSERT(!IsOpen());
     mFd = aFd;
     mGood = !!mFd;
     mBuffer.reset(new uint8_t[kBufferSize]);
@@ -69,7 +69,7 @@ public:
     mGood = pos != -1;
   }
 
-  void write(const char* aData, size_t aSize) {
+  void write(const char* aData, size_t aSize) override {
     if (!good()) {
       return;
     }
@@ -98,7 +98,7 @@ public:
     }
   }
 
-  void read(char* aOut, size_t aSize) {
+  void read(char* aOut, size_t aSize) override {
     if (!good()) {
       return;
     }

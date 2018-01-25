@@ -102,7 +102,7 @@ using namespace mozilla::layers;
 #define ALIGN_UNSET uint8_t(-1)
 
 // static icon information
-nsImageFrame::IconLoad* nsImageFrame::gIconLoad = nullptr;
+StaticRefPtr<nsImageFrame::IconLoad> nsImageFrame::gIconLoad;
 
 // cached IO service for loading icons
 nsIIOService* nsImageFrame::sIOService;
@@ -1922,7 +1922,7 @@ nsImageFrame::ShouldDisplaySelection()
           nsCOMPtr<nsIContent> parentContent = mContent->GetParent();
           if (parentContent)
           {
-            int32_t thisOffset = parentContent->IndexOf(mContent);
+            int32_t thisOffset = parentContent->ComputeIndexOf(mContent);
             nsCOMPtr<nsIDOMNode> parentNode = do_QueryInterface(parentContent);
             nsCOMPtr<nsIDOMNode> rangeNode;
             uint32_t rangeOffset;
@@ -2358,7 +2358,6 @@ nsresult nsImageFrame::LoadIcons(nsPresContext *aPresContext)
   NS_NAMED_LITERAL_STRING(brokenSrc,"resource://gre-resources/broken-image.png");
 
   gIconLoad = new IconLoad();
-  NS_ADDREF(gIconLoad);
 
   nsresult rv;
   // create a loader and load the images

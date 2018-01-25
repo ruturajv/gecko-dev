@@ -113,7 +113,6 @@ class IncrementalRunnable;
 class IntlUtils;
 class Location;
 class MediaQueryList;
-class Navigator;
 class OwningExternalOrWindowProxy;
 class Promise;
 class PostMessageEvent;
@@ -348,9 +347,9 @@ public:
   virtual bool IsFrozen() const override;
   void SyncStateFromParentWindow();
 
-  mozilla::Maybe<mozilla::dom::ClientInfo> GetClientInfo() const;
+  mozilla::Maybe<mozilla::dom::ClientInfo> GetClientInfo() const override;
   mozilla::Maybe<mozilla::dom::ClientState> GetClientState() const;
-  mozilla::Maybe<mozilla::dom::ServiceWorkerDescriptor> GetController() const;
+  mozilla::Maybe<mozilla::dom::ServiceWorkerDescriptor> GetController() const override;
 
   void NoteCalledRegisterForServiceWorkerScope(const nsACString& aScope);
 
@@ -676,8 +675,6 @@ public:
        const nsAString& aName,
        const nsAString& aOptions,
        mozilla::ErrorResult& aError);
-  mozilla::dom::Navigator* Navigator();
-  nsIDOMNavigator* GetNavigator() override;
   nsIDOMOfflineResourceList* GetApplicationCache(mozilla::ErrorResult& aError);
   already_AddRefed<nsIDOMOfflineResourceList> GetApplicationCache() override;
 
@@ -899,7 +896,7 @@ public:
              const nsAString& aOptions,
              const mozilla::dom::Sequence<JS::Value>& aExtraArgument,
              mozilla::ErrorResult& aError);
-  nsresult UpdateCommands(const nsAString& anAction, nsISelection* aSel, int16_t aReason) override;
+  void UpdateCommands(const nsAString& anAction, nsISelection* aSel, int16_t aReason);
 
   void GetContent(JSContext* aCx,
                   JS::MutableHandle<JSObject*> aRetval,
@@ -1166,8 +1163,6 @@ public:
 
   void FireOfflineStatusEventIfChanged();
 
-  bool GetIsPrerendered();
-
 public:
   // Inner windows only.
   nsresult ScheduleNextIdleObserverCallback();
@@ -1241,7 +1236,7 @@ protected:
   nsresult GetComputedStyleHelper(nsIDOMElement* aElt,
                                   const nsAString& aPseudoElt,
                                   bool aDefaultStylesOnly,
-                                  nsIDOMCSSStyleDeclaration** aReturn);
+                                  nsICSSDeclaration** aReturn);
 
   nsGlobalWindowInner* InnerForSetTimeoutOrInterval(mozilla::ErrorResult& aError);
 
@@ -1348,7 +1343,6 @@ protected:
   nsRefPtrHashtable<nsUint32HashKey, mozilla::dom::Gamepad> mGamepads;
   bool mHasSeenGamepadInput;
 
-  RefPtr<mozilla::dom::Navigator> mNavigator;
   RefPtr<nsScreen>            mScreen;
 
   RefPtr<mozilla::dom::BarProp> mMenubar;

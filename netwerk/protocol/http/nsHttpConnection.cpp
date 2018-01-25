@@ -24,6 +24,7 @@
 #include "nsHttpHandler.h"
 #include "nsHttpRequestHead.h"
 #include "nsHttpResponseHead.h"
+#include "nsIClassOfService.h"
 #include "nsIOService.h"
 #include "nsISocketTransport.h"
 #include "nsSocketTransportService2.h"
@@ -55,6 +56,8 @@ nsHttpConnection::nsHttpConnection()
     , mTotalBytesRead(0)
     , mTotalBytesWritten(0)
     , mContentBytesWritten(0)
+    , mUrgentStartPreferred(false)
+    , mUrgentStartPreferredKnown(false)
     , mConnectedTransport(false)
     , mKeepAlive(true) // assume to keep-alive by default
     , mKeepAliveMask(true)
@@ -92,6 +95,7 @@ nsHttpConnection::nsHttpConnection()
     , mReceivedSocketWouldBlockDuringFastOpen(false)
     , mCheckNetworkStallsWithTFO(false)
     , mLastRequestBytesSentTime(0)
+    , mBootstrappedTimingsSet(false)
 {
     LOG(("Creating nsHttpConnection @%p\n", this));
 
@@ -129,11 +133,12 @@ nsHttpConnection::~nsHttpConnection()
 
     if ((mFastOpenStatus != TFO_FAILED) &&
         (mFastOpenStatus != TFO_HTTP) &&
-        ((mFastOpenStatus != TFO_DISABLED) ||
+        (((mFastOpenStatus > TFO_DISABLED_CONNECT) && (mFastOpenStatus < TFO_BACKUP_CONN)) ||
          gHttpHandler->UseFastOpen())) {
         // TFO_FAILED will be reported in the replacement connection with more
         // details.
         // Otherwise report only if TFO is enabled and supported.
+        // If TFO is disabled, report only connections ha cause it to be disabled, e.g. TFO_FAILED_NET_TIMEOUT, etc.
         Telemetry::Accumulate(Telemetry::TCP_FAST_OPEN_3, mFastOpenStatus);
     }
 }
@@ -627,9 +632,13 @@ nsHttpConnection::Activate(nsAHttpTransaction *trans, uint32_t caps, int32_t pri
         if (!mFastOpen) {
             mExperienced = true;
         }
-        nsHttpTransaction *hTrans = trans->QueryHttpTransaction();
-        if (hTrans) {
-            hTrans->BootstrapTimings(mBootstrappedTimings);
+        if (mBootstrappedTimingsSet) {
+            mBootstrappedTimingsSet = false;
+            nsHttpTransaction *hTrans = trans->QueryHttpTransaction();
+            if (hTrans) {
+                hTrans->BootstrapTimings(mBootstrappedTimings);
+                SetUrgentStartPreferred(hTrans->ClassOfService() & nsIClassOfService::UrgentStart);
+            }
         }
         mBootstrappedTimings = TimingStruct();
     }
@@ -726,7 +735,7 @@ nsHttpConnection::Activate(nsAHttpTransaction *trans, uint32_t caps, int32_t pri
         mTransaction = mTLSFilter;
     }
 
-    trans->OnActivated(false);
+    trans->OnActivated();
 
     rv = OnOutputStreamReady(mSocketOut);
 
@@ -1069,6 +1078,17 @@ nsHttpConnection::IsAlive()
 #endif
 
     return alive;
+}
+
+void
+nsHttpConnection::SetUrgentStartPreferred(bool urgent)
+{
+  if (mExperienced && !mUrgentStartPreferredKnown) {
+    // Set only according the first ever dispatched non-null transaction
+    mUrgentStartPreferredKnown = true;
+    mUrgentStartPreferred = urgent;
+    LOG(("nsHttpConnection::SetUrgentStartPreferred [this=%p urgent=%d]", this, urgent));
+  }
 }
 
 //----------------------------------------------------------------------------
@@ -2470,7 +2490,13 @@ nsHttpConnection::SetFastOpen(bool aFastOpen)
     if (!mFastOpen &&
         mTransaction &&
         !mTransaction->IsNullTransaction()) {
+
         mExperienced = true;
+
+        nsHttpTransaction *hTrans = mTransaction->QueryHttpTransaction();
+        if (hTrans) {
+            SetUrgentStartPreferred(hTrans->ClassOfService() & nsIClassOfService::UrgentStart);
+        }
     }
 }
 
@@ -2499,6 +2525,7 @@ nsHttpConnection::SetFastOpenStatus(uint8_t tfoStatus) {
 void
 nsHttpConnection::BootstrapTimings(TimingStruct times)
 {
+    mBootstrappedTimingsSet = true;
     mBootstrappedTimings = times;
 }
 
@@ -2510,7 +2537,7 @@ nsHttpConnection::SetEvent(nsresult aStatus)
     mBootstrappedTimings.domainLookupStart = TimeStamp::Now();
     break;
   case NS_NET_STATUS_RESOLVED_HOST:
-    mBootstrappedTimings.domainLookupStart = TimeStamp::Now();
+    mBootstrappedTimings.domainLookupEnd = TimeStamp::Now();
     break;
   case NS_NET_STATUS_CONNECTING_TO:
     mBootstrappedTimings.connectStart = TimeStamp::Now();

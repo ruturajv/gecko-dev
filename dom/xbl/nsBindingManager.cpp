@@ -722,11 +722,18 @@ nsBindingManager::EnumerateBoundContentBindings(
     return true;
   }
 
+  nsTHashtable<nsPtrHashKey<nsXBLBinding>> bindings;
   for (auto iter = mBoundContentSet->Iter(); !iter.Done(); iter.Next()) {
     nsIContent* boundContent = iter.Get()->GetKey();
     for (nsXBLBinding* binding = boundContent->GetXBLBinding();
          binding;
          binding = binding->GetBaseBinding()) {
+      // If we have already invoked the callback with a binding, we
+      // should have also invoked it for all its base bindings, so we
+      // don't need to continue this loop anymore.
+      if (!bindings.EnsureInserted(binding)) {
+        break;
+      }
       if (!aCallback(binding)) {
         return false;
       }
@@ -1136,21 +1143,4 @@ nsBindingManager::FindNestedSingleInsertionPoint(nsIContent* aContainer,
   }
 
   return parent;
-}
-
-bool
-nsBindingManager::AnyBindingHasDocumentStateDependency(EventStates aStateMask)
-{
-  MOZ_ASSERT(mDocument->IsStyledByServo());
-
-  bool result = false;
-  EnumerateBoundContentBindings([&](nsXBLBinding* aBinding) {
-    ServoStyleSet* styleSet = aBinding->PrototypeBinding()->GetServoStyleSet();
-    if (styleSet && styleSet->HasDocumentStateDependency(aStateMask)) {
-      result = true;
-      return false;
-    }
-    return true;
-  });
-  return result;
 }
