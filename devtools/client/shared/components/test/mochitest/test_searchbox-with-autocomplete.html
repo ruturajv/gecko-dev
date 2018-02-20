@@ -105,7 +105,7 @@ window.onload = async function () {
       "abc",
     ]);
 
-    is(refs.autocomplete.state.selectedIndex, -1, "Initialised selectedIndex is -1");
+    is(refs.autocomplete.state.selectedIndex, 0, "Initialised selectedIndex is 0");
 
     // Blur event
     $(".devtools-searchinput").blur();
@@ -121,11 +121,12 @@ window.onload = async function () {
     // ArrowDown
     synthesizeKey("VK_DOWN", {});
     await forceRender(component);
-    is(refs.autocomplete.state.selectedIndex, 0, "selectedIndex is 0");
-    ok($(".devtools-autocomplete-listbox .autocomplete-item:nth-child(1)")
+    is(refs.autocomplete.state.selectedIndex, 1, "selectedIndex is 1");
+    ok($(".devtools-autocomplete-listbox .autocomplete-item:nth-child(2)")
       .className.includes("autocomplete-selected"),
       "Selection class applied");
 
+    synthesizeKey("VK_UP", {});
     // ArrowUp should roll back to the bottom of the list
     synthesizeKey("VK_UP", {});
     await forceRender(component);
