@@ -22,7 +22,7 @@ add_task(async function () {
   tab.linkedBrowser.reload();
   await wait;
 
-  wait = waitForDOM(document, ".headers-overview");
+  wait = waitUntil(() => document.querySelector(".headers-overview"));
   EventUtils.sendMouseEvent({ type: "mousedown" },
     document.querySelectorAll(".request-list-item")[0]);
   await wait;
@@ -35,7 +35,8 @@ add_task(async function () {
   document.querySelectorAll(".devtools-filterinput")[1].focus();
   EventUtils.synthesizeKey("con", {});
   // await waitForDOM(document, ".treeRow.hidden");
-  await new Promise(r => setTimeout(r, 900));
+  // await new Promise(r => setTimeout(r, 900));
+  await waitUntil(() => document.querySelector(".treeRow.hidden"));
 
   info("Check if Headers are filtered correctly");
 
