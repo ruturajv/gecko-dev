@@ -34,8 +34,6 @@ add_task(async function () {
 
   document.querySelectorAll(".devtools-filterinput")[1].focus();
   EventUtils.synthesizeKey("con", {});
-  // await waitForDOM(document, ".treeRow.hidden");
-  // await new Promise(r => setTimeout(r, 900));
   await waitUntil(() => document.querySelector(".treeRow.hidden"));
 
   info("Check if Headers are filtered correctly");
