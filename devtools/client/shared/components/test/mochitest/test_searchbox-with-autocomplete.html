@@ -102,16 +102,6 @@ window.onload = async function () {
     await forceRender(component);
 
     compareAutocompleteList($(".devtools-autocomplete-listbox"), [
-      "ABC",
-      "a1",
-      "a2",
-      "a3",
-      "a4",
-      "a5",
-      "abc",
-    ]);
-
-    compareAutocompleteList($(".devtools-autocomplete-listbox"), [
       ["ABC"],
       "a1",
       "a2",
