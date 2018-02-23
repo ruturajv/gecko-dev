@@ -27,20 +27,18 @@ window.onload = async function () {
    *
    * @params {Node} - Node to be compared
    * @reference {array} - Reference array for comparison. The selected index is
-   * highlighted as a single element array ie. [["abc"], "ab", "abcPQR"],
+   * highlighted as a single element array ie. ["[abc]", "ab", "abcPQR"],
    * Here the element "abc" is highlighted
    */
   function compareAutocompleteList(list, reference) {
-    let items = [...list.children].map(el => el.textContent);
-    for (let i = 0; i < items.length; i++) {
-      let item = items[i];
-      let ref = reference[i];
-      if (Array.isArray(ref)) {
-        is(item, ref[0], `Selected list item ${i} is correct`);
-      } else {
-        is(item, ref, `Item ${i} in list is correct`);
-      }
-    }
+    const delimiter = " - ";
+    const observedList = [...list.children].map(el => {
+      return el.classList.contains("autocomplete-selected")
+        ? `[${el.textContent}]`
+        : el.textContent
+    });
+    is(observedList.join(delimiter), reference.join(delimiter),
+      "Autocomplete items are rendered as expected");
   }
 
   let React = browserRequire("devtools/client/shared/vendor/react");
@@ -102,7 +100,7 @@ window.onload = async function () {
     await forceRender(component);
 
     compareAutocompleteList($(".devtools-autocomplete-listbox"), [
-      ["ABC"],
+      "[ABC]",
       "a1",
       "a2",
       "a3",
@@ -127,7 +125,7 @@ window.onload = async function () {
     await forceRender(component);
     compareAutocompleteList($(".devtools-autocomplete-listbox"), [
       "ABC",
-      ["a1"],
+      "[a1]",
       "a2",
       "a3",
       "a4",
@@ -149,7 +147,7 @@ window.onload = async function () {
       "a3",
       "a4",
       "a5",
-      ["abc"],
+      "[abc]",
     ]);
 
     // PageDown should take -5 places up
@@ -157,7 +155,7 @@ window.onload = async function () {
     await forceRender(component);
     compareAutocompleteList($(".devtools-autocomplete-listbox"), [
       "ABC",
-      ["a1"],
+      "[a1]",
       "a2",
       "a3",
       "a4",
@@ -175,14 +173,14 @@ window.onload = async function () {
       "a3",
       "a4",
       "a5",
-      ["abc"],
+      "[abc]",
     ]);
 
     // Home should take to the top of the list
     synthesizeKey("KEY_Home");
     await forceRender(component);
     compareAutocompleteList($(".devtools-autocomplete-listbox"), [
-      ["ABC"],
+      "[ABC]",
       "a1",
       "a2",
       "a3",
@@ -201,7 +199,7 @@ window.onload = async function () {
       "a3",
       "a4",
       "a5",
-      ["abc"],
+      "[abc]",
     ]);
 
     // Key down in existing state should rollover to the top
@@ -218,7 +216,7 @@ window.onload = async function () {
     await forceRender(component);
     ok($(".devtools-autocomplete-popup"), "Popup is up");
     compareAutocompleteList($(".devtools-autocomplete-listbox"), [
-      ["ABC"],
+      "[ABC]",
       "abc"
     ]);
 
@@ -269,7 +267,7 @@ window.onload = async function () {
     sendString(" ab");
     await forceRender(component);
     compareAutocompleteList($(".devtools-autocomplete-listbox"), [
-      ["ABC"],
+      "[ABC]",
       "abc"
     ]);
 
